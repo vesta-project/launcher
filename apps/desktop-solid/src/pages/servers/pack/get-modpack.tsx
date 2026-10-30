@@ -1,35 +1,65 @@
-import { Badge, Button, Checkbox, Select } from '@vesta/ui';
-import { For, Show, createSignal, onCleanup, untrack } from 'solid-js';
+import { Button, Checkbox, Dialog, Progress, Select } from '@vesta/ui';
+import { For, Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { instances } from '../../../features/instances/catalog';
 import { refreshNativeInstances } from '../../../features/instances/native-service';
-import { syncApplyRequest, syncChangeSummary } from '../../../features/servers/modpack-area-model';
-import type { ServerCommandError } from '../../../features/servers/native';
+import { modpackGates, syncApplyRequest, syncChangeSummary } from '../../../features/servers/modpack-area-model';
+import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { PackSyncPreview } from '../../../features/servers/native-pack-sync';
+import { peekServerResource } from '../../../features/servers/resources';
+import { packWorkspaceResource } from '../../../features/servers/server-resources';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
-import { useModpackArea } from './area';
+import './modpack.css';
 
-const NEW = 'new';
 const uncertainCodes = new Set(['outcome_unknown', 'timeout', 'unreachable']);
+export type GetModpackMode = 'new' | 'link';
+
+/**
+ * Whether players can get a client pack from this server, in any mode: a published custom pack,
+ * or the server's own modpack offered to players.
+ */
+export function offersClientPack(snapshot: ServerSnapshot): boolean {
+  if (snapshot.pack?.status === 'published' || (snapshot.pack?.hostedRevision ?? null) !== null) return true;
+  const workspace = peekServerResource(snapshot.connection.id, packWorkspaceResource);
+  return (workspace?.clientPack?.mode ?? 'none') !== 'none' || (workspace?.publishedRevision ?? '0') !== '0';
+}
+
+export const canGetModpack = (snapshot: ServerSnapshot) => modpackGates(snapshot.capabilities, snapshot.connection.role).download;
+
+/** Server Overview: play on this server with a new instance, or link one you have. */
+export function PlayOnServerCard(props: { snapshot: ServerSnapshot }) {
+  const [mode, setMode] = createSignal<GetModpackMode | null>(null, { name: 'play-card:mode' });
+  return (
+    <article data-vesta="server-stat" data-server-panel="play">
+      <h2>{t('server-pack.play-title')}</h2>
+      <Show when={props.snapshot.pack?.hostedRevision}>{(revision) => <p data-vesta="server-muted">{t('server-pack.play-version', { version: revision() })}</p>}</Show>
+      <div data-vesta="server-stat-actions">
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => setMode('new')}>{t('server-pack.play-create')}</Button>
+        <Button size="sm" variant="outline" icon={<Icon name="icons/content/link" />} onClick={() => setMode('link')}>{t('server-pack.play-link')}</Button>
+      </div>
+      <Show when={mode()} keyed>{(value) => <GetModpackDialog snapshot={props.snapshot} mode={value} onClose={() => setMode(null)} />}</Show>
+    </article>
+  );
+}
 
 /**
  * Get the modpack: a new local instance, or link an existing one. Native verifies the signed
  * release and builds a single-use review; executable changes need consent for that revision.
  */
-export function GetModpack() {
-  const area = useModpackArea();
-  const [target, setTarget] = createSignal(NEW, { name: 'modpack-get:target' });
+export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetModpackMode; onClose: () => void }) {
+  const id = () => props.snapshot.connection.id;
+  const [target, setTarget] = createSignal<string | undefined>(undefined, { name: 'modpack-get:target' });
   const [review, setReview] = createSignal<PackSyncPreview | undefined>(undefined, { name: 'modpack-get:review' });
   const [consent, setConsent] = createSignal(false, { name: 'modpack-get:consent' });
   const [busy, setBusy] = createSignal(false, { name: 'modpack-get:busy' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-get:error' });
   const [uncertain, setUncertain] = createSignal(false, { name: 'modpack-get:uncertain' });
   let disposed = false;
+  let sequence = 0;
   void refreshNativeInstances();
-  const published = () => (area.snapshot().pack?.hostedRevision ?? null) !== null || (area.workspace()?.publishedRevision ?? '0') !== '0';
   const candidates = () => instances().filter((entry) => /^\d+$/.test(entry.instance.id) && entry.state.kind !== 'running');
 
   const discard = () => {
@@ -39,15 +69,20 @@ export function GetModpack() {
   };
   onCleanup(() => { disposed = true; discard(); });
 
-  const start = async () => {
+  const start = async (instance: number | null) => {
+    const request = ++sequence;
     discard(); setBusy(true); setError(null);
     try {
-      const value = await serverCommand((api) => api.packSyncPreview(area.id(), target() === NEW ? null : Number(target())));
-      if (disposed) { void serverCommand((api) => api.packSyncDiscard(value.reviewId)).catch(() => {}); return; }
+      const value = await serverCommand((api) => api.packSyncPreview(id(), instance));
+      if (disposed || request !== sequence) { void serverCommand((api) => api.packSyncDiscard(value.reviewId)).catch(() => {}); return; }
       setReview(value);
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { if (!disposed) setBusy(false); }
+    } catch (reason) { if (!disposed && request === sequence) setError(reason as ServerCommandError); }
+    finally { if (!disposed && request === sequence) setBusy(false); }
   };
+  // A new instance is reviewed straight away; linking reviews the instance once it's picked.
+  createEffect(() => (props.mode === 'new' ? 'new' : target() ?? null), (key) => {
+    if (key) void start(key === 'new' ? null : Number(key));
+  }, { name: 'modpack-get:review-target' });
 
   const apply = async (linkOnly: boolean) => {
     const value = review();
@@ -58,6 +93,7 @@ export function GetModpack() {
     setReview(undefined); setConsent(false); setBusy(true); setError(null);
     try {
       const instance = await serverCommand((api) => api.packSyncApply(request));
+      props.onClose();
       transitionTo(`/library/${instance}`);
     } catch (reason) {
       const failure = reason as ServerCommandError;
@@ -65,65 +101,52 @@ export function GetModpack() {
       setError(failure);
     } finally { if (!disposed) setBusy(false); }
   };
+  const counts = () => { const value = review(); return value ? syncChangeSummary(value.changes) : null; };
 
   return (
-    <section data-vesta="modpack-panel" data-panel="get">
-      <header data-vesta="modpack-panel-head"><h3>{t('server-pack.get-title')}</h3></header>
-      <div data-vesta="modpack-panel-body">
-        <Show when={published()} fallback={<p data-vesta="server-muted">{t('server-pack.get-unpublished')}</p>}>
-          <Show when={review()} fallback={
+    <Dialog open onOpenChange={(open) => { if (!open && !busy()) props.onClose(); }} closeLabel={t('nav.close')} size="md"
+      title={t(props.mode === 'new' ? 'server-pack.play-create-title' : 'server-pack.play-link-title', { title: props.snapshot.connection.name })}
+      footer={<>
+        <Button variant="ghost" disabled={busy() && !!review()} onClick={props.onClose}>{t('common.cancel')}</Button>
+        <Show when={review()?.instanceId !== null && review()}>
+          <Button variant="outline" disabled={busy()} onClick={() => void apply(true)}>{t('server-pack.get-link-only')}</Button>
+        </Show>
+        <Button tone="accent" disabled={busy() || !review() || uncertain() || (review()!.consentRequired && !consent())} onClick={() => void apply(false)}>
+          {t(props.mode === 'new' ? 'server-pack.play-create' : 'server-pack.get-update')}
+        </Button>
+      </>}>
+      <div data-vesta="pack-review">
+        <Show when={props.mode === 'link'}>
+          <Select size="sm" label={t('server-pack.play-instance')} value={target()} disabled={busy()} onChange={setTarget}
+            placeholder={t(candidates().length ? 'server-pack.play-instance-pick' : 'server-pack.play-instance-none')}
+            options={candidates().map((entry) => ({ value: entry.instance.id, label: entry.instance.name, description: `${entry.instance.minecraftVersion} · ${entry.instance.modloader}` }))} />
+        </Show>
+        <Show when={busy() && !review()}><Progress size="sm" label={t('server-pack.play-checking')} /></Show>
+        <Show when={review()}>
+          {(value) => (
             <>
-              <p data-vesta="server-muted">{t('server-pack.get-description')}</p>
-              <Select size="sm" aria-label={t('server-pack.get-target')} value={target()} disabled={busy()} onChange={setTarget}
-                options={[
-                  { value: NEW, label: t('server-pack.get-new') },
-                  ...candidates().map((entry) => ({ value: entry.instance.id, label: entry.instance.name, description: `${entry.instance.minecraftVersion} · ${entry.instance.modloader}` })),
-                ]} />
-              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/download" />} disabled={busy() || uncertain()} onClick={() => void start()}>
-                {t(target() === NEW ? 'server-pack.get-review-new' : 'server-pack.get-review-link')}
-              </Button>
-            </>
-          }>
-            {(value) => (
-              <div data-vesta="modpack-sync-review">
-                <p data-vesta="modpack-card-title">{value().name}</p>
-                <p data-vesta="server-muted">
-                  {value().runtime.minecraftVersion} · {value().runtime.loader} {value().runtime.loaderVersion ?? ''} · {t('server-pack.revision-facts', { published: value().revision, minimum: value().minimumRevision })}
-                </p>
-                <p>{t('server-pack.get-changes', syncChangeSummary(value().changes))}</p>
-                <Show when={value().changes.length}>
-                  <details data-vesta="modpack-unresolved">
-                    <summary>{t('server-pack.get-show-changes')}</summary>
-                    <ul>
-                      <For each={value().changes}>
-                        {(change) => (
-                          <li><code>{change.path}</code> <Badge size="sm" variant="soft" tone={change.executable ? 'warning' : 'neutral'}>{change.operation}</Badge></li>
-                        )}
-                      </For>
-                    </ul>
-                  </details>
-                </Show>
-                <Show when={value().consentRequired}>
-                  <Checkbox size="sm" checked={consent()} onChange={setConsent} disabled={busy()}
-                    label={t('server-pack.get-consent', { version: value().revision })} description={t('server-pack.get-consent-help')} />
-                </Show>
-                <div data-vesta="modpack-card-actions">
-                  <Button size="sm" variant="ghost" disabled={busy()} onClick={discard}>{t('common.cancel')}</Button>
-                  <span data-vesta="server-toolbar-spacer" />
-                  <Show when={value().instanceId !== null}>
-                    <Button size="sm" variant="outline" disabled={busy()} onClick={() => void apply(true)}>{t('server-pack.get-link-only')}</Button>
-                  </Show>
-                  <Button size="sm" tone="accent" disabled={busy() || (value().consentRequired && !consent())} onClick={() => void apply(false)}>
-                    {t(value().instanceId === null ? 'server-pack.get-install' : 'server-pack.get-update')}
-                  </Button>
-                </div>
+              <div data-vesta="pack-review-version">
+                <span data-vesta="pack-review-version-static"><small>{t('server-pack.review-version')}</small><strong>{value().name} {value().revision}</strong></span>
+                <span data-vesta="pack-review-version-meta">
+                  <span>{value().runtime.minecraftVersion}</span><span aria-hidden="true">·</span>
+                  <span>{value().runtime.loader} {value().runtime.loaderVersion ?? ''}</span>
+                </span>
               </div>
-            )}
-          </Show>
+              <Show when={value().changes.length} fallback={<span data-vesta="server-muted">{t('server-pack.review-nothing')}</span>}>
+                <details data-vesta="pack-review-notes">
+                  <summary>{t('server-pack.get-changes', counts()!)}</summary>
+                  <ul><For each={value().changes}>{(change) => <li><code>{change.path}</code></li>}</For></ul>
+                </details>
+              </Show>
+              <Show when={value().consentRequired}>
+                <Checkbox size="sm" checked={consent()} onChange={setConsent} disabled={busy()} label={t('server-pack.play-consent')} />
+              </Show>
+            </>
+          )}
         </Show>
         <Show when={uncertain()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.get-uncertain')}</p></Show>
-        <ServerErrorNote error={error()} />
+        <ServerErrorNote error={error()} onRetry={props.mode === 'new' ? () => void start(null) : undefined} />
       </div>
-    </section>
+    </Dialog>
   );
 }

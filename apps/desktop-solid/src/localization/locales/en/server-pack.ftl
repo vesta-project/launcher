@@ -476,7 +476,58 @@ server-pack-install-current-runtime = Installed: { $software } { $version }, loa
 
 server-pack-warning-missing-dependency = A required dependency is missing from this pack: { $path }
 
+# Install review
+server-pack-review-version = Version
+server-pack-review-installed = Installed { $version }
+server-pack-review-badge-update = Update
+server-pack-review-badge-installed = Installed
+server-pack-review-badge-older = Older version
+server-pack-review-switch = Switches the server to { $target }
+server-pack-review-switch-current = now { $source }
+server-pack-review-switch-ack = This changes the server's software and may break existing worlds or plugins
+server-pack-review-switch-needs-ack = Confirm the software change to continue
+server-pack-review-switch-started = The server is switching to { $target }.
+server-pack-review-changes = Changes
+server-pack-review-count-added = { $count } added
+server-pack-review-count-updated = { $count } updated
+server-pack-review-count-removed = { $count } removed
+server-pack-review-count-overrides = { $count ->
+    [one] 1 config file
+   *[other] { $count } config files
+}
+server-pack-review-count-skipped = { $count } client-only skipped
+server-pack-review-conflicts = { $count ->
+    [one] 1 file already on the server
+   *[other] { $count } files already on the server
+}
+server-pack-review-nothing = Already installed. Nothing to change.
+server-pack-review-backup-first = Back up first
+server-pack-review-backup-failed = The backup didn't finish. Try again, or untick Back up first.
+server-pack-review-backing-up = Backing up…
+server-pack-review-installing = Installing…
+server-pack-review-install = Install
+server-pack-review-update = Update
+server-pack-review-note-restart = Applies on the next restart.
+server-pack-review-note-start = Applies when the server starts.
+server-pack-review-note-players = Players get it too.
+server-pack-review-stage-archive = Reading the pack
+server-pack-review-stage-metadata = Resolving files
+server-pack-review-stage-review = Checking the server
+server-pack-play-title = Play on this server
+server-pack-play-version = Pack version { $version }
+server-pack-play-create = Create instance
+server-pack-play-link = Link existing instance
+server-pack-play-create-title = Create an instance for { $title }
+server-pack-play-link-title = Link an instance to { $title }
+server-pack-play-instance = Instance
+server-pack-play-instance-pick = Choose an instance
+server-pack-play-instance-none = No instances to link
+server-pack-play-checking = Checking the server's pack
+server-pack-play-consent = I trust the mods and scripts in this pack
+server-pack-play-none = This server doesn't offer a modpack.
+server-pack-review-note-replaces = Replaces the current modpack link.
 server-pack-provider-filename = This file?s name is not supported on the server.
 server-pack-provider-host = The provider returned an unsupported download host.
 server-pack-provider-redirect = The download redirected too many times. Try again.
 server-pack-provider-manual = This file requires a manual download from the provider.
+server-pack-review-note-stop = Stop Minecraft to switch the software.

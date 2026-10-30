@@ -80,17 +80,18 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
 
   const profileActions = (name: string) => (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
-        {t(openProfile() === name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
+      <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/controls/chevron-down" size={12} />} aria-expanded={openProfile() === name ? 'true' : 'false'}
+        onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
+        {t('servers.backups.show-points')}
       </Button>
       <Show when={can('backups.create')}>
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', name)}>{t('servers.backups.run')}</Button>
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
       </Show>
     </>
   );
   const profilePoints = (name: string) => (
     <Show when={openProfile() === name}>
-      <RestorePoints snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
+      <BackupList snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
     </Show>
   );
   let disposed = false;
@@ -119,7 +120,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
     follower?.observe(jobs);
   }, { name: 'server-backups:jobs' });
 
-  const start = async (_kind: 'run', profile: string) => {
+  const start = async (profile: string) => {
     try {
       const job = await serverCommand((client) => client.backupRun(id(), profile, newIntentId()));
       if (disposed) return;
@@ -157,35 +158,12 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
         </Show>
 
         <Show when={enabled()}>
-          {(profile) => <BackupsEnabled snapshot={props.snapshot} profile={profile()} onDismiss={() => setEnabled(null)} onRun={() => { setEnabled(null); void start('run', profile()); }} />}
+          {(profile) => <BackupsEnabled snapshot={props.snapshot} profile={profile()} onDismiss={() => setEnabled(null)} onRun={() => { setEnabled(null); void start(profile()); }} />}
         </Show>
         <Show when={!settingUp()} fallback={<BackupSetup snapshot={props.snapshot} onEnabled={(profile) => { setEnabled(profile); void refresh(); }} />}>
-        <Show when={storage()}>
-          {(space) => (
-            <section data-vesta="settings-panel">
-              <h3>{t('servers.backups.storage')}</h3>
-              <div data-vesta="server-backup-storage">
-                <div><strong>{bytes(space().repositoryBytes)}</strong><span>{t('servers.backups.used')}</span></div>
-                <div><strong>{space().restorePoints}</strong><span>{t('servers.backups.restore-points')}</span></div>
-                <div><strong>{bytes(space().freeBytes)}</strong><span>{t('servers.backups.free')}</span></div>
-                <Show when={space().limits.maxRepositoryBytes}>
-                  {(limit) => (
-                    <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
-                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
-                      <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
-                    </div>
-                  )}
-                </Show>
-              </div>
-              <Show when={space().stopped}>
-                {(code) => <p data-vesta="server-callout" data-tone="warning">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}
-              </Show>
-            </section>
-          )}
-        </Show>
-
+        <div data-vesta="backups-layout">
+        <div data-vesta="backups-main">
         <Show when={canConfigure()} fallback={
-          <>
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.profiles')}</h3>
           <Show when={configured()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.backup-setup.view-only')}</p></Show>
@@ -211,9 +189,33 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
             </Show>
           </div>
         </section>
-          </>
         }>
           <BackupProfilesEditor snapshot={props.snapshot} actions={profileActions} details={profilePoints} />
+        </Show>
+        </div>
+        <aside data-vesta="backups-side">
+        <Show when={storage()}>
+          {(space) => (
+            <section data-vesta="settings-panel">
+              <h3>{t('servers.backups.storage')}</h3>
+              <div data-vesta="server-backup-storage">
+                <div><strong>{bytes(space().repositoryBytes)}</strong><span>{t('servers.backups.used')}</span></div>
+                <div><strong>{space().restorePoints}</strong><span>{t('servers.backups.restore-points')}</span></div>
+                <div><strong>{bytes(space().freeBytes)}</strong><span>{t('servers.backups.free')}</span></div>
+                <Show when={space().limits.maxRepositoryBytes}>
+                  {(limit) => (
+                    <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
+                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
+                      <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
+                    </div>
+                  )}
+                </Show>
+              </div>
+              <Show when={space().stopped}>
+                {(code) => <p data-vesta="server-callout" data-tone="warning">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}
+              </Show>
+            </section>
+          )}
         </Show>
 
         <section data-vesta="settings-panel">
@@ -248,6 +250,8 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
             </ul>
           </Show>
         </section>
+        </aside>
+        </div>
         </Show>
       </div>
       <Show when={restoring()} keyed>
@@ -257,7 +261,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
+function BackupList(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
   const id = () => props.snapshot.connection.id;
   const points = useServerResource(stableConnectionId(() => props.snapshot), backupSnapshotsResource, { args: () => props.profile });
   const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') !== 'denied';

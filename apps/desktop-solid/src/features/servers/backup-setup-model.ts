@@ -10,10 +10,43 @@ export function backupsTabVisible(configured: boolean | undefined, canConfigure:
   return configured === true || canConfigure || (configured === undefined && requested);
 }
 
-/** The profile suggested on first setup: nightly-friendly "daily", online, 7 daily / 4 weekly / 3 monthly, the whole game. */
-export const suggestedProfile = (): BackupProfileConfig => ({
-  ...defaultBackupProfile('daily'), mode: 'online', keepLast: 0, keepDaily: 7, keepWeekly: 4, keepMonthly: 3, include: [], exclude: [],
-});
+/** The profile suggested on first setup: "daily", online, up to 14 backups at most one per day, the whole game. */
+export const suggestedProfile = (): BackupProfileConfig => withSimpleRetention(
+  { ...defaultBackupProfile('daily'), mode: 'online', include: [], exclude: [] }, { total: 14, thinning: 'daily' },
+);
+
+/* ---- Retention ---- */
+
+type Retention = Pick<BackupProfileConfig, 'keepTotal' | 'keepHourly' | 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>;
+export type Thinning = 'none' | 'hourly' | 'daily';
+/** "Keep up to `total` backups", optionally at most one per hour or day. */
+export interface SimpleRetention { total: number; thinning: Thinning }
+
+/**
+ * The simple form of a profile's retention, or null when it needs the advanced counts (weekly or
+ * monthly tiers, or several tiers at once). A total of 0 keeps everything.
+ */
+export function simpleRetention(profile: Retention): SimpleRetention | null {
+  if (profile.keepWeekly || profile.keepMonthly) return null;
+  const tiers = ([['none', profile.keepLast], ['hourly', profile.keepHourly ?? 0], ['daily', profile.keepDaily]] as const).filter(([, count]) => count > 0);
+  const total = profile.keepTotal ?? 0;
+  if (!tiers.length) return { total, thinning: 'none' };
+  if (tiers.length > 1) return null;
+  const [[thinning, count]] = tiers;
+  return total && total !== count ? null : { total: count, thinning };
+}
+
+/**
+ * Applies the simple form. The tier count mirrors the total so agents without a total cap still
+ * prune to the same number.
+ */
+export function withSimpleRetention<P extends Retention>(profile: P, retention: SimpleRetention): P {
+  const { total, thinning } = retention;
+  return {
+    ...profile, keepTotal: total, keepLast: thinning === 'none' ? total : 0, keepHourly: thinning === 'hourly' ? total : 0,
+    keepDaily: thinning === 'daily' ? total : 0, keepWeekly: 0, keepMonthly: 0,
+  };
+}
 
 /** The first-time draft: one suggested profile, the server's limits, and a new repository. */
 export const setupDraft = (configuration: Pick<BackupConfiguration, 'limits' | 'repository'>): BackupConfigDraft => ({
@@ -54,12 +87,12 @@ const excludePattern = (pattern: string) => pattern.length > 0 && pattern.length
   && !/^[!#\\]/.test(pattern) && !pattern.split('/').includes('..');
 
 /** Whether every retention count is a whole number the agent accepts. */
-export const retentionValid = (profile: Pick<BackupProfileConfig, 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>) =>
-  [profile.keepLast, profile.keepDaily, profile.keepWeekly, profile.keepMonthly].every((value) => Number.isInteger(value) && value >= 0 && value <= MAX_KEEP);
+export const retentionValid = (profile: Retention) =>
+  [profile.keepTotal ?? 0, profile.keepHourly ?? 0, profile.keepLast, profile.keepDaily, profile.keepWeekly, profile.keepMonthly].every((value) => Number.isInteger(value) && value >= 0 && value <= MAX_KEEP);
 
 /** True when nothing is ever pruned (all counts zero): allowed, but storage grows without bound. */
-export const keepsEverything = (profile: Pick<BackupProfileConfig, 'keepLast' | 'keepDaily' | 'keepWeekly' | 'keepMonthly'>) =>
-  !profile.keepLast && !profile.keepDaily && !profile.keepWeekly && !profile.keepMonthly;
+export const keepsEverything = (profile: Retention) =>
+  !profile.keepTotal && !profile.keepHourly && !profile.keepLast && !profile.keepDaily && !profile.keepWeekly && !profile.keepMonthly;
 
 /** Problems with one profile, given the other profiles in the set (not including itself). */
 export function profileProblems(profile: BackupProfileConfig, others: readonly BackupProfileConfig[]): ProfileProblem[] {
@@ -94,7 +127,7 @@ export function draftDiff(base: readonly BackupProfileConfig[], draft: readonly 
 export const diffCount = (diff: DraftDiff) => diff.added.length + diff.removed.length + diff.changed.length;
 
 const normalize = (profile: BackupProfileConfig) => ({
-  name: profile.name, mode: profile.mode, keepLast: profile.keepLast, keepDaily: profile.keepDaily, keepWeekly: profile.keepWeekly,
+  name: profile.name, mode: profile.mode, keepTotal: profile.keepTotal ?? 0, keepHourly: profile.keepHourly ?? 0, keepLast: profile.keepLast, keepDaily: profile.keepDaily, keepWeekly: profile.keepWeekly,
   keepMonthly: profile.keepMonthly, onMutation: profile.onMutation, warnSeconds: profile.warnSeconds, maxSnapshots: profile.maxSnapshots,
   include: profile.include, exclude: profile.exclude,
 });

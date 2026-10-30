@@ -15,6 +15,7 @@ import { refreshServerWithFeedback } from './refresh-button';
 import type { ServerSnapshot } from '../../features/servers/native';
 import { actionIcons, actionLabels, useLifecycle } from './lifecycle';
 import { RemoveServerDialog } from './remove-dialog';
+import { GetModpackDialog, canGetModpack, offersClientPack } from './pack/get-modpack';
 import '../../features/instances/instance-card.css';
 
 type Tag = { status: string; label: MessageId };
@@ -33,6 +34,7 @@ function cardState(snapshot: ServerSnapshot): { tone: string; tag: Tag | null } 
 
 export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
   const [removing, setRemoving] = createSignal(false, { name: 'server-card:removing' });
+  const [creating, setCreating] = createSignal(false, { name: 'server-card:creating' });
   const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const href = () => `/servers/${id()}`;
@@ -120,6 +122,9 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
           <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
         </Show>
         <ContextMenuItem onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
+        <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
+          <ContextMenuItem onSelect={() => setCreating(true)}>{t('server-pack.play-create')}</ContextMenuItem>
+        </Show>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
           {props.snapshot.connection.pinned ? t('common.unpin') : t('servers.pin')}
@@ -129,6 +134,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         <ContextMenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</ContextMenuItem>
       </ContextMenu>
       <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
+      <Show when={creating()}><GetModpackDialog snapshot={props.snapshot} mode="new" onClose={() => setCreating(false)} /></Show>
     </>
   );
 }
