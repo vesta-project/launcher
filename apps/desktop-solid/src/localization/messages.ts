@@ -141,6 +141,7 @@ export const messageIds = [
   "server-pack.review-note-restart",
   "server-pack.review-note-start",
   "server-pack.review-note-players",
+  "server-pack.review-note-replaces",
   "server-pack.review-stage-archive",
   "server-pack.review-stage-metadata",
   "server-pack.review-stage-review",

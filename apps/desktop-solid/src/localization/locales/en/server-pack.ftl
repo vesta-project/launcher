@@ -525,3 +525,4 @@ server-pack-play-instance-none = No instances to link
 server-pack-play-checking = Checking the server's pack
 server-pack-play-consent = I trust the mods and scripts in this pack
 server-pack-play-none = This server doesn't offer a modpack.
+server-pack-review-note-replaces = Replaces the current modpack link.

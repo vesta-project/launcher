@@ -42,7 +42,7 @@ const countLabel: Record<ReviewCountKey, MessageId> = {
   skipped: 'server-pack.review-count-skipped',
 };
 const countIcon: Record<ReviewCountKey, string> = {
-  added: 'icons/actions/add', updated: 'icons/actions/refresh', removed: 'icons/actions/delete', overrides: 'icons/content/file', skipped: 'icons/controls/close',
+  added: 'icons/actions/add', updated: 'icons/actions/refresh', removed: 'icons/actions/delete', overrides: 'icons/content/file', skipped: 'icons/actions/close',
 };
 
 const stageLabel: Record<PackInstallProgress['stage'], MessageId> = {
@@ -199,6 +199,8 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const notes = () => {
     const lines = [t(running() ? 'server-pack.review-note-restart' : 'server-pack.review-note-start')];
     if (area.clientMode() === 'server-modpack') lines.push(t('server-pack.review-note-players'));
+    const linked = linkProvider(area.link().source), next = linkProvider(source());
+    if (area.link().phase !== 'unlinked' && props.request.mode === 'link' && !(linked && next && linked.provider === next.provider && linked.projectId === next.projectId)) lines.push(t('server-pack.review-note-replaces'));
     return lines.join(' · ');
   };
   const actionLabel = (): string => {

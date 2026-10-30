@@ -1,5 +1,5 @@
 import { Button, Dialog, Select } from '@vesta/ui';
-import { Show, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { sourceById } from '../../../features/browse/browse-model';
 import { loadVersions, peekVersions } from '../../../features/browse/browse-projects';
@@ -45,6 +45,10 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
       name: props.pick.name, mode: sameProject() ? 'update' : 'link',
     });
   };
+
+  // The review has its own version card: go straight there once a version is known.
+  // This dialog stays only while versions load, fail, or the link can't change.
+  createEffect(() => (chosen() && !blocked() ? chosen() : null), (id) => { if (id) go(); }, { name: 'modpack-pick:straight-to-review' });
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close(); }} closeLabel={t('nav.close')} size="md"
