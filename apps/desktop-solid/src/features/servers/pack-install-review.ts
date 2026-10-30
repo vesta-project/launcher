@@ -1,20 +1,15 @@
 // Pure rules for the server modpack install / link / update review.
 import type { MessageId } from '../../localization/messages';
 import { installApplyRequest, installConflicts, linkReview, type ConflictChoice } from './modpack-area-model';
-import type { PackInstallApply, PackInstallPlan } from './native-pack';
+import type { PackInstallApply, PackInstallPlan, SoftwareSwitchTarget } from './native-pack';
 
 /** One server runtime: software, Minecraft version and loader version. */
-export interface PackRuntime { software: string; minecraftVersion: string; loaderVersion: string | null }
+export type PackRuntime = SoftwareSwitchTarget;
+/** `from` is null only when an older agent flags a switch without describing it. */
 export interface PackSoftwareSwitch { from: PackRuntime | null; to: PackRuntime }
 
-/*
- * PENDING BACKEND (MODPACK-REDESIGN.md): the agent applies the software switch together with the
- * pack when the request carries `acknowledgeSoftwareSwitch`, and the plan describes it as
- * `softwareSwitch { from, to }`. Until `native-pack.ts` declares both fields they are optional
- * extensions here; once it does, replace these two aliases with the contract types.
- */
-export type ReviewPlan = PackInstallPlan & { softwareSwitch?: PackSoftwareSwitch | null };
-export type ReviewApply = PackInstallApply & { acknowledgeSoftwareSwitch?: boolean };
+export type ReviewPlan = PackInstallPlan;
+export type ReviewApply = PackInstallApply;
 
 /**
  * The switch the install performs, if any. Prefers the plan's own description; older agents only

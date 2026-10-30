@@ -22,6 +22,7 @@ export function seedPackWorkspace(scenario: PackFixtureScenario): PackWorkspace 
 interface Host {
   scenario?: PackFixtureScenario;
   server(id: string): { snapshot: { capabilities: { granted: string[] }; connection: { role: string | null }; pack: { hostedRevision: string | null; minimumRevision: string | null; status: 'published' | 'unpublished' } | null } };
+  switchSoftware?(id: string, target: import('./native-pack').SoftwareSwitchTarget): void;
   software(id: string): string | null;
   minecraftVersion?(id: string): string;
   content?(id: string): Promise<ServerContentInventory>;
@@ -172,6 +173,7 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
       const scenario=request.source.source==='provider'?'provider':request.source.source==='uploaded_archive'?'archive':'conflicts';
       const plan=seedPackInstallPlan(scenario); plan.planId=crypto.randomUUID(); plan.confirmationToken=crypto.randomUUID();plan.expiresAtMs=Date.now()+900000;
       plan.softwareSwitchRequired=host.software(id)!==plan.software||(host.minecraftVersion?.(id)??'1.21.4')!==plan.minecraftVersion;
+      plan.softwareSwitch = plan.softwareSwitchRequired ? {from:{software:host.software(id)??'unknown',minecraftVersion:host.minecraftVersion?.(id)??'1.21.4',loaderVersion:null},to:{software:plan.software,minecraftVersion:plan.minecraftVersion,loaderVersion:plan.loaderVersion}} : null;
       installPlans.set(plan.planId,{id,plan:clone(plan),source:clone(request.source)});return plan;
     },
     async packInstallApply(id, request, intent) {
@@ -180,12 +182,14 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
       return mutate(id,intent,request,()=>{
         const saved=installPlans.get(request.planId)??fail('not_found'),p=saved.plan;
         if(saved.id!==id||p.confirmationToken!==request.confirmationToken||p.expiresAtMs<Date.now())fail('conflict');
-        if(host.software(id)!==p.software||(host.minecraftVersion?.(id)??'1.21.4')!==p.minecraftVersion)fail('stale_target');
+        if(p.softwareSwitchRequired && !request.acknowledgeSoftwareSwitch)fail('stale_target');
+        if(!p.softwareSwitchRequired && (host.software(id)!==p.software||(host.minecraftVersion?.(id)??'1.21.4')!==p.minecraftVersion))fail('stale_target');
         const conflicts=p.files.filter(f=>f.conflict).map(f=>f.path).sort();
         if(JSON.stringify(conflicts)!==JSON.stringify(request.choices.map(c=>c.path).sort())||request.choices.some(c=>!['keep','replace'].includes(c.choice)))fail('invalid_input');
         const view=state(id).view;
         const selected=p.files.filter(f=>!request.choices.some(c=>c.path===f.path&&c.choice==='keep'));
         if(view.serverModpack?.pending)fail('conflict');
+        if(p.softwareSwitchRequired)host.switchSoftware?.(id,{software:p.software,minecraftVersion:p.minecraftVersion,loaderVersion:p.loaderVersion});
         view.serverModpack={source:clone(saved.source),displayVersion:'1',files:Object.fromEntries(selected.map(f=>[f.path,f.sha256])),state:'staged_until_restart',installed:view.serverModpack?.installed??null,pending:{source:clone(saved.source),displayVersion:'1'},pendingIds:selected.map((_,i)=>`${p.planId}-${i}`)};
         if(!selected.length){view.serverModpack.installed=view.serverModpack.pending;view.serverModpack.pending=null;view.serverModpack.state='installed';}
         return {state:'staged_until_restart' as const,pendingIds:selected.map((_,i)=>`${p.planId}-${i}`),modpackRevision:null,serverModpack:clone(view.serverModpack)};
@@ -244,7 +248,7 @@ export function seedRedesignWorkspace(source: 'provider' | 'overrides'): PackWor
 
 /** Review examples for the Modpack and Browse server destinations. */
 export function seedPackInstallPlan(scenario:'provider'|'archive'|'conflicts'|'software_switch'):PackInstallPlan {
-  return {planId:'fixture-plan',confirmationToken:'fixture-confirmation',expiresAtMs:Date.now()+900000,
+  return {softwareSwitch:scenario==='software_switch'?{from:{software:'paper',minecraftVersion:'1.21.4',loaderVersion:null},to:{software:'fabric',minecraftVersion:'1.21.5',loaderVersion:'0.16.10'}}:null,planId:'fixture-plan',confirmationToken:'fixture-confirmation',expiresAtMs:Date.now()+900000,
     minecraftVersion:scenario==='software_switch'?'1.21.5':'1.21.4',software:'fabric',loaderVersion:'0.16.10',softwareSwitchRequired:scenario==='software_switch',valid:true,backupRecommended:true,
     files:[{path:'mods/example.jar',sha256:'a'.repeat(64),expectedSha256:scenario==='conflicts'?'b'.repeat(64):null,conflict:scenario==='conflicts'?'project_version':null},
       ...(scenario==='archive'?[{path:'config/example.json',sha256:'c'.repeat(64),expectedSha256:null,conflict:null}]:[])],

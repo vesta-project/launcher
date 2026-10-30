@@ -65,7 +65,7 @@ export function ActivityRow(props: { operation: ServerOperation; now: number; co
 export function ActivityTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
-  const [filter, setFilter] = createSignal<'all' | 'mine' | 'running'>('all', { name: 'server-activity:filter' });
+  const [filter, setFilter] = createSignal<'all' | 'mine'>('all', { name: 'server-activity:filter' });
   // Shared with Overview: switching between them reuses the read; the topic keeps it live.
   const tasks = useServerResource(stableConnectionId(() => props.snapshot), operationsResource);
   const [cursors, setCursors] = createSignal<string[]>([], { name: 'server-activity:cursors' });
@@ -77,10 +77,12 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
   const refreshing = () => cursor() ? history.refreshing() : tasks.refreshing();
   const loading = () => cursor() ? history.loading() : tasks.loading();
   const refresh = () => cursor() ? history.refresh() : tasks.refresh();
-  const visible = () => activityPageRows(page()?.items ?? [], serverOperations(id()), !cursor()).filter((operation) =>
-    filter() === 'all' ? true
-      : filter() === 'running' ? !isTerminal(operation) || operation.reconciling
-        : operation.actor?.kind === 'principal' && operation.actor.self);
+  const visible = () => [...new Map([
+    ...activityPageRows(page()?.items ?? [], serverOperations(id()), !cursor()),
+    ...serverOperations(id()).filter(operation => !isTerminal(operation) || operation.reconciling),
+  ].map(operation => [operation.operationId, operation])).values()].filter((operation) =>
+    filter() === 'all' || operation.actor?.kind === 'principal' && operation.actor.self)
+    .toSorted((a,b) => Number(!isTerminal(b) || !!b.reconciling) - Number(!isTerminal(a) || !!a.reconciling));
 
   return (
     <div data-vesta="server-activity">
@@ -89,10 +91,9 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
           size="md"
           aria-label={t('servers.activity.filter')}
           value={filter()}
-          onChange={(value) => setFilter(value as 'all' | 'mine' | 'running')}
+          onChange={(value) => setFilter(value as 'all' | 'mine')}
           options={[
             { value: 'all', label: t('servers.activity.all') },
-            { value: 'running', label: t('servers.activity.in-progress') },
             { value: 'mine', label: t('servers.activity.mine') },
           ]}
         />
@@ -112,7 +113,6 @@ export function ActivityTab(props: { snapshot: ServerSnapshot }) {
           <Show when={cursors().length}><Button size="sm" variant="outline" disabled={refreshing()} onClick={() => setCursors((items) => items.slice(0, -1))}>{t('servers.activity.newer')}</Button></Show>
           <Show when={page()?.nextCursor}><Button size="sm" variant="outline" disabled={refreshing()} onClick={() => { const next = page()?.nextCursor; if (next && next !== cursor()) setCursors((items) => [...items, next]); }}>{t('servers.activity.older')}</Button></Show>
         </div>
-        <p data-vesta="server-muted">{t('servers.activity.description')}</p>
       </div>
     </div>
   );

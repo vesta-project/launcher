@@ -513,3 +513,22 @@ Provider pagination (bounded discovery is still 256 Modrinth rows / 50 CurseForg
 files), explicit transactional recovery after cancelled/failed server installs, and
 real-provider/live-server acceptance remain. The two backend items above are complete.
 No files under src/pages/** or unrelated user changes were staged.
+
+## Combined software switch (2026-10-30)
+
+Plan includes optional `softwareSwitch: {from,to}`; each target has `software`,
+`minecraftVersion`, `loaderVersion`. Apply with `acknowledgeSoftwareSwitch: true`
+and the reviewed plan ID/token to acknowledge that target and compatibility risk.
+This also covers server-modpack link/update, which use the same install endpoint.
+Without acknowledgement, mismatched software remains rejected. No Settings redirect.
+Combined apply returns `state: "queued"`, `softwareJobId`; follow software jobs until
+success, then refresh pack/content. The worker reuses software plan/apply, activates
+while stopped, and stages pack files before releasing the stopped/recovery guard.
+Files load on the next start. Failed staging leaves recovery required with previous
+software available for rollback; retry/review the pack after recovery. No auto restart.
+Java compatibility and legacy checksum approval remain enforced.
+
+The existing software activation precondition still requires Minecraft to be stopped.
+Combined jobs do not stop a running game. A running-game activation is refused before
+launch/file mutation; the user can stop and retry. Pack-only installs retain their
+existing running-server staging behavior.

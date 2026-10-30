@@ -56,6 +56,7 @@ const backupErrors: Record<string, MessageId> = {
   backup_confirmation_expired: 'servers.error.confirmation-expired',
 };
 
+// TODO: expose total-cap and thinning retention fields in Claude's profile editor redesign.
 export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = () => props.snapshot.connection.id;
@@ -64,6 +65,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const backups = useServerResource(connection, backupsResource);
   const space = useServerResource(connection, backupStorageResource);
   const overview = () => backups.value() ?? null;
+  const visibleJobs = () => (overview()?.jobs ?? []).filter(job => job.kind !== 'verify' || !!job.errorCode || job.state === 'failed' || job.state === 'recovery_required');
   const storage = () => space.value() ?? null;
   const error = backups.error;
   const loading = () => backups.loading() || backups.refreshing();
@@ -74,8 +76,6 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const canConfigure = () => can('backups.configure');
   const configured = () => backupsConfigured(props.snapshot, overview());
   const settingUp = () => configured() === false && canConfigure();
-  /** Verification runs on its own; only its failures are worth a row. */
-  const visibleJobs = () => (overview()?.jobs ?? []).filter((job) => job.kind !== 'verify' || job.state === 'failed' || job.state === 'uncertain');
   const [enabled, setEnabled] = createSignal<string | null>(null, { name: 'server-backups:just-enabled' });
 
   const profileActions = (name: string) => (

@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
+import { Button, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
 import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
@@ -10,8 +10,8 @@ import { loadProject, loadProjects, loadVersionLists, peekProject, peekVersions,
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
-  contentSide, contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
-  pendingLabel, pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
+  contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
+  pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
 import { lifecycleControls, newIntentId } from '../../../features/servers/model';
@@ -56,7 +56,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const [filter, setFilter] = createSignal<ContentFilter>('all', { name: 'server-content:filter' });
   const [query, setQuery] = createSignal('', { name: 'server-content:query' });
   const [menuKey, setMenuKey] = createSignal<string | null>(null, { name: 'server-content:menu' });
-  const [removing, setRemoving] = createSignal<ContentRowModel | null>(null, { name: 'server-content:removing' });
+  const [expanded, setExpanded] = createSignal(true, { name: 'server-content:expanded' });
   const [busy, setBusy] = createSignal<ReadonlySet<string>>(new Set(), { name: 'server-content:busy' });
   const [viewport, setViewport] = createSignal<HTMLDivElement | undefined>(undefined, { name: 'server-content:viewport' });
   const [checking, setChecking] = createSignal(false, { name: 'server-content:checking' });
@@ -96,14 +96,24 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     return value ? contentUpdate(entry, versionsOf(entry), value) : undefined;
   };
 
-  const rows = createMemo<ContentListRow[]>(() => contentList(inventory()?.items ?? [], {
+  type ListRow = Exclude<ContentListRow, {kind: 'group'}> | {id:string;kind:'group';group:ServerContentEntry['kind']|'pack'|'own';count:number};
+  const listed = createMemo<ContentListRow[]>(() => contentList(inventory()?.items ?? [], {
     filter: activeFilter(),
     query: query(),
     project: projectOf,
     version: (entry) => versionsOf(entry)?.find((version) => version.id === entry.provider?.versionId),
   }), { name: 'server-content:rows' });
-  const visibleCount = () => rows().filter((row) => row.kind === 'entry').length;
-  const summary = createMemo(() => pendingSummary(inventory()?.items ?? [], props.snapshot), { name: 'server-content:pending' });
+  const rows = createMemo<ListRow[]>(() => {
+    const entries = listed().filter((r): r is Extract<ContentListRow,{kind:'entry'}> => r.kind === 'entry');
+    const bundled = entries.filter(r => isModpackOwned(r.row.entry, owned()));
+    if (!bundled.length) return listed();
+    const own = entries.filter(r => !isModpackOwned(r.row.entry, owned()));
+    return [{id:'group:pack',kind:'group',group:'pack',count:bundled.length},
+      ...(expanded() ? bundled : []),
+      ...(own.length ? [{id:'group:own',kind:'group' as const,group:'own' as const,count:own.length},...own] : [])];
+  }, {name:'server-content:grouped'});
+  const visibleCount = () => listed().filter((row) => row.kind === 'entry').length;
+  const summary = createMemo(() => ({...pendingSummary(inventory()?.items ?? [], props.snapshot), count: inventory()?.deferredWrites ?? 0, running: !!inventory()?.needsRestart}), { name: 'server-content:pending' });
   const canRestart = () => lifecycleControls(props.snapshot).restart;
 
   const filterOptions = createMemo(() => [
@@ -186,7 +196,6 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
 
   const remove = (row: ContentRowModel) => {
     const request = mutationRequest(row.entry, 'remove');
-    setRemoving(null);
     if (!request) return;
     void run(row, 'remove', (intentId) => serverCommand((client) => client.contentMutate(id(), request, intentId)),
       (change) => changed(change, 'server-content.removed-toast', row.name));
@@ -265,13 +274,8 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               <span data-vesta="resource-title">{row().name}</span>
               <span data-vesta="resource-sub">
                 {providerBadge(row())}
-                <Badge size="sm" variant="soft" tone="neutral">{t(contentSide(entry(), project()))}</Badge>
                 <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
-                <Show when={managed()}>
-                  <span data-vesta="server-content-owned" title={t('server-content.managed-by-modpack')}>
-                    <Icon name="icons/content/link" size={11} />{t('server-content.from-modpack', { name: modpackName() })}
-                  </span>
-                </Show>
+                <Show when={entry().pendingError}><span data-tone="danger">{t('server-content.pending-failed')}</span></Show>
               </span>
             </span>
           </a>
@@ -287,26 +291,6 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               )}
             </Show>
           </span>
-        </div>
-        <div data-vesta="table-cell" role="cell" class="col-status">
-          <Show when={entry().pending} fallback={
-            <Show when={!entry().provider && actions().identify}>
-              <Button size="sm" variant="ghost" disabled={working()} onClick={() => identify(row())}>{t('server-content.identify')}</Button>
-            </Show>
-          }>
-            {(pending) => (
-              <span data-vesta="server-content-pending-cell">
-                <Badge size="sm" tone={entry().pendingError ? 'danger' : 'accent'} title={entry().pendingError ?? undefined}
-                  icon={<Icon name={entry().pendingError ? 'icons/controls/warning' : 'icons/actions/reload'} size={11} />}>
-                  {t(entry().pendingError ? 'server-content.pending-failed' : pendingLabel[pending()])}
-                </Badge>
-                <Show when={actions().cancel}>
-                  <IconButton size="sm" variant="ghost" disabled={working()} label={t('server-content.cancel-change', { name: row().name })}
-                    icon={<Icon name="icons/actions/close" />} onClick={() => cancel(row())} />
-                </Show>
-              </span>
-            )}
-          </Show>
         </div>
         <div data-vesta="table-cell" role="cell" class="col-enabled">
           <Show when={entry().enabled !== null}>
@@ -353,7 +337,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               <MenuSeparator />
               <Show when={actions().managed} fallback={
                 <MenuItem tone="danger" icon={<Icon name="icons/actions/delete" />} disabled={working() || !actions().remove}
-                  onSelect={() => { if (actions().remove) setRemoving(row()); }}>
+                  onSelect={() => { if (actions().remove) remove(row()); }}>
                   {t('server-content.remove')}
                 </MenuItem>
               }>
@@ -367,14 +351,26 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     );
   };
 
-  const groupRow = (row: () => Extract<ContentListRow, { kind: 'group' }>) => (
-    <div data-vesta="table-row" role="presentation" class="resource-group-row">
-      <div data-vesta="table-cell" role="cell" aria-colspan={5}>
-        <div data-vesta="resource-group">
-          <Icon name={kindIcon[row().group]} size={14} />
-          <strong>{t(groupLabel[row().group])}</strong>
-          <span data-vesta="resource-group-count">{row().count}</span>
-        </div>
+  const groupRow = (row: () => Extract<ListRow, { kind: 'group' }>) => (
+    <div data-vesta="table-row" role="presentation" class={{'resource-group-row':true,'resource-pack-row':row().group === 'pack'}}>
+      <div data-vesta="table-cell" role="cell" aria-colspan={4}>
+        <Show when={row().group === 'pack'} fallback={
+          <div data-vesta="resource-group">
+            <Icon name={row().group === 'own' ? 'icons/content/layers' : kindIcon[row().group as ServerContentEntry['kind']]} size={14} />
+            <strong>{row().group === 'own' ? t('resources.added-by-you') : t(groupLabel[row().group as ServerContentEntry['kind']])}</strong>
+            <span data-vesta="resource-group-count">{row().count}</span>
+          </div>
+        }>
+          <button type="button" data-vesta="resource-group" aria-expanded={expanded() ? 'true' : 'false'} onClick={() => setExpanded(!expanded())}>
+            <Icon name="icons/controls/chevron-down" size={12} class="resource-group-chevron" />
+            <Show when={(() => { const source = linkProvider(modpackSource()); return source ? peekProject(source.provider, source.projectId)?.icon_url : null; })()}>
+              {(icon) => <img src={icon()} alt="" loading="lazy" decoding="async" width={32} height={32} />}
+            </Show>
+            <strong>{modpackName()}</strong>
+            <span data-vesta="resource-group-meta">{t('resources.modpack-group', {version:pack.value()?.serverModpack?.displayVersion ?? ''})}</span>
+            <span data-vesta="resource-group-count">{row().count}</span>
+          </button>
+        </Show>
       </div>
     </div>
   );
@@ -400,12 +396,11 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
         </div>
       </div>
 
-      <Show when={summary().count}>
+      <Show when={summary().running && summary().count}>
         <div data-vesta="server-content-summary" data-tone={summary().failed ? 'danger' : 'accent'} role="status">
           <Icon name={summary().failed ? 'icons/controls/warning' : 'icons/actions/reload'} size={15} />
           <span data-vesta="server-content-summary-text">
-            <strong>{t('server-content.pending-count', { count: summary().count })}</strong>
-            <span>{t(summary().running ? 'server-content.pending-running' : 'server-content.pending-stopped')}</span>
+            <strong>{t('server-content.restart-load', { count: summary().count })}</strong>
           </span>
           <Show when={summary().running && canRestart()}>
             <Button size="sm" variant="outline" icon={<Icon name="icons/actions/reload" />}
@@ -433,12 +428,12 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
           {(value) => (
             <Show when={visibleCount()} fallback={<ContentEmpty inventory={value()} query={query()} onClear={() => setQuery('')} />}>
               <div data-vesta="table-scroll" class="resource-table server-content-table">
-                <div data-vesta="table" role="table" aria-label={t('server-content.tab')} aria-colcount={5} aria-rowcount={rows().length + 1}>
+                <div data-vesta="table" role="table" aria-label={t('server-content.tab')} aria-colcount={4} aria-rowcount={rows().length + 1}>
                   <VirtualList
                     items={rows()}
                     key={(row) => row.id}
                     rowHeight={44}
-                    getHeight={(index) => (rows()[index]?.kind === 'group' ? 36 : 44)}
+                    getHeight={(index) => { const row = rows()[index]; return row?.kind === 'group' ? row.group === 'pack' ? 52 : 36 : 44; }}
                     scrollElement={viewport()}
                     pinnedKey={menuKey() ? `entry:${menuKey()}` : null}
                     rowRole="row"
@@ -449,14 +444,13 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
                       <div data-vesta="table-row" role="row" aria-rowindex={1}>
                         <div data-vesta="table-head" role="columnheader" class="col-name">{t('resources.name-column')}</div>
                         <div data-vesta="table-head" role="columnheader" class="col-version">{t('resources.version-column')}</div>
-                        <div data-vesta="table-head" role="columnheader" class="col-status">{t('server-content.status-column')}</div>
                         <div data-vesta="table-head" role="columnheader" class="col-enabled">{t('resources.enabled-column')}</div>
                         <div data-vesta="table-head" role="columnheader" class="col-menu"><span data-vesta="sr-only">{t('resources.actions-column')}</span></div>
                       </div>
                     }
                   >
                     {(item) => (
-                      <Show when={item().kind === 'entry'} fallback={groupRow(() => item() as Extract<ContentListRow, { kind: 'group' }>)}>
+                      <Show when={item().kind === 'entry'} fallback={groupRow(() => item() as Extract<ListRow, { kind: 'group' }>)}>
                         {entryRow(() => (item() as Extract<ContentListRow, { kind: 'entry' }>).row)}
                       </Show>
                     )}
@@ -468,20 +462,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
         </Show>
       </div>
 
-      <Dialog
-        closeLabel={t('nav.close')}
-        size="sm"
-        open={!!removing()}
-        onOpenChange={(open) => { if (!open) setRemoving(null); }}
-        title={t('server-content.remove-title', { name: removing()?.name ?? '' })}
-        description={t(gates()?.running ? 'server-content.remove-running' : 'server-content.remove-description')}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setRemoving(null)}>{t('common.cancel')}</Button>
-            <Button tone="danger" onClick={() => { const row = untrack(removing); if (row) remove(row); }}>{t('server-content.remove')}</Button>
-          </>
-        }
-      />
+
     </div>
   );
 }

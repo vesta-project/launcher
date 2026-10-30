@@ -251,6 +251,7 @@ async fn real_provider_packs_stage_through_launcher_apis_and_survive_reconnect()
         let outcome = client
             .pack_install_apply(
                 PackInstallApply {
+                    acknowledge_software_switch: false,
                     plan_id: plan.plan_id,
                     confirmation_token: plan.confirmation_token,
                     choices: Vec::new(),

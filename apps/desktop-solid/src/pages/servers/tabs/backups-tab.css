@@ -1,23 +1,14 @@
 /*
- * Server → Backups: profiles beside storage and recent jobs; a profile's settings in two columns.
+ * Server → Backups: profiles, then storage and recent jobs; a profile's settings in two columns.
  * Hooks: [data-vesta=backups-layout] -main -side; backup-form(-column -field -label -help -actions)
  *        backup-keep-row, backup-keep-grid, backup-advanced, backup-location
- * Knobs: --backups-side-width
  */
 @layer launcher {
+  /* Inside the shared content width: profiles first, then storage and recent jobs. */
   :where([data-vesta="backups-layout"]) {
-    --backups-side-width: 320px;
-
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--backups-side-width);
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--vesta-space-4);
-  }
-
-  @container pane (max-width: 860px) {
-    :where([data-vesta="backups-layout"]) {
-      grid-template-columns: minmax(0, 1fr);
-    }
   }
 
   :where([data-vesta="backups-main"], [data-vesta="backups-side"]) {

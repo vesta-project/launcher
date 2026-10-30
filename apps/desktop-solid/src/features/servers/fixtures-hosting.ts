@@ -117,6 +117,7 @@ export function createHostingFixtures(host: HostingHost) {
   };
 
   return {
+    fixtureSwitch(id: string, software: SoftwareId, version: string, loaderVersion: string | null) { const s = state(id).software; s.previous = s.current; s.current = { ...s.current!, software, version, loaderVersion, installationId: crypto.randomUUID() }; s.revision = String(BigInt(s.revision) + 1n); },
     contentTarget(id: string) { const launch = state(id).software.current; return { software: launch?.software ?? null, minecraftVersion: launch?.version ?? '1.21.4' }; },
     async customJarPlan(id: string, path: string | null, expectedRevision: string): Promise<CustomJarPlan> {
       owner(id); const current = state(id);

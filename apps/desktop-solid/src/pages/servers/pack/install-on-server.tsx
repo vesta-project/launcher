@@ -52,8 +52,7 @@ const stageLabel: Record<PackInstallProgress['stage'], MessageId> = {
   review: 'server-pack.review-stage-review',
 };
 
-/** PENDING BACKEND: the outcome names the software job when the install switched software. */
-type ReviewOutcome = PackInstallOutcome & { softwareJobId?: string | null };
+type ReviewOutcome = PackInstallOutcome;
 
 const sourceKey = (source: PackInstallSource) => JSON.stringify(source);
 
@@ -198,6 +197,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
 
   const notes = () => {
     const lines = [t(running() ? 'server-pack.review-note-restart' : 'server-pack.review-note-start')];
+    if (switchTo() && running()) lines.push(t('server-pack.review-note-stop'));
     if (area.clientMode() === 'server-modpack') lines.push(t('server-pack.review-note-players'));
     const linked = linkProvider(area.link().source), next = linkProvider(source());
     if (area.link().phase !== 'unlinked' && props.request.mode === 'link' && !(linked && next && linked.provider === next.provider && linked.projectId === next.projectId)) lines.push(t('server-pack.review-note-replaces'));
@@ -287,7 +287,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
             <span data-vesta="modpack-done-mark"><Icon name="icons/controls/check" size={20} /></span>
             <h4>{t('server-pack.install-staged', { count: result().pendingIds.length })}</h4>
             <p>{t(running() ? 'server-pack.install-staged-running' : 'server-pack.install-staged-stopped')}</p>
-            <Show when={result().softwareJobId ? switchTo() : null}>{(change) => <p>{t('server-pack.review-switch-started', { target: runtimeLabel(change().to) })}</p>}</Show>
+            <Show when={result().softwareJobId ? switchTo() : null}>{(change) => <p>{t('server-pack.review-switch-started', { target: runtimeLabel(change().to) })}{running() ? ` ${t('server-pack.review-note-stop')}` : ''}</p>}</Show>
             <Show when={!update()}><OfferToPlayers /></Show>
           </div>
         )}
@@ -394,7 +394,7 @@ function ChangeSummary(props: { plan: ReviewPlan; picks: Record<string, Conflict
                 onClick={() => setOpen(open() === group.key ? null : group.key)}>
                 <Icon name={countIcon[group.key]} size={12} />
                 {t(countLabel[group.key], { count: group.paths.length })}
-                <Icon name="icons/navigation/chevron-down" size={12} />
+                <Icon name="icons/controls/chevron-down" size={12} />
               </button>
             )}
           </For>

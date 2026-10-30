@@ -203,7 +203,7 @@ function ProviderPanel() {
         </div>
         <p data-vesta="server-muted">{t('server-pack.provider-help')}</p>
         <div data-vesta="modpack-source-actions">
-          <Button size="sm" variant="outline" icon={<Icon name="icons/content/history" />} onClick={() => area.open('versions')}>{t('server-pack.change-version')}</Button>
+          <Button size="sm" variant="outline" icon={<Icon name="icons/actions/swap" />} onClick={() => area.open('versions')}>{t('server-pack.change-version')}</Button>
           <Button size="sm" variant="outline" icon={<Icon name="icons/actions/edit" />} onClick={() => setConfirming(true)}>{t('server-pack.customize')}</Button>
         </div>
       </div>

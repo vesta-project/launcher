@@ -157,7 +157,7 @@ function LinkCard() {
               {t('server-pack.link-check')}
             </MenuItem>
             <Show when={provider()}>
-              <MenuItem icon={<Icon name="icons/content/history" />} disabled={!area.link().canChange} onSelect={changeVersion}>{t('server-pack.change-version')}</MenuItem>
+              <MenuItem icon={<Icon name="icons/actions/swap" />} disabled={!area.link().canChange} onSelect={changeVersion}>{t('server-pack.change-version')}</MenuItem>
             </Show>
             <MenuItem icon={<Icon name="icons/content/storage" />} onSelect={() => transitionTo(`/servers/${area.id()}/resources`)}>{t('server-pack.link-open-resources')}</MenuItem>
             <MenuSeparator />
