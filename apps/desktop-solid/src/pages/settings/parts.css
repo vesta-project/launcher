@@ -28,7 +28,7 @@
   :where([data-vesta='prefs-card-header']) {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: var(--vesta-space-3);
     padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-2);
