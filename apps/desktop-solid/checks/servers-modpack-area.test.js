@@ -219,7 +219,7 @@ describe('link / update review', () => {
     expect(installBlocker(seedPackInstallPlan('provider'), now)).toBeNull();
     expect(installBlocker(seedPackInstallPlan('software_switch'), now)).toBe('server-pack.install-switch-first');
     expect(installBlocker({ ...seedPackInstallPlan('provider'), valid: false }, now)).toBe('server-pack.install-invalid');
-    expect(installBlocker(seedPackInstallPlan('provider'), now + 3_600_000)).toBe('server-pack.install-expired');
+    expect(installBlocker(seedPackInstallPlan('provider'), now + 3_600_000)).toBeNull();
     expect(installWarning('unknown_server_side:mods/a.jar', (id, args) => `${id}|${args.path}`)).toBe('server-pack.warning-unknown-side|mods/a.jar');
     expect(installWarning('something_new', () => 'x')).toBe('something_new');
   });

@@ -531,11 +531,10 @@ export function installApplyRequest(plan: PackInstallPlan, picks: Record<string,
   return { planId: plan.planId, confirmationToken: plan.confirmationToken, choices, setAsModpack: false };
 }
 
-/** Plan can be applied: valid, not expired, software already matches. */
-export function installBlocker(plan: PackInstallPlan, nowMs: number): MessageId | null {
+/** Expired credentials refresh at apply; only reviewed effects block the user. */
+export function installBlocker(plan: PackInstallPlan, _nowMs: number): MessageId | null {
   if (!plan.valid) return 'server-pack.install-invalid';
   if (plan.softwareSwitchRequired) return 'server-pack.install-switch-first';
-  if (plan.expiresAtMs <= nowMs) return 'server-pack.install-expired';
   return null;
 }
 

@@ -1,3 +1,4 @@
+import { sameReviewedPlan } from '../../../features/servers/review-plan';
 import { Button, Checkbox, Combobox, Dialog, Progress, SegmentedControl, Skeleton, toast } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
@@ -263,7 +264,7 @@ export function ChangeFlow(props: {
   const legacy = () => !!plan()?.warnings.includes('legacy_checksum');
   const otherWarnings = () => plan()?.warnings.filter((code) => code !== 'legacy_checksum') ?? [];
   const compat = () => (plan() ? javaCompatibility(plan()!) : null);
-  const canApply = () => !!plan() && !expired() && !busy() && gameStopped(props.snapshot) && compat()?.state !== 'incompatible'
+  const canApply = () => !!plan() && !busy() && gameStopped(props.snapshot) && compat()?.state !== 'incompatible'
     && (!plan()!.warnings.length || acknowledged()) && (!legacy() || legacyAcknowledged());
 
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
@@ -298,13 +299,22 @@ export function ChangeFlow(props: {
     finally { setBusy(false); }
   };
   const apply = async () => {
-    const current = plan();
+    let current = plan();
     if (!current || !canApply()) return;
+    if (expired()) {
+      const previous = current;
+      const ack = acknowledged(); const legacyAck = legacyAcknowledged();
+      setPlan(null);
+      await review();
+      current = plan();
+      if (!current || !sameReviewedPlan(previous, current)) return;
+      setAcknowledged(ack); setLegacyAcknowledged(legacyAck);
+    }
     const payload = { planId: current.planId, ack: acknowledged(), legacy: legacyAcknowledged() };
     const intentId = intents.idFor(payload);
     setBusy(true); setError(null);
     try {
-      const job = await serverCommand((client) => client.softwareApply(id(), current.planId, payload.ack, payload.legacy, intentId));
+      const job = await serverCommand((client) => client.softwareApply(id(), payload.planId, payload.ack, payload.legacy, intentId));
       intents.settle();
       toast.show({ title: t('server-hosting.switch-accepted'), tone: 'neutral' });
       setPlan(null);
@@ -398,15 +408,9 @@ export function ChangeFlow(props: {
             </Show>
             <Hint when={!gameStopped(props.snapshot)}>{t('server-hosting.stop-first')}</Hint>
             <div data-vesta="server-software-actions">
-              <Show when={!expired()} fallback={
-                <Button tone="accent" disabled={busy()} onClick={() => void review()}>{t('server-hosting.review-again')}</Button>
-              }>
-                <Button tone="accent" disabled={!canApply()} onClick={() => void apply()}>{t('server-hosting.apply')}</Button>
-              </Show>
+              <Button tone="accent" disabled={!canApply()} onClick={() => void apply()}>{t('server-hosting.apply')}</Button>
               <Button variant="ghost" disabled={busy()} onClick={() => { setPlan(null); setError(null); }}>{t('server-hosting.back')}</Button>
-              <span data-vesta="server-hosting-hint">
-                {expired() ? t('server-hosting.review-expired') : t('server-hosting.review-expires', { count: remaining() })}
-              </span>
+
             </div>
           </section>
         )}

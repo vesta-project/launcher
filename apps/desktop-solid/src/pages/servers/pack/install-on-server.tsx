@@ -1,3 +1,4 @@
+import { sameReviewedPlan } from '../../../features/servers/review-plan';
 import { Badge, Button, Dialog, Progress, SegmentedControl, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
@@ -74,14 +75,23 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const request = createMemo(() => { const value = plan(); return value ? installApplyRequest(value, picks()) : null; }, { name: 'modpack-install:request' });
   const review = createMemo(() => { const value = plan(); return value ? linkReview(value) : null; }, { name: 'modpack-install:review' });
   const update = () => props.request.mode === 'update';
-  const minutesLeft = () => { const value = plan(); return value ? Math.max(0, Math.ceil((value.expiresAtMs - now()) / 60_000)) : 0; };
 
   const apply = async () => {
-    const body = request();
+    let body = request();
     if (!body || blocker()) return;
     setBusy(true); setError(null);
     try {
-      const result = await serverCommand((api) => api.packInstallApply(area.id(), body, intents.idFor(body)));
+      const previous = plan();
+      if (previous && previous.expiresAtMs <= now()) {
+        const fresh = await serverCommand(api => api.packInstallPlan(area.id(), { source: props.request.source }));
+        if (disposed) return;
+        setPlan(fresh);
+        if (!sameReviewedPlan(previous, fresh)) { setPicks(defaultInstallChoices(fresh)); return; }
+        body = installApplyRequest(fresh, picks());
+        if (!body || installBlocker(fresh, now())) return;
+      }
+      const ready = body;
+      const result = await serverCommand((api) => api.packInstallApply(area.id(), ready, intents.idFor(ready)));
       intents.settle();
       if (disposed) return;
       setOutcome(result);
@@ -121,9 +131,6 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         }>
           <Button variant="ghost" disabled={busy() && !!plan()} onClick={close}>{t('common.cancel')}</Button>
           <span data-vesta="server-toolbar-spacer" />
-          <Show when={plan()}>
-            <span data-vesta="server-muted">{t('server-pack.install-expires', { count: minutesLeft() })}</span>
-          </Show>
           <Show when={!plan() && !error()}>
             <Button tone="accent" disabled={busy() || installRequested()} onClick={() => setInstallRequested(true)}>{t(busy() || installRequested() ? 'server-pack.install-preparing' : 'server-pack.install-action')}</Button>
           </Show>
@@ -166,10 +173,6 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                 target={{ software: value().software as SoftwareId, version: value().minecraftVersion, loaderVersion: value().loaderVersion }}
                 onWorking={setBusy} onComplete={() => { setSoftwareOpen(false); void planNow(); }} />}</Show>
               <Show when={!value().valid}><p data-vesta="server-callout" data-tone="danger" role="alert">{t('server-pack.install-invalid')}</p></Show>
-              <Show when={blocker() === 'server-pack.install-expired'}>
-                <div data-vesta="server-callout" data-tone="warning"><span>{t('server-pack.install-expired')}</span>
-                  <Button size="sm" variant="outline" onClick={() => void planNow()}>{t('server-pack.install-replan')}</Button></div>
-              </Show>
               <Show when={value().backupRecommended}>
                 <div data-vesta="server-callout" data-tone="neutral">
                   <span><Icon name="icons/content/storage" size={14} /> {t('server-pack.install-backup')}</span>
