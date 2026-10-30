@@ -26,11 +26,11 @@ describe('backups tab visibility', () => {
 
 describe('setup draft', () => {
   const unconfigured = { limits: { maxSnapshots: null, maxRepositoryBytes: null, minFreeBytes: 1 }, repository: { kind: 'local', location: 'x', initialized: false } };
-  test('suggests one online daily profile keeping 7 daily, 4 weekly, 3 monthly of the whole game', () => {
+  test('suggests one online daily profile keeping up to 14, at most one per day, of the whole game', () => {
     const draft = setupDraft(unconfigured);
     expect(draft.initializeRepository).toBe(true);
     expect(draft.profiles).toHaveLength(1);
-    expect(draft.profiles[0]).toMatchObject({ name: 'daily', mode: 'online', keepDaily: 7, keepWeekly: 4, keepMonthly: 3, include: [], exclude: [] });
+    expect(draft.profiles[0]).toMatchObject({ name: 'daily', mode: 'online', keepTotal: 14, keepDaily: 14, keepLast: 0, keepHourly: 0, keepWeekly: 0, keepMonthly: 0, include: [], exclude: [] });
     expect(draftValid(draft)).toBe(true);
     expect(setupDraft({ ...unconfigured, repository: { ...unconfigured.repository, initialized: true } }).initializeRepository).toBe(false);
   });
@@ -72,9 +72,40 @@ describe('draft diff', () => {
   const weekly = { ...suggestedProfile(), name: 'weekly', keepDaily: 0 };
   test('reports added, removed and changed profiles by name', () => {
     expect(diffCount(draftDiff([daily, weekly], [daily, weekly]))).toBe(0);
-    expect(draftDiff([daily], [{ ...daily, keepDaily: 14 }])).toEqual({ added: [], removed: [], changed: ['daily'] });
+    expect(draftDiff([daily], [{ ...daily, keepDaily: 21 }])).toEqual({ added: [], removed: [], changed: ['daily'] });
     expect(draftDiff([daily], [daily, weekly])).toEqual({ added: ['weekly'], removed: [], changed: [] });
     expect(draftDiff([daily, weekly], [daily])).toEqual({ added: [], removed: ['weekly'], changed: [] });
     expect(draftDiff([daily], [{ ...daily, name: 'nightly' }])).toEqual({ added: ['nightly'], removed: ['daily'], changed: [] });
+  });
+});
+
+import { simpleRetention, withSimpleRetention } from '../src/features/servers/backup-setup-model';
+describe('simple retention', () => {
+  const base = { ...suggestedProfile(), keepTotal: 0, keepHourly: 0, keepLast: 0, keepDaily: 0, keepWeekly: 0, keepMonthly: 0 };
+  test('"keep up to N" maps to the total cap and mirrors the chosen tier', () => {
+    expect(withSimpleRetention(base, { total: 20, thinning: 'none' })).toMatchObject({ keepTotal: 20, keepLast: 20, keepHourly: 0, keepDaily: 0, keepWeekly: 0, keepMonthly: 0 });
+    expect(withSimpleRetention(base, { total: 24, thinning: 'hourly' })).toMatchObject({ keepTotal: 24, keepLast: 0, keepHourly: 24, keepDaily: 0 });
+    expect(withSimpleRetention({ ...base, keepWeekly: 4, keepMonthly: 3 }, { total: 7, thinning: 'daily' })).toMatchObject({ keepTotal: 7, keepDaily: 7, keepWeekly: 0, keepMonthly: 0 });
+  });
+  test('reads back what it wrote, and older single-tier profiles without a total', () => {
+    for (const retention of [{ total: 20, thinning: 'none' }, { total: 24, thinning: 'hourly' }, { total: 7, thinning: 'daily' }]) {
+      expect(simpleRetention(withSimpleRetention(base, retention))).toEqual(retention);
+    }
+    expect(simpleRetention({ ...base, keepTotal: undefined, keepLast: 5 })).toEqual({ total: 5, thinning: 'none' });
+    expect(simpleRetention(base)).toEqual({ total: 0, thinning: 'none' });
+    expect(simpleRetention({ ...base, keepTotal: 30 })).toEqual({ total: 30, thinning: 'none' });
+  });
+  test('weekly/monthly tiers, several tiers or a mismatched cap need the advanced counts', () => {
+    expect(simpleRetention({ ...base, keepDaily: 7, keepWeekly: 4 })).toBeNull();
+    expect(simpleRetention({ ...base, keepLast: 3, keepDaily: 7 })).toBeNull();
+    expect(simpleRetention({ ...base, keepTotal: 30, keepDaily: 7 })).toBeNull();
+  });
+  test('validity, keeps-everything and diffs include the total and hourly counts', () => {
+    expect(retentionValid({ ...base, keepTotal: 1001 })).toBe(false);
+    expect(retentionValid({ ...base, keepHourly: -1 })).toBe(false);
+    expect(keepsEverything({ ...base, keepTotal: 10 })).toBe(false);
+    expect(keepsEverything(base)).toBe(true);
+    expect(draftDiff([base], [{ ...base, keepTotal: 9 }]).changed).toEqual([base.name]);
+    expect(draftDiff([{ ...base, keepTotal: undefined }], [base]).changed).toEqual([]);
   });
 });

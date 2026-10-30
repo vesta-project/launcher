@@ -1,0 +1,127 @@
+/*
+ * Server → Backups: profiles beside storage and recent jobs; a profile's settings in two columns.
+ * Hooks: [data-vesta=backups-layout] -main -side; backup-form(-column -field -label -help -actions)
+ *        backup-keep-row, backup-keep-grid, backup-advanced, backup-location
+ * Knobs: --backups-side-width
+ */
+@layer launcher {
+  :where([data-vesta="backups-layout"]) {
+    --backups-side-width: 320px;
+
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--backups-side-width);
+    align-items: start;
+    gap: var(--vesta-space-4);
+  }
+
+  @container pane (max-width: 860px) {
+    :where([data-vesta="backups-layout"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  :where([data-vesta="backups-main"], [data-vesta="backups-side"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="backup-form"]) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--vesta-space-4) var(--vesta-space-6, 32px);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+
+  @container pane (max-width: 640px) {
+    :where([data-vesta="backup-form"]) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  :where([data-vesta="backup-form-column"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="backup-form-field"]) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="backup-form-label"]) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium, 500);
+  }
+
+  :where([data-vesta="backup-form-help"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="backup-keep-row"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="backup-keep-row"]) > [data-vesta="field"] {
+    inline-size: 96px;
+  }
+
+  :where([data-vesta="backup-advanced"]) {
+    align-self: stretch;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="backup-advanced"] summary) {
+    color: var(--vesta-color-text-muted);
+    cursor: default;
+  }
+
+  :where([data-vesta="backup-advanced"][open] summary) {
+    margin-block-end: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="backup-keep-grid"]) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    margin-block-end: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="backup-form-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+  }
+
+  :where([data-vesta="backup-location"]) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="backup-location"] code) {
+    overflow: hidden;
+    max-inline-size: 360px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

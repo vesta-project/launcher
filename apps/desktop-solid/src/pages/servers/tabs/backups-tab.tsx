@@ -74,24 +74,24 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const canConfigure = () => can('backups.configure');
   const configured = () => backupsConfigured(props.snapshot, overview());
   const settingUp = () => configured() === false && canConfigure();
+  /** Verification runs on its own; only its failures are worth a row. */
+  const visibleJobs = () => (overview()?.jobs ?? []).filter((job) => job.kind !== 'verify' || job.state === 'failed' || job.state === 'uncertain');
   const [enabled, setEnabled] = createSignal<string | null>(null, { name: 'server-backups:just-enabled' });
 
   const profileActions = (name: string) => (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
-        {t(openProfile() === name ? 'servers.backups.hide-points' : 'servers.backups.show-points')}
+      <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/controls/chevron-down" size={12} />} aria-expanded={openProfile() === name ? 'true' : 'false'}
+        onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
+        {t('servers.backups.show-points')}
       </Button>
-      <Show when={can('backups.verify')}>
-        <Button size="sm" variant="outline" onClick={() => void start('verify', name)}>{t('servers.backups.verify')}</Button>
-      </Show>
       <Show when={can('backups.create')}>
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start('run', name)}>{t('servers.backups.run')}</Button>
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
       </Show>
     </>
   );
   const profilePoints = (name: string) => (
     <Show when={openProfile() === name}>
-      <RestorePoints snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
+      <BackupList snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
     </Show>
   );
   let disposed = false;
@@ -120,12 +120,12 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
     follower?.observe(jobs);
   }, { name: 'server-backups:jobs' });
 
-  const start = async (kind: 'run' | 'verify', profile: string) => {
+  const start = async (profile: string) => {
     try {
-      const job = await serverCommand((client) => (kind === 'run' ? client.backupRun(id(), profile, newIntentId()) : client.backupVerify(id(), profile, newIntentId())));
+      const job = await serverCommand((client) => client.backupRun(id(), profile, newIntentId()));
       if (disposed) return;
       setStarted(job);
-      toast.show({ title: t(kind === 'run' ? 'servers.backups.started' : 'servers.backups.verify-started', { name: profile }), tone: 'neutral' });
+      toast.show({ title: t('servers.backups.started', { name: profile }), tone: 'neutral' });
       void refresh();
     } catch (reason) {
       toast.show({ title: t(errorMessage(reason)), tone: 'danger' });
@@ -158,35 +158,12 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
         </Show>
 
         <Show when={enabled()}>
-          {(profile) => <BackupsEnabled snapshot={props.snapshot} profile={profile()} onDismiss={() => setEnabled(null)} onRun={() => { setEnabled(null); void start('run', profile()); }} />}
+          {(profile) => <BackupsEnabled snapshot={props.snapshot} profile={profile()} onDismiss={() => setEnabled(null)} onRun={() => { setEnabled(null); void start(profile()); }} />}
         </Show>
         <Show when={!settingUp()} fallback={<BackupSetup snapshot={props.snapshot} onEnabled={(profile) => { setEnabled(profile); void refresh(); }} />}>
-        <Show when={storage()}>
-          {(space) => (
-            <section data-vesta="settings-panel">
-              <h3>{t('servers.backups.storage')}</h3>
-              <div data-vesta="server-backup-storage">
-                <div><strong>{bytes(space().repositoryBytes)}</strong><span>{t('servers.backups.used')}</span></div>
-                <div><strong>{space().restorePoints}</strong><span>{t('servers.backups.restore-points')}</span></div>
-                <div><strong>{bytes(space().freeBytes)}</strong><span>{t('servers.backups.free')}</span></div>
-                <Show when={space().limits.maxRepositoryBytes}>
-                  {(limit) => (
-                    <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
-                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
-                      <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
-                    </div>
-                  )}
-                </Show>
-              </div>
-              <Show when={space().stopped}>
-                {(code) => <p data-vesta="server-callout" data-tone="warning">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}
-              </Show>
-            </section>
-          )}
-        </Show>
-
+        <div data-vesta="backups-layout">
+        <div data-vesta="backups-main">
         <Show when={canConfigure()} fallback={
-          <>
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.profiles')}</h3>
           <Show when={configured()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.backup-setup.view-only')}</p></Show>
@@ -212,16 +189,40 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
             </Show>
           </div>
         </section>
-          </>
         }>
           <BackupProfilesEditor snapshot={props.snapshot} actions={profileActions} details={profilePoints} />
+        </Show>
+        </div>
+        <aside data-vesta="backups-side">
+        <Show when={storage()}>
+          {(space) => (
+            <section data-vesta="settings-panel">
+              <h3>{t('servers.backups.storage')}</h3>
+              <div data-vesta="server-backup-storage">
+                <div><strong>{bytes(space().repositoryBytes)}</strong><span>{t('servers.backups.used')}</span></div>
+                <div><strong>{space().restorePoints}</strong><span>{t('servers.backups.restore-points')}</span></div>
+                <div><strong>{bytes(space().freeBytes)}</strong><span>{t('servers.backups.free')}</span></div>
+                <Show when={space().limits.maxRepositoryBytes}>
+                  {(limit) => (
+                    <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
+                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
+                      <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
+                    </div>
+                  )}
+                </Show>
+              </div>
+              <Show when={space().stopped}>
+                {(code) => <p data-vesta="server-callout" data-tone="warning">{t(backupErrors[code()] ?? 'servers.backups.failed')}</p>}
+              </Show>
+            </section>
+          )}
         </Show>
 
         <section data-vesta="settings-panel">
           <h3>{t('servers.backups.recent')}</h3>
-          <Show when={overview()?.jobs.length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-jobs')}</p>}>
+          <Show when={visibleJobs().length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-jobs')}</p>}>
             <ul data-vesta="server-activity-list" class="server-panel-list">
-              <For each={overview()?.jobs ?? []} keyed={(job) => job.id}>
+              <For each={visibleJobs()} keyed={(job) => job.id}>
                 {(job) => {
                   const when = () => age(job().createdAtMs, now());
                   return (
@@ -239,7 +240,6 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                           <span>{t('servers.ago', { time: t(when().message, { count: when().count }) })}</span>
                           <Show when={job().result?.dataAdded !== undefined}><span>{t('servers.backups.added', { value: bytes(job().result?.dataAdded) })}</span></Show>
                           <Show when={job().result?.filesChanged !== undefined}><span>{t('servers.backups.files-changed', { count: (job().result?.filesChanged ?? 0) + (job().result?.filesNew ?? 0) })}</span></Show>
-                          <Show when={job().result?.verified}><span>{t('servers.backups.verified')}</span></Show>
                         </p>
                       </div>
                       <Badge size="sm" variant="soft" tone={jobTone(job())}>{t(jobState[job().state])}</Badge>
@@ -250,6 +250,8 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
             </ul>
           </Show>
         </section>
+        </aside>
+        </div>
         </Show>
       </div>
       <Show when={restoring()} keyed>
@@ -259,7 +261,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-function RestorePoints(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
+function BackupList(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
   const id = () => props.snapshot.connection.id;
   const points = useServerResource(stableConnectionId(() => props.snapshot), backupSnapshotsResource, { args: () => props.profile });
   const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') !== 'denied';
