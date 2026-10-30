@@ -79,7 +79,7 @@ impl Error {
                 && d.filename.as_ref().is_none_or(|s| {
                     !s.is_empty()
                         && s.len() <= 256
-                        && s.chars().all(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':'))
+                        && s.chars().all(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':' | '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
                 })
         }).map(Box::new);
         self

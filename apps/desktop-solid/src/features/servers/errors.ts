@@ -74,7 +74,7 @@ function providerDetails(error: ServerCommandError) {
 
 export function serverErrorFile(reason: unknown): string | null {
   const filename = providerDetails(toServerError(reason))?.filename;
-  return typeof filename === 'string' && filename.length > 0 && filename.length <= 256 && !/[\x00-\x1f\x7f-\x9f]/.test(filename)
+  return typeof filename === 'string' && filename.length > 0 && filename.length <= 256 && !/[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(filename)
     && !/[\\/:]/.test(filename) ? filename : null;
 }
 
