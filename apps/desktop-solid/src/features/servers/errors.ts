@@ -74,7 +74,7 @@ function providerDetails(error: ServerCommandError) {
 
 export function serverErrorFile(reason: unknown): string | null {
   const filename = providerDetails(toServerError(reason))?.filename;
-  return typeof filename === 'string' && filename.length <= 256 && /^[\x20-\x7e]+$/.test(filename)
+  return typeof filename === 'string' && filename.length > 0 && filename.length <= 256 && !/[\x00-\x1f\x7f-\x9f]/.test(filename)
     && !/[\\/:]/.test(filename) ? filename : null;
 }
 
@@ -86,6 +86,7 @@ export function serverErrorDetails(reason: unknown): string {
   const d = providerDetails(error);
   if (d) {
     lines.push(`${d.stage}: ${d.provider} ${d.projectId}${d.versionId ? ` / ${d.versionId}` : ''}`);
+    if (d.reason && ['filename_not_portable', 'download_host_not_allowed', 'redirect_limit_exceeded', 'manual_download_required', 'provider_request_failed'].includes(d.reason)) lines.push(d.reason);
     const filename = serverErrorFile(reason);
     if (filename) lines.push(filename);
   }

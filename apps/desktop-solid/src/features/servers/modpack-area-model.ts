@@ -641,6 +641,6 @@ export function pickProviderVersion<V extends { id: string; game_versions: strin
 
 /** Early Install consent covers additive, compatible plans; conflicts still need review. */
 export function installCanProceedWithoutReview(plan: PackInstallPlan, now: number): boolean {
-  return !installBlocker(plan, now) && !installConflicts(plan).length && !(plan.removed?.length)
+  return plan.expiresAtMs > now && !installBlocker(plan, now) && !installConflicts(plan).length && !(plan.removed?.length)
     && !plan.warnings.length && plan.files.every(file => file.operation === 'added' || file.operation === 'unchanged');
 }
