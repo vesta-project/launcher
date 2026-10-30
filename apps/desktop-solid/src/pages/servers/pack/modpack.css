@@ -1,5 +1,5 @@
 /*
- * Server → Modpack: two sections (Server modpack | Client pack). The server modpack reads like
+ * Server â†’ Modpack: two sections (Server modpack | Client pack). The server modpack reads like
  * an instance linked to a modpack (link card, pending, owned content). The custom client pack
  * has a pack header, a sub-nav like an instance's tabs, and panes that reuse the instance
  * Resources table and the server Files list.
@@ -1204,6 +1204,10 @@
     font-size: var(--vesta-text-sm);
     font-variant-numeric: tabular-nums;
   }
+
+  :where([data-vesta="pack-review-version-meta"] > span) { display: grid; gap: var(--vesta-space-1); margin-inline-end: var(--vesta-space-3); }
+  :where([data-vesta="pack-review-version-meta"] small) { font-size: var(--vesta-text-xs); }
+  :where([data-vesta="pack-review-version-meta"] strong) { color: var(--vesta-color-text); font-weight: var(--vesta-weight-medium); }
 
   :where([data-vesta="pack-review-switch"]) {
     display: grid;

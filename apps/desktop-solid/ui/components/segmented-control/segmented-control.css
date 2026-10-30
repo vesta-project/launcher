@@ -120,6 +120,8 @@
   :where([data-vesta='segmented-item']) {
     position: relative;
     z-index: 1;
+    box-sizing: border-box;
+    align-self: stretch;
     display: flex;
     flex: none;
     align-items: center;
