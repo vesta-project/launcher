@@ -116,3 +116,9 @@
     white-space: nowrap;
   }
 }
+
+@layer launcher {
+  :where([data-vesta="backup-form-field"] > [data-vesta="segmented-field"]) {
+    align-self: flex-start;
+  }
+}

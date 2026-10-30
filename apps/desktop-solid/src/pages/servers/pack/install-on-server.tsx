@@ -118,11 +118,11 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     finally { if (!disposed && request === sequence) setPlanning(false); }
   };
   // Plan for the chosen version; a new version choice plans again.
-  createEffect(() => sourceKey(source()), () => { void planNow(); }, { name: 'pack-review:plan-source' });
+  createEffect(() => sourceKey(source()), () => { untrack(() => void planNow()); }, { name: 'pack-review:plan-source' });
   let softwareRevision: string | undefined;
   createEffect(() => software.value()?.revision, revision => {
     const previous = softwareRevision; softwareRevision = revision;
-    if (previous !== undefined && revision !== previous && !untrack(busy) && !untrack(outcome)) void planNow();
+    if (previous !== undefined && revision !== previous && !untrack(busy) && !untrack(outcome)) untrack(() => void planNow());
   }, { name: 'pack-review:software-revision' });
 
   const current = (): PackRuntime | null => {
