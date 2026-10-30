@@ -348,6 +348,7 @@ export function ChangeFlow(props: {
             )}
           </Show>
         </div>
+        <Show when={software() === 'bukkit' || software() === 'spigot'}><p data-vesta="server-hosting-hint">{t('server-hosting.warning-source-build')}</p></Show>
         <HostingError error={releases.error()} onRetry={() => void releases.refresh()} />
         <HostingError error={versions.error()} onRetry={() => void versions.refresh()} />
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
