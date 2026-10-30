@@ -48,6 +48,7 @@ pub struct Error {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderErrorDetails {
     pub stage: String,
+    pub reason: Option<String>,
     pub provider: String,
     pub project_id: String,
     pub version_id: String,
@@ -70,6 +71,7 @@ impl Error {
         let details = serde_json::from_value::<ProviderErrorDetails>(value.clone()).ok();
         self.details = details.filter(|d| {
             matches!(d.stage.as_str(), "metadata" | "download")
+                && d.reason.as_deref().is_none_or(|r| matches!(r, "filename_not_portable" | "download_host_not_allowed" | "redirect_limit_exceeded" | "manual_download_required" | "provider_request_failed"))
                 && matches!(d.provider.as_str(), "curseforge" | "modrinth")
                 && !d.project_id.is_empty()
                 && valid_id(&d.project_id)
@@ -77,8 +79,7 @@ impl Error {
                 && d.filename.as_ref().is_none_or(|s| {
                     !s.is_empty()
                         && s.len() <= 256
-                        && s.bytes()
-                            .all(|b| (32..=126).contains(&b) && !matches!(b, b'/' | b'\\' | b':'))
+                        && s.chars().all(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':'))
                 })
         });
         self

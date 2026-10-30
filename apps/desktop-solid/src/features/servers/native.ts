@@ -66,7 +66,7 @@ export interface ServerCommandError {
   /** The agent's fixed wire code when it adds detail, e.g. `software_runtime_unavailable`. Never free text. */
   reason?: string | null;
   /** Sanitized public provider identity. No response body, URL or credential. */
-  details?: { stage: 'metadata' | 'download'; provider: 'curseforge' | 'modrinth'; projectId: string; versionId: string; filename: string | null } | null;
+  details?: { stage: 'metadata' | 'download'; reason?: 'filename_not_portable' | 'download_host_not_allowed' | 'redirect_limit_exceeded' | 'manual_download_required' | 'provider_request_failed' | null; provider: 'curseforge' | 'modrinth'; projectId: string; versionId: string; filename: string | null } | null;
 }
 
 export const isServerCommandError = (value: unknown): value is ServerCommandError =>
