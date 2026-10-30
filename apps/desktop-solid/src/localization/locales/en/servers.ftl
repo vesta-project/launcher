@@ -500,7 +500,7 @@ servers-backup-setup-keep-backups = { $count ->
 }
 servers-backup-setup-keep-newest = Keep the newest
 servers-backup-setup-keep-daily = Also keep one per day for
-servers-backup-setup-keep-weekly = one per week for
+servers-backup-setup-keep-weekly = Also keep one per week for
 servers-backup-setup-keep-monthly = one per month for
 servers-backup-setup-keep-hourly = one per hour for
 servers-backup-setup-unit-days = { $count ->

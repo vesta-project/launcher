@@ -450,7 +450,10 @@ server-pack-check-content-failed = Some updates couldn't be checked. Try again.
 
 server-pack-install-action = Install
 server-pack-install-preparing = Preparing installation?
-server-pack-install-notes = { $count } notes
+server-pack-install-notes = { $count ->
+    [one] 1 note
+   *[other] { $count } notes
+}
 server-pack-install-current-runtime = Installed: { $software } { $version }, loader { $loader }
 
 server-pack-warning-missing-dependency = A required dependency is missing from this pack: { $path }
