@@ -41,7 +41,7 @@ pub struct Error {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub details: Option<ProviderErrorDetails>,
+    pub details: Option<Box<ProviderErrorDetails>>,
 }
 /// A bounded public file identity, never a provider response, URL or credential.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -81,7 +81,7 @@ impl Error {
                         && s.len() <= 256
                         && s.chars().all(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':'))
                 })
-        });
+        }).map(Box::new);
         self
     }
     pub fn wire_for_route(status: u16, code: &str, retry: Option<u64>, path: &str) -> Self {
