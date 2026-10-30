@@ -253,7 +253,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                       <p>
                         <Icon name="icons/controls/warning" size={14} />
                         <strong>{t('server-pack.review-switch', { target: runtimeLabel(change().to) })}</strong>
-                        <Show when={change().from}>{(from) => <small>{t('server-pack.review-switch-current', { current: runtimeLabel(from()) })}</small>}</Show>
+                        <Show when={change().from}>{(from) => <small>{t('server-pack.review-switch-current', { source: runtimeLabel(from()) })}</small>}</Show>
                       </p>
                       <Checkbox size="sm" checked={acknowledged()} disabled={busy()} onChange={setAcknowledged} label={t('server-pack.review-switch-ack')} />
                     </div>
