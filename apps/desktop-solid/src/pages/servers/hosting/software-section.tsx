@@ -326,7 +326,6 @@ export function ChangeFlow(props: {
 
   return (
     <div data-vesta="server-software-flow" data-server-software-step={reviewing() ? 'review' : 'pick'}>
-      <>
         <Show when={props.target}><p>{softwareName(software())} {minecraft()} {selectedRelease() === 'latest' ? '' : selectedRelease()}</p></Show>
         <Show when={!props.target}>
         <Field label={t('server-hosting.software-label')}>
@@ -369,7 +368,6 @@ export function ChangeFlow(props: {
           </div>
         </Show>
         <Show when={blocker()}>{(message) => <p data-vesta="server-hosting-hint" data-server-software-blocked>{t(message())}</p>}</Show>
-      </>
 
       <Show when={plan()}>
         {(current) => (
