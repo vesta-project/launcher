@@ -158,7 +158,9 @@ dto!(ClientPackConfig {
 dto!(ServerModpackUnlink {
     remove_owned_files: bool
 });
+dto!(PackInstallProgress { stage: String, completed: usize, total: usize });
 dto!(WorkspaceView {
+    install_progress: Option<PackInstallProgress>,
     server_modpack:Option<ServerModpackLink>,
     client_pack:ClientPackConfig,
     customizing_provider:bool,

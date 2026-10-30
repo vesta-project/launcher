@@ -9,7 +9,7 @@ import {
   type ConflictChoice,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError } from '../../../features/servers/native';
-import type { PackInstallOutcome, PackInstallPlan } from '../../../features/servers/native-pack';
+import type { PackInstallOutcome, PackInstallPlan, PackInstallProgress } from '../../../features/servers/native-pack';
 import { useServerResource, invalidateServerResources } from '../../../features/servers/resources';
 import { softwareResource, CONTENT_RESOURCES } from '../../../features/servers/server-resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
@@ -42,12 +42,27 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const [plan, setPlan] = createSignal<PackInstallPlan | null>(null, { name: 'modpack-install:plan' });
   const [picks, setPicks] = createSignal<Record<string, ConflictChoice>>({}, { name: 'modpack-install:picks' });
   const [busy, setBusy] = createSignal(false, { name: 'modpack-install:busy' });
+  const [preparation, setPreparation] = createSignal<PackInstallProgress | null>(null);
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack-install:error' });
   const [outcome, setOutcome] = createSignal<PackInstallOutcome | null>(null, { name: 'modpack-install:outcome' });
   const intents = new IntentMemo();
   const [uncertain, setUncertain] = createSignal(false, { name: 'modpack-install:uncertain' });
   let disposed = false;
   onCleanup(() => { disposed = true; });
+  createEffect(() => busy() && !plan(), active => {
+    if (!active) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const workspace = await serverCommand(api => api.packDraft(area.id()));
+        if (!stopped) setPreparation(workspace.installProgress ?? null);
+      } catch { /* The plan request reports actionable failures. */ }
+      if (!stopped) timer = setTimeout(() => void poll(), 1500);
+    };
+    timer = setTimeout(() => void poll(), 1000);
+    onCleanup(() => { stopped = true; clearTimeout(timer); });
+  });
 
   const planNow = async (): Promise<void> => {
     const startedRevision = untrack(() => software.value()?.revision);
@@ -144,7 +159,9 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
       <Show when={outcome()} fallback={
         <Show when={plan()} fallback={
           <div data-vesta="modpack-install-loading">
-            <Show when={!error()}><Progress size="sm" label={t('server-pack.install-planning')} /></Show>
+            <Show when={!error()}><Progress size="sm"
+              value={preparation()?.total ? Math.round(preparation()!.completed / preparation()!.total * 100) : undefined}
+              label={t('server-pack.install-planning')} /></Show>
             <ServerErrorNote error={error()} onRetry={() => void planNow()} />
           </div>
         }>
