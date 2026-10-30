@@ -5,7 +5,7 @@ import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
-import { projectPath, sourceById, type ResourceVersion } from '../../../features/browse/browse-model';
+import { projectPath, type ResourceVersion } from '../../../features/browse/browse-model';
 import { loadProject, loadProjects, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
@@ -230,17 +230,6 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
 
   /* ---- Rows ---- */
 
-  const providerBadge = (row: ContentRowModel) => (
-    <Show when={row.entry.provider} fallback={<span data-vesta="server-content-provider" data-unknown="">{t('server-content.unidentified')}</span>}>
-      {(provider) => (
-        <span data-vesta="server-content-provider" data-provider={provider().provider}>
-          <Icon name={sourceById(provider().provider).icon} size={11} />
-          {sourceById(provider().provider).label}
-        </span>
-      )}
-    </Show>
-  );
-
   const entryRow = (row: () => ContentRowModel) => {
     const entry = () => row().entry;
     const project = () => projectOf(entry());
@@ -273,7 +262,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
             <span data-vesta="resource-copy">
               <span data-vesta="resource-title">{row().name}</span>
               <span data-vesta="resource-sub">
-                {providerBadge(row())}
+                {t(kindLabel[entry().kind])}
                 <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
                 <Show when={entry().pendingError}><span data-tone="danger">{t('server-content.pending-failed')}</span></Show>
               </span>

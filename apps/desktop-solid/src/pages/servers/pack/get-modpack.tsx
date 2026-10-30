@@ -1,5 +1,5 @@
 import { Button, Checkbox, Dialog, Progress, Select } from '@vesta/ui';
-import { For, Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import { For, Show, createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { instances } from '../../../features/instances/catalog';
@@ -13,6 +13,7 @@ import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import './modpack.css';
+import { openServerInstall } from '../../create/install-navigation';
 
 const uncertainCodes = new Set(['outcome_unknown', 'timeout', 'unreachable']);
 export type GetModpackMode = 'new' | 'link';
@@ -37,7 +38,7 @@ export function PlayOnServerCard(props: { snapshot: ServerSnapshot }) {
       <h2>{t('server-pack.play-title')}</h2>
       <Show when={props.snapshot.pack?.hostedRevision}>{(revision) => <p data-vesta="server-muted">{t('server-pack.play-version', { version: revision() })}</p>}</Show>
       <div data-vesta="server-stat-actions">
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => setMode('new')}>{t('server-pack.play-create')}</Button>
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => openServerInstall(props.snapshot.connection.id)}>{t('server-pack.play-create')}</Button>
         <Button size="sm" variant="outline" icon={<Icon name="icons/content/link" />} onClick={() => setMode('link')}>{t('server-pack.play-link')}</Button>
       </div>
       <Show when={mode()} keyed>{(value) => <GetModpackDialog snapshot={props.snapshot} mode={value} onClose={() => setMode(null)} />}</Show>
@@ -50,6 +51,7 @@ export function PlayOnServerCard(props: { snapshot: ServerSnapshot }) {
  * release and builds a single-use review; executable changes need consent for that revision.
  */
 export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetModpackMode; onClose: () => void }) {
+  onSettled(() => { if (props.mode === 'new') { openServerInstall(props.snapshot.connection.id); props.onClose(); } });
   const id = () => props.snapshot.connection.id;
   const [target, setTarget] = createSignal<string | undefined>(undefined, { name: 'modpack-get:target' });
   const [review, setReview] = createSignal<PackSyncPreview | undefined>(undefined, { name: 'modpack-get:review' });
@@ -79,8 +81,8 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
     } catch (reason) { if (!disposed && request === sequence) setError(reason as ServerCommandError); }
     finally { if (!disposed && request === sequence) setBusy(false); }
   };
-  // A new instance is reviewed straight away; linking reviews the instance once it's picked.
-  createEffect(() => (props.mode === 'new' ? 'new' : target() ?? null), (key) => {
+  // New instances use Create; linking reviews the instance once it is picked.
+  createEffect(() => (props.mode === 'new' ? null : target() ?? null), (key) => {
     if (key) void start(key === 'new' ? null : Number(key));
   }, { name: 'modpack-get:review-target' });
 
@@ -104,7 +106,7 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
   const counts = () => { const value = review(); return value ? syncChangeSummary(value.changes) : null; };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !busy()) props.onClose(); }} closeLabel={t('nav.close')} size="md"
+    <Show when={props.mode === 'link'}><Dialog open onOpenChange={(open) => { if (!open && !busy()) props.onClose(); }} closeLabel={t('nav.close')} size="md"
       title={t(props.mode === 'new' ? 'server-pack.play-create-title' : 'server-pack.play-link-title', { title: props.snapshot.connection.name })}
       footer={<>
         <Button variant="ghost" disabled={busy() && !!review()} onClick={props.onClose}>{t('common.cancel')}</Button>
@@ -119,7 +121,7 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
         <Show when={props.mode === 'link'}>
           <Select size="sm" label={t('server-pack.play-instance')} value={target()} disabled={busy()} onChange={setTarget}
             placeholder={t(candidates().length ? 'server-pack.play-instance-pick' : 'server-pack.play-instance-none')}
-            options={candidates().map((entry) => ({ value: entry.instance.id, label: entry.instance.name, description: `${entry.instance.minecraftVersion} · ${entry.instance.modloader}` }))} />
+            options={candidates().map((entry) => ({ value: entry.instance.id, label: entry.instance.name, description: entry.instance.minecraftVersion }))} />
         </Show>
         <Show when={busy() && !review()}><Progress size="sm" label={t('server-pack.play-checking')} /></Show>
         <Show when={review()}>
@@ -128,7 +130,7 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
               <div data-vesta="pack-review-version">
                 <span data-vesta="pack-review-version-static"><small>{t('server-pack.review-version')}</small><strong>{value().name} {value().revision}</strong></span>
                 <span data-vesta="pack-review-version-meta">
-                  <span>{value().runtime.minecraftVersion}</span><span aria-hidden="true">·</span>
+                  <span>{value().runtime.minecraftVersion}</span>
                   <span>{value().runtime.loader} {value().runtime.loaderVersion ?? ''}</span>
                 </span>
               </div>
@@ -147,6 +149,6 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
         <Show when={uncertain()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.get-uncertain')}</p></Show>
         <ServerErrorNote error={error()} onRetry={props.mode === 'new' ? () => void start(null) : undefined} />
       </div>
-    </Dialog>
+    </Dialog></Show>
   );
 }

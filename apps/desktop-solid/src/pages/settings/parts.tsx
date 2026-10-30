@@ -8,7 +8,7 @@ import './parts.css';
 /** A titled, raised group of settings rows. */
 export function Card(props: {
   title?: string;
-  description?: string;
+  description?: JSX.Element;
   /** Controls in the card's header, right-aligned. */
   action?: JSX.Element;
   danger?: boolean;

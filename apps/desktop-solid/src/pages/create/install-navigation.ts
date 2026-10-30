@@ -13,6 +13,7 @@ const [actionRevision, setActionRevision] = createSignal(0, { name: 'createActio
 /** An explicit intent also works when Create is already mounted at the same URL. */
 export const createActionKey = () => `create:${actionRevision()}`;
 export function requestCreateAction(action: CreateAction) {
+  pendingServer = undefined;
   pendingSource = undefined;
   pendingResource = undefined;
   pendingAction = action;
@@ -26,6 +27,7 @@ export function takeCreateAction() {
 }
 /** One-shot handoff from the launcher-import page to archive installation. */
 export function openInstallSource(source: InstallSourceHandoff) {
+  pendingServer = undefined;
   pendingAction = undefined;
   pendingResource = undefined;
   pendingSource = source;
@@ -40,6 +42,7 @@ export function takeInstallSource() {
 
 /** Consumed by the mounted form; leaving it drops the unsubmitted resource. */
 export function openResourceInstall(resource: PendingResourceInstall) {
+  pendingServer = undefined;
   pendingAction = undefined;
   pendingSource = undefined;
   pendingResource = resource;
@@ -51,3 +54,11 @@ export function takeResourceInstall() {
   pendingResource = undefined;
   return resource;
 }
+
+let pendingServer: string | undefined;
+export function openServerInstall(connectionId: string) {
+  pendingSource = undefined; pendingResource = undefined; pendingAction = undefined;
+  pendingServer = connectionId;
+  setActionRevision(value => value + 1); navigate('/create');
+}
+export function takeServerInstall() { const id = pendingServer; pendingServer = undefined; return id; }

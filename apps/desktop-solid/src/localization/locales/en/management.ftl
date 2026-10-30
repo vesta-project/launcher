@@ -83,3 +83,7 @@ library-color-pink = Pink
 library-open-group-first = Open the group first
 library-open-group-first-description = Drop the files onto an instance inside the group.
 library-save-error = Your arrangement could not be saved. Changes may be lost when the launcher closes.
+
+management-export-files = Choose files
+management-export-description = Description
+management-export-selected = { $count } files selected

@@ -4,7 +4,7 @@ import {
   enrichLocalPack,
   packArtwork,
 } from "../../features/installation/pack-metadata";
-import { Button, Combobox, IconPicker, SegmentedControl, Switch, TextField } from "@vesta/ui";
+import { Button, Checkbox, Combobox, IconPicker, SegmentedControl, Switch, TextField } from "@vesta/ui";
 import { Show, createMemo, createSignal, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
 import { Icon } from "../../components/icon";
@@ -45,11 +45,18 @@ import { route } from "../../app/router";
 import { findLauncher } from "../../features/installation/launchers";
 import { LauncherImportPage } from "./launcher-import-page";
 import { startPendingResourceInstallation } from "../../features/browse/new-instance-install";
-import { createActionKey, takeCreateAction, takeResourceInstall, takeInstallSource } from "./install-navigation";
+import { createActionKey, takeCreateAction, takeResourceInstall, takeInstallSource, takeServerInstall, openServerInstall } from "./install-navigation";
 import { InstallMemoryCard } from "./memory-card";
 import { InstallPackDetails } from "./pack-details";
 import { ImportDialog } from "./import-dialog";
 import "./create-page.css";
+import { serverCommand } from '../../features/servers/store';
+import { usingFixtures } from '../../features/servers/service';
+import type { PackSyncPreview } from '../../features/servers/native-pack-sync';
+import { syncApplyRequest } from '../../features/servers/modpack-area-model';
+import { invoke } from '@tauri-apps/api/core';
+import type { NativeInstance } from '../../features/instances/native-model';
+import { refreshNativeInstances } from '../../features/instances/native-service';
 
 const loaderNames: Record<string, string> = {
   vanilla: "Vanilla",
@@ -71,6 +78,10 @@ export function CreatePage() {
 }
 
 function InstanceInstallForm() {
+  const serverId = takeServerInstall();
+  const [serverReview, setServerReview] = createSignal<PackSyncPreview>();
+  const [serverConsent, setServerConsent] = createSignal(false);
+  const [serverUncertain, setServerUncertain] = createSignal(false);
   const createAction = takeCreateAction();
   const sourceHandoff = takeInstallSource();
   const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
@@ -83,7 +94,7 @@ function InstanceInstallForm() {
   const [memory, setMemory] = createSignal([2048, 4096], { name: "installMemory" });
   const [busy, setBusy] = createSignal(false, { name: "installSubmitting" });
   const [matching, setMatching] = createSignal(false, { name: "installPackMatching" });
-  const [reading, setReading] = createSignal(!!sourceHandoff, { name: "installSourceLoading" });
+  const [reading, setReading] = createSignal(!!sourceHandoff || !!serverId, { name: "installSourceLoading" });
   const [error, setError] = createSignal("", { name: "installError" });
   const [source, setSource] = createSignal<PackSource>();
   const [pack, setPack] = createSignal<PackInfo>();
@@ -106,6 +117,8 @@ function InstanceInstallForm() {
   onCleanup(() => {
     disposed = true;
     request++;
+    const review = untrack(serverReview);
+    if (review) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {});
   });
   const selectedMinecraft = () =>
     minecraft() || (nativeInstances ? metadata()?.latest.release : "1.21.4") || "";
@@ -150,7 +163,8 @@ function InstanceInstallForm() {
     !locked() &&
     !createdId() &&
     !releaseError() &&
-    (source()
+    (!serverId || (!!serverReview() && (!serverReview()!.consentRequired || serverConsent()))) &&
+    (serverId ? !!pack() : source()
       ? !!pack()
       : versions().some((version) => version.value === selectedMinecraft()) &&
         (loader() === "vanilla" || loaderOptions().includes(selectedLoader())));
@@ -166,6 +180,14 @@ function InstanceInstallForm() {
     return options;
   });
   onSettled(() => {
+    if (serverId) void serverCommand(api => api.packSyncPreview(serverId, null)).then(review => {
+      if (disposed) { void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {}); return; }
+      setServerReview(review); setName(review.name); setMinecraft(review.runtime.minecraftVersion);
+      setLoader(review.runtime.loader); setLoaderVersion(review.runtime.loaderVersion || '');
+      setPack({ name: review.name, version: review.revision, author: null, description: null, iconUrl: null,
+        minecraftVersion: review.runtime.minecraftVersion, modloader: review.runtime.loader, modloaderVersion: review.runtime.loaderVersion,
+        modCount: review.changes.filter(change => change.path.startsWith('mods/')).length, format: 'server' });
+    }).catch(reason => { if (!disposed) setError(String(reason.code || reason)); }).finally(() => { if (!disposed) setReading(false); });
     const pending = untrack(pendingResource);
     if (pending) {
       setName(pending.project.name);
@@ -310,10 +332,24 @@ function InstanceInstallForm() {
     }
   };
   const install = async () => {
-    if (!nativeInstances || !valid()) return;
+    if ((!nativeInstances && !serverId) || !valid()) return;
     setBusy(true);
     setError("");
     try {
+      if (serverId) {
+        const review = serverReview();
+        const apply = review && syncApplyRequest(review, serverConsent(), false);
+        if (!apply) return;
+        setServerReview(undefined);
+        const id = await serverCommand(api => api.packSyncApply({ ...apply, name: name().trim() }));
+        setCreatedId(id);
+        if (!usingFixtures) {
+          const record = await invoke<NativeInstance>('get_instance', { instanceId: id });
+          await invoke('update_instance', { instanceData: { ...record, minMemory: memory()[0], maxMemory: memory()[1], iconPath: iconEdited ? icon() : record.iconPath } });
+          await refreshNativeInstances(true);
+        }
+        navigate(`/library/${id}`); return;
+      }
       const selected = releases().find((item) => item.id === pack()?.modpackVersionId);
       const packSource = source();
       // Bind install to the inspected release, even when the original URL meant "latest".
@@ -338,6 +374,9 @@ function InstanceInstallForm() {
     } catch (reason) {
       if (!disposed) {
         if (reason instanceof InstallationStartError) setCreatedId(reason.instanceId);
+        if (serverId && ['outcome_unknown', 'timeout', 'unreachable'].includes(String((reason as { code?: string }).code))) {
+          setServerUncertain(true); setError(t('server-pack.get-uncertain')); return;
+        }
         setError(String(reason));
       }
     } finally {
@@ -345,7 +384,7 @@ function InstanceInstallForm() {
     }
   };
   let dropElement: HTMLFormElement | undefined;
-  useNativeDropZone({ element: () => dropElement, accept: 'files', extensions: ['.zip', '.mrpack'], disabled: busy,
+  useNativeDropZone({ element: () => dropElement, accept: 'files', extensions: ['.zip', '.mrpack'], disabled: () => busy() || !!serverId,
     drop: (paths) => { if (paths.length === 1) void loadSource({ kind: 'file', value: paths[0]! }); else setError(t('drop.single-pack')); },
   });
   return (
@@ -370,7 +409,7 @@ function InstanceInstallForm() {
             </Show>
           </div>
           <div>
-            <Button variant="outline" disabled={locked()} onClick={() => { setImportStep('methods'); setImportOpen(true); }}>
+            <Button variant="outline" disabled={locked() || !!serverId} onClick={() => { setImportStep('methods'); setImportOpen(true); }}>
               {source() ? t("install.change-import") : t("install.import")}
             </Button>
           </div>
@@ -542,6 +581,7 @@ function InstanceInstallForm() {
           <Show when={error()}>
             <div data-vesta="install-error" role="alert">
               <p>{error()}</p>
+              <Show when={serverId && !serverReview() && !createdId() && !serverUncertain()}><Button variant="outline" onClick={() => openServerInstall(serverId!)}>{t('common.retry')}</Button></Show>
               <Show
                 when={createdId()}
                 fallback={
@@ -567,13 +607,14 @@ function InstanceInstallForm() {
           </Show>
         </div>
         <footer data-vesta="install-footer">
+          <Show when={serverReview()?.consentRequired}><Checkbox label={t('server-pack.play-consent')} checked={serverConsent()} onChange={setServerConsent} /></Show>
           <Button variant="ghost" onClick={() => navigate("/library")} disabled={locked()}>
             {t("common.cancel")}
           </Button>
           <Button
             tone="accent"
             type="submit"
-            disabled={!nativeInstances || !valid()}
+            disabled={(!nativeInstances && !serverId) || !valid()}
             icon={<Icon name="icons/actions/download" />}
           >
             {t(busy() ? "install.starting" : "management.install")}

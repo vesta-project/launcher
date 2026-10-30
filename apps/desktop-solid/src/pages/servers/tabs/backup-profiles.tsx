@@ -22,6 +22,7 @@ import { SaveBar } from '../settings-parts';
 import { draftFromTemplate, handOffDraft } from './automation-shared';
 import { templateLabels } from '../automation/templates';
 import './backups-tab.css';
+import { BackupFileSelection } from '../backup-file-selection';
 
 /** One profile while it is edited: list fields stay as typed text until saved. */
 interface Row { key: number; profile: BackupProfileConfig; scope: 'all' | 'some'; includeText: string; excludeText: string }
@@ -54,7 +55,7 @@ const ADVANCED_FIELDS = [
 const DEFAULT_TOTAL = 14;
 
 /** Name, mode, retention and scope of one profile, in two columns. */
-function ProfileFields(props: { row: Row; others: readonly BackupProfileConfig[]; readOnly?: boolean; onChange: (patch: Partial<Row>) => void }) {
+function ProfileFields(props: { connectionId: string; row: Row; others: readonly BackupProfileConfig[]; readOnly?: boolean; onChange: (patch: Partial<Row>) => void }) {
   const profile = () => fromRow(props.row);
   const problems = () => profileProblems(profile(), props.others);
   const has = (problem: ProfileProblem) => problems().includes(problem);
@@ -136,11 +137,14 @@ function ProfileFields(props: { row: Row; others: readonly BackupProfileConfig[]
             onChange={(value) => props.onChange({ scope: value as Row['scope'] })}
             options={[{ value: 'all', label: t('servers.backup-setup.scope-all') }, { value: 'some', label: t('servers.backup-setup.scope-some') }]} />
         </div>
-        <Show when={props.row.scope === 'some'}>
-          <TextArea size="sm" rows={3} label={t('servers.backup-setup.include')}
-            placeholder={'world\nconfig\nserver.properties'} value={props.row.includeText} disabled={props.readOnly}
-            error={has('include') ? t(problemText.include) : undefined} onChange={(next: string) => props.onChange({ includeText: next })} />
+        <div style={{ "min-height": "72px" }}><Show when={props.row.scope === 'some'}>
+          <div data-vesta="backup-form-field">
+            <BackupFileSelection connectionId={props.connectionId} value={props.row.includeText} disabled={props.readOnly} onChange={next => props.onChange({ includeText: next })} />
+            <span data-vesta="backup-form-help">{props.row.includeText.split('\n').filter(Boolean).join(', ')}</span>
+            <Show when={has('include')}><span role="alert">{t(problemText.include)}</span></Show>
+          </div>
         </Show>
+        </div>
         <TextArea size="sm" rows={2} label={t('servers.backup-setup.exclude')}
           placeholder={'logs/\n*.tmp'} value={props.row.excludeText} disabled={props.readOnly}
           error={has('exclude') ? t(problemText.exclude) : undefined} onChange={(next: string) => props.onChange({ excludeText: next })} />
@@ -222,7 +226,7 @@ export function BackupSetup(props: { snapshot: ServerSnapshot; onEnabled: (profi
         <Show when={config.value()} fallback={<Show when={!config.error()}><Skeleton height={220} radius={10} /></Show>}>
           {(current) => (
             <>
-              <ProfileFields row={row()} others={[]} onChange={(patch) => setRow((value) => ({ ...value, ...patch }))} />
+              <ProfileFields connectionId={props.snapshot.connection.id} row={row()} others={[]} onChange={(patch) => setRow((value) => ({ ...value, ...patch }))} />
               <Show when={saver.stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('servers.backup-setup.stale')}</p></Show>
               <Show when={saver.uncertain()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('servers.backup-setup.uncertain')}</p></Show>
               <div data-vesta="backup-form-actions">
@@ -363,7 +367,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
                     </div>
                     <Show when={isOpen()}>
                       <div data-vesta="settings-reveal">
-                        <ProfileFields row={row()} others={others(row().key)} onChange={(patch) => edit(row().key, patch)} />
+                        <ProfileFields connectionId={props.snapshot.connection.id} row={row()} others={others(row().key)} onChange={(patch) => edit(row().key, patch)} />
                         <Show when={renamed(row())}>
                           {(old) => <p data-vesta="server-callout" data-tone="neutral">{t('servers.backup-setup.rename-note', { name: old() })}</p>}
                         </Show>
