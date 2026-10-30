@@ -15,6 +15,8 @@ async function harness(run) {
   const fixtures = {
     '@tauri-apps/api/core': `export const invoke = async (command, args) => {
       c.calls.push({ command, args });
+      if (command === 'server_pack_sync_link') return c.binding ?? null;
+      if (command === 'check_modpack_update' && c.check) return c.check;
       if (command === 'get_resource_versions') return c.versions;
       if (command === 'get_resource_project') { if (!args.id) throw Error('missing id'); if(c.failProject) throw Error('offline'); return {name: 'Provider pack'}; }
     };`,
@@ -70,4 +72,14 @@ test('server-sourced links are the same linked pack with the server as source, n
   const pack = { ...api.versionStore('7').state().pack, releases: [{ id: '14', label: '14', channel: 'release' }, { id: '12', label: '12', channel: 'release' }] };
   expect(api.packUpdateTarget(pack)).toMatchObject({ id: '14' });
   expect(api.packUpdateTarget({ ...pack, installed: '14' })).toBeUndefined();
+}));
+
+test('provider-linked server instances keep their provider identity but only offer the server version', () => harness(async (api,c) => {
+ c.binding={connectionId:'conn-1'};
+ c.check={current_version:'12',latest_version:{id:'14',release_type:'required'}};
+ api.useNativePack('7'); await settle();
+ const pack=api.versionStore('7').state().pack;
+ expect(pack).toMatchObject({source:'Modrinth',projectId:'project',serverId:'conn-1',instanceId:7,installed:'12'});
+ expect(pack.releases.map(r=>r.id)).toEqual(['14','12']);
+ expect(c.calls.some(call=>call.command==='get_resource_versions')).toBe(false);
 }));

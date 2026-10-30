@@ -73,7 +73,12 @@ pub struct Preview {
     pub executable_changes: Vec<String>,
     pub consent_required: bool,
 }
+#[derive(Clone, Debug)]
+pub(crate) struct ProviderPackIdentity {
+    pub platform: String, pub project: String, pub version: String, pub icon_url: Option<String>,
+}
 pub(crate) struct Prepared {
+    pub provider_pack: Option<ProviderPackIdentity>,
     pub preview: Preview,
     pub release: Release,
     pub files: BTreeMap<String, String>,
@@ -365,6 +370,14 @@ fn read_member(
 }
 
 impl ServerManager {
+    pub(crate) async fn check_custom_content(&self, instance: &Instance) -> Result<()> {
+        if let Some(link) = self.pack_link(instance.id).await? {
+            let (release, _) = self.verified_release(&link.connection_id, Some(instance)).await?;
+            if !release.allow_custom_content { return Err(conflict("pack_custom_content_disabled")); }
+        }
+        Ok(())
+    }
+
     pub(crate) async fn detach_modpack_source(&self, id: i32) -> Result<()> {
         let _gate = self.pack_gate.lock().await;
         let active = link_path(&self.root, id);
@@ -483,6 +496,16 @@ impl ServerManager {
             .await?
             .pack_sync_download(&release)
             .await?;
+        let provider_pack = if release.format == "catalogue" {
+            let value: serde_json::Value = serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
+            let content = &value["content"];
+            let platform = content["platform"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+            let source = match platform { "modrinth" => crate::models::SourcePlatform::Modrinth, "curseforge" => crate::models::SourcePlatform::CurseForge, _ => return Err(conflict("pack_invalid_source")) };
+            let project = content["projectId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+            let version = content["versionId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+            let resource = app.state::<ResourceManager>().get_project(source, project).await.map_err(io)?;
+            Some(ProviderPackIdentity { platform: platform.into(), project: project.into(), version: version.into(), icon_url: resource.icon_url })
+        } else { None };
         let archive = if release.format == "vestapack" {
             archive
         } else {
@@ -669,6 +692,7 @@ impl ServerManager {
         previews.insert(
             preview.review_id.clone(),
             Prepared {
+                provider_pack,
                 preview: preview.clone(),
                 release,
                 files,

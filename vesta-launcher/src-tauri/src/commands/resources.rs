@@ -1405,6 +1405,10 @@ pub async fn install_resource(
         ResourceInstallTarget::Instance { instance_id } => *instance_id,
         ResourceInstallTarget::World { world } => world.instance_id,
     };
+    if install_type == ResourceType::Mod {
+        let instance = crate::commands::instances::get_instance(instance_id).map_err(anyhow::Error::msg)?;
+        app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().check_custom_content(&instance).await.map_err(|error| anyhow!("{}", if error.reason.as_deref() == Some("pack_custom_content_disabled") { "This server does not allow custom mods. Ask its owner to enable custom content." } else { "Could not verify the server content policy. Reconnect and try again." }))?;
+    }
     let planned = plan_artifacts(&version, install_type).map_err(anyhow::Error::msg)?;
     let world_artifact_count = planned
         .iter()

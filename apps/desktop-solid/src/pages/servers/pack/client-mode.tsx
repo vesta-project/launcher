@@ -34,7 +34,9 @@ export function ClientModePanel() {
   const options = () => clientModeOptions(area.workspace(), area.gates());
   const selected = () => choice() ?? area.clientMode();
   const required = () => requireUpdate() ?? area.workspace()?.clientPack?.requireUpdate ?? false;
-  const dirty = () => selected() !== area.clientMode() || (selected() === 'server-modpack' && required() !== (area.workspace()?.clientPack?.requireUpdate ?? false));
+  const [custom, setCustom] = createSignal<boolean | null>(null);
+  const allowCustom = () => custom() ?? area.workspace()?.clientPack?.allowCustomContent ?? false;
+  const dirty = () => allowCustom() !== (area.workspace()?.clientPack?.allowCustomContent ?? false) || selected() !== area.clientMode() || (selected() === 'server-modpack' && required() !== (area.workspace()?.clientPack?.requireUpdate ?? false));
   const linkName = () => {
     const source = area.link().source;
     if (!source) return '';
@@ -43,11 +45,11 @@ export function ClientModePanel() {
   };
   const hasCustom = () => (area.workspace()?.publishedRevision ?? '0') !== '0';
 
-  const reset = () => { setChoice(null); setRequireUpdate(null); setError(null); };
+  const reset = () => { setChoice(null); setRequireUpdate(null); setCustom(null); setError(null); };
   const save = async () => {
     setBusy(true); setError(null);
     try {
-      await area.setClientMode(selected(), required());
+      await area.setClientMode(selected(), required(), allowCustom());
       reset();
       toast.show({ title: t('server-pack.mode-saved'), tone: 'success' });
     } catch (reason) { setError(reason as ServerCommandError); }
@@ -107,6 +109,7 @@ export function ClientModePanel() {
           <Switch size="sm" checked={required()} onChange={setRequireUpdate} disabled={busy() || !area.gates().forceUpdate}
             label={t('server-pack.mode-require-update')} description={t('server-pack.mode-require-update-help')} />
         </Show>
+        <Switch size="sm" checked={allowCustom()} onChange={setCustom} disabled={busy()} label="Allow players to add mods" />
         <Show when={dirty()}>
           <div data-vesta="modpack-mode-save" role="status">
             <span>{t(consequence(), { name: linkName() })}</span>

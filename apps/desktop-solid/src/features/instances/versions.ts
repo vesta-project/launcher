@@ -203,7 +203,7 @@ export function unlinkPack(id: string, removeBundled: boolean) {
     }
     // Explicit unlink releases ownership before its optional cleanup. Ordinary
     // Resources deletion must never remove files while the pack owns them.
-    if (record.modpackPlatform === 'server') await invoke('unlink_modpack', { instanceId: record.id });
+    if (record.modpackPlatform === 'server' || await invoke('server_pack_sync_link', { instanceId: record.id })) await invoke('unlink_modpack', { instanceId: record.id });
     else await invoke('update_instance', { instanceData: { ...record, modpackId: null, modpackVersionId: null, modpackPlatform: null, modpackIconUrl: null } });
     await invoke('clear_modpack_resource_provenance', { instanceId: record.id });
     for (const row of bundled) {
@@ -214,15 +214,15 @@ export function unlinkPack(id: string, removeBundled: boolean) {
   unlinkBundledResources(id, removeBundled);
 }
 
-function nativePack(id: string, versions: NativeVersion[] = [], name?: string): LinkedPack | undefined {
+function nativePack(id: string, versions: NativeVersion[] = [], name?: string, binding?: { connectionId: string; installed: string }): LinkedPack | undefined {
   const record = nativeRecord(id);
   if (!record?.modpackId?.trim()) return undefined;
   const engine = { minecraft: record.minecraftVersion, loader: record.modloader || 'vanilla', loaderVersion: record.modloaderVersion || '' };
   // Server-sourced link: modpackId is the server, modpackVersionId the installed offering revision.
   // Newer revisions come from the signed server check, not a provider version list.
-  if (record.modpackPlatform === 'server') {
-    const installed = record.modpackVersionId ?? '';
-    return { name: name || record.name, icon: displayImage(record), source: 'Server', serverId: record.modpackId, installed,
+  if (record.modpackPlatform === 'server' || binding) {
+    const installed = binding?.installed ?? record.modpackVersionId ?? '';
+    return { instanceId: record.id, name: name || record.name, icon: displayImage(record), projectId: binding ? record.modpackId : undefined, source: record.modpackPlatform === 'modrinth' ? 'Modrinth' : record.modpackPlatform === 'curseforge' ? 'CurseForge' : 'Server', serverId: binding?.connectionId ?? record.modpackId, installed,
       releases: [{ ...engine, id: installed, label: installed, experimental: false, channel: 'release', changes: '' }] };
   }
   const releases: PackRelease[] = releaseOrder(versions).map((version) => ({ ...engine, minecraft: version.game_versions[0] ?? engine.minecraft,
@@ -243,12 +243,14 @@ export function useNativePack(id: string) {
       const projectId = record?.modpackId?.trim();
       const platform = record?.modpackPlatform;
       if (!projectId || !platform) return;
-      if (platform === 'server') {
+      const binding = platform === 'server' ? null : await invoke<{ connectionId: string } | null>('server_pack_sync_link', { instanceId: record.id }).catch(() => null);
+      if (disposed) return;
+      if (platform === 'server' || binding) {
         const current = ++revision;
         try {
-          const check = await invoke<{ latest_version: {id:string;release_type:string} | null }>('check_modpack_update', { instanceId: record.id });
-          if (disposed || current !== revision || nativeRecord(id)?.modpackVersionId !== record.modpackVersionId || nativeRecord(id)?.modpackPlatform !== 'server' || nativeRecord(id)?.modpackId !== projectId) return;
-          const pack = nativePack(id);
+          const check = await invoke<{ current_version: string | null; latest_version: {id:string;release_type:string} | null }>('check_modpack_update', { instanceId: record.id });
+          if (disposed || current !== revision || nativeRecord(id)?.modpackVersionId !== record.modpackVersionId || nativeRecord(id)?.modpackPlatform !== platform || nativeRecord(id)?.modpackId !== projectId) return;
+          const pack = nativePack(id, [], undefined, binding ? { connectionId: binding.connectionId, installed: check.current_version ?? '' } : undefined);
           if (pack && check.latest_version && !pack.releases.some(r => r.id === check.latest_version!.id)) {
             pack.releases.unshift({ ...pack.releases[0], id: check.latest_version.id, label: check.latest_version.id, changes: check.latest_version.release_type });
           }
@@ -332,7 +334,7 @@ export function releaseChangelog(source: PackSource, projectId: string | undefin
   return cached;
 }
 export async function previewPackUpdate(pack: LinkedPack, release: PackRelease): Promise<UpdatePreview> {
-  if (nativeInstances && pack.source === 'Server' && pack.instanceId !== undefined) {
+  if (nativeInstances && !!pack.serverId && pack.instanceId !== undefined) {
     const review = await invoke<PackSyncPreview>('preview_modpack_update', { instanceId: pack.instanceId, newVersionId: release.id });
     return { review, added: review.changes.filter(c => c.operation === 'add').map(c => c.path), removed: review.changes.filter(c => c.operation === 'remove').map(c => c.path), updated: review.changes.filter(c => c.operation === 'update').map(c => c.path) };
   }
