@@ -600,7 +600,9 @@ const installWarnings: Record<string, MessageId> = {
 };
 
 /** Agent warnings are `code` or `code:path`; known codes read as sentences, others stay as sent. */
-export function installWarning(warning: string, translate: (id: MessageId, args: Record<string, string>) => string): string {
+export function installWarning(warning: string | import('./native-pack').PackInstallWarning, translate: (id: MessageId, args: Record<string, string>) => string): string {
+  if (typeof warning !== 'string') return `${installWarning(warning.detail, translate)} (${warning.code}: ${warning.rule}, ${warning.item})`;
+  if (warning.startsWith("unusual_content_directory:")) return `Unusual content destination: ${warning.slice(26)}. Check the file before installing.`;
   if (warning.startsWith("pack_size_warning:")) return `Large download: ${Math.ceil(Number(warning.slice(18)) / 1048576)} MiB. Check free space before installing.`;
   const split = warning.indexOf(':');
   const code = split < 0 ? warning : warning.slice(0, split);

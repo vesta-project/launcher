@@ -59,6 +59,7 @@ export type ServerErrorCode =
 
 export interface ServerCommandError {
   code: ServerErrorCode;
+  issue?: { code: string; rule: string; item: string } | null;
   /** Present for `rate_limited` and `server_busy` when the server sent guidance. */
   retryAfterMs?: number | null;
   /** The launcher paced this request locally; it never reached the server. */

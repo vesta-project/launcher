@@ -576,12 +576,21 @@ struct ApplySelection {
     world_ids: Vec<String>,
 }
 
+/// Check both before inspection and after user choices/task queuing.
+async fn check_content_policy(app: &AppHandle, instance_id: i32) -> Result<(), String> {
+    let instance = crate::commands::instances::get_instance(instance_id)?;
+    app.state::<Arc<crate::servers::ServerManager>>().check_custom_content(&instance).await
+        .map_err(|error| if error.reason.as_deref() == Some("pack_custom_content_disabled") {
+            "This server does not allow custom content. Ask its owner to enable it.".into()
+        } else { "Could not verify the server content policy. Reconnect and try again.".into() })
+}
 async fn coordinate(
     app: &AppHandle,
     state: &CoordinatorState,
     operation: Arc<Operation>,
     paths: Vec<String>,
 ) -> Result<ApplyReport, String> {
+    check_content_policy(app, operation.instance_id).await?;
     progress(
         app,
         &operation,
@@ -1059,6 +1068,10 @@ impl Task for ApplyDropTask {
                 );
                 return Ok(());
             };
+            if let Err(error) = check_content_policy(&ctx.app_handle, operation.instance_id).await {
+                deliver(&result, ApplyReport { skipped: selections.len(), notes: vec![error.clone()], ..Default::default() });
+                return Err(error);
+            }
             let app = ctx.app_handle.clone();
             let work_app = app.clone();
             let work_operation = operation.clone();

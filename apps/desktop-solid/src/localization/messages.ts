@@ -1,5 +1,17 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "server-pack.error-pack-limit-invalid",
+  "server-pack.error-pack-path-protected",
+  "server-pack.error-pack-path-linked",
+  "server-pack.error-pack-unavailable",
+  "server-pack.error-pack-artifact-conflict",
+  "server-pack.error-pack-artifact-not-published",
+  "server-pack.error-pack-release-revision-exhausted",
+  "server-pack.error-pack-release-revision-mismatch",
+  "server-pack.error-pack-release-version-not-increasing",
+  "server-pack.error-pack-release-version-invalid",
+  "server-pack.error-pack-prune-recovery-required",
+  "server-pack.error-pack-custom-content-disabled",
   "management.export-files",
   "management.export-description",
   "management.export-selected",

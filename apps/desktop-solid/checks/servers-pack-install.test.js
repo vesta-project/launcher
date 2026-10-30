@@ -83,3 +83,12 @@ test('warnings require explicit install-anyway acknowledgement', async () => {
  const a=api(), p=await a.packInstallPlan('s',{source:{source:'draft',revision:'3'}});
  await expect(a.packInstallApply('s',{planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false},'no-ack')).rejects.toMatchObject({code:'invalid_input'});
 });
+
+import { installWarning } from '../src/features/servers/modpack-area-model.ts';
+import { serverErrorDetails } from '../src/features/servers/errors.ts';
+test('structured review warnings and hard refusals name the rule and item', () => {
+ const message = installWarning({code:'unusual_content_directory',rule:'unusual_content_directory',item:'licenses/license.pdf',detail:'unusual_content_directory:licenses/license.pdf'}, id => id);
+ expect(message).toContain('licenses/license.pdf');
+ expect(message).toContain('unusual_content_directory');
+ expect(serverErrorDetails({code:'invalid_input',reason:'pack_path_invalid',issue:{code:'pack_path_invalid',rule:'safe_relative_path',item:'../escape.jar'}})).toContain('safe_relative_path: ../escape.jar');
+});

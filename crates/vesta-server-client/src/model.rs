@@ -42,8 +42,13 @@ pub struct Error {
     pub reason: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<Box<ProviderErrorDetails>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue: Option<PackRefusal>,
 }
 /// A bounded public file identity, never a provider response, URL or credential.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PackRefusal { pub code: String, pub rule: String, pub item: String }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderErrorDetails {
@@ -55,6 +60,14 @@ pub struct ProviderErrorDetails {
     pub filename: Option<String>,
 }
 impl Error {
+    pub(crate) fn with_pack_issue(mut self, value: &serde_json::Value) -> Self {
+        self.issue = serde_json::from_value::<PackRefusal>(value.clone()).ok().filter(|issue| {
+            Some(issue.code.as_str()) == self.reason.as_deref() && issue.rule.len() <= 96
+                && issue.rule.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+                && issue.item.len() <= 8192 && !issue.item.chars().any(char::is_control)
+        });
+        self
+    }
     pub(crate) fn with_provider_details(mut self, value: &serde_json::Value) -> Self {
         if !self
             .reason
@@ -111,6 +124,7 @@ impl Error {
             local_pressure: false,
             reason: None,
             details: None,
+            issue: None,
         }
     }
     pub fn local_pressure(mut self) -> Self {
@@ -178,6 +192,7 @@ impl Error {
             local_pressure: false,
             reason,
             details: None,
+            issue: None,
         }
     }
 }
@@ -684,5 +699,18 @@ mod pack_policy_mapping_tests {
             assert_eq!(error.reason.as_deref(), Some(reason));
         }
         assert_eq!(Error::wire(503, "temporarily_unavailable", None).code, ErrorCode::ServerBusy);
+    }
+}
+
+#[cfg(test)]
+mod pack_issue_tests {
+    use super::*;
+    #[test]
+    fn structured_pack_issue_survives_ipc_without_arbitrary_error_details() {
+        let error = Error::wire(400, "pack_path_invalid", None).with_pack_issue(&serde_json::json!({"code":"pack_path_invalid","rule":"safe_relative_path","item":"../outside.jar"}));
+        assert_eq!(error.code, ErrorCode::InvalidInput);
+        assert_eq!(error.issue.as_ref().unwrap().item, "../outside.jar");
+        assert_eq!(serde_json::to_value(error).unwrap()["issue"]["rule"], "safe_relative_path");
+        assert!(Error::wire(400, "pack_path_invalid", None).with_pack_issue(&serde_json::json!({"code":"different","rule":"safe_relative_path","item":"file"})).issue.is_none());
     }
 }

@@ -510,3 +510,16 @@ server-pack-provider-redirect = The download redirected too many times. Try agai
 server-pack-provider-manual = This file requires a manual download from the provider.
 server-pack-review-note-stop = Stop Minecraft to switch the software.
 server-pack-review-note = Applies on server restart.
+
+server-pack-error-pack-limit-invalid = The pack limits are invalid. Ask the server owner to correct them.
+server-pack-error-pack-path-protected = The pack includes a protected server file. Remove it and review again.
+server-pack-error-pack-path-linked = The pack path crosses a linked directory. Use a directory without links.
+server-pack-error-pack-unavailable = The pack storage cannot be read. Check server storage and retry.
+server-pack-error-pack-artifact-conflict = The stored pack changed. Refresh and review again.
+server-pack-error-pack-artifact-not-published = This pack has not been published. Ask the owner to publish it.
+server-pack-error-pack-release-revision-exhausted = The pack revision counter is exhausted. Contact the server owner.
+server-pack-error-pack-release-revision-mismatch = The pack revision differs from the review. Refresh and review again.
+server-pack-error-pack-release-version-not-increasing = This version is older than the published pack. Acknowledge the downgrade in the publication review.
+server-pack-error-pack-release-version-invalid = The pack version is invalid. Enter a numeric version such as 1.2.3.
+server-pack-error-pack-prune-recovery-required = Pack cleanup needs recovery. Ask the server owner to repair pack storage.
+server-pack-error-pack-custom-content-disabled = This server does not allow custom content. Ask its owner to enable it.
