@@ -282,7 +282,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
 
   const hosting = createHostingFixtures({ server, requireCapability, wait, datapackOperation: (id: ConnectionId, command: string) => { const target = server(id); const operation = record(target, 'console.command', { kind: 'console.command', command }); setTimeout(() => advance(target, operation, 'succeeded'), 400); return operation; } });
   const content = createContentFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion });
-  const pack = createPackFixtures({ server, wait, software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion, content: content.content, publish: id => publish(server(id)) });
+  const pack = createPackFixtures({ server, wait, switchSoftware: (id, target) => hosting.fixtureSwitch(id, target.software as import('./hosting-native').SoftwareId, target.minecraftVersion, target.loaderVersion), software: id => hosting.contentTarget(id).software, minecraftVersion: id => hosting.contentTarget(id).minecraftVersion, content: content.content, publish: id => publish(server(id)) });
   const api: ServersApi = {
     ...content,
     ...pack,

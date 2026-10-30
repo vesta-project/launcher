@@ -26,3 +26,21 @@ test('early install consent pauses for runtime changes, warnings and destructive
  expect(installCanProceedWithoutReview(safe,Date.now())).toBe(true);
  for(const patch of [{softwareSwitchRequired:true},{valid:false},{warnings:['missing_required_dependency:api']},{removed:[['mods/old.jar','a']]},{files:[{...safe.files[0],operation:'updated'}]},{expiresAtMs:0}]) expect(installCanProceedWithoutReview({...safe,...patch},Date.now())).toBe(false);
 });
+
+
+test('combined install binds acknowledgement to the reviewed software target', async () => {
+ let software='paper', minecraft='1.20.1', switches=0;
+ const a=createPackFixtures({server:()=>({snapshot}),software:()=>software,minecraftVersion:()=>minecraft,wait:async()=>{},switchSoftware:(_id,target)=>{software=target.software;minecraft=target.minecraftVersion;switches++;}});
+ const p=await a.packInstallPlan('s',{source:{source:'provider',provider:'modrinth',projectId:'pack',versionId:'v1'}});
+ expect(p.softwareSwitch.from.software).toBe('paper');
+ expect(p.softwareSwitch.to.software).toBe('fabric');
+ const req={planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false};
+ await expect(a.packInstallApply('s',req,'unacknowledged')).rejects.toMatchObject({code:'stale_target'});
+ expect(switches).toBe(0);
+ await expect(a.packInstallApply('s',{...req,acknowledgeSoftwareSwitch:true,confirmationToken:'wrong'},'wrong')).rejects.toBeDefined();
+ expect(switches).toBe(0);
+ const acknowledged={...req,acknowledgeSoftwareSwitch:true};
+ const result=await a.packInstallApply('s',acknowledged,'combined');
+ expect(result.state).toBe('staged_until_restart');expect(software).toBe('fabric');
+ expect(await a.packInstallApply('s',acknowledged,'combined')).toEqual(result);expect(switches).toBe(1);
+});
