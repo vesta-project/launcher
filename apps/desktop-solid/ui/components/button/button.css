@@ -35,7 +35,8 @@
     align-items: center;
     justify-content: center;
     gap: var(--button-gap);
-    min-block-size: var(--button-height);
+    box-sizing: border-box;
+    block-size: var(--button-height);
     max-inline-size: 100%;
     margin: 0;
     padding-block: 0;
