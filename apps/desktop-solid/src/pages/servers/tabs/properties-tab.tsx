@@ -216,7 +216,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
 
       <Show when={base()} fallback={<Show when={!file.error()}><For each={[0, 1, 2]}>{() => <Skeleton height={148} radius={10} />}</For></Show>}>
         <Show when={!searching() || matches(motdDef)}>
-          <SettingsPanel title={t('server-settings.motd-title')} description={t('server-settings.motd-help')} name="motd">
+          <SettingsPanel title={t('server-settings.motd-title')} name="motd">
             <MotdEditor
               id={id()}
               name={props.snapshot.connection.name}

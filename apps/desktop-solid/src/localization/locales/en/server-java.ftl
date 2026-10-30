@@ -1,6 +1,5 @@
 ## Server Java picker (D5).
 server-java-title = Java
-server-java-help = The Java this server starts with, from the runtimes on the server computer.
 server-java-rescan = Check for runtimes again
 server-java-required = Needed
 server-java-needed-by = Minecraft { $version } needs this version

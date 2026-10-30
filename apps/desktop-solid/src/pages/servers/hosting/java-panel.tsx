@@ -69,7 +69,7 @@ export function JavaPanel(props: {
   const locked = () => props.jobRunning || !!props.actions.busy();
 
   return (
-    <SettingsPanel title={t('server-java.title')} description={t('server-java.help')} name="java"
+    <SettingsPanel title={t('server-java.title')} name="java"
       action={<IconButton size="sm" variant="ghost" label={t('server-java.rescan')} icon={<Icon name="icons/actions/refresh" />} disabled={props.loading} onClick={() => props.onRefresh()} />}>
       <div data-vesta="server-java">
         <HostingError error={props.error} onRetry={props.onRefresh} />

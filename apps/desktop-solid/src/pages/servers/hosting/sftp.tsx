@@ -173,7 +173,7 @@ function ServicePanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
   return (
     <SettingsPanel
       title={t('server-hosting.sftp-service')}
-      description={t('server-hosting.sftp-enable-description')}
+
       name="sftp-service"
       action={
         <Badge tone={props.status.running ? 'success' : 'neutral'} variant="soft">
@@ -214,7 +214,7 @@ function DetailsPanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
   const link = () => linkFor(props.snapshot, props.status);
   const copy = t('server-hosting.copy');
   return (
-    <SettingsPanel title={t('server-hosting.sftp-details')} description={t('server-hosting.sftp-sign-in-help')} name="sftp-details">
+    <SettingsPanel title={t('server-hosting.sftp-details')} name="sftp-details">
       <div data-vesta="settings-panel-body">
         <SettingRow label={t('server-hosting.sftp-link')}><CopyValue value={link()} label={t('server-hosting.sftp-copy-link')}><Sensitive>{link()}</Sensitive></CopyValue></SettingRow>
         <SettingRow label={t('server-hosting.sftp-host')}><CopyValue value={host()} label={copy}><Sensitive>{host()}</Sensitive></CopyValue></SettingRow>
@@ -281,7 +281,7 @@ function KeysPanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
   };
 
   return (
-    <SettingsPanel title={t('server-hosting.sftp-keys')} description={t('server-hosting.sftp-keys-description')} name="sftp-keys">
+    <SettingsPanel title={t('server-hosting.sftp-keys')} name="sftp-keys">
       <div data-vesta="settings-panel-body" data-server-sftp-keys>
         <HostingError error={keys.error()} onRetry={() => void keys.refresh()} />
         <Hint when={keys.value() && !mine()}>{t('server-hosting.key-needed')}</Hint>

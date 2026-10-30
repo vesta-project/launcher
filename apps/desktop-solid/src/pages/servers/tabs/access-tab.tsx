@@ -94,7 +94,7 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   );
   return (
     <>
-      <SettingsPanel title={t('servers.access.people')} description={t('servers.access.people-help')} name="access-people">
+      <SettingsPanel title={t('servers.access.people')} name="access-people">
         <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
         <Show when={loaded()} fallback={<Show when={!users.error() && !devices.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
           <div data-vesta="server-access-people">
@@ -259,7 +259,7 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
   return (
     <SettingsPanel
       title={t('servers.access.invitations')}
-      description={t('servers.access.invite-help')}
+
       name="access-invitations"
       action={<Show when={!unsupported()}><Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => setCreating(true)}>{t('servers.access.invite')}</Button></Show>}
     >
@@ -375,7 +375,7 @@ function RulesView(props: { snapshot: ServerSnapshot }) {
     } finally { setBusy(false); }
   };
   return (
-    <SettingsPanel title={t('servers.access.rules')} description={t('servers.access.rules-help')} name="access-rules">
+    <SettingsPanel title={t('servers.access.rules')} name="access-rules">
       <ServerErrorNote error={sources.error()} onRetry={() => void sources.refresh()} />
       <Show when={sources.value()}>
         {(current) => (

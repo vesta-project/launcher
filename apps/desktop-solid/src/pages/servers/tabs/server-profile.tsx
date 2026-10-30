@@ -104,7 +104,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
       <SaveBar show={changeCount() > 0} label={t('server-settings.unsaved', { count: changeCount() })} busy={busy()}
         disabled={!canEdit() || !!nameProblem() || !!descriptionProblem()} onDiscard={discard} onSave={() => void save()} />
     }>
-      <SettingsPanel title={t('servers.profile.title')} description={t('servers.profile.help')} name="profile">
+      <SettingsPanel title={t('servers.profile.title')} name="profile">
         <ServerErrorNote error={error() ?? branding.error()} onRetry={() => void branding.refresh()} />
         <Show when={branding.value()} fallback={<Show when={!branding.error()}><Skeleton height={180} radius={0} /></Show>}>
           <div data-vesta="settings-panel-body" data-server-profile>

@@ -475,3 +475,8 @@ server-pack-install-notes = { $count } notes
 server-pack-install-current-runtime = Installed: { $software } { $version }, loader { $loader }
 
 server-pack-warning-missing-dependency = A required dependency is missing from this pack: { $path }
+
+server-pack-provider-filename = This file?s name is not supported on the server.
+server-pack-provider-host = The provider returned an unsupported download host.
+server-pack-provider-redirect = The download redirected too many times. Try again.
+server-pack-provider-manual = This file requires a manual download from the provider.

@@ -34,8 +34,6 @@ server-hosting-review-expires = { $count ->
    *[other] This review expires in { $count } seconds.
 }
 server-hosting-review-expired = This review expired. Review again to continue.
-server-hosting-from = From
-server-hosting-to = To
 server-hosting-back = Back
 server-hosting-apply = Apply
 server-hosting-backup-first = Make a backup first. A world opened with a newer version may not open with an older one.
@@ -60,7 +58,6 @@ server-hosting-restore-description = { $name } is kept, so you can switch back l
 server-hosting-restore-world-warning = The world isn't changed back. If a newer version already opened it, you may need to restore a backup.
 server-hosting-restore = Restore
 server-hosting-restore-software-only = Only the server software goes back. The world, settings, mods and plugins stay as they are now.
-server-hosting-previously = Previously: { $name }
 server-hosting-original-description = The installation saved before this change.
 server-hosting-minecraft-version = Minecraft { $version }
 server-hosting-not-set-up-here = Can't be set up from here yet: { $name }.
@@ -133,10 +130,8 @@ server-hosting-sftp-port = Port
 server-hosting-sftp-username = Username
 server-hosting-sftp-host-key = Host key
 server-hosting-copy = Copy
-server-hosting-sftp-sign-in-help = Sign in with the SSH key you added. Check the host key matches the first time you connect.
 server-hosting-sftp-loopback = SFTP only accepts connections from the server computer itself.
 server-hosting-sftp-enable = SFTP
-server-hosting-sftp-enable-description = Let people with an added SSH key manage the server files with an SFTP app.
 server-hosting-sftp-bind = Listen address
 server-hosting-sftp-bind-description = 0.0.0.0 accepts connections on every network.
 server-hosting-sftp-disconnects = Saving disconnects anyone connected.
@@ -156,7 +151,6 @@ server-hosting-sftp-sessions = { $count ->
    *[other] On · { $count } connected
 }
 server-hosting-sftp-sign-in = Sign-in methods
-server-hosting-sftp-keys-description = Public keys that may sign in as you.
 server-hosting-port-invalid = Use a port from 1 to 65535.
 server-hosting-bind-invalid = Use an IP address, like 0.0.0.0 or 127.0.0.1.
 server-hosting-key-needed = Add your public key to sign in.

@@ -49,8 +49,17 @@ const packReasons: Record<string, { message: MessageId; action: RecoveryAction }
   pack_unresolved_file: { message: 'server-pack.unresolved-file', action: 'none' },
 };
 
+const providerFailureMessages: Record<string, MessageId> = {
+  filename_not_portable:'server-pack.provider-filename',
+  download_host_not_allowed:'server-pack.provider-host',
+  redirect_limit_exceeded:'server-pack.provider-redirect',
+  manual_download_required:'server-pack.provider-manual',
+};
+
 export function serverErrorPresentation(reason: unknown) {
   const error = toServerError(reason);
+  const providerReason = providerDetails(error)?.reason;
+  if (providerReason && providerFailureMessages[providerReason]) return {message:providerFailureMessages[providerReason]!, action:'none' as const};
   if (error.reason && packReasons[error.reason]) return packReasons[error.reason]!;
   if (error.reason === 'content_provider_not_configured')
     return { message: 'server-pack.provider-not-configured' as MessageId, action: 'none' as const };

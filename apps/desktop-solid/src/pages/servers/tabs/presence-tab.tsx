@@ -140,7 +140,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
       <SaveBar show={dirtyCount() > 0} label={t('server-settings.unsaved', { count: dirtyCount() })} busy={busy()}
         disabled={!canEdit() || (motdDirty() && problems().length > 0)} onDiscard={discard} onSave={() => void save()} />
     }>
-      <SettingsPanel title={t('servers.presence.sleep')} description={t('servers.presence.sleep-help')} name="sleep">
+      <SettingsPanel title={t('servers.presence.sleep')} name="sleep">
         <ServerErrorNote error={sleepError() ?? sleep.error()} onRetry={() => void sleep.refresh()} />
         <Show when={policy()} fallback={<Show when={!sleep.error()}><Skeleton height={160} radius={0} /></Show>}>
           {(current) => (
@@ -202,7 +202,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
 
       <SettingsPanel
         title={t('servers.presence.status')}
-        description={t('servers.presence.status-help')}
+
         name="status"
         action={
           <Select size="sm" aria-label={t('servers.presence.when')} value={state()} onChange={(value) => { setState(value as PresenceState); setChecked(null); }}
