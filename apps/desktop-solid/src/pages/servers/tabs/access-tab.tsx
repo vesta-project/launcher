@@ -70,27 +70,25 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   const devices = useServerResource(id, devicesResource, { enabled: () => can('devices.revoke') });
   const groups = createMemo(() => groupAccess(users.value(), devices.value()), { name: 'server-access:groups' });
   const [editing, setEditing] = createSignal<ServerUser | null>(null, { name: 'server-access:editing' });
-  const [revoking, setRevoking] = createSignal<ServerDevice | null>(null, { name: 'server-access:revoking' });
+
   const [renaming, setRenaming] = createSignal<ServerDevice | null>(null, { name: 'server-access:renaming' });
   const [packOpen, setPackOpen] = createSignal(false, { name: 'server-access:pack-open' });
   const canManage = () => can('principals.manage');
   const saved = (next: ServerUser) => seedServerResource(id(), usersResource, (users.value() ?? []).map((entry) => (entry.id === next.id ? next : entry)));
   const renamed = (device: ServerDevice, name: string) =>
     seedServerResource(id(), devicesResource, (devices.value() ?? []).map((entry) => (entry.id === device.id ? { ...entry, name } : entry)));
-  const revoke = async () => {
-    const target = revoking();
-    if (!target) return;
-    try {
-      await serverCommand((client) => client.revokeDevice(id(), target.id, newIntentId()));
-      setRevoking(null);
-      // A revoked device also changes its owner's device count.
-      invalidateServerResources(id(), [devicesResource.name, usersResource.name]);
-    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
-  };
   const loaded = () => !!(users.value() || devices.value());
   const Person = (row: { entry: AccessPerson }) => (
     <PersonRow snapshot={props.snapshot} person={row.entry} roles={roles()} canManage={canManage()} canRevoke={can('devices.revoke')}
-      allDevices={devices.value() ?? []} onRole={setEditing} onRevoke={setRevoking} onRename={setRenaming} />
+      allDevices={devices.value() ?? []} onRole={setEditing} onRevoke={target => {
+        const connection = id();
+        const previous = devices.value() ?? [];
+        toast.undo({ title: t('servers.access.revoke-title', { name: target.name }), undoLabel: 'Undo',
+          apply: () => seedServerResource(connection, devicesResource, previous.filter(item => item.id !== target.id)),
+          rollback: () => invalidateServerResources(connection, [devicesResource.name, usersResource.name]),
+          commit: async () => { await serverCommand(client => client.revokeDevice(connection, target.id, newIntentId())); invalidateServerResources(connection, [devicesResource.name, usersResource.name]); },
+          onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) });
+      }} onRename={setRenaming} />
   );
   return (
     <>
@@ -121,10 +119,7 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
       <Show when={renaming()} keyed>
         {(device) => <RenameDialog snapshot={props.snapshot} device={device} onClose={() => setRenaming(null)} onSaved={(name) => { renamed(device, name); setRenaming(null); }} />}
       </Show>
-      <Dialog open={!!revoking()} onOpenChange={(open) => { if (!open) setRevoking(null); }} title={t('servers.access.revoke-title', { name: revoking()?.name ?? '' })}
-        description={t('servers.access.revoke-description')} size="sm"
-        footer={<><Button variant="ghost" onClick={() => setRevoking(null)}>{t('common.cancel')}</Button><Button tone="danger" onClick={() => void revoke()}>{t('servers.access.revoke')}</Button></>}
-      />
+
     </>
   );
 }
@@ -250,10 +245,14 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
   const invitations = useServerResource(id, invitationsResource);
   const [creating, setCreating] = createSignal(false, { name: 'server-access:creating' });
   const reload = () => invalidateServerResources(id(), [invitationsResource.name]);
-  const revoke = async (invitation: Invitation) => {
+  const revoke = (invitation: Invitation) => {
     if (!invitation.id) return;
-    try { await serverCommand((client) => client.revokeInvitation(id(), invitation.id!, newIntentId())); reload(); }
-    catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
+    const connection = id(), target = invitation.id, previous = invitations.value();
+    toast.undo({ title: t('servers.access.revoke'), undoLabel: 'Undo',
+      apply: () => { if (previous) seedServerResource(connection, invitationsResource, previous.filter(item => item.id !== target)); },
+      rollback: () => invalidateServerResources(connection, [invitationsResource.name]),
+      commit: async () => { await serverCommand(client => client.revokeInvitation(connection, target, newIntentId())); invalidateServerResources(connection, [invitationsResource.name]); },
+      onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) });
   };
   const unsupported = () => invitations.error()?.code === 'unsupported';
   return (

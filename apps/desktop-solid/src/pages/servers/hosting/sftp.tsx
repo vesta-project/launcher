@@ -1,3 +1,4 @@
+import { errorMessage } from '../../../features/servers/errors';
 import { Badge, Button, Dialog, Skeleton, Switch as Toggle, TextArea, TextField, toast } from '@vesta/ui';
 import { For, Show, createSignal, untrack } from 'solid-js';
 import { isTauri } from '@tauri-apps/api/core';
@@ -14,7 +15,7 @@ import {
 import type { SftpKey, SftpStatus } from '../../../features/servers/hosting-native';
 import { IntentMemo, newIntentId } from '../../../features/servers/model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import { seedServerResource, useServerResource } from '../../../features/servers/resources';
+import { invalidateServerResources, seedServerResource, useServerResource } from '../../../features/servers/resources';
 import { sftpKeysResource, sftpResource } from '../../../features/servers/server-resources';
 import { serverPath } from '../../../features/servers/shell-model';
 import { serverCommand } from '../../../features/servers/store';
@@ -239,7 +240,6 @@ function KeysPanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
   const [text, setText] = createSignal('', { name: 'server-sftp:key-text' });
   const [label, setLabel] = createSignal('', { name: 'server-sftp:key-label' });
   const [busy, setBusy] = createSignal(false, { name: 'server-sftp:key-busy' });
-  const [confirming, setConfirming] = createSignal<string | null>(null, { name: 'server-sftp:revoke-confirm' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-sftp:key-error' });
   const [refused, setRefused] = createSignal(false, { name: 'server-sftp:key-refused' });
   const intents = new IntentMemo();
@@ -270,14 +270,13 @@ function KeysPanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
       setError(failure);
     } finally { setBusy(false); }
   };
-  const revoke = async (key: SftpKey) => {
-    if (confirming() !== key.id) { setConfirming(key.id); return; }
-    setBusy(true); setError(null);
-    try {
-      await serverCommand((client) => client.sftpKeyRevoke(id(), key.id, newIntentId()));
-      seedServerResource(id(), sftpKeysResource, (keys.value() ?? []).map((entry) => (entry.id === key.id ? { ...entry, revokedAtMs: Date.now() } : entry)));
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { setBusy(false); setConfirming(null); }
+  const revoke = (key: SftpKey) => {
+    const connection = id();
+    toast.undo({ title: t('server-hosting.key-revoke'), undoLabel: 'Undo',
+      apply: () => seedServerResource(connection, sftpKeysResource, (keys.value() ?? []).map(entry => entry.id === key.id ? { ...entry, revokedAtMs: Date.now() } : entry)),
+      rollback: () => invalidateServerResources(connection, [sftpKeysResource.name]),
+      commit: () => serverCommand(client => client.sftpKeyRevoke(connection, key.id, newIntentId())),
+      onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) });
   };
 
   return (
@@ -295,8 +294,8 @@ function KeysPanel(props: { snapshot: ServerSnapshot; status: SftpStatus }) {
                     <span>{key.label}</span>
                     <code>{key.fingerprint}</code>
                   </span>
-                  <Button size="sm" variant="ghost" tone={confirming() === key.id ? 'danger' : undefined} disabled={busy()} onClick={() => void revoke(key)}>
-                    {confirming() === key.id ? t('server-hosting.key-revoke-confirm') : t('server-hosting.key-revoke')}
+                  <Button size="sm" variant="ghost" tone="danger" disabled={busy()} onClick={() => void revoke(key)}>
+                    {t('server-hosting.key-revoke')}
                   </Button>
                 </li>
               )}
