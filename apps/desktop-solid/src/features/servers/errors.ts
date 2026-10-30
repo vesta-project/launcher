@@ -1,4 +1,5 @@
 // One localized message and one recovery action for every closed client error code.
+import { reasonMessage } from './hosting-model';
 import type { MessageId } from '../../localization/messages';
 import { isServerCommandError, type ServerCommandError, type ServerErrorCode } from './native';
 
@@ -65,6 +66,8 @@ export function serverErrorPresentation(reason: unknown) {
     return { message: 'server-pack.provider-not-configured' as MessageId, action: 'none' as const };
   if (error.reason === 'content_provider_unavailable')
     return { message: 'server-pack.provider-unavailable' as MessageId, action: 'retry' as const };
+  const specific = reasonMessage(error.reason);
+  if (specific) return { message: specific, action: errorPresentation[error.code].action };
   if (error.localPressure && error.code === 'rate_limited')
     return { message: 'servers.error.client-rate-limited' as MessageId, action: 'wait' as const };
   if (error.localPressure && error.code === 'server_busy')

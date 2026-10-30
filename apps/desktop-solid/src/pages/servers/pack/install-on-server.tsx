@@ -112,7 +112,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
       const value: ReviewPlan = await serverCommand((api) => api.packInstallPlan(area.id(), { source: target }));
       if (disposed || request !== sequence) return;
       if (startedRevision !== undefined && startedRevision !== untrack(() => software.value()?.revision)) return planNow();
-      setPlan(value);
+      setPlan(value); setWarningsAcknowledged(false);
       setPicks(defaultInstallChoices(value));
     } catch (reason) { if (!disposed && request === sequence) setError(reason as ServerCommandError); }
     finally { if (!disposed && request === sequence) setPlanning(false); }
@@ -131,7 +131,8 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   };
   const switchTo = () => { const value = plan(); return value ? planSoftwareSwitch(value, current()) : null; };
   const blocker = () => { const value = plan(); return value ? reviewBlocker(value, acknowledged()) : null; };
-  const request = createMemo(() => { const value = plan(); return value ? reviewApplyRequest(value, picks(), acknowledged()) : null; }, { name: 'pack-review:request' });
+  const [warningsAcknowledged, setWarningsAcknowledged] = createSignal(false);
+  const request = createMemo<import('../../../features/servers/native-pack').PackInstallApply | null>(() => { const value = plan(); const result = value ? reviewApplyRequest(value, picks(), acknowledged()) : null; return result ? { ...result, acknowledgeWarnings: warningsAcknowledged() } : null; }, { name: 'pack-review:request' });
   const update = () => props.request.mode === 'update';
   const running = () => area.snapshot().status?.state === 'running';
   const backupProfile = () => backupProfileFor(backups.value()?.profiles ?? [], running());
@@ -171,6 +172,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         setPlan(fresh);
         if (!sameReviewedPlan(previous, fresh)) { setPicks(defaultInstallChoices(fresh)); setAcknowledged(false); return; }
         body = reviewApplyRequest(fresh, picks(), acknowledged());
+        if (body) body = { ...body, acknowledgeWarnings: warningsAcknowledged() };
         if (!body) return;
       }
       const ready = body;
@@ -228,7 +230,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         }>
           <span data-vesta="pack-review-note">{notes()}</span>
           <Button variant="ghost" disabled={!!stage()} onClick={close}>{t('common.cancel')}</Button>
-          <Button tone="accent" disabled={busy() || !request() || !!blocker() || (!!plan() && reviewEmpty(plan()!))}
+          <Button tone="accent" disabled={busy() || !request() || !!blocker() || (!!plan() && reviewEmpty(plan()!)) || (!!plan()?.warnings.length && !warningsAcknowledged())}
             title={blocker() ? t(blocker()!) : undefined} onClick={() => void apply()}>
             {actionLabel()}
           </Button>
@@ -244,7 +246,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                   value={preparation()?.total ? Math.round(preparation()!.completed / preparation()!.total * 100) : undefined}
                   label={t(preparation() ? stageLabel[preparation()!.stage] : 'server-pack.install-planning')} />
               </Show>
-              <ServerErrorNote error={error()} onRetry={() => void planNow()} />
+<ServerErrorNote error={error()} onRetry={() => void planNow()} />
             </div>
           }>
             {(value) => (
@@ -265,10 +267,11 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                 <ChangeSummary plan={value()} picks={picks()} disabled={busy()}
                   onPick={(path, choice) => setPicks((currentPicks) => ({ ...currentPicks, [path]: choice }))} />
                 <Show when={value().warnings.length}>
-                  <details data-vesta="pack-review-notes">
+                  <details open data-vesta="pack-review-notes">
                     <summary>{t('server-pack.install-notes', { count: value().warnings.length })}</summary>
                     <ul><For each={value().warnings}>{(warning) => <li>{installWarning(warning, t)}</li>}</For></ul>
                   </details>
+                  <Button size="sm" variant="outline" disabled={busy() || warningsAcknowledged()} onClick={() => setWarningsAcknowledged(true)}>Install anyway</Button>
                 </Show>
                 <Show when={backupProfile() && !backedUp()}>
                   <Checkbox size="sm" checked={backupFirst()} disabled={busy()} onChange={setBackupFirst} label={t('server-pack.review-backup-first')} />

@@ -601,6 +601,7 @@ const installWarnings: Record<string, MessageId> = {
 
 /** Agent warnings are `code` or `code:path`; known codes read as sentences, others stay as sent. */
 export function installWarning(warning: string, translate: (id: MessageId, args: Record<string, string>) => string): string {
+  if (warning.startsWith("pack_size_warning:")) return `Large download: ${Math.ceil(Number(warning.slice(18)) / 1048576)} MiB. Check free space before installing.`;
   const split = warning.indexOf(':');
   const code = split < 0 ? warning : warning.slice(0, split);
   const path = split < 0 ? '' : warning.slice(split + 1);

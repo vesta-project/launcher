@@ -10,13 +10,13 @@ test('install review fixtures expose provider, archive, conflicts and software s
 });
 test('install apply requires reviewed token and every choice; replays exact outcome',async()=>{
  const a=api();const p=await a.packInstallPlan('s',{source:{source:'draft',revision:'3'}});
- const req={planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false};
+ const req={planId:p.planId,confirmationToken:p.confirmationToken,choices:[],acknowledgeWarnings:true,setAsModpack:false};
  await expect(a.packInstallApply('s',req,'missing-choice')).rejects.toMatchObject({code:'invalid_input'});
  const chosen={...req,choices:[{path:p.files[0].path,choice:'keep'}]};
  const result=await a.packInstallApply('s',chosen,'apply');
  expect(result.pendingIds).toHaveLength(0);expect(result.state).toBe('staged_until_restart');
  expect(await a.packInstallApply('s',chosen,'apply')).toEqual(result);
- await expect(a.packInstallApply('s',{...chosen,setAsModpack:true},'apply')).rejects.toBeDefined();
+ await expect(a.packInstallApply('s',{...chosen,acknowledgeWarnings:true,setAsModpack:true},'apply')).rejects.toBeDefined();
 });
 
 import { installCanProceedWithoutReview } from '../src/features/servers/modpack-area-model.ts';
@@ -68,7 +68,7 @@ test('combined install binds acknowledgement to the reviewed software target', a
  const p=await a.packInstallPlan('s',{source:{source:'provider',provider:'modrinth',projectId:'pack',versionId:'v1'}});
  expect(p.softwareSwitch.from.software).toBe('paper');
  expect(p.softwareSwitch.to.software).toBe('fabric');
- const req={planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false};
+ const req={planId:p.planId,confirmationToken:p.confirmationToken,choices:[],acknowledgeWarnings:true,setAsModpack:false};
  await expect(a.packInstallApply('s',req,'unacknowledged')).rejects.toMatchObject({code:'stale_target'});
  expect(switches).toBe(0);
  await expect(a.packInstallApply('s',{...req,acknowledgeSoftwareSwitch:true,confirmationToken:'wrong'},'wrong')).rejects.toBeDefined();
@@ -77,4 +77,9 @@ test('combined install binds acknowledgement to the reviewed software target', a
  const result=await a.packInstallApply('s',acknowledged,'combined');
  expect(result.state).toBe('staged_until_restart');expect(software).toBe('fabric');
  expect(await a.packInstallApply('s',acknowledged,'combined')).toEqual(result);expect(switches).toBe(1);
+});
+
+test('warnings require explicit install-anyway acknowledgement', async () => {
+ const a=api(), p=await a.packInstallPlan('s',{source:{source:'draft',revision:'3'}});
+ await expect(a.packInstallApply('s',{planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false},'no-ack')).rejects.toMatchObject({code:'invalid_input'});
 });

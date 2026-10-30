@@ -135,6 +135,10 @@ impl Error {
         .then(|| code.to_owned());
         use ErrorCode::*;
         let code = match code {
+            "content_pack_source_unsafe" | "content_pack_metadata_invalid"
+            | "content_pack_hash_mismatch" | "content_pack_download_unavailable"
+            | "pack_path_invalid" | "pack_archive_invalid" | "pack_too_large" => InvalidInput,
+            "content_pack_download_failed" => Internal,
             "software_runtime_unavailable" | "software_disabled" => Unsupported,
             "software_busy" | "pack_storage_low" => ServerBusy,
             "software_plan_expired" | "software_confirmation_invalid" => ConfirmationExpired,
@@ -666,5 +670,19 @@ mod provider_error_tests {
             .is_none());
         let old = Error::wire(400, "invalid_request", None);
         assert!(serde_json::to_value(old).unwrap().get("details").is_none());
+    }
+}
+
+#[cfg(test)]
+mod pack_policy_mapping_tests {
+    use super::*;
+    #[test]
+    fn typed_provider_refusals_are_never_busy() {
+        for reason in ["content_pack_source_unsafe", "content_pack_metadata_invalid", "content_pack_hash_mismatch"] {
+            let error = Error::wire(502, reason, None);
+            assert_eq!(error.code, ErrorCode::InvalidInput);
+            assert_eq!(error.reason.as_deref(), Some(reason));
+        }
+        assert_eq!(Error::wire(503, "temporarily_unavailable", None).code, ErrorCode::ServerBusy);
     }
 }

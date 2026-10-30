@@ -31,7 +31,7 @@ export interface PackIcon { mimeType: 'image/png' | 'image/jpeg'; contentBase64:
 export interface ServerModpackVersion { source: PackInstallSource; displayVersion: string }
 export interface ServerModpackUpdate { installed: ServerModpackVersion | null; pending: ServerModpackVersion | null; available: PackInstallSource | null }
 export interface ServerModpackLink { installed?: ServerModpackVersion | null; pending?: ServerModpackVersion | null; pendingIds?: string[]; source: PackInstallSource; displayVersion: string; files: Record<string,string>; state: string }
-export interface ClientPackConfig { mode: 'none' | 'server-modpack' | 'custom'; requireUpdate: boolean }
+export interface ClientPackConfig { allowCustomContent?: boolean; mode: 'none' | 'server-modpack' | 'custom'; requireUpdate: boolean }
 export interface PackInstallProgress { stage: 'archive' | 'metadata' | 'download_verify' | 'review'; completed: number; total: number }
 export interface PackWorkspace { installProgress?: PackInstallProgress | null; serverModpack?: ServerModpackLink | null; clientPack?: ClientPackConfig; customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
@@ -56,7 +56,7 @@ export interface PackInstallRequest {source:PackInstallSource}
 export interface PackInstallFile {operation?: string;path:string;sha256:string;expectedSha256:string|null;conflict:'project_version'|'same_filename'|'unidentified_jar'|null}
 export interface SoftwareSwitchTarget {software:string;minecraftVersion:string;loaderVersion:string|null}
 export interface PackInstallPlan {softwareSwitch?:{from:SoftwareSwitchTarget;to:SoftwareSwitchTarget}|null;removed?: [string,string][];planId:string;confirmationToken:string;expiresAtMs:number;minecraftVersion:string;software:string;loaderVersion:string|null;softwareSwitchRequired:boolean;valid:boolean;files:PackInstallFile[];skipped:string[];warnings:string[];backupRecommended:boolean}
-export interface PackInstallApply {acknowledgeSoftwareSwitch?:boolean;planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
+export interface PackInstallApply {acknowledgeWarnings?:boolean;acknowledgeSoftwareSwitch?:boolean;planId:string;confirmationToken:string;choices:{path:string;choice:'replace'|'keep'}[];setAsModpack:boolean}
 export interface PackInstallOutcome {serverModpack?: ServerModpackLink | null;softwareJobId?:string|null;state:'queued'|'staged_until_restart';pendingIds:string[];modpackRevision:string|null}
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export interface PublishedRevision { revision: string; publishedAt: number; publishedBy: string | null; requiredUpdate: boolean; entryCount: number | null; overrideCount: number | null; providerVersion: string | null }

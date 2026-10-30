@@ -182,6 +182,7 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
       return mutate(id,intent,request,()=>{
         const saved=installPlans.get(request.planId)??fail('not_found'),p=saved.plan;
         if(saved.id!==id||p.confirmationToken!==request.confirmationToken||p.expiresAtMs<Date.now())fail('conflict');
+        if(p.warnings.length && !request.acknowledgeWarnings)fail('invalid_input');
         if(p.softwareSwitchRequired && !request.acknowledgeSoftwareSwitch)fail('stale_target');
         if(!p.softwareSwitchRequired && (host.software(id)!==p.software||(host.minecraftVersion?.(id)??'1.21.4')!==p.minecraftVersion))fail('stale_target');
         const conflicts=p.files.filter(f=>f.conflict).map(f=>f.path).sort();

@@ -151,10 +151,14 @@ dto!(ServerModpackVersion {
 });
 dto!(ServerModpackUpdate {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,available:Option<PackInstallSource>});
 dto!(ServerModpackLink {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,source:PackInstallSource,display_version:String,files:std::collections::BTreeMap<String,String>,state:String,pending_ids:Vec<String>});
-dto!(ClientPackConfig {
-    mode: String,
-    require_update: bool
-});
+#[derive(Clone,Debug,Deserialize,Serialize)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+pub struct ClientPackConfig {
+    #[serde(default)] pub allow_custom_content: bool,
+    pub mode: String,
+    pub require_update: bool,
+}
+
 dto!(ServerModpackUnlink {
     remove_owned_files: bool
 });
@@ -282,6 +286,8 @@ dto!(PackInstallChoice {
 #[derive(Clone,Debug,Deserialize,Serialize)]
 #[serde(rename_all="camelCase",deny_unknown_fields)]
 pub struct PackInstallApply {
+    #[serde(default)]
+    pub acknowledge_warnings: bool,
     #[serde(default)]
     pub acknowledge_software_switch: bool,
     pub plan_id: String,
@@ -567,6 +573,7 @@ mod install_wire_tests {
     #[test]
     fn install_wire_preserves_paths_and_nested_source() {
         let input = PackInstallApply {
+            acknowledge_warnings: true,
             acknowledge_software_switch: true,
             plan_id: "plan".into(),
             confirmation_token: "secret".into(),
