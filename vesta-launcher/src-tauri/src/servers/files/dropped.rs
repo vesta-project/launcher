@@ -311,25 +311,27 @@ mod tests {
         let drops = DroppedFiles::default();
         rejects(
             drops
-                .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+                .pack_sources("main", strings(std::slice::from_ref(&root)), false)
                 .await,
         );
         drop_paths(&drops, "main", std::slice::from_ref(&root));
         let files = drops
-            .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+            .pack_sources("main", strings(std::slice::from_ref(&root)), false)
             .await
             .unwrap();
-        assert_eq!(files[0].1, "config/settings.toml");
-        assert_eq!(files[0].2, b"enabled=true");
+        assert_eq!(files[0].path, "config/settings.toml");
+        let mut body = Vec::new();
+        std::io::Read::read_to_end(&mut &files[0].file, &mut body).unwrap();
+        assert_eq!(body, b"enabled=true");
         rejects(
             drops
-                .pack_bytes("main", strings(std::slice::from_ref(&root)), false)
+                .pack_sources("main", strings(std::slice::from_ref(&root)), false)
                 .await,
         );
         drop_paths(&drops, "main", std::slice::from_ref(&root));
         rejects(
             drops
-                .pack_bytes("main", strings(std::slice::from_ref(&root)), true)
+                .pack_sources("main", strings(std::slice::from_ref(&root)), true)
                 .await,
         );
     }
