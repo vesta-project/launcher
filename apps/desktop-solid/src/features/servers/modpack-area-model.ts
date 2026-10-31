@@ -592,6 +592,7 @@ export function syncChangeSummary(changes: readonly PackSyncChange[]) {
 
 const installWarnings: Record<string, MessageId> = {
   missing_required_dependency: 'server-pack.warning-missing-dependency',
+  software_legacy_checksum_review: 'server-pack.warning-software-checksum',
   unknown_server_side: 'server-pack.warning-unknown-side',
   unknown_or_optional_server_side: 'server-pack.warning-unknown-side',
   archive_loader_inferred_from_server_review_required: 'server-pack.warning-loader-inferred',
@@ -617,9 +618,9 @@ export function installWarning(warning: string | import('./native-pack').PackIns
     const id = messages[warning.rule];
     if (id) return `${translate(id, {})} (${warning.item}: ${warning.detail})`;
   }
-  if (typeof warning !== 'string') return `${installWarning(warning.detail, translate)} (${warning.code}: ${warning.rule}, ${warning.item})`;
+  if (typeof warning !== 'string') return installWarning(warning.detail, translate);
   if (warning.startsWith("unusual_content_directory:")) return `Unusual content destination: ${warning.slice(26)}. Check the file before installing.`;
-  if (warning.startsWith("pack_size_warning:")) return `Large download: ${Math.ceil(Number(warning.slice(18)) / 1048576)} MiB. Check free space before installing.`;
+  if (warning.startsWith("pack_size_warning:")) return `Server files: ${Math.ceil(Number(warning.slice(18)) / 1048576)} MiB.`;
   const split = warning.indexOf(':');
   const code = split < 0 ? warning : warning.slice(0, split);
   const path = split < 0 ? '' : warning.slice(split + 1);

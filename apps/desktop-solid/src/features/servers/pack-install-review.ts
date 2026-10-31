@@ -11,6 +11,14 @@ export interface PackSoftwareSwitch { from: PackRuntime | null; to: PackRuntime 
 export type ReviewPlan = PackInstallPlan;
 export type ReviewApply = PackInstallApply;
 
+const informationalWarnings = new Set(['pack_size_warning', 'version_from_pack_manifest', 'curseforge_server_pack', 'server_pack_managed_file_skipped']);
+const warningCode = (warning: ReviewPlan['warnings'][number]) => typeof warning === 'string' ? warning.split(':')[0] : warning.code;
+const obsoleteWarning = (warning: ReviewPlan['warnings'][number]) => warningCode(warning) === 'missing_required_dependency' || (typeof warning !== 'string' && warning.code === 'archive_limit_warning' && warning.rule.startsWith('legacy_'));
+
+/** Ignore obsolete buffer budgets and provider-ID guesses about prebuilt dependencies. */
+export const reviewWarnings = (plan: ReviewPlan) => plan.warnings.filter(warning => !obsoleteWarning(warning));
+export const reviewNeedsWarningConsent = (plan: ReviewPlan) => reviewWarnings(plan).some(warning => !informationalWarnings.has(warningCode(warning)));
+
 /**
  * The switch the install performs, if any. Prefers the plan's own description; older agents only
  * flag `softwareSwitchRequired`, so the target falls back to the plan's runtime and the source to
@@ -30,11 +38,12 @@ export function reviewBlocker(plan: ReviewPlan, acknowledged: boolean): MessageI
 }
 
 /** The apply request: every conflict decided, plus the switch acknowledgement when the plan switches. */
-export function reviewApplyRequest(plan: ReviewPlan, picks: Record<string, ConflictChoice>, acknowledged: boolean): ReviewApply | null {
+export function reviewApplyRequest(plan: ReviewPlan, picks: Record<string, ConflictChoice>, acknowledged: boolean, warningsAcknowledged = false): ReviewApply | null {
   if (reviewBlocker(plan, acknowledged)) return null;
   const request = installApplyRequest(plan, picks);
   if (!request) return null;
-  return planSoftwareSwitch(plan) ? { ...request, acknowledgeSoftwareSwitch: true } : request;
+  const reviewed = { ...request, acknowledgeWarnings: !reviewNeedsWarningConsent(plan) || warningsAcknowledged };
+  return planSoftwareSwitch(plan) ? { ...reviewed, acknowledgeSoftwareSwitch: true } : reviewed;
 }
 
 export type ReviewCountKey = 'added' | 'updated' | 'removed' | 'overrides' | 'skipped';

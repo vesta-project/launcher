@@ -79,7 +79,7 @@ test('combined install binds acknowledgement to the reviewed software target', a
  expect(await a.packInstallApply('s',acknowledged,'combined')).toEqual(result);expect(switches).toBe(1);
 });
 
-test('warnings require explicit install-anyway acknowledgement', async () => {
+test('warnings require explicit acknowledgement', async () => {
  const a=api(), p=await a.packInstallPlan('s',{source:{source:'draft',revision:'3'}});
  await expect(a.packInstallApply('s',{planId:p.planId,confirmationToken:p.confirmationToken,choices:[],setAsModpack:false},'no-ack')).rejects.toMatchObject({code:'invalid_input'});
 });
@@ -89,6 +89,26 @@ import { serverErrorDetails } from '../src/features/servers/errors.ts';
 test('structured review warnings and hard refusals name the rule and item', () => {
  const message = installWarning({code:'unusual_content_directory',rule:'unusual_content_directory',item:'licenses/license.pdf',detail:'unusual_content_directory:licenses/license.pdf'}, id => id);
  expect(message).toContain('licenses/license.pdf');
- expect(message).toContain('unusual_content_directory');
+ expect(message).toContain('Unusual content destination');
  expect(serverErrorDetails({code:'invalid_input',reason:'pack_path_invalid',issue:{code:'pack_path_invalid',rule:'safe_relative_path',item:'../escape.jar'}})).toContain('safe_relative_path: ../escape.jar');
+});
+
+import { reviewWarnings, reviewNeedsWarningConsent } from '../src/features/servers/pack-install-review.ts';
+test('ordinary sizes and obsolete buffer thresholds do not require an override', () => {
+ const plan={...seedPackInstallPlan('provider'),warnings:[
+  {code:'archive_limit_warning',rule:'legacy_member_bytes',item:'mods/large.jar',detail:'138801550 > 16777216'},
+  {code:'pack_size_warning',rule:'pack_size_warning',item:'590583000',detail:'pack_size_warning:590583000'},
+ ]};
+ expect(reviewWarnings(plan)).toHaveLength(1);
+ expect(reviewNeedsWarningConsent(plan)).toBe(false);
+ expect(reviewApplyRequest(plan,{},false)?.acknowledgeWarnings).toBe(true);
+ const packaged={...plan,warnings:[...plan.warnings,'missing_required_dependency:mods/a.jar (curseforge/410295)']};
+ expect(reviewWarnings(packaged)).toHaveLength(1);
+ expect(reviewNeedsWarningConsent(packaged)).toBe(false);
+ const risk={...plan,warnings:[...plan.warnings,'unknown_server_side:mods/a.jar']};
+ expect(reviewNeedsWarningConsent(risk)).toBe(true);
+ expect(reviewApplyRequest(risk,{},false)?.acknowledgeWarnings).toBe(false);
+ expect(reviewApplyRequest(risk,{},false,true)?.acknowledgeWarnings).toBe(true);
+ const checksum={...plan,warnings:['software_legacy_checksum_review']};
+ expect(reviewNeedsWarningConsent(checksum)).toBe(true);
 });

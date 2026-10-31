@@ -15,7 +15,7 @@ import {
   type ConflictChoice,
 } from '../../../features/servers/modpack-area-model';
 import {
-  backupProfileFor, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewCounts, reviewEmpty, runtimeLabel, softwareName,
+  backupProfileFor, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewCounts, reviewEmpty, reviewWarnings, reviewNeedsWarningConsent, runtimeLabel, softwareName,
   type PackRuntime, type ReviewCountKey, type ReviewPlan,
 } from '../../../features/servers/pack-install-review';
 import type { ServerCommandError } from '../../../features/servers/native';
@@ -133,7 +133,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const switchTo = () => { const value = plan(); return value ? planSoftwareSwitch(value, current()) : null; };
   const blocker = () => { const value = plan(); return value ? reviewBlocker(value, acknowledged()) : null; };
   const [warningsAcknowledged, setWarningsAcknowledged] = createSignal(false);
-  const request = createMemo<import('../../../features/servers/native-pack').PackInstallApply | null>(() => { const value = plan(); const result = value ? reviewApplyRequest(value, picks(), acknowledged()) : null; return result ? { ...result, acknowledgeWarnings: warningsAcknowledged() } : null; }, { name: 'pack-review:request' });
+  const request = createMemo<import('../../../features/servers/native-pack').PackInstallApply | null>(() => { const value = plan(); const result = value ? reviewApplyRequest(value, picks(), acknowledged(), warningsAcknowledged()) : null; return result; }, { name: 'pack-review:request' });
   const update = () => props.request.mode === 'update';
   const running = () => area.snapshot().status?.state === 'running';
   const backupProfile = () => backupProfileFor(backups.value()?.profiles ?? [], running());
@@ -154,7 +154,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
 
   const apply = async () => {
     let body = request();
-    if (!body || blocker()) return;
+    if (!body || blocker() || (plan() && reviewNeedsWarningConsent(plan()!) && !warningsAcknowledged())) return;
     setError(null); setBackupFailed(false);
     try {
       const profile = backupProfile();
@@ -171,9 +171,8 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         const fresh: ReviewPlan = await serverCommand(api => api.packInstallPlan(area.id(), { source: untrack(source) }));
         if (disposed) return;
         setPlan(fresh);
-        if (!sameReviewedPlan(previous, fresh)) { setPicks(defaultInstallChoices(fresh)); setAcknowledged(false); return; }
-        body = reviewApplyRequest(fresh, picks(), acknowledged());
-        if (body) body = { ...body, acknowledgeWarnings: warningsAcknowledged() };
+        if (!sameReviewedPlan(previous, fresh)) { setPicks(defaultInstallChoices(fresh)); setAcknowledged(false); setWarningsAcknowledged(false); return; }
+        body = reviewApplyRequest(fresh, picks(), acknowledged(), warningsAcknowledged());
         if (!body) return;
       }
       const ready = body;
@@ -222,7 +221,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         }>
           <span data-vesta="pack-review-note">{t('server-pack.review-note')}</span>
           <Button variant="ghost" disabled={!!stage()} onClick={close}>{t('common.cancel')}</Button>
-          <Button tone="accent" disabled={busy() || !request() || !!blocker() || (!!plan() && reviewEmpty(plan()!)) || (!!plan()?.warnings.length && !warningsAcknowledged())}
+          <Button tone="accent" disabled={busy() || !request() || !!blocker() || (!!plan() && reviewEmpty(plan()!)) || (!!plan() && reviewNeedsWarningConsent(plan()!) && !warningsAcknowledged())}
             title={blocker() ? t(blocker()!) : undefined} onClick={() => void apply()}>
             {actionLabel()}
           </Button>
@@ -258,12 +257,12 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                 <Show when={!value().valid}><p data-vesta="server-callout" data-tone="danger" role="alert">{t('server-pack.install-invalid')}</p></Show>
                 <ChangeSummary plan={value()} picks={picks()} disabled={busy()}
                   onPick={(path, choice) => setPicks((currentPicks) => ({ ...currentPicks, [path]: choice }))} />
-                <Show when={value().warnings.length}>
+                <Show when={reviewWarnings(value()).length}>
                   <details open data-vesta="pack-review-notes">
-                    <summary>{t('server-pack.install-notes', { count: value().warnings.length })}</summary>
-                    <ul><For each={value().warnings}>{(warning) => <li>{installWarning(warning, t)}</li>}</For></ul>
+                    <summary>{t('server-pack.install-notes', { count: reviewWarnings(value()).length })}</summary>
+                    <ul><For each={reviewWarnings(value())}>{(warning) => <li>{installWarning(warning, t)}</li>}</For></ul>
                   </details>
-                  <Button size="sm" variant="outline" disabled={busy() || warningsAcknowledged()} onClick={() => setWarningsAcknowledged(true)}>Install anyway</Button>
+                  <Show when={reviewNeedsWarningConsent(value())}><Checkbox size="sm" checked={warningsAcknowledged()} disabled={busy()} onChange={setWarningsAcknowledged} label={t('server-pack.review-warnings-ack')} /></Show>
                 </Show>
                 <Show when={backupProfile() && !backedUp()}>
                   <Checkbox size="sm" checked={backupFirst()} disabled={busy()} onChange={setBackupFirst} label={t('server-pack.review-backup-first')} />

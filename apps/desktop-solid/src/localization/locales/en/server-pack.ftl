@@ -119,7 +119,7 @@ server-pack-get-link-only = Link matching files only
 server-pack-get-uncertain = The result is unclear. Check your library before trying again.
 
 # Install on server
-server-pack-install-planning = Downloading and verifying files
+server-pack-install-planning = Downloading server files
 server-pack-install-software = Software
 server-pack-install-minecraft = Minecraft
 server-pack-install-loader = Loader version
@@ -545,3 +545,6 @@ server-pack-client-link-resources = Keep resources only
 server-pack-client-link-remove = Remove everything
 server-pack-client-link-from = From this modpack
 server-pack-client-link-custom = Your additions
+
+server-pack-review-warnings-ack = Continue despite these warnings
+server-pack-warning-software-checksum = The required server software uses upstream SHA-1 checksums. Downloads are checked against those values.

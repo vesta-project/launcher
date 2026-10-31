@@ -237,6 +237,8 @@ export const messageIds = [
   "server-pack.review-switch",
   "server-pack.review-switch-current",
   "server-pack.review-switch-ack",
+  "server-pack.review-warnings-ack",
+  "server-pack.warning-software-checksum",
   "server-pack.review-switch-needs-ack",
   "server-pack.review-switch-started",
   "server-pack.review-changes",
