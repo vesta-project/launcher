@@ -87,7 +87,7 @@ fn upload_retry_delay(error: &Error, attempt: u32) -> Option<Duration> {
     let backoff = Duration::from_millis(250 * (1 << attempt));
     let delay = error.retry_after_ms.map(Duration::from_millis).unwrap_or(backoff).max(backoff);
     // Do not shorten a server's Retry-After or hold an upload indefinitely.
-    (delay <= Duration::from_secs(30)).then_some(delay)
+    (delay <= Duration::from_secs(120)).then_some(delay)
 }
 use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig},
@@ -564,12 +564,19 @@ mod priority_tests {
     use super::*;
 
     #[test]
+    fn archive_upload_can_wait_out_a_session_rate_window() {
+        let mut error=Error::wire(429,"rate_limited",Some(60_000));
+        error.retry_after_ms=Some(60_000);
+        assert_eq!(upload_retry_delay(&error,0),Some(Duration::from_secs(60)));
+        assert_eq!(upload_retry_delay(&error,3),None);
+    }
+    #[test]
     fn upload_retry_honors_pacing_and_never_retries_refusals() {
         let mut error = Error::new(ErrorCode::RateLimited).local_pressure();
         error.retry_after_ms = Some(1500);
         assert_eq!(upload_retry_delay(&error, 0), Some(Duration::from_millis(1500)));
         assert_eq!(upload_retry_delay(&error, 3), None);
-        error.retry_after_ms = Some(30_001);
+        error.retry_after_ms = Some(120_001);
         assert_eq!(upload_retry_delay(&error, 0), None);
         for code in [ErrorCode::Timeout, ErrorCode::Unreachable, ErrorCode::OutcomeUnknown] {
             assert!(upload_retry_delay(&Error::new(code), 0).is_some());
