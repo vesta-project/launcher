@@ -186,6 +186,8 @@ export interface ServerSnapshot {
   state: ConnectionState;
   info: ServerInfo | null;
   status: ServerStatus | null;
+  /** Public lifecycle for player connections without process-detail access. */
+  publicLifecycle?: Lifecycle | null;
   /** Epoch ms when `status` was last confirmed by the server. */
   statusObservedAtMs: number | null;
   pack: PackStatus | null;

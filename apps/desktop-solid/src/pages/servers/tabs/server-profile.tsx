@@ -29,7 +29,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const textIntents = new IntentMemo();
   const iconIntents = new IntentMemo();
   let picker: HTMLInputElement | undefined;
-  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
+  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
 
   const name = () => nameDraft() ?? branding.value()?.name ?? '';
   const description = () => descriptionDraft() ?? branding.value()?.description ?? '';

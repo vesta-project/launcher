@@ -45,7 +45,7 @@ const ALL_RUNS = { workflowId: null, after: null };
 function AutomationHome(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = stableConnectionId(() => props.snapshot);
-  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
+  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') === 'allowed';
   const [view, setView] = createSignal<'workflows' | 'runs'>(lastView.get(untrack(id)) ?? 'workflows', { name: 'server-automation:view' });
   const choose = (next: 'workflows' | 'runs') => { lastView.set(id(), next); setView(next); };
   // Summaries carry the trigger, and one newest-first page of runs gives each its last run.

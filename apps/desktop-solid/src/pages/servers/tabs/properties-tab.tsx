@@ -58,7 +58,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
   const [query, setQuery] = createSignal('', { name: 'server-properties:query' });
   const [open, setOpen] = createSignal<ReadonlySet<string>>(new Set(), { name: 'server-properties:open-groups' });
   const intents = new IntentMemo();
-  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
+  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
 
   const base = createMemo(() => { const value = file.value(); return value ? parseProperties(value.values) : null; }, { name: 'server-properties:base' });
   const sha = () => file.value()?.sha256 ?? '';

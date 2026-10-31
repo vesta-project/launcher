@@ -483,6 +483,7 @@ impl ServerManager {
             restart_required: false,
             join_address: None,
             backups_configured: None,
+            public_lifecycle: discovery.public_lifecycle.clone(),
         };
         let client = Client::new(transport, discovery.server_id, device.clone(), signer);
         self.edit_store(|s| {
@@ -661,6 +662,20 @@ impl ServerManager {
         }
         let result = async {
             let client = self.client(id).await?;
+            // Learn effective access before requesting any privileged metadata.
+            // Minecraft enrollment can be player-only, with no management grants.
+            if !slot.capabilities_loaded.load(std::sync::atomic::Ordering::Relaxed) {
+                snapshot.capabilities = client.capabilities(snapshot.connection.role.as_deref()).await?;
+                slot.capabilities_loaded.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            if !snapshot.capabilities.granted.iter().any(|cap| cap == "status.view") {
+                snapshot.info = None;
+                snapshot.status = None;
+                snapshot.pack = None;
+                snapshot.public_lifecycle = Some(client.public_lifecycle().await?);
+                snapshot.status_observed_at_ms = Some(vesta_server_client::now_ms());
+                return Ok::<(), Error>(());
+            }
             if !slot.info_loaded.load(std::sync::atomic::Ordering::Relaxed) {
                 let info = client.info().await?;
                 if snapshot.connection.name == snapshot.connection.endpoint {
@@ -677,22 +692,13 @@ impl ServerManager {
                 slot.info_loaded
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
-            if !slot
-                .capabilities_loaded
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                snapshot.capabilities = client
-                    .capabilities(snapshot.connection.role.as_deref())
-                    .await?;
-                slot.capabilities_loaded
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-            }
             if snapshot.pack.is_none() {
                 snapshot.pack = Some(from_wire(
                     client.get("pack", interactive, "status.view").await?,
                 )?);
             }
             let status = client.status(interactive).await?;
+            snapshot.public_lifecycle = None;
             snapshot.status = Some(status);
             snapshot.status_observed_at_ms = Some(vesta_server_client::now_ms());
             snapshot.capabilities.refused = client.refused().await;

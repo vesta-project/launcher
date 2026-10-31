@@ -25,6 +25,13 @@ const snapshot = (patch = {}, role = 'owner') => ({
 const offline = (phase = 'unreachable') => snapshot({ state: { phase, access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: 'unreachable' } });
 
 describe('[shell] routing', () => {
+  test('navigation starts with overview until permissions are known; players never see management tabs', () => {
+    const pending = snapshot({ capabilities: { source: 'unknown', granted: [], refused: [] } });
+    expect(visibleMainTabs({ snapshot: pending, backupsConfigured: undefined }).map(tab => tab.id)).toEqual(['overview']);
+    expect(visibleSections(pending).map(section => section.id)).toEqual(['connection']);
+    const player = snapshot({ capabilities: { source: 'session', granted: ['public.info', 'pack.access'], refused: [] } });
+    expect(visibleMainTabs({ snapshot: player, backupsConfigured: true }).map(tab => tab.id)).toEqual(['overview', 'pack']);
+  });
   test('main tabs, settings sections and the overview default', () => {
     expect(resolveServerLocation(undefined, undefined)).toEqual({ mode: 'main', tab: 'overview' });
     expect(resolveServerLocation('console', undefined)).toEqual({ mode: 'main', tab: 'console' });

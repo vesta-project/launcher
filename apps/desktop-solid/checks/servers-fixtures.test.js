@@ -33,7 +33,9 @@ describe('[pairing] connect flow', () => {
     const servers = api();
     const found = await servers.discover('mc.example');
     const snapshot = await servers.signInMinecraft(found.discoveryId, 'uuid');
-    expect(snapshot.state.access).toBe('no_management_access');
+    expect(snapshot.state.access).toBe('paired');
+    expect(snapshot.publicLifecycle).toBe('offline');
+    expect(snapshot.status).toBeNull();
     expect(snapshot.capabilities.granted).not.toContain('status.view');
   });
 });

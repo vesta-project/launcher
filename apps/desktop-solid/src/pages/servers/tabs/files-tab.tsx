@@ -243,7 +243,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
           <Show when={view() === 'browse'} fallback={
             <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} onClick={() => setView('browse')}>{t('server-files.back-to-files')}</Button>
           }>
-            <Show when={gate(props.snapshot.capabilities, 'config.view') !== 'denied'}>
+            <Show when={gate(props.snapshot.capabilities, 'config.view') === 'allowed'}>
               <SftpButton snapshot={props.snapshot} path={directory()} />
             </Show>
             <Show when={folder().trash}>

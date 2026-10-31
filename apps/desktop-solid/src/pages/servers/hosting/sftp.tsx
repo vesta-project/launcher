@@ -25,8 +25,8 @@ import { Hint, HostingError } from './parts';
 import './hosting.css';
 
 const failureTitle = (error: ServerCommandError) => t(reasonMessage(error.reason) ?? 'server-hosting.sftp-open-failed');
-const mayConfigure = (snapshot: ServerSnapshot) => mayOwn(snapshot.connection.role) && gate(snapshot.capabilities, 'security.manage') !== 'denied';
-const mayManageKeys = (snapshot: ServerSnapshot) => mayOwn(snapshot.connection.role) && gate(snapshot.capabilities, 'credentials.manage') !== 'denied';
+const mayConfigure = (snapshot: ServerSnapshot) => mayOwn(snapshot.connection.role) && gate(snapshot.capabilities, 'security.manage') === 'allowed';
+const mayManageKeys = (snapshot: ServerSnapshot) => mayOwn(snapshot.connection.role) && gate(snapshot.capabilities, 'credentials.manage') === 'allowed';
 const linkFor = (snapshot: ServerSnapshot, status: SftpStatus, path = '') =>
   sftpLink({ host: hostOf(snapshot.connection.endpoint), port: status.config.port, username: status.username, path });
 

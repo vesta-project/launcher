@@ -40,7 +40,7 @@ export const capabilitiesForRole = (role: string | null | undefined): string[] |
 
 /**
  * `allowed`: show and enable. `denied`: the server refused it or the reported set excludes it; hide.
- * `unknown`: show, and let the server decide (the first refusal turns it into `denied`).
+ * `unknown`: wait for the capability projection before showing controls or making reads.
  */
 export type Gate = 'allowed' | 'denied' | 'unknown';
 
@@ -58,6 +58,6 @@ export function canInstallServerModpack(view: CapabilityView | undefined, paired
     && gate(view, 'content.install') === 'allowed' && gate(view, 'pack.edit') === 'allowed';
 }
 
-/** True when any listed capability could be usable. Used to decide whether a tab is shown. */
+/** True when at least one listed capability is confirmed usable. Used to decide whether a tab is shown. */
 export const anyVisible = (view: CapabilityView | undefined, capabilities: readonly string[]) =>
-  capabilities.some((capability) => gate(view, capability) !== 'denied');
+  capabilities.some((capability) => gate(view, capability) === 'allowed');

@@ -142,7 +142,7 @@ function RunRow(props: { snapshot: ServerSnapshot; run: RunSummary; name: string
 function RunSteps(props: { snapshot: ServerSnapshot; run: RunSummary; onChanged: () => void }) {
   const id = stableConnectionId(() => props.snapshot);
   const [busy, setBusy] = createSignal(false, { name: 'server-automation-run:busy' });
-  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
+  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') === 'allowed';
   // Re-read only when the run moves on (state, step or attempt); the history poll notices that.
   const detail = useServerResource(id, runStepsResource, {
     args: () => ({ runId: props.run.id, progress: `${props.run.state}:${props.run.currentStep}:${props.run.attempt}` }),

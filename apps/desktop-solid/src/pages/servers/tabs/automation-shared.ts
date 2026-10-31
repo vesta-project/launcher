@@ -26,8 +26,8 @@ export interface AutomationPeople {
  */
 export function useAutomationPeople(id: Accessor<ConnectionId>, snapshot: Accessor<ServerSnapshot>, needs: { users: (selfId: string | undefined) => boolean; profiles: Accessor<boolean> }): AutomationPeople {
   const self = useServerResource(id, automationSelfResource);
-  const users = useServerResource(id, automationUsersResource, { enabled: () => needs.users(self.value()?.principalId) && gate(snapshot().capabilities, 'principals.view') !== 'denied' });
-  const backups = useServerResource(id, backupsResource, { enabled: () => needs.profiles() && gate(snapshot().capabilities, 'backups.view') !== 'denied' });
+  const users = useServerResource(id, automationUsersResource, { enabled: () => needs.users(self.value()?.principalId) && gate(snapshot().capabilities, 'principals.view') === 'allowed' });
+  const backups = useServerResource(id, backupsResource, { enabled: () => needs.profiles() && gate(snapshot().capabilities, 'backups.view') === 'allowed' });
   const profiles = createMemo(() => backups.value()?.profiles.map((profile) => profile.name) ?? [], { name: 'server-automation:profiles' });
   return { self: self.value, users: () => users.value() ?? [], profiles };
 }

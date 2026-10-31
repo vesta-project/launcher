@@ -154,7 +154,7 @@ export function contentGates(
   snapshot: Pick<ServerSnapshot, 'status'> & { capabilities?: CapabilityView },
 ): ContentGates {
   const caps = inventory.capabilities;
-  const allowed = gate(snapshot.capabilities, 'content.install') !== 'denied';
+  const allowed = gate(snapshot.capabilities, 'content.install') === 'allowed';
   const running = !!snapshot.status && snapshot.status.state !== 'stopped';
   const generation = snapshot.status?.generation ?? null;
   const datapack = running ? (caps.datapackToggleRunning ?? caps.toggle) && generation !== null : caps.datapackToggleOffline ?? caps.toggle;

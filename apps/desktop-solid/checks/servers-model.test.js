@@ -134,9 +134,10 @@ describe('[authorization] capability gating is a hint, never authority', () => {
     expect(capabilitiesForRole('owner')).toContain('backups.restore');
     expect(capabilitiesForRole('custom-role')).toBeUndefined();
   });
-  test('unknown capabilities stay visible until the server refuses them', () => {
+  test('unknown capabilities wait for a projection before controls become visible', () => {
     const view = { source: 'unknown', granted: [], refused: [] };
     expect(gate(view, 'console.read')).toBe('unknown');
+    expect(anyVisible(view, ['console.read', 'backups.view'])).toBe(false);
     view.refused.push('console.read');
     expect(gate(view, 'console.read')).toBe('denied');
     expect(gate({ source: 'session', granted: ['status.view'], refused: [] }, 'console.read')).toBe('denied');
@@ -145,6 +146,15 @@ describe('[authorization] capability gating is a hint, never authority', () => {
 });
 
 describe('[state] connection, access and Minecraft are separate facts', () => {
+  test('player-only public lifecycle shows game state without inventing process details', () => {
+    const value = snapshot({ status: null, publicLifecycle: 'offline' });
+    expect(minecraftFact(value.status, value.publicLifecycle).message).toBe('servers.minecraft.stopped');
+    expect(minecraftFact(null, 'online').message).toBe('servers.minecraft.ready');
+    expect(minecraftFact(null, 'sleeping').message).toBe('servers.minecraft.sleeping');
+    expect(minecraftFact(null).message).toBe('servers.minecraft.unknown');
+    expect(statusDot(value)).toBe('stopped');
+    expect(value.status).toBeNull();
+  });
   test('a reachable agent with a stopped game is not "online"', () => {
     const value = snapshot({ status: status({ state: 'stopped', lifecycle: 'offline', generation: null, playerCount: null, playerCountKnown: false }) });
     expect(connectionFact(value, 0).message).toBe('servers.connection.online');

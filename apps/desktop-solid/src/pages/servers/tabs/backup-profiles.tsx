@@ -240,7 +240,7 @@ export function BackupSetup(props: { snapshot: ServerSnapshot; onEnabled: (profi
 
 /** After setup: offer the nightly Automation template (pre-filled with the new profile). */
 export function BackupsEnabled(props: { snapshot: ServerSnapshot; profile: string; onDismiss: () => void; onRun: () => void }) {
-  const canSchedule = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
+  const canSchedule = () => gate(props.snapshot.capabilities, 'automation.manage') === 'allowed';
   const [busy, setBusy] = createSignal(false, { name: 'server-backup-setup:scheduling' });
   const schedule = async () => {
     const id = props.snapshot.connection.id;
@@ -257,7 +257,7 @@ export function BackupsEnabled(props: { snapshot: ServerSnapshot; profile: strin
       <p><strong>{t('servers.backup-setup.enabled-title')}</strong> {t('servers.backup-setup.enabled-body', { name: props.profile })}</p>
       <div data-vesta="server-backup-actions">
         <Button size="sm" variant="ghost" onClick={props.onDismiss}>{t('servers.backup-setup.dismiss')}</Button>
-        <Show when={gate(props.snapshot.capabilities, 'backups.create') !== 'denied'}>
+        <Show when={gate(props.snapshot.capabilities, 'backups.create') === 'allowed'}>
           <Button size="sm" variant="outline" onClick={props.onRun}>{t('servers.backups.run')}</Button>
         </Show>
         <Show when={canSchedule()}>

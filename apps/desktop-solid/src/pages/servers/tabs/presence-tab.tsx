@@ -45,7 +45,7 @@ const sameJson = (left: unknown, right: unknown) => JSON.stringify(left) === JSO
  */
 export function PresenceTab(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') !== 'denied';
+  const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
   const sleep = useServerResource(id, sleepPolicyResource);
   const motd = useServerResource(id, motdPolicyResource);
   // A null draft means "as saved", so a fresh read shows through without syncing.

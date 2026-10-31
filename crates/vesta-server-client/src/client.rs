@@ -368,6 +368,14 @@ impl Client {
         auth::check_identity(&self.server_id, &info.server_id)?;
         Ok(info)
     }
+    /// Public lifecycle is separate from privileged process/readiness details.
+    pub async fn public_lifecycle(&self) -> Result<String> {
+        let value = self.transport.request(Method::GET, "/api/v3/status", None, None, None, false).await?;
+        auth::check_identity(&self.server_id, value["server_id"].as_str().ok_or_else(|| Error::new(ErrorCode::Unsupported))?)?;
+        value["state"].as_str().filter(|state| matches!(*state,
+            "offline" | "sleeping" | "waking" | "starting" | "online" | "stopping" | "crash_loop" | "recovery_required"))
+            .map(str::to_owned).ok_or_else(|| Error::new(ErrorCode::Unsupported))
+    }
     pub async fn capabilities(&self, role: Option<&str>) -> Result<CapabilityView> {
         match self.get("session", true, "").await {
             Ok(value) => {

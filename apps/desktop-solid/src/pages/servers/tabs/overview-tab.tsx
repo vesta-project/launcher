@@ -23,7 +23,7 @@ import { PlayOnServerCard, canGetModpack, offersClientPack } from '../pack/get-m
 export function OverviewTab(props: { snapshot: ServerSnapshot }) {
   const now = useServersClock();
   const id = stableConnectionId(() => props.snapshot);
-  const metricsAllowed = () => gate(props.snapshot.capabilities, 'metrics.view') !== 'denied';
+  const metricsAllowed = () => gate(props.snapshot.capabilities, 'metrics.view') === 'allowed';
   // Metrics stream only while the overview is visible and allowed.
   useServerTopic(() => (metricsAllowed() && props.snapshot.state.phase === 'online' ? id() : undefined), 'metrics');
   const status = () => props.snapshot.status;
@@ -45,11 +45,13 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
       <section data-vesta="server-cards">
         <article data-vesta="server-stat">
           <h2>{t('servers.overview.minecraft')}</h2>
-          <FactBadge fact={agentReachable(props.snapshot) ? minecraftFact(status()) : { ...minecraftFact(status()), tone: 'neutral' }} />
+          <FactBadge fact={agentReachable(props.snapshot) ? minecraftFact(status(), props.snapshot.publicLifecycle) : { ...minecraftFact(status(), props.snapshot.publicLifecycle), tone: 'neutral' }} />
+          <Show when={gate(props.snapshot.capabilities, 'status.view') === 'allowed'}>
           <dl>
             <dt>{t('servers.overview.version')}</dt><dd>{props.snapshot.info?.minecraftVersion || t('servers.unknown')}</dd>
             <dt>{t('servers.overview.uptime')}</dt><dd>{formatUptime(status()?.uptimeSeconds ?? null) ?? t('servers.unknown')}</dd>
           </dl>
+          </Show>
           <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} phase={props.snapshot.state.phase} />
         </article>
 
@@ -93,7 +95,7 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
       </Show>
 
       <dl data-vesta="server-about">
-        <dt>{t('servers.overview.agent')}</dt><dd>{props.snapshot.info?.agentVersion ?? t('servers.unknown')}</dd>
+        <Show when={props.snapshot.info?.agentVersion}><dt>{t('servers.overview.agent')}</dt><dd>{props.snapshot.info?.agentVersion}</dd></Show>
         <dt>{t('servers.server-id')}</dt><dd><code><Sensitive label={t('servers.server-id')}>{props.snapshot.connection.serverId}</Sensitive></code></dd>
       </dl>
     </div>

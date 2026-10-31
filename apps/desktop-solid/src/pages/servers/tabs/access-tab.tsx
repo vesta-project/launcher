@@ -26,7 +26,7 @@ const LOCAL_ONLY = new Set(['owner', 'administrator']);
 const SAFE_SOURCE_ROLES = ['public', 'player'];
 
 export function AccessTab(props: { snapshot: ServerSnapshot }) {
-  const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
+  const can = (capability: string) => gate(props.snapshot.capabilities, capability) === 'allowed';
   const views = (): { value: View; label: MessageId }[] => [
     // People and their devices are one view: devices sit under the person they belong to.
     ...(can('principals.view') || can('devices.revoke') ? [{ value: 'people' as const, label: 'servers.access.people' as MessageId }] : []),
@@ -64,7 +64,7 @@ function useRoles(snapshot: () => ServerSnapshot) {
  */
 function PeopleView(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
+  const can = (capability: string) => gate(props.snapshot.capabilities, capability) === 'allowed';
   const roles = useRoles(() => props.snapshot);
   const users = useServerResource(id, usersResource, { enabled: () => can('principals.view') });
   const devices = useServerResource(id, devicesResource, { enabled: () => can('devices.revoke') });

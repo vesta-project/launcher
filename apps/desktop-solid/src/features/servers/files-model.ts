@@ -83,7 +83,7 @@ export function protectedAccess(view: CapabilityView | undefined, path: string, 
   if (protection === 'normal') return 'none';
   if (!isProtectedPath(path)) return 'none';
   const raw = protection === 'confirm_edit' || (protection === undefined && rawProtectedFile(path));
-  const can = (capability: string) => gate(view, capability) !== 'denied';
+  const can = (capability: string) => gate(view, capability) === 'allowed';
   return raw && can('config.edit') && can('files.read') && can('files.overwrite') ? 'raw' : 'redirect';
 }
 
@@ -215,7 +215,7 @@ export interface FileActions {
 
 /** What may be offered for one entry. Directories only open; rename and delete are regular-file only. */
 export function fileActions(view: CapabilityView | undefined, path: string, entry: Pick<FileEntry, 'kind' | 'size' | 'protection'>): FileActions {
-  const can = (capability: string) => gate(view, capability) !== 'denied';
+  const can = (capability: string) => gate(view, capability) === 'allowed';
   const access = protectedAccess(view, path, entry.protection);
   // Raw protected documents open in the editor (with confirmation) but are never renamed or deleted here.
   const isProtected = access !== 'none';
@@ -239,7 +239,7 @@ export interface FolderActions {
 }
 
 export function folderActions(view: CapabilityView | undefined): FolderActions {
-  const can = (capability: string) => gate(view, capability) !== 'denied';
+  const can = (capability: string) => gate(view, capability) === 'allowed';
   return { newFile: can('files.create'), newFolder: can('files.mkdir'), upload: can('files.create'), trash: can('files.read') };
 }
 

@@ -24,7 +24,13 @@ export function registerServerPrefetch(target: string, prefetch: Prefetcher) {
 }
 
 export function prefetchServerTarget(snapshot: ServerSnapshot, target: string) {
-  if (agentReachable(snapshot)) prefetchers.get(target)?.(snapshot);
+  const needs: Record<string, readonly string[]> = {
+    overview: ['tasks.view'], resources: ['files.list', 'pack.edit'], pack: ['pack.edit'], activity: ['tasks.view'],
+    backups: ['backups.view'], general: ['config.view'], game: ['config.view'], world: ['config.view'],
+    sftp: ['config.view'], software: ['content.install'], presence: ['config.view'], players: ['players.view'],
+    access: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], automation: ['automation.view'],
+  };
+  if (agentReachable(snapshot) && anyVisible(snapshot.capabilities, needs[target] ?? [])) prefetchers.get(target)?.(snapshot);
 }
 
 const can = (snapshot: ServerSnapshot, capability: string) => anyVisible(snapshot.capabilities, [capability]);

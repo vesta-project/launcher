@@ -173,6 +173,7 @@ impl ServerManager {
                 continue;
             }
             if (want_status || want_metrics)
+                && snapshot.capabilities.granted.iter().any(|cap| cap == "metrics.view")
                 && telemetry.is_none()
                 && !metrics_stopped
                 && !metrics_stream_disabled
@@ -349,6 +350,7 @@ impl ServerManager {
                 }
             }
             if want_metrics
+                && snapshot.capabilities.granted.iter().any(|cap| cap == "metrics.view")
                 && telemetry.is_none()
                 && !metrics_stopped
                 && last_metrics_poll.elapsed() >= Duration::from_secs(10)
@@ -370,6 +372,7 @@ impl ServerManager {
                 }
             }
             if want_ops
+                && snapshot.capabilities.granted.iter().any(|cap| cap == "tasks.view")
                 && !self.tracks_operations(&id)
                 && last_operation_poll.elapsed() >= Duration::from_secs(10)
             {

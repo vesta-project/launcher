@@ -85,7 +85,7 @@ export function ServerWorkspace(props: { id: string }) {
 function ServerContent(props: { id: string }) {
   // One status subscription per open workspace; native code shares the stream.
   useServerTopic(() => props.id, 'status');
-  useServerTopic(() => props.id, 'operations');
+  useServerTopic(() => gate(serverSnapshot(props.id)?.capabilities, 'tasks.view') === 'allowed' ? props.id : undefined, 'operations');
   const sideNav = useSideNav();
   const snapshot = () => serverSnapshot(props.id)!;
   const id = stableConnectionId(snapshot);
@@ -99,7 +99,7 @@ function ServerContent(props: { id: string }) {
   // Recent tasks, once per connection (the operations topic keeps them current); console and overview read them.
   useServerResource(id, operationsResource, { enabled: () => reachable() && anyVisible(snapshot().capabilities, ['tasks.view']) });
   const backups = useServerResource(id, backupsResource, {
-    enabled: () => reachable() && gate(snapshot().capabilities, 'backups.view') !== 'denied' && !backupsFlag(),
+    enabled: () => reachable() && gate(snapshot().capabilities, 'backups.view') === 'allowed' && !backupsFlag(),
   });
   const tabs = () => visibleMainTabs({ snapshot: snapshot(), backupsConfigured: backupsConfigured(snapshot(), backups.value()), requested: route().detail });
   const activeTab = (): MainTabId => {

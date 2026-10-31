@@ -52,7 +52,7 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
   const id = stableConnectionId(() => props.snapshot);
   const isNew = props.workflowId === 'new';
   const listPath = () => `/servers/${id()}/automation`;
-  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') !== 'denied';
+  const canManage = () => gate(props.snapshot.capabilities, 'automation.manage') === 'allowed';
   // The definition is read here, when the workflow is opened, and nowhere else.
   const detail = useServerResource(id, workflowResource, { args: () => props.workflowId, enabled: () => !isNew });
   const people = useAutomationPeople(id, () => props.snapshot, { users: () => true, profiles: () => canManage() });

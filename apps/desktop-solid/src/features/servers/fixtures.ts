@@ -354,8 +354,8 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       const entry: FixtureServer = {
         snapshot: {
           connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly },
-          state: { phase: 'online', access: 'no_management_access', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
-          info: null, status: null, statusObservedAtMs: null, pack: null,
+          state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
+          info: null, status: null, publicLifecycle: 'offline', statusObservedAtMs: Date.now(), pack: null,
           capabilities: { source: 'session', granted: ['public.info', 'pack.download', 'pack.realtime'], refused: [] },
           restartRequired: false,
         },

@@ -4,6 +4,7 @@ import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
 import { lifecycleControls, minecraftFactNow, newIntentId, statusDot } from '../../features/servers/model';
+import { gate } from '../../features/servers/capabilities';
 import { serverPressure, useServerResource } from '../../features/servers/resources';
 import { sleepPolicyResource } from '../../features/servers/server-resources';
 import { headerNotice, joinAddress, knownPlayerCount } from '../../features/servers/shell-model';
@@ -26,7 +27,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   const art = () => serverArt(props.snapshot.connection.serverId || id());
   const sleeping = () => props.snapshot.state.phase === 'online' && props.snapshot.status?.lifecycle === 'sleeping';
   // Whether a join wakes it lives in the sleep policy; read it only while asleep.
-  const sleepPolicy = useServerResource(id, sleepPolicyResource, { enabled: sleeping });
+  const sleepPolicy = useServerResource(id, sleepPolicyResource, { enabled: () => sleeping() && gate(props.snapshot.capabilities, 'config.view') === 'allowed' });
   const minecraft = () => {
     const fact = minecraftFactNow(props.snapshot, now());
     return sleeping() ? { ...fact, message: sleepingMessage(sleepPolicy.value()?.policy) } : fact;

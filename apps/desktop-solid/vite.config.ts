@@ -9,7 +9,7 @@ export default defineConfig({
     // Solid RC refresh proxies can become recursive after repeated edits and
     // halt the reactive runtime. Use full reloads for code edits until the
     // installed refresh runtime is fixed; keep dev diagnostics enabled.
-    solid({ start: true, diagnostics: true, refresh: false }), // add `ssr: true` for streaming SSR
+    solid({ start: true, diagnostics: true, hot: false }), // add `ssr: true` for streaming SSR
   ],
   resolve: {
     tsconfigPaths: true,

@@ -16,7 +16,7 @@ export interface ShellTab<Id extends string = string> {
   id: Id;
   label: MessageId;
   icon: string;
-  /** Shown unless every listed capability is known to be absent. Empty means always. */
+  /** Shown once at least one listed capability is granted. Empty means always. */
   needs: readonly string[];
   /** Reads from the agent, so it shows the offline placeholder while the agent can't be reached. */
   live: boolean;
@@ -114,7 +114,7 @@ export function visibleMainTabs(input: VisibleTabsInput): ShellTab<MainTabId>[] 
   return mainTabs.filter((tab) => {
     if (tab.needs.length && !anyVisible(input.snapshot.capabilities, tab.needs)) return false;
     // Shown once set up, or while this user could set it up (owners and administrators).
-    if (tab.id === 'backups') return backupsTabVisible(input.backupsConfigured, gate(input.snapshot.capabilities, 'backups.configure') !== 'denied', input.requested === 'backups');
+    if (tab.id === 'backups') return backupsTabVisible(input.backupsConfigured, gate(input.snapshot.capabilities, 'backups.configure') === 'allowed', input.requested === 'backups');
     return true;
   });
 }

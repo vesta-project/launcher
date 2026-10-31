@@ -15,6 +15,23 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn player_session_and_public_lifecycle_need_no_management_status_access() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    a.set("GET", "/api/v3/manage/session", json!({"server_id":"server-1", "principal_id":"player", "roles":[], "capabilities":["public.info"]}));
+    a.set("GET", "/api/v3/status", json!({"api_version":"3", "server_id":"server-1", "state":"offline"}));
+    let capabilities = a.client.capabilities(None).await.unwrap();
+    assert_eq!(capabilities.source, "session");
+    assert!(!capabilities.granted.iter().any(|cap| cap == "status.view"));
+    assert_eq!(a.client.public_lifecycle().await.unwrap(), "offline");
+    assert!(a.calls("/api/v3/manage/server").is_empty());
+    assert!(a.calls("/api/v3/manage/server/status").is_empty());
+    a.set("GET", "/api/v3/status", json!({"api_version":"3", "server_id":"other-server", "state":"online"}));
+    a.client.transport.invalidate_reads();
+    assert!(a.client.public_lifecycle().await.is_err());
+}
+
+#[tokio::test]
 async fn pack_upload_retries_pressure_with_identical_chunk_and_intent() {
     use vesta_server_client::pack::UploadChunk;
     let _owner = OWNER.lock().await;
@@ -588,6 +605,9 @@ async fn route(
             200,
             json!({"server_id":"server-1","token":"session","expires_at_ms":vesta_server_client::now_ms()+900_000}),
         )
+    } else if path == "/api/v3/status" {
+        assert!(req.headers().get("authorization").is_none());
+        state.routes.get(&(method, full)).cloned().unwrap_or((404, Value::Null))
     } else {
         assert_eq!(req.headers()["authorization"], "Bearer session");
         let route_key = (method, full);

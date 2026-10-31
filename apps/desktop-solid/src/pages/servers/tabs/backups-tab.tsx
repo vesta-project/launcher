@@ -72,7 +72,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const [openProfile, setOpenProfile] = createSignal<string | null>(null, { name: 'server-backups:open-profile' });
   const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
   const [started, setStarted] = createSignal<BackupJob | null>(null, { name: 'server-backups:started' });
-  const can = (capability: string) => gate(props.snapshot.capabilities, capability) !== 'denied';
+  const can = (capability: string) => gate(props.snapshot.capabilities, capability) === 'allowed';
   const canConfigure = () => can('backups.configure');
   const configured = () => backupsConfigured(props.snapshot, overview());
   const settingUp = () => configured() === false && canConfigure();
@@ -264,7 +264,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
 function BackupList(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
   const id = () => props.snapshot.connection.id;
   const points = useServerResource(stableConnectionId(() => props.snapshot), backupSnapshotsResource, { args: () => props.profile });
-  const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') !== 'denied';
+  const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') === 'allowed';
   const copy = async (point: BackupSnapshot) => {
     try {
       const job = await serverCommand((client) => client.backupRestoreCopy(id(), props.profile, point.id, [], newIntentId()));

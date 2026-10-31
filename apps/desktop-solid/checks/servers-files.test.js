@@ -198,7 +198,7 @@ describe('[capabilities] gating', () => {
     const readOnly = { source: 'session', granted: ['files.list', 'files.read'], refused: [] };
     expect(fileActions(readOnly, 'config/a.toml', { kind: 'file', size: '1' })).toMatchObject({ open: true, edit: false, delete: false });
     const refused = { source: 'unknown', granted: [], refused: ['files.read'] };
-    expect(fileActions(refused, 'config/a.toml', { kind: 'file', size: '1' })).toMatchObject({ open: false, rename: true });
+    expect(fileActions(refused, 'config/a.toml', { kind: 'file', size: '1' })).toMatchObject({ open: false, rename: false });
   });
   test('the fixture enforces capabilities on file routes', async () => {
     const servers = api();

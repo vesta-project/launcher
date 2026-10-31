@@ -37,7 +37,7 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-online:dialog' });
   const reachable = () => agentReachable(props.snapshot);
   const live = () => reachable() && running(props.snapshot);
-  const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
+  const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') === 'allowed';
   /** The roster for the run on screen, or null when it can't be trusted. */
   const known = () => {
     const roster = serverPlayers(id());
@@ -112,10 +112,10 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const whitelist = useServerResource(id, whitelistResource);
   const ops = useServerResource(id, operatorsResource);
   const bans = useServerResource(id, bansResource);
-  const configVisible = () => gate(props.snapshot.capabilities, 'config.view') !== 'denied';
+  const configVisible = () => gate(props.snapshot.capabilities, 'config.view') === 'allowed';
   const properties = useServerResource(id, propertiesResource, { enabled: configVisible });
-  const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') !== 'denied';
-  const operator = () => gate(props.snapshot.capabilities, 'players.operator') !== 'denied';
+  const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') === 'allowed';
+  const operator = () => gate(props.snapshot.capabilities, 'players.operator') === 'allowed';
   const live = () => running(props.snapshot);
   /** Whitelist edits also work while stopped or starting: the agent keeps them for the run. */
   const canWhitelist = () => agentReachable(props.snapshot) && !!routeFor('whitelist_add', { state: props.snapshot.status?.state, generation: props.snapshot.status?.generation });

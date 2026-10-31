@@ -58,7 +58,20 @@ export const roleLabel = (role: string) =>
   role.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 /** The Minecraft state, from lifecycle first (sleep, crash loop…), then process state and readiness. */
-export function minecraftFact(status: ServerStatus | null): Fact {
+export function minecraftFact(status: ServerStatus | null, publicLifecycle?: ServerSnapshot['publicLifecycle']): Fact {
+  if (!status && publicLifecycle) {
+    const facts: Record<NonNullable<ServerSnapshot['publicLifecycle']>, Fact> = {
+      offline: { tone: 'neutral', message: 'servers.minecraft.stopped' },
+      sleeping: { tone: 'neutral', message: 'servers.minecraft.sleeping' },
+      waking: { tone: 'accent', message: 'servers.minecraft.waking' },
+      starting: { tone: 'accent', message: 'servers.minecraft.starting' },
+      online: { tone: 'success', message: 'servers.minecraft.ready' },
+      stopping: { tone: 'warning', message: 'servers.minecraft.stopping' },
+      crash_loop: { tone: 'danger', message: 'servers.minecraft.crash-loop' },
+      recovery_required: { tone: 'danger', message: 'servers.minecraft.recovery-required' },
+    };
+    return facts[publicLifecycle] ?? { tone: 'neutral', message: 'servers.minecraft.unknown' };
+  }
   if (!status) return { tone: 'neutral', message: 'servers.minecraft.unknown' };
   switch (status.lifecycle) {
     case 'sleeping': return { tone: 'neutral', message: 'servers.minecraft.sleeping' };
@@ -137,7 +150,7 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   if (status.lifecycle === 'crash_loop' || status.lifecycle === 'recovery_required') {
     return { ...NONE, primary: null, blocked: 'servers.lifecycle.needs-attention' };
   }
-  const can = (capability: string) => gate(caps, capability) !== 'denied';
+  const can = (capability: string) => gate(caps, capability) === 'allowed';
   const progress = status.lifecycle === 'waking' ? 'waking' : status.lifecycle === 'starting' ? 'starting' : null;
   if (status.state === 'stopped') {
     // Waking or starting before the process exists: nothing to press yet.
@@ -173,7 +186,7 @@ export type Dot = 'online' | 'starting' | 'sleeping' | 'stopped' | 'problem' | '
 export function statusDot(snapshot: ServerSnapshot): Dot {
   if (snapshot.state.access === 'fingerprint_changed' || snapshot.state.access === 'credentials_rejected') return 'problem';
   if (snapshot.state.phase !== 'online') return 'offline';
-  const fact = minecraftFact(snapshot.status);
+  const fact = minecraftFact(snapshot.status, snapshot.publicLifecycle);
   if (fact.tone === 'danger' || fact.tone === 'warning') return 'problem';
   if (fact.message === 'servers.minecraft.ready') return 'online';
   if (fact.message === 'servers.minecraft.sleeping') return 'sleeping';
@@ -266,9 +279,9 @@ export function freshnessVisible(
 
 /** The Minecraft fact while disconnected or stale: the last known value, with its age. */
 export function minecraftFactNow(snapshot: ServerSnapshot, nowMs: number): Fact {
-  const fact = minecraftFact(snapshot.status);
+  const fact = minecraftFact(snapshot.status, snapshot.publicLifecycle);
   const observed = snapshot.statusObservedAtMs;
-  if (!snapshot.status || observed === null || !freshnessVisible(snapshot.state.phase, observed, nowMs)) return fact;
+  if ((!snapshot.status && !snapshot.publicLifecycle) || observed === null || !freshnessVisible(snapshot.state.phase, observed, nowMs)) return fact;
   // Disconnected: the value is history, so it loses its success/warning tone. Stale but
   // connected: keep the tone and just say how old it is.
   return snapshot.state.phase === 'online' ? { ...fact, seen: age(observed, nowMs) } : { ...fact, tone: 'neutral', seen: age(observed, nowMs) };

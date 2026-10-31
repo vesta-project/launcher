@@ -68,7 +68,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const lifecycle = useLifecycle(area.snapshot);
   const software = useServerResource(() => area.id(), softwareResource);
   const caps = () => area.snapshot().capabilities;
-  const backups = useServerResource(() => area.id(), backupsResource, { enabled: () => gate(caps(), 'backups.create') !== 'denied' });
+  const backups = useServerResource(() => area.id(), backupsResource, { enabled: () => gate(caps(), 'backups.create') === 'allowed' });
   const [source, setSource] = createSignal<PackInstallSource>(untrack(() => props.request.source), { name: 'pack-review:source' });
   const [plan, setPlan] = createSignal<ReviewPlan | null>(null, { name: 'pack-review:plan' });
   const [picks, setPicks] = createSignal<Record<string, ConflictChoice>>({}, { name: 'pack-review:picks' });

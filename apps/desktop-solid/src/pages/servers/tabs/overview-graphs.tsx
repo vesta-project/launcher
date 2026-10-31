@@ -37,7 +37,7 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
   const history = useServerResource(() => props.id, metricsHistoryResource, { args: range, enabled: reachable });
   // Max players comes from server.properties, when this role may read it.
   const properties = useServerResource(() => props.id, propertiesResource, {
-    enabled: () => reachable() && gate(props.snapshot.capabilities, 'config.view') !== 'denied',
+    enabled: () => reachable() && gate(props.snapshot.capabilities, 'config.view') === 'allowed',
   });
   const samples = () => serverMetrics(props.id);
   const series = createMemo(() => {

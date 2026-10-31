@@ -198,7 +198,7 @@ const OWNED_TILES = 8;
  */
 function OwnedPanel() {
   const area = useModpackArea();
-  const content = useServerResource(() => area.id(), contentResource, { enabled: () => gate(area.snapshot().capabilities, 'files.list') !== 'denied' });
+  const content = useServerResource(() => area.id(), contentResource, { enabled: () => gate(area.snapshot().capabilities, 'files.list') === 'allowed' });
   const items = createMemo(() => ownedResources(area.link().owned, content.value()?.items), { name: 'modpack-server:owned' });
   createEffect(items, (value) => {
     for (const [provider, ids] of providerLookups(value.flatMap((item) => (item.entry ? [item.entry] : [])))) void loadProjects(provider, ids).catch(() => {});

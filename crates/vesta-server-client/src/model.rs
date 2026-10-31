@@ -286,6 +286,7 @@ dto!(ServerSnapshot {
     status: Option<ServerStatus>, status_observed_at_ms: Option<i64>, pack: Option<PackStatus>,
     capabilities: CapabilityView, restart_required: bool,
     join_address: Option<String>, backups_configured: Option<bool>,
+    public_lifecycle: Option<String>,
 });
 dto!(Discovery {
     discovery_id: String, endpoint: String, server_id: String, fingerprint: String,

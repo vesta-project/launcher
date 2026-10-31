@@ -39,7 +39,7 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
     consoleVersion(id());
     return toLogEntries(consoleBuffer(id()).entries, { label: t('servers.console.gap'), detail: t('servers.console.gap-latest-log') }, parsed);
   }, { name: 'server-console:entries' });
-  const canWrite = () => gate(props.snapshot.capabilities, 'console.write') !== 'denied';
+  const canWrite = () => gate(props.snapshot.capabilities, 'console.write') === 'allowed';
   const running = () => props.snapshot.status?.state === 'running' && !!props.snapshot.status.generation;
   const problem = () => (line() ? consoleLineProblem(line()) : null);
   const commandInFlight = () => busyIntent(serverOperations(id()), 'console.command');
