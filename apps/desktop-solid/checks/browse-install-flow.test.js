@@ -32,7 +32,7 @@ async function harness(entry, run) {
     './browse-projects': 'export const loadVersions = async () => { c.versionReads++; return c.versions; };',
     '../../features/browse/browse-projects': 'export const loadVersions = async () => { c.versionReads++; return c.versions; };',
     './browse-store': 'export const setNotice = (value) => c.notices.push(value), installInto = (...args) => c.install(...args);',
-    '../../features/browse/browse-store': `export const gameVersion = () => null, loader = () => null, serverTarget = () => undefined, serverTargetId = () => undefined, setNotice = (value) => c.notices.push(value), installInto = (...args) => c.install(...args);`,
+    '../../features/browse/browse-store': `export const gameVersion = () => null, loader = () => null, serverTarget = () => undefined, serverTargetId = () => undefined, serverDestinationHint = () => undefined, setNotice = (value) => c.notices.push(value), installInto = (...args) => c.install(...args);`,
     '../../features/browse/browse-api': 'export const installResource = async (request) => { c.installs.push(request); return "task"; };',
     '../../pages/create/install-navigation': 'export const openResourceInstall = (pending) => c.handoffs.push(pending);',
     '../create/install-navigation': 'export const openInstallSource = (source) => c.handoffs.push(source);',

@@ -8,6 +8,26 @@ const lines = (start, count, scope = 'run.console.') => Array.from({ length: cou
 const cursors = (buffer) => buffer.entries.filter((entry) => entry.kind === 'line').map((entry) => entry.cursor);
 
 describe('console recovery at the retention bound', () => {
+  test('append conversion reuses rows without mutating published arrays and invalidates on eviction and clear', () => {
+    const buffer = new ConsoleBuffer(3);
+    const cache = new WeakMap();
+    const gap = { label: 'gap' };
+    buffer.append(lines(100, 2));
+    const first = toLogEntries(buffer.entries, gap, cache);
+    expect(toLogEntries(buffer.entries, gap, cache)).toBe(first);
+    buffer.append(lines(102, 1));
+    const second = toLogEntries(buffer.entries, gap, cache);
+    expect(first).toHaveLength(2);
+    expect(second).toHaveLength(3);
+    expect(second[0]).toBe(first[0]);
+    buffer.append(lines(103, 1));
+    expect(toLogEntries(buffer.entries, gap, cache).map(row => row.raw)).toEqual(['line 101', 'line 102', 'line 103']);
+    buffer.clear();
+    expect(toLogEntries(buffer.entries, gap, cache)).toEqual([]);
+    buffer.gap('unknown');
+    expect(toLogEntries(buffer.entries, { label: 'new gap' }, cache)[0].label).toBe('new gap');
+  });
+
   test('an older page cannot displace a full live tail', () => {
     const buffer = new ConsoleBuffer(5);
     buffer.append(lines(100, 5));

@@ -66,8 +66,15 @@ export const useModpackArea = () => useContext(ModpackAreaContext)!;
 
 /** Loads the pack workspace once per server and keeps derived pieces next to it. */
 export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAreaValue {
-  const id = createMemo(() => snapshot().connection.id, { name: 'modpack:server-id' });
-  const access = createMemo(() => ({ capabilities: snapshot().capabilities, role: snapshot().connection.role }), {
+  const context = createMemo(() => {
+    const value = snapshot();
+    return { id: value.connection.id, role: value.connection.role, capabilities: value.capabilities };
+  }, {
+    name: 'modpack:context',
+    equals: (a, b) => a.id === b.id && a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
+  });
+  const id = createMemo(() => context().id, { name: 'modpack:server-id' });
+  const access = createMemo(() => ({ capabilities: context().capabilities, role: context().role }), {
     name: 'modpack:access', equals: (a, b) => a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
   });
   const gates = createMemo(() => modpackGates(access().capabilities, access().role), {
@@ -81,7 +88,7 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     return current.serverId === id() ? current.value : peekServerResource(id(), packWorkspaceResource);
   }, { name: 'modpack:workspace' });
   const setWorkspace = (value: PackWorkspace | undefined) => setWorkspaceData({ serverId: untrack(id), value });
-  const [loading, setLoading] = createSignal(false, { name: 'modpack:loading' });
+  const [loading, setLoading] = createSignal(false, { name: 'modpack:loading', equals: Object.is });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'modpack:error' });
   const [started, setStarted] = createSignal(false, { name: 'modpack:started' });
   const [iconData, setIconData] = createSignal<string | undefined>(undefined, { name: 'modpack:icon' });
@@ -119,7 +126,8 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     }
   };
   let loadedId = untrack(id);
-  createEffect(() => `${id()}:${gates().edit}`, () => {
+  const loadKey = createMemo(() => `${id()}:${gates().edit}`, { name: 'modpack:load-key' });
+  createEffect(loadKey, () => {
     const serverId = untrack(id), edit = untrack(gates).edit;
     if (serverId !== loadedId || !edit) {
       loadedId = serverId;

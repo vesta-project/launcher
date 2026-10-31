@@ -10,12 +10,12 @@ import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
 /** One lazily created signal per connection id. */
-function keyed<T>(name: string, initial: () => T) {
+function keyed<T>(name: string, initial: () => T, equals?: (a: T, b: T) => boolean) {
   const cells = new Map<ConnectionId, { read: Accessor<T>; write: (next: (current: T) => T) => void }>();
   const cell = (id: ConnectionId) => {
     let entry = cells.get(id);
     if (!entry) {
-      const [read, set] = createSignal<T>(initial() as Exclude<T, Function>, { name: `${name}:${id}` });
+      const [read, set] = createSignal<T>(initial() as Exclude<T, Function>, { name: `${name}:${id}`, ...(equals ? { equals } : {}) });
       entry = { read, write: (next) => set((current) => next(current)) };
       cells.set(id, entry);
     }
@@ -28,7 +28,8 @@ function keyed<T>(name: string, initial: () => T) {
   };
 }
 
-const snapshots = keyed<ServerSnapshot | undefined>('serverSnapshot', () => undefined);
+const snapshots = keyed<ServerSnapshot | undefined>('serverSnapshot', () => undefined,
+  (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b));
 const operations = keyed<ServerOperation[]>('serverOperations', () => []);
 const metrics = keyed<MetricsSample[]>('serverMetrics', () => []);
 const consoleVersions = keyed<number>('serverConsoleVersion', () => 0);

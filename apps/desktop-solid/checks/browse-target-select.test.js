@@ -60,19 +60,23 @@ describe('option building', () => {
   test('modpacks list servers only; the inventory version outranks the snapshot', () => {
     const options = buildTargetOptions({ instances: [instance('1')], snapshots, software: () => null, kind: 'modpack' });
     expect(options.instances).toEqual([]);
-    expect(options.servers.map(option => option.id)).toEqual(['owner', 'down']);
+    expect(options.servers.map(option => option.id)).toEqual(['owner', 'pack-editor', 'down']);
+    expect(options.servers.find(option => option.id === 'pack-editor')).toMatchObject({ canInstallModpack: false, canEditPack: true });
     const known = buildTargetOptions({ instances: [], snapshots, software: () => null, minecraftVersion: (id) => (id === 'owner' ? '1.21.1' : undefined), kind: 'mod' });
     expect(known.servers.map((option) => option.minecraftVersion)).toEqual(['1.21.1', '1.21.4', '1.21.4']);
   });
 
-  test('modpack targets use effective roles, not a stale pairing label or capabilities alone', () => {
+  test('server modpack installs use effective roles while client pack edits use capabilities', () => {
     const grants = capabilitiesForRole('owner');
     const candidates = [
       snapshot('minecraft-owner', { source: 'session', roles: ['owner'], granted: grants, refused: [] }),
       snapshot('custom', { source: 'session', roles: ['custom'], granted: grants, refused: [] }),
       snapshot('revoked', { source: 'session', roles: [], granted: grants, refused: [] }, { connection: { id: 'revoked', role: 'owner' } }),
     ];
-    expect(buildTargetOptions({ instances: [], snapshots: candidates, software: () => null, kind: 'modpack' }).servers.map(option => option.id)).toEqual(['minecraft-owner']);
+    const options = buildTargetOptions({ instances: [], snapshots: candidates, software: () => null, kind: 'modpack' });
+    expect(options.servers.map(option => option.id)).toEqual(['minecraft-owner', 'custom', 'revoked']);
+    expect(options.servers.map(option => option.canInstallModpack)).toEqual([true, false, false]);
+    expect(options.servers.every(option => option.canEditPack)).toBe(true);
   });
 
   test('search narrows by name, version and software; long lists are searchable', () => {

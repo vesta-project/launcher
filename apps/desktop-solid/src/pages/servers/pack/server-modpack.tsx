@@ -1,6 +1,5 @@
 import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Progress, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
-import { navigate } from '../../../app/router';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
@@ -23,6 +22,7 @@ import { useLifecycle } from '../lifecycle';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 import { FirstRun } from './first-run';
+import { ModpackLinkCard } from './link-card';
 
 /**
  * Server → Modpack → Server modpack: the server installation's own, optional link. Unlinked it
@@ -109,29 +109,14 @@ function LinkCard() {
   };
 
   return (
-    <section data-vesta="modpack-link-card" data-phase={area.link().phase}>
-      <a data-vesta="modpack-link-identity" href={path() ? `#${path()}` : undefined}
-        onClick={(event) => {
-          const next = path();
-          if (!next || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          navigate(next);
-        }}>
-        <img data-vesta="modpack-link-icon" src={area.linkIcon()} alt="" width={56} height={56} draggable="false" />
-        <span data-vesta="modpack-link-title">
-          <span data-vesta="modpack-link-name">
-            <strong>{name()}</strong>
-            <span data-vesta="source-tag" data-source={kind()}>{sourceName()}</span>
-          </span>
-          <span data-vesta="modpack-link-meta">
+    <ModpackLinkCard phase={area.link().phase} path={path()} icon={area.linkIcon()} name={name()} source={kind()} sourceName={sourceName()}
+      metadata={<>
             <Show when={area.link().installed} fallback={<span>{t('server-pack.link-not-confirmed')}</span>}>
               {(installed) => <span>{t('server-pack.link-installed', { version: label(installed()) })}</span>}
             </Show>
             <span>{t('server-pack.minecraft', { version: area.workspace()!.serverMinecraftVersion })}</span>
-          </span>
-        </span>
-      </a>
-      <div data-vesta="modpack-link-status">
+      </>}
+      actions={<>
         <Show when={area.link().phase === 'installed'} fallback={
           <Badge size="sm" tone="warning" icon={<Icon name="icons/actions/reload" size={11} />}>{t('server-pack.link-pending-badge', { version: label(area.link().pending) })}</Badge>
         }>
@@ -168,12 +153,12 @@ function LinkCard() {
             </MenuItem>
           </Menu>
         </Show>
-      </div>
+      </>}>
       <Show when={check().step === 'failed' ? (check() as Extract<UpdateCheck, { step: 'failed' }>).error : undefined}>
         {(failure) => <div data-vesta="modpack-link-error"><ServerErrorNote error={failure()} onRetry={() => void runCheck()} /></div>}
       </Show>
       <Show when={unlinking()}><UnlinkDialog name={name()} onClose={() => setUnlinking(false)} /></Show>
-    </section>
+    </ModpackLinkCard>
   );
 }
 
