@@ -149,7 +149,8 @@ export function versionAction(project: ResourceProject, version: ResourceVersion
   const info = target();
   const kind = project.resource_type;
   const none = { replaces: false, waiting: false };
-  if (!info || kind === 'modpack') return { state: { kind: 'install' }, ...none };
+  if (kind === 'modpack') return { state: installState(project), ...none };
+  if (!info) return { state: { kind: 'install' }, ...none };
   const busy = installingVersion(project);
   if (busy === version.id) return { state: { kind: 'installing' }, ...none };
   const row = installed().get(projectKey(project.source, project.id));

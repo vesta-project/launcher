@@ -41,7 +41,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
   const current = () => client() ? area.workspace()?.draft.manifest.modpackLink : linkProvider(area.link().source);
   const sameProject = () => current()?.provider === props.pick.provider && current()?.projectId === props.pick.projectId;
   const replacing = () => (client() ? !!current() : area.link().phase !== 'unlinked') && !sameProject();
-  const blocked = () => client() ? (!area.gates().edit ? 'server-pack.link-no-permission' as const : null) : !area.gates().installOnServer ? 'server-pack.link-no-permission' as const : !area.link().canChange ? 'server-pack.link-wait-restart' as const : null;
+  const blocked = () => client() ? (!area.gates().edit ? 'server-pack.link-no-permission' as const : null) : !area.gates().installOnServer ? 'server-pack.stop-to-install' as const : !area.link().canChange ? 'server-pack.link-wait-restart' as const : null;
   const close = () => clearModpackPick(props.pick.serverId);
 
   const go = async () => {
@@ -88,7 +88,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
             <h3>{props.pick.name}</h3>
           </div>
         </div>
-        <Select size="sm" label={t('server-pack.pick-version')} value={chosen() ?? undefined} onChange={setVersionId}
+        <Select size="sm" disabled={!client() && !area.gates().installOnServer} label={t('server-pack.pick-version')} value={chosen() ?? undefined} onChange={setVersionId}
           placeholder={t(loading() ? 'server-pack.loading-versions' : failed() ? 'server-pack.versions-failed' : 'server-pack.versions-empty')}
           options={versions().map((version) => ({
             value: version.id, label: version.version_number,

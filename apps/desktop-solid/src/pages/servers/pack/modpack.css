@@ -1371,3 +1371,7 @@
     white-space: nowrap;
   }
 }
+
+@layer vesta.pages {
+  :where([data-vesta="pack-review-notes"]) { color: var(--vesta-color-text-secondary); border-color: var(--vesta-color-border); background: transparent; }
+}

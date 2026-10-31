@@ -149,20 +149,15 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
       <Show when={uncertain()}>
         <span data-vesta="server-lifecycle-note" role="status">{t('servers.operation.uncertain-retry')}</span>
       </Show>
-      <Show when={controls().progress}>
-        {(progress) => (
-          <span data-vesta="server-lifecycle-progress" role="status">
-            <span data-vesta="server-lifecycle-spinner" aria-hidden="true" />
-            {t(progress() === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
-          </span>
-        )}
+      <Show when={controls().progress || busy() === 'start' || pending('start')}>
+        <Button tone="accent" disabled role="status">{t(controls().progress === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}</Button>
       </Show>
       <Show when={controls().restart}>
         <Button variant="outline" icon={<Icon name="icons/actions/reload" />} disabled={!!busy() || pending('restart')} onClick={() => void submit('restart')}>
           {t('servers.lifecycle.restart')}
         </Button>
       </Show>
-      <Show when={controls().primary}>
+      <Show when={!controls().progress && busy() !== 'start' && !pending('start') ? controls().primary : null}>
         {(primary) => (
           <Show
             when={primary() === 'kill'}
