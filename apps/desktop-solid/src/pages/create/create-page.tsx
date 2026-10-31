@@ -1,3 +1,5 @@
+import { serverInstanceFallback } from '../../features/servers/create-instance-model';
+import { contentPathKind } from '../../features/servers/content-kind';
 import { preloadLaunchers } from '../../features/launcher-import';
 import { useNativeDropZone } from '../../features/file-drop/zone';
 import {
@@ -50,9 +52,11 @@ import { InstallMemoryCard } from "./memory-card";
 import { InstallPackDetails } from "./pack-details";
 import { ImportDialog } from "./import-dialog";
 import "./create-page.css";
-import { serverCommand } from '../../features/servers/store';
+import { serverCommand, serverSnapshot } from '../../features/servers/store';
 import { usingFixtures } from '../../features/servers/service';
 import type { PackSyncPreview } from '../../features/servers/native-pack-sync';
+import { errorMessage } from '../../features/servers/errors';
+import type { ServerCommandError } from '../../features/servers/native';
 import { syncApplyRequest } from '../../features/servers/modpack-area-model';
 import { invoke } from '@tauri-apps/api/core';
 import type { NativeInstance } from '../../features/instances/native-model';
@@ -94,6 +98,7 @@ function InstanceInstallForm() {
   const [memory, setMemory] = createSignal([2048, 4096], { name: "installMemory" });
   const [busy, setBusy] = createSignal(false, { name: "installSubmitting" });
   const [matching, setMatching] = createSignal(false, { name: "installPackMatching" });
+  const [serverWithoutPack, setServerWithoutPack] = createSignal(false, { name: 'create:server-without-pack' });
   const [reading, setReading] = createSignal(!!sourceHandoff || !!serverId, { name: "installSourceLoading" });
   const [error, setError] = createSignal("", { name: "installError" });
   const [source, setSource] = createSignal<PackSource>();
@@ -163,8 +168,8 @@ function InstanceInstallForm() {
     !locked() &&
     !createdId() &&
     !releaseError() &&
-    (!serverId || (!!serverReview() && (!serverReview()!.consentRequired || serverConsent()))) &&
-    (serverId ? !!pack() : source()
+    (!serverId || serverWithoutPack() || (!!serverReview() && (!serverReview()!.consentRequired || serverConsent()))) &&
+    (serverId && !serverWithoutPack() ? !!pack() : source()
       ? !!pack()
       : versions().some((version) => version.value === selectedMinecraft()) &&
         (loader() === "vanilla" || loaderOptions().includes(selectedLoader())));
@@ -186,8 +191,17 @@ function InstanceInstallForm() {
       setLoader(review.runtime.loader); setLoaderVersion(review.runtime.loaderVersion || '');
       setPack({ name: review.name, version: review.revision, author: null, description: null, iconUrl: null,
         minecraftVersion: review.runtime.minecraftVersion, modloader: review.runtime.loader, modloaderVersion: review.runtime.loaderVersion,
-        modCount: review.changes.filter(change => change.path.startsWith('mods/')).length, format: 'server' });
-    }).catch(reason => { if (!disposed) setError(String(reason.code || reason)); }).finally(() => { if (!disposed) setReading(false); });
+        modCount: review.changes.filter(change => contentPathKind(change.path) === 'mod').length, format: 'server' });
+    }).catch(reason => {
+      if (disposed) return;
+      const failure = reason as ServerCommandError;
+      const fallback = serverInstanceFallback(failure, serverSnapshot(serverId));
+      if (fallback) {
+        setName(fallback.name); setMinecraft(fallback.minecraft); setLoader(fallback.loader);
+        setServerWithoutPack(true); return;
+      }
+      setError(t('server-pack.create-failed', { message: t(errorMessage(failure)) }));
+    }).finally(() => { if (!disposed) setReading(false); });
     const pending = untrack(pendingResource);
     if (pending) {
       setName(pending.project.name);
@@ -336,7 +350,7 @@ function InstanceInstallForm() {
     setBusy(true);
     setError("");
     try {
-      if (serverId) {
+      if (serverId && !serverWithoutPack()) {
         const review = serverReview();
         const apply = review && syncApplyRequest(review, serverConsent(), false);
         if (!apply) return;
@@ -377,7 +391,7 @@ function InstanceInstallForm() {
         if (serverId && ['outcome_unknown', 'timeout', 'unreachable'].includes(String((reason as { code?: string }).code))) {
           setServerUncertain(true); setError(t('server-pack.get-uncertain')); return;
         }
-        setError(String(reason));
+        setError(serverId ? t('server-pack.create-failed', { message: t(errorMessage(reason as ServerCommandError)) }) : String(reason));
       }
     } finally {
       if (!disposed) setBusy(false);
@@ -581,10 +595,11 @@ function InstanceInstallForm() {
               </Show>
             </div>
           </Show>
+          <Show when={serverWithoutPack()}><p>{t('server-pack.create-no-pack')}</p></Show>
           <Show when={error()}>
             <div data-vesta="install-error" role="alert">
               <p>{error()}</p>
-              <Show when={serverId && !serverReview() && !createdId() && !serverUncertain()}><Button variant="outline" onClick={() => openServerInstall(serverId!)}>{t('common.retry')}</Button></Show>
+              <Show when={serverId && !serverWithoutPack() && !serverReview() && !createdId() && !serverUncertain()}><Button variant="outline" onClick={() => openServerInstall(serverId!)}>{t('common.retry')}</Button></Show>
               <Show
                 when={createdId()}
                 fallback={
