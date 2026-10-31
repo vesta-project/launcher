@@ -228,7 +228,7 @@
   :where([data-vesta="log-gap"])::before {
     content: "";
     flex: 0 0 24px;
-    border-block-start: 1px dashed currentColor;
+    border-block-start: var(--vesta-border-width) dashed currentColor;
   }
 
   :where([data-vesta="log-gap-detail"]) {

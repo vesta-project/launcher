@@ -99,18 +99,18 @@
   }
 
   :where([data-vesta="server-file-icon"][data-kind="jar"]) {
-    background: oklch(0.65 0.13 145 / 0.16);
-    color: oklch(0.78 0.12 145);
+    background: color-mix(in oklab, var(--vesta-color-success) 16%, transparent);
+    color: var(--vesta-color-success-text);
   }
 
   :where([data-vesta="server-file-icon"]:is([data-kind="log"], [data-kind="archived-log"])) {
-    background: oklch(0.7 0.12 240 / 0.16);
-    color: oklch(0.78 0.1 240);
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta="server-file-icon"][data-kind="config"]) {
-    background: oklch(0.72 0.13 75 / 0.16);
-    color: oklch(0.8 0.12 75);
+    background: color-mix(in oklab, var(--vesta-color-warning) 16%, transparent);
+    color: var(--vesta-color-warning-text);
   }
 
   :where([data-vesta="server-file-name"]) {
@@ -253,8 +253,8 @@
     gap: var(--vesta-space-3);
     padding: var(--vesta-space-2) var(--vesta-space-3);
     border-radius: var(--vesta-radius-sm);
-    background: oklch(0.2 0.01 260);
-    color: oklch(0.92 0 0);
+    background: var(--vesta-color-media-shade);
+    color: var(--vesta-color-media-text);
     font-family: var(--vesta-font-mono);
     font-size: var(--vesta-text-sm);
   }
@@ -266,7 +266,7 @@
     inline-size: 40px;
     block-size: 40px;
     border-radius: var(--vesta-radius-sm);;
-    background: oklch(0.32 0.02 260);
+    background: var(--vesta-color-media-shade);
   }
 
   :where([data-vesta="server-motd-copy"]) {
@@ -278,13 +278,13 @@
 
   :where([data-vesta="server-motd-copy"]) > :where(span) {
     overflow: hidden;
-    color: oklch(0.72 0 0);
+    color: color-mix(in oklab, var(--vesta-color-media-text) 70%, transparent);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   :where([data-vesta="server-motd-players"]) {
-    color: oklch(0.72 0 0);
+    color: color-mix(in oklab, var(--vesta-color-media-text) 70%, transparent);
   }
 
   :where([data-vesta="server-weakening-list"]) {

@@ -28,7 +28,7 @@
     background: var(--world-art) center / cover;
     content: "";
     filter: blur(28px) saturate(1.2);
-    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.55), transparent);
+    mask-image: linear-gradient(to bottom, color-mix(in oklab, var(--vesta-color-media-shade) 55%, transparent), transparent);
     opacity: 0.7;
   }
   :where([data-vesta="server-world-hero-main"]) {
@@ -249,7 +249,7 @@
   :where([data-vesta="server-world-pack-spinner"]) {
     inline-size: 10px;
     block-size: 10px;
-    border: 2px solid currentColor;
+    border: calc(var(--vesta-border-width) * 2) solid currentColor;
     border-block-start-color: transparent;
     border-radius: 50%;
     animation: server-world-spin 0.8s linear infinite;

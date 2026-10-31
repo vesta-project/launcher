@@ -22,10 +22,10 @@
 
   /* Glass: a thin bright edge at the top of surfaces. */
   :where(:root[data-vesta-material='glass']) {
-    --vesta-edge-highlight: inset 0 1px 0 oklch(1 0 0 / 0.08);
+    --vesta-edge-highlight: inset 0 1px 0 color-mix(in oklab, var(--vesta-color-text) 8%, transparent);
   }
   :where(:root[data-vesta-material='glass'][data-vesta-scheme='light']) {
-    --vesta-edge-highlight: inset 0 1px 0 oklch(1 0 0 / 0.6);
+    --vesta-edge-highlight: inset 0 1px 0 color-mix(in oklab, var(--vesta-color-text) 60%, transparent);
   }
 
   :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {

@@ -118,7 +118,7 @@
     place-items: center;
     inline-size: 20px;
     block-size: 20px;
-    border: 2px solid var(--vesta-color-surface);
+    border: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-surface);
     border-radius: 50%;
     background: var(--vesta-color-accent);
     color: var(--vesta-color-on-accent);
@@ -208,23 +208,23 @@
     overflow: hidden;
     border-radius: var(--vesta-radius-container);
     background:
-      linear-gradient(to top, oklch(0 0 0 / 0.45), transparent 55%),
+      linear-gradient(to top, color-mix(in oklab, var(--vesta-color-text) 45%, transparent), transparent 55%),
       var(--vesta-color-surface-raised);
-    border: var(--preview-border-width) solid oklch(1 0 0 / 0.08);
+    border: var(--preview-border-width) solid color-mix(in oklab, var(--vesta-color-text) 8%, transparent);
     box-shadow: var(--vesta-theme-shadow-sm);
   }
   :where([data-vesta="prefs-theme-preview-card"][data-accent]) {
     background:
-      linear-gradient(to top, oklch(0 0 0 / 0.45), transparent 55%),
-      linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 45%, black));
+      linear-gradient(to top, color-mix(in oklab, var(--vesta-color-text) 45%, transparent), transparent 55%),
+      linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 45%, var(--vesta-color-media-shade)));
   }
   :where([data-vesta="prefs-theme-preview-card"]) > i {
     position: absolute;
     inset: auto auto calc(10 * var(--u)) calc(10 * var(--u));
     inline-size: 48%;
     block-size: calc(7 * var(--u));
-    border-radius: calc(3 * var(--u));
-    background: oklch(0.98 0 0 / 0.9);
+    border-radius: var(--vesta-radius-sm);
+    background: color-mix(in oklab, var(--vesta-color-text) 90%, transparent);
   }
   @keyframes prefs-theme-check {
     from {

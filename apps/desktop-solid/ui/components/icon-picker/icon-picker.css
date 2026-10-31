@@ -33,8 +33,8 @@
     inset: 0;
     display: grid;
     place-items: center;
-    background: oklch(0 0 0 / 0.45);
-    color: white;
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 45%, transparent);
+    color: var(--vesta-color-media-text);
     font-size: var(--vesta-text-xs);
     opacity: 0;
   }
@@ -72,8 +72,8 @@
     inset: 0;
     display: grid;
     place-items: center;
-    background: oklch(0 0 0 / 0.3);
-    color: white;
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 30%, transparent);
+    color: var(--vesta-color-media-text);
   }
   :where([data-vesta="icon-picker-check"] svg) {
     inline-size: 20px;

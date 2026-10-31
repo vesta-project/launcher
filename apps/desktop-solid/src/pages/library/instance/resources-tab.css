@@ -249,8 +249,8 @@
     flex: none;
     padding: 0 5px;
     border-radius: var(--vesta-radius-sm);;
-    background: oklch(0.6 0.12 var(--kind-hue) / 0.18);
-    color: oklch(0.8 0.1 var(--kind-hue));
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    color: var(--vesta-color-accent-text);
     font-size: 10px;
     font-weight: var(--vesta-weight-semibold);
     line-height: 15px;
@@ -270,7 +270,7 @@
   }
 
   :where([data-vesta-scheme="light"]) :where([data-vesta="resource-kind"]) {
-    color: oklch(0.45 0.12 var(--kind-hue));
+    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta="resource-version"]) {

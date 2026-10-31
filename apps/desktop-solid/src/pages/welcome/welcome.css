@@ -77,7 +77,7 @@
 
   :where([data-vesta='welcome-progress-step'])::before {
     block-size: 3px;
-    border-radius: 2px;
+    border-radius: var(--vesta-radius-sm);
     background:
       linear-gradient(var(--vesta-color-accent-text), var(--vesta-color-accent-text)) left / var(--welcome-segment, 0%) 100% no-repeat,
       var(--vesta-color-fill-active);

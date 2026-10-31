@@ -64,7 +64,7 @@
     cursor: default;
   }
   :where([data-vesta="server-automation-name"]):hover { text-decoration: underline; text-underline-offset: 3px; }
-  :where([data-vesta="server-automation-name"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: 2px; }
+  :where([data-vesta="server-automation-name"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: var(--vesta-radius-sm); }
   :where([data-vesta="server-automation-template"]) { display: flex; flex-direction: column; gap: 1px; }
   :where([data-vesta="server-automation-template"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-automation-callout-text"]) { flex: 1; }
@@ -100,7 +100,7 @@
   :where([data-vesta="server-automation-problem-link"]) span:first-child { font-weight: var(--vesta-weight-medium); }
   :where([data-vesta="server-automation-problem-link"]) span:last-child { color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-automation-problem-link"]):hover span:first-child { text-decoration: underline; text-underline-offset: 3px; }
-  :where([data-vesta="server-automation-problem-link"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: 2px; }
+  :where([data-vesta="server-automation-problem-link"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 2px; border-radius: var(--vesta-radius-sm); }
 
   /* ---- Workflow head: name, on/off, trigger sentence, run as ---- */
   :where([data-vesta="server-automation-head"]) {
@@ -240,7 +240,7 @@
   }
   :where([data-vesta="server-automation-grip"]):hover { background: var(--vesta-color-fill); color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-automation-grip"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
-  :where([data-vesta="server-automation-grip"][aria-pressed="true"]) { background: var(--vesta-color-accent); color: var(--vesta-color-accent-contrast, #fff); }
+  :where([data-vesta="server-automation-grip"][aria-pressed="true"]) { background: var(--vesta-color-accent); color: var(--vesta-color-on-accent); }
   :where([data-vesta="server-automation-step-card"]):not(:has([data-vesta="server-automation-grip"])) { padding-inline-start: var(--vesta-space-3); }
   :where([data-vesta="server-automation-step-index"]) {
     display: grid;
@@ -366,7 +366,7 @@
   :where([data-vesta="server-automation-group-head"]) > [data-vesta="icon"]:first-child { color: var(--vesta-color-text-subtle); }
   :where([data-vesta="server-automation-group-title"]) { flex: none; font-weight: var(--vesta-weight-medium); }
   :where([data-vesta="server-automation-group-summary"]) { flex: 1; min-inline-size: 0; overflow: hidden; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="server-automation-group-summary"][data-mono]) { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  :where([data-vesta="server-automation-group-summary"][data-mono]) { font-family: var(--vesta-font-mono); }
   .server-automation-group-warning { margin-inline-start: auto; color: var(--vesta-color-danger-text); }
   :where([data-vesta="server-automation-group-body"]) { padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-4); animation: settings-reveal 180ms var(--vesta-ease-out) both; }
   :where([data-vesta="server-automation-label"]) { font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-medium); }
@@ -403,5 +403,5 @@
   :where([data-vesta="server-automation-output"]) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-1) var(--vesta-space-3); margin: 0; font-size: 11px; }
   :where([data-vesta="server-automation-output"]) > div { display: flex; gap: var(--vesta-space-1); min-inline-size: 0; }
   :where([data-vesta="server-automation-output"]) dt { color: var(--vesta-color-text-subtle); }
-  :where([data-vesta="server-automation-output"]) dd { margin: 0; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
+  :where([data-vesta="server-automation-output"]) dd { margin: 0; font-family: var(--vesta-font-mono); overflow-wrap: anywhere; }
 }

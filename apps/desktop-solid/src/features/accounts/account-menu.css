@@ -8,7 +8,7 @@
 @layer launcher {
   :where([data-vesta="profile-button"]) {
     /* --profile-size and --profile-radius come from the container (rail or titlebar). */
-    --profile-border: oklch(1 0 0 / 0.15);
+    --profile-border: color-mix(in oklab, var(--vesta-color-text) 15%, transparent);
 
     position: relative;
     display: block;
@@ -19,7 +19,7 @@
     padding: 0;
     overflow: hidden;
     border: 0;
-    border-radius: var(--profile-radius, 6px);
+    border-radius: var(--profile-radius, var(--vesta-radius-control));
     background: transparent;
     cursor: default;
     transition:
@@ -28,7 +28,7 @@
   }
 
   :where([data-vesta="profile-button"]:hover) {
-    --profile-border: oklch(1 0 0 / 0.3);
+    --profile-border: color-mix(in oklab, var(--vesta-color-text) 30%, transparent);
   }
 
   :where([data-vesta="profile-button"][data-open]) {
@@ -44,10 +44,10 @@
     display: block;
     inline-size: 100%;
     block-size: 100%;
-    background-color: oklch(0.5 0 0);
+    background-color: var(--vesta-color-text-muted);
     background-image:
       var(--head-image),
-      linear-gradient(to bottom, oklch(0.55 0 0), oklch(0.38 0 0));
+      linear-gradient(to bottom, var(--vesta-color-fill-hover), var(--vesta-color-fill-active));
     background-size: cover;
     background-position: center;
     image-rendering: pixelated;
@@ -59,8 +59,8 @@
     margin: auto;
     inline-size: 18px;
     block-size: 18px;
-    border: 2px solid oklch(1 0 0 / 0.3);
-    border-top-color: oklch(1 0 0);
+    border: calc(var(--vesta-border-width) * 2) solid color-mix(in oklab, var(--vesta-color-text) 30%, transparent);
+    border-top-color: var(--vesta-color-text);
     border-radius: 50%;
     animation: vesta-profile-spin 1s linear infinite;
   }
@@ -91,7 +91,7 @@
     inline-size: 45px;
     block-size: 45px;
     overflow: hidden;
-    border-radius: 5px;
+    border-radius: var(--vesta-radius-sm);
   }
 
   :where([data-vesta="account-face"][data-size="small"]) {
@@ -195,9 +195,7 @@
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    box-shadow:
-      inset 0 0 0 1px oklch(1 0 0 / 0.12),
-      inset 0 0 4px oklch(0 0 0 / 0.18);
+    box-shadow: var(--vesta-shadow-md);
   }
 }
 

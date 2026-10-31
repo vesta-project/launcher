@@ -24,7 +24,7 @@
     flex: none;
     inline-size: 56px;
     block-size: 56px;
-    border-radius: 14px;
+    border-radius: var(--vesta-radius-sm);
     object-fit: contain;
   }
 

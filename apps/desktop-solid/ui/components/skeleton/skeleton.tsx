@@ -7,7 +7,7 @@ export interface SkeletonProps {
   width?: number;
   /** Pixel height. Defaults to one control-md line. */
   height?: number;
-  /** Roundness in px. Prefer `circle` for avatars. */
+  /** Preferred roundness in px, scaled by the theme radius factor. Prefer `circle` for avatars. */
   radius?: number;
   /** Make a circle (sets equal width/height and full rounding). */
   circle?: boolean;
@@ -24,10 +24,12 @@ export function Skeleton(props: SkeletonProps) {
     <KobalteSkeleton
       data-vesta="skeleton"
       class={props.class}
-      style={props.style}
+      style={{
+        '--skeleton-preferred-radius': props.radius === undefined ? undefined : `calc(${props.radius}px * var(--vesta-radius-factor))`,
+        ...props.style,
+      }}
       width={props.width}
       height={props.height ?? (props.circle ? undefined : 16)}
-      radius={props.radius}
       circle={props.circle}
       animate={props.animate ?? true}
       visible={props.visible ?? true}

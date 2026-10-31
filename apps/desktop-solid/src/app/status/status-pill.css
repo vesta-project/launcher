@@ -448,8 +448,8 @@
       var(--vesta-color-accent) 45%,
       var(--vesta-color-surface-raised)
     );
-    background: oklch(from var(--vesta-color-accent) max(l, 0.72) 0.09 var(--activity-icon-hue));
-    color: oklch(0.25 0.03 var(--activity-icon-hue, 300));
+    background: var(--vesta-color-accent);
+    color: var(--vesta-color-on-accent);
   }
 
   :where([data-vesta="activity-icon"]) :where(img) {

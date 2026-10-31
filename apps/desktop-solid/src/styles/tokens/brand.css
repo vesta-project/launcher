@@ -5,6 +5,8 @@
  */
 @layer launcher.tokens {
   :where(:root, [data-vesta-scheme]) {
+    --vesta-brand-modrinth: #1bd96a;
+    --vesta-brand-curseforge: rgb(183, 91, 58);
     --vesta-brand-start: oklch(0.74 0.13 207);
     --vesta-brand-mid: oklch(0.6 0.2 285);
     --vesta-brand-end: oklch(0.76 0.15 60);

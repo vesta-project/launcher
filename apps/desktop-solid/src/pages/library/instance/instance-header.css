@@ -16,9 +16,9 @@
     position: relative;
     flex: none;
     overflow: hidden;
-    background: oklch(0.22 0.015 190);
-    color: oklch(0.98 0 0);
-    text-shadow: 0 1px 6px oklch(0 0 0 / 0.6);
+    background: var(--vesta-color-media-shade);
+    color: var(--vesta-color-media-text);
+    text-shadow: var(--vesta-shadow-text);
   }
 
   /* Keep art behind the header identity and controls. */
@@ -27,8 +27,8 @@
     inset: 0;
     z-index: 0;
     background:
-      linear-gradient(to left, oklch(0 0 0 / 0.45), transparent 45%),
-      linear-gradient(to top, oklch(0 0 0 / 0.78), oklch(0 0 0 / 0.28) 80%),
+      linear-gradient(to left, color-mix(in oklab, var(--vesta-color-media-shade) 45%, transparent), transparent 45%),
+      linear-gradient(to top, color-mix(in oklab, var(--vesta-color-media-shade) 78%, transparent), color-mix(in oklab, var(--vesta-color-media-shade) 28%, transparent) 80%),
       var(--header-image, none) center 35% / cover no-repeat;
   }
 
@@ -56,10 +56,10 @@
     transition:
       inline-size var(--vesta-duration-normal) var(--vesta-ease-standard),
       block-size var(--vesta-duration-normal) var(--vesta-ease-standard);
-    border: 1px solid oklch(1 0 0 / 0.2);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-media-text) 20%, transparent);
     border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-surface-sunken);
-    box-shadow: 0 4px 14px oklch(0 0 0 / 0.4);
+    box-shadow: var(--vesta-shadow-md);
   }
 
   :where([data-vesta="instance-header-copy"]) {
@@ -86,7 +86,7 @@
     align-items: center;
     gap: var(--vesta-space-1) var(--vesta-space-3);
     margin: 0;
-    color: oklch(0.93 0 0 / 0.85);
+    color: color-mix(in oklab, var(--vesta-color-media-text) 85%, transparent);
     font-size: var(--vesta-text-sm);
   }
 
@@ -107,18 +107,18 @@
   /* Header controls sit on art, so ghost icon buttons get a legible light tint. */
   :where([data-vesta="instance-header-actions"])
     :where([data-vesta="button"][data-variant="ghost"]) {
-    --button-fg: oklch(0.98 0 0);
-    --button-bg-hover: oklch(1 0 0 / 0.16);
-    --button-bg-active: oklch(1 0 0 / 0.22);
+    --button-fg: var(--vesta-color-media-text);
+    --button-bg-hover: color-mix(in oklab, var(--vesta-color-media-text) 16%, transparent);
+    --button-bg-active: color-mix(in oklab, var(--vesta-color-media-text) 22%, transparent);
   }
 
   /* Outline actions sit on the art in both themes, so they keep light text and a light edge. */
   :where([data-vesta="instance-header-actions"])
     :where([data-vesta="button"][data-variant="outline"]:not([data-tone="danger"])) {
-    --button-fg: oklch(0.98 0 0);
-    --button-border-color: oklch(1 0 0 / 0.35);
-    --button-bg-hover: oklch(1 0 0 / 0.16);
-    --button-bg-active: oklch(1 0 0 / 0.22);
+    --button-fg: var(--vesta-color-media-text);
+    --button-border-color: color-mix(in oklab, var(--vesta-color-media-text) 35%, transparent);
+    --button-bg-hover: color-mix(in oklab, var(--vesta-color-media-text) 16%, transparent);
+    --button-bg-active: color-mix(in oklab, var(--vesta-color-media-text) 22%, transparent);
   }
 
   /* Problem strip: sits under the art, in the same gutter. */
@@ -132,7 +132,7 @@
     background: color-mix(
       in oklab,
       var(--vesta-color-danger) 24%,
-      oklch(0 0 0 / 0.65)
+      color-mix(in oklab, var(--vesta-color-media-shade) 65%, transparent)
     );
     font-size: var(--vesta-text-sm);
     text-shadow: none;
@@ -142,7 +142,7 @@
     background: color-mix(
       in oklab,
       var(--vesta-color-warning) 20%,
-      oklch(0 0 0 / 0.65)
+      color-mix(in oklab, var(--vesta-color-media-shade) 65%, transparent)
     );
   }
 
@@ -165,7 +165,7 @@
   }
 
   :where([data-vesta="instance-notice"]) span {
-    color: oklch(0.92 0 0 / 0.85);
+    color: color-mix(in oklab, var(--vesta-color-media-text) 85%, transparent);
   }
 
   /* Short windows: smaller art band and icon, so tabs and content keep the room. */

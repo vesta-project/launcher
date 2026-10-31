@@ -21,19 +21,19 @@
    * belongs to the active theme. Light-on-dark controls are intentionally fixed.
    */
   :where([data-vesta='image-viewer-backdrop'], [data-vesta='image-viewer']) {
-    --image-viewer-scrim: color-mix(in oklab, oklch(0.1 0 0 / 0.78), var(--vesta-color-accent) 8%);
+    --image-viewer-scrim: color-mix(in oklab, color-mix(in oklab, var(--vesta-color-media-shade) 78%, transparent), var(--vesta-color-accent) 8%);
     --image-viewer-blur: 12px;
-    --image-viewer-shade: color-mix(in oklab, oklch(0 0 0 / 0.6), var(--vesta-color-accent) 6%);
-    --image-viewer-fg: oklch(0.99 0 0);
-    --image-viewer-fg-muted: oklch(1 0 0 / 0.6);
-    --image-viewer-fg-subtle: oklch(1 0 0 / 0.5);
-    --image-viewer-control-bg: oklch(1 0 0 / 0.06);
-    --image-viewer-control-bg-hover: oklch(1 0 0 / 0.16);
-    --image-viewer-control-border: oklch(1 0 0 / 0.12);
-    --image-viewer-control-border-hover: oklch(1 0 0 / 0.28);
-    --image-viewer-nav-bg: color-mix(in oklab, oklch(0 0 0 / 0.4), var(--vesta-color-accent) 8%);
-    --image-viewer-nav-bg-hover: color-mix(in oklab, oklch(0 0 0 / 0.7), var(--vesta-color-accent) 10%);
-    --image-viewer-image-shadow: 0 20px 50px oklch(0 0 0 / 0.5);
+    --image-viewer-shade: color-mix(in oklab, color-mix(in oklab, var(--vesta-color-media-shade) 60%, transparent), var(--vesta-color-accent) 6%);
+    --image-viewer-fg: var(--vesta-color-media-text);
+    --image-viewer-fg-muted: color-mix(in oklab, var(--vesta-color-media-text) 60%, transparent);
+    --image-viewer-fg-subtle: color-mix(in oklab, var(--vesta-color-media-text) 50%, transparent);
+    --image-viewer-control-bg: color-mix(in oklab, var(--vesta-color-media-text) 6%, transparent);
+    --image-viewer-control-bg-hover: color-mix(in oklab, var(--vesta-color-media-text) 16%, transparent);
+    --image-viewer-control-border: color-mix(in oklab, var(--vesta-color-media-text) 12%, transparent);
+    --image-viewer-control-border-hover: color-mix(in oklab, var(--vesta-color-media-text) 28%, transparent);
+    --image-viewer-nav-bg: color-mix(in oklab, color-mix(in oklab, var(--vesta-color-media-shade) 40%, transparent), var(--vesta-color-accent) 8%);
+    --image-viewer-nav-bg-hover: color-mix(in oklab, color-mix(in oklab, var(--vesta-color-media-shade) 70%, transparent), var(--vesta-color-accent) 10%);
+    --image-viewer-image-shadow: 0 20px 50px color-mix(in oklab, var(--vesta-color-media-shade) 50%, transparent);
     --image-viewer-chrome-size: 80px;
     --image-viewer-side-space: calc(var(--vesta-space-6) + 40px + var(--vesta-space-3));
   }

@@ -20,26 +20,26 @@
   :where([data-vesta='instance-card']) {
     --instance-card-size: 200px;
     --instance-card-radius: var(--vesta-radius-container);
-    --instance-card-scrim-top: oklch(0 0 0 / 0.42);
-    --instance-card-scrim-bottom: oklch(0 0 0 / 0.58);
-    --instance-card-scrim-bottom-soft: oklch(0 0 0 / 0.24);
-    --instance-card-scrim-base: oklch(0 0 0 / 0.65);
-    --instance-card-overlay-bg: oklch(0 0 0 / 0.4);
-    --instance-card-overlay-surface: oklch(0 0 0 / 0.72);
-    --instance-card-text: oklch(0.98 0 0);
-    --instance-card-text-muted: oklch(0.92 0 0 / 0.8);
-    --instance-card-text-shadow: 0 1px 4px oklch(0 0 0 / 0.75), 0 2px 12px oklch(0 0 0 / 0.6);
-    --instance-card-tag-bg: oklch(0 0 0 / 0.42);
-    --instance-card-tag-border: oklch(1 0 0 / 0.14);
-    --instance-card-edge: oklch(1 0 0 / 0.08);
-    --instance-card-play-bg: oklch(1 0 0 / 0.1);
-    --instance-card-play-hover: oklch(1 0 0 / 0.2);
-    --instance-card-play-active: oklch(1 0 0 / 0.14);
+    --instance-card-scrim-top: color-mix(in oklab, var(--vesta-color-media-shade) 42%, transparent);
+    --instance-card-scrim-bottom: color-mix(in oklab, var(--vesta-color-media-shade) 58%, transparent);
+    --instance-card-scrim-bottom-soft: color-mix(in oklab, var(--vesta-color-media-shade) 24%, transparent);
+    --instance-card-scrim-base: color-mix(in oklab, var(--vesta-color-media-shade) 65%, transparent);
+    --instance-card-overlay-bg: color-mix(in oklab, var(--vesta-color-media-shade) 40%, transparent);
+    --instance-card-overlay-surface: color-mix(in oklab, var(--vesta-color-media-shade) 72%, transparent);
+    --instance-card-text: var(--vesta-color-media-text);
+    --instance-card-text-muted: color-mix(in oklab, var(--vesta-color-media-text) 80%, transparent);
+    --instance-card-text-shadow: var(--vesta-shadow-text);
+    --instance-card-tag-bg: color-mix(in oklab, var(--vesta-color-media-shade) 42%, transparent);
+    --instance-card-tag-border: color-mix(in oklab, var(--vesta-color-media-text) 14%, transparent);
+    --instance-card-edge: color-mix(in oklab, var(--vesta-color-media-text) 8%, transparent);
+    --instance-card-play-bg: color-mix(in oklab, var(--vesta-color-media-text) 10%, transparent);
+    --instance-card-play-hover: color-mix(in oklab, var(--vesta-color-media-text) 20%, transparent);
+    --instance-card-play-active: color-mix(in oklab, var(--vesta-color-media-text) 14%, transparent);
 
     /* Neutral tint: white glow over black. States below retune these. */
-    --instance-card-tone: oklch(1 0 0);
+    --instance-card-tone: var(--vesta-color-media-text);
     --instance-card-tone-glow: 10%;
-    --instance-card-tone-deep: oklch(0.2 0 0);
+    --instance-card-tone-deep: var(--vesta-color-media-shade);
     --instance-card-tone-deep-strength: 30%;
 
     position: relative;
@@ -55,7 +55,7 @@
     background: var(--vesta-color-panel);
     backdrop-filter: var(--vesta-theme-overlay-blur, none);
     -webkit-backdrop-filter: var(--vesta-theme-overlay-blur, none);
-    box-shadow: 0 2px 6px oklch(0 0 0 / 0.12);
+    box-shadow: var(--vesta-shadow-md);
     color: var(--instance-card-text);
     text-shadow: var(--instance-card-text-shadow);
     user-select: none;
@@ -95,7 +95,7 @@
     inset: 0;
     z-index: 1;
     border-radius: inherit;
-    background: linear-gradient(160deg, oklch(1 0 0 / 0.06) 0%, transparent 40%);
+    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-media-text) 6%, transparent) 0%, transparent 40%);
     pointer-events: none;
   }
 
@@ -111,7 +111,7 @@
 
   @media (hover: hover) {
     :where([data-vesta='instance-card']:hover) {
-      box-shadow: 0 8px 24px oklch(0 0 0 / 0.18);
+      box-shadow: var(--vesta-shadow-md);
       transform: scale(1.03);
     }
 
@@ -122,7 +122,7 @@
 
   :where([data-vesta='instance-card'][data-leaving]) {
     transform: scale(1);
-    box-shadow: 0 2px 8px 0 oklch(0 0 0 / 0.1);
+    box-shadow: var(--vesta-shadow-md);
   }
 
   :where([data-vesta='instance-card'][data-leaving])::after {
@@ -133,7 +133,7 @@
   :where([data-vesta='instance-card'][data-tone='warning']) {
     --instance-card-tone: var(--vesta-color-warning);
     --instance-card-tone-glow: 14%;
-    --instance-card-tone-deep: oklch(0.3 0.08 80);
+    --instance-card-tone-deep: var(--vesta-color-warning-text);
     --instance-card-tone-deep-strength: 34%;
     border-color: color-mix(in oklab, var(--vesta-color-warning) 55%, transparent);
   }
@@ -141,7 +141,7 @@
   :where([data-vesta='instance-card'][data-tone='success']) {
     --instance-card-tone: var(--vesta-color-success);
     --instance-card-tone-glow: 12%;
-    --instance-card-tone-deep: oklch(0.25 0.08 155);
+    --instance-card-tone-deep: var(--vesta-color-success-text);
     --instance-card-tone-deep-strength: 34%;
     border-color: color-mix(in oklab, var(--vesta-color-success) 55%, transparent);
   }
@@ -149,7 +149,7 @@
   :where([data-vesta='instance-card'][data-tone='danger']) {
     --instance-card-tone: var(--vesta-color-danger);
     --instance-card-tone-glow: 16%;
-    --instance-card-tone-deep: oklch(0.2 0.1 25);
+    --instance-card-tone-deep: var(--vesta-color-danger-text);
     --instance-card-tone-deep-strength: 40%;
     border-color: color-mix(in oklab, var(--vesta-color-danger) 62%, transparent);
   }
@@ -185,7 +185,7 @@
     border: var(--vesta-border-width) solid var(--instance-card-tag-border);
     border-radius: var(--vesta-radius-sm);
     background: var(--instance-card-tag-bg);
-    box-shadow: 0 1px 4px oklch(0 0 0 / 0.28);
+    box-shadow: var(--vesta-shadow-md);
     font-size: 9px;
     font-weight: var(--vesta-weight-bold);
     letter-spacing: 0.04em;
@@ -223,10 +223,10 @@
   /* ---- Reveal the action on card hover or keyboard focus.
      Pressing keeps the hover fill and shrinks the control. ---- */
   :where([data-vesta='instance-card-play']) {
-    --play-tone: oklch(0.45 0 0);
+    --play-tone: var(--vesta-color-accent);
     --play-fg: var(--vesta-color-on-accent);
-    --play-fill: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, black) 90%, transparent);
-    --play-fill-hover: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, black) 98%, transparent);
+    --play-fill: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, var(--vesta-color-media-shade)) 90%, transparent);
+    --play-fill-hover: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, var(--vesta-color-media-shade)) 98%, transparent);
     --play-fill-active: var(--play-fill-hover);
 
     display: inline-grid;
@@ -236,12 +236,12 @@
     block-size: 36px;
     margin: 0;
     padding: 0;
-    border: var(--vesta-border-width) solid color-mix(in oklab, var(--play-tone) 70%, white);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--play-tone) 70%, var(--vesta-color-media-text));
     border-radius: var(--vesta-radius-control);
     background: var(--play-fill);
     color: var(--play-fg);
     text-shadow: none;
-    box-shadow: 0 4px 10px -2px oklch(0 0 0 / 0.35);
+    box-shadow: var(--vesta-shadow-md);
     opacity: 0;
     pointer-events: none;
     cursor: default;
@@ -266,7 +266,7 @@
   /* Pressed: shrink without changing the hover transparency. */
   :where([data-vesta='instance-card-play']:not(:disabled):active) {
     background: var(--play-fill-active);
-    box-shadow: inset 0 1px 3px oklch(0 0 0 / 0.35);
+    box-shadow: var(--vesta-shadow-md);
     transform: scale(0.95);
   }
 
@@ -291,7 +291,7 @@
   }
 
   :where([data-vesta='instance-card-play'][data-variant='busy']) {
-    --play-tone: oklch(0.42 0 0);
+    --play-tone: var(--vesta-color-accent);
   }
 
   :where([data-vesta='instance-card-play']:disabled) {
@@ -307,7 +307,7 @@
     display: inline-block;
     inline-size: 14px;
     block-size: 14px;
-    border: 2px solid transparent;
+    border: calc(var(--vesta-border-width) * 2) solid transparent;
     border-top-color: var(--instance-card-text);
     border-radius: 50%;
     animation: vesta-instance-spin 1s linear infinite;
@@ -453,9 +453,9 @@
     gap: 6px;
     margin-block-start: var(--vesta-space-2);
     padding: 7px 10px;
-    border: var(--vesta-border-width) solid color-mix(in oklab, var(--instance-card-action) 70%, white);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--instance-card-action) 70%, var(--vesta-color-media-text));
     border-radius: var(--vesta-radius-md);
-    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, black) 90%, transparent);
+    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, var(--vesta-color-media-shade)) 90%, transparent);
     color: var(--instance-card-on-action);
     font: inherit;
     font-size: 10px;
@@ -468,11 +468,11 @@
   }
 
   :where([data-vesta='instance-card-retry']:not(:disabled):hover) {
-    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, black) 98%, transparent);
+    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, var(--vesta-color-media-shade)) 98%, transparent);
   }
 
   :where([data-vesta='instance-card-retry']:not(:disabled):active) {
-    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, black) 98%, transparent);
+    background: color-mix(in oklab, color-mix(in oklab, var(--instance-card-action) 94%, var(--vesta-color-media-shade)) 98%, transparent);
     transform: scale(0.95);
   }
 
@@ -490,19 +490,19 @@
   :where([data-vesta-scheme='light'] [data-vesta='instance-card']) {
     --instance-card-light-surface: color-mix(in oklab, var(--vesta-color-surface-sunken) 90%, var(--instance-card-tone));
     --instance-card-scrim-top: transparent;
-    --instance-card-scrim-bottom: oklch(0 0 0 / 0.74);
-    --instance-card-scrim-bottom-soft: oklch(0 0 0 / 0.66);
+    --instance-card-scrim-bottom: color-mix(in oklab, var(--vesta-color-media-shade) 74%, transparent);
+    --instance-card-scrim-bottom-soft: color-mix(in oklab, var(--vesta-color-media-shade) 66%, transparent);
     --instance-card-scrim-base: color-mix(in oklab, var(--instance-card-light-surface) 12%, transparent);
     --instance-card-overlay-bg: color-mix(in oklab, var(--vesta-color-surface) 88%, transparent);
     --instance-card-overlay-surface: color-mix(in oklab, var(--vesta-color-surface) 94%, transparent);
     --instance-card-text: var(--vesta-color-text);
     --instance-card-text-muted: var(--vesta-color-text-muted);
-    --instance-card-text-shadow: 0 1px 2px oklch(0 0 0 / 0.25);
+    --instance-card-text-shadow: var(--vesta-shadow-text);
     --instance-card-tag-bg: color-mix(in oklab, var(--vesta-color-surface) 90%, transparent);
     --instance-card-tag-border: var(--vesta-color-border-strong);
     --instance-card-edge: var(--vesta-color-border-strong);
     --instance-card-tone-deep: var(--instance-card-light-surface);
-    box-shadow: 0 2px 6px oklch(0 0 0 / 0.08);
+    box-shadow: var(--vesta-shadow-md);
   }
 
   :where([data-vesta-scheme='light'] [data-vesta='instance-card'][data-tone='neutral']) {
@@ -511,18 +511,18 @@
 
   :where([data-vesta-scheme='light'] [data-vesta='instance-card'][data-status='crashed']) {
     --instance-card-scrim-base: color-mix(in oklab, var(--vesta-color-danger) 42%, transparent);
-    --instance-card-scrim-bottom-soft: color-mix(in oklab, var(--vesta-color-danger) 18%, oklch(0 0 0 / 0.74));
-    --instance-card-scrim-bottom: color-mix(in oklab, var(--vesta-color-danger) 30%, oklch(0 0 0 / 0.82));
+    --instance-card-scrim-bottom-soft: color-mix(in oklab, var(--vesta-color-danger) 18%, color-mix(in oklab, var(--vesta-color-media-shade) 74%, transparent));
+    --instance-card-scrim-bottom: color-mix(in oklab, var(--vesta-color-danger) 30%, color-mix(in oklab, var(--vesta-color-media-shade) 82%, transparent));
   }
 
   /* Artwork needs its own ink/scrim pair. Keep light surfaces on controls and
      overlays, with light lettering only on the image-facing details. The fade
      reaches its reading strength within the empty top padding of this band. */
   :where([data-vesta-scheme='light'] [data-vesta='instance-card-bottom']) {
-    --instance-card-text: oklch(0.98 0 0);
-    --instance-card-text-muted: oklch(0.94 0 0);
+    --instance-card-text: var(--vesta-color-media-text);
+    --instance-card-text-muted: var(--vesta-color-media-text);
     color: var(--instance-card-text);
-    text-shadow: 0 1px 2px oklch(0 0 0 / 0.6);
+    text-shadow: var(--vesta-shadow-text);
     background: linear-gradient(
       to bottom,
       transparent,
@@ -552,16 +552,14 @@
   }
 
   :where([data-vesta-scheme='light'] [data-vesta='instance-card']:hover) {
-    box-shadow: 0 8px 24px oklch(0 0 0 / 0.12);
+    box-shadow: var(--vesta-shadow-md);
   }
 
   /* ---- File drop: the card catches the files. The ring and pill are drawn by drop.css on
      the [data-vesta=drop-decor] child; the card itself lifts, shakes or squashes. ---- */
   :where([data-vesta='instance-card'][data-drop-target='active']) {
     border-color: var(--vesta-color-accent);
-    box-shadow:
-      0 12px 28px oklch(0 0 0 / 0.26),
-      0 0 22px color-mix(in oklab, var(--vesta-color-accent) 40%, transparent);
+    box-shadow: var(--vesta-shadow-md);
     transform: translateY(-4px) scale(1.03);
   }
 

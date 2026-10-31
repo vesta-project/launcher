@@ -67,7 +67,7 @@
     flex: none;
     inline-size: 12px;
     block-size: 12px;
-    border: 2px solid var(--vesta-color-border-strong);
+    border: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-border-strong);
     border-block-start-color: var(--vesta-color-accent-text);
     border-radius: 50%;
     animation: account-login-spin 1s linear infinite;
