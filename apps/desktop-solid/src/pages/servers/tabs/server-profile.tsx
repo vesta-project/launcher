@@ -63,7 +63,8 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
     } catch (reason) {
       const failure = reason as ServerCommandError;
       textIntents.settle(failure);
-      if (failure.code === 'stale_target') {
+      if (failure.code === 'stale_target' || failure.code === 'conflict') {
+        setError(failure);
         toast.show({ title: t('servers.profile.stale'), tone: 'warning' });
         await branding.refresh();
       } else setError(failure);

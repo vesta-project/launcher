@@ -59,6 +59,8 @@ export type ServerErrorCode =
 
 export interface ServerCommandError {
   code: ServerErrorCode;
+  /** Current authorized resource returned after a revision conflict. */
+  current?: Record<string, unknown> | null;
   issue?: { code: string; rule: string; item: string } | null;
   /** Present for `rate_limited` and `server_busy` when the server sent guidance. */
   retryAfterMs?: number | null;

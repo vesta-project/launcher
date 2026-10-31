@@ -24,6 +24,14 @@ export interface PlayerSources {
   roster?: PlayersView;
 }
 
+const playerNameOrder = new Intl.Collator(undefined, { sensitivity: 'base' });
+export const PLAYER_PAGE_SIZE = 100;
+export function playerPage<T>(players: readonly T[], page: number): readonly T[] {
+  const last = Math.max(0, Math.ceil(players.length / PLAYER_PAGE_SIZE) - 1);
+  const index = Math.min(last, Math.max(0, Math.floor(page)));
+  return players.slice(index * PLAYER_PAGE_SIZE, (index + 1) * PLAYER_PAGE_SIZE);
+}
+
 /**
  * Merges every source. The UUID is the identity: two entries with the same name but
  * different UUIDs (a renamed account, an offline-mode profile) stay separate, and every
@@ -71,7 +79,7 @@ export function mergePlayers(sources: PlayerSources): KnownPlayer[] {
   for (const item of sources.bans ?? []) entry(item.name, item.uuid).ban = { reason: item.reason, created: item.created, expires: item.expires, source: item.source };
   // The live name is the current one; actions on the row target it, not an older alias.
   if (sources.roster?.known) for (const name of sources.roster.names) Object.assign(entry(name), { online: true, name });
-  return [...players.values()].sort((a, b) => Number(b.online) - Number(a.online) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  return [...players.values()].sort((a, b) => Number(b.online) - Number(a.online) || playerNameOrder.compare(a.name, b.name));
 }
 
 export type PlayerFilter = 'all' | 'online' | 'whitelisted' | 'operators' | 'banned';

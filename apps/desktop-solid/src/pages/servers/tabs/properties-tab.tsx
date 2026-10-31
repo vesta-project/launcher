@@ -113,7 +113,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
     } catch (reason) {
       const failure = reason as ServerCommandError;
       intents.settle(failure);
-      if (failure.code === 'stale_target') {
+      if (failure.code === 'stale_target' || failure.code === 'conflict') {
         // The file changed on the server: re-read it and keep this draft on top for review.
         setPending(null);
         setStale(true);

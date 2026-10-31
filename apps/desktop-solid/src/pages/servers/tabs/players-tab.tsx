@@ -11,7 +11,7 @@ import { isPlayerName, newIntentId } from '../../../features/servers/model';
 import { afterFailure, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
 import { banDuration } from '../../../features/servers/operations-model';
 import {
-  BAN_DURATIONS, PLAYER_FILTERS, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
+  BAN_DURATIONS, PLAYER_FILTERS, PLAYER_PAGE_SIZE, playerPage, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
 } from '../../../features/servers/player-manager';
 import { effectiveValue, parseProperties, propertyDef } from '../../../features/servers/properties-model';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
@@ -69,7 +69,7 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
             }
           >
             <ul data-vesta="server-activity-list" data-server-players>
-              <For each={roster().names}>
+              <For each={roster().names.slice(0, PLAYER_PAGE_SIZE)}>
                 {(name) => (
                   <li data-vesta="server-activity-row" data-compact>
                     <span data-vesta="server-activity-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
@@ -84,6 +84,9 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
                 )}
               </For>
             </ul>
+            <Show when={roster().names.length > PLAYER_PAGE_SIZE}>
+              <p>{t('servers.people.preview-limit', { count: PLAYER_PAGE_SIZE })}</p>
+            </Show>
           </Show>
         )}
       </Show>
@@ -106,6 +109,7 @@ const filterLabels: Record<PlayerFilter, MessageId> = {
 export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const [filter, setFilter] = createSignal<PlayerFilter>('all', { name: 'server-players:filter' });
+  const [page, setPage] = createSignal(0, { name: 'server-players:page' });
   const [query, setQuery] = createSignal('', { name: 'server-players:query' });
   const [expanded, setExpanded] = createSignal<string | null>(null, { name: 'server-players:expanded' });
   const [dialog, setDialog] = createSignal<Request | null>(null, { name: 'server-players:dialog' });
@@ -125,6 +129,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const players = createMemo(() => mergePlayers({ whitelist: whitelist.value(), ops: ops.value(), bans: bans.value(), roster: serverPlayers(id()) }), { name: 'server-players:merged' });
   const counts = createMemo(() => filterCounts(players()), { name: 'server-players:counts' });
   const shown = createMemo(() => filterPlayers(players(), filter(), query()), { name: 'server-players:shown' });
+  const currentPage = () => Math.min(page(), Math.max(0, Math.ceil(shown().length / PLAYER_PAGE_SIZE) - 1));
   const loading = () => whitelist.loading() || ops.loading() || bans.loading();
   const listError = () => whitelist.error() ?? ops.error() ?? bans.error();
   /** Whitelist on/off from server.properties, when this role can see it. */
@@ -151,10 +156,10 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
           size="md"
           aria-label={t('servers.tab.players')}
           value={filter()}
-          onChange={(value) => setFilter(value as PlayerFilter)}
+          onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
           options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
         />
-        <SettingsSearch value={query()} onChange={setQuery} placeholder={t('servers.people.search')} />
+        <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
         <Show when={moderate() || operator()}>
           <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
             {t('servers.people.add')}
@@ -172,7 +177,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
         >
           <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
             <ul data-vesta="server-player-list">
-              <For each={shown()}>
+              <For each={playerPage(shown(), page())}>
                 {(player) => (
                   <PlayerRow
                     player={player}
@@ -186,6 +191,13 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
                 )}
               </For>
             </ul>
+            <Show when={shown().length > PLAYER_PAGE_SIZE}>
+              <div data-vesta="server-settings-bar">
+                <Button disabled={currentPage() === 0} onClick={() => setPage(Math.max(0, currentPage() - 1))}>{t('servers.people.previous-page')}</Button>
+                <span role="status">{currentPage() + 1} / {Math.ceil(shown().length / PLAYER_PAGE_SIZE)}</span>
+                <Button disabled={(currentPage() + 1) * PLAYER_PAGE_SIZE >= shown().length} onClick={() => setPage(currentPage() + 1)}>{t('servers.people.next-page')}</Button>
+              </div>
+            </Show>
           </Show>
         </Show>
       </Show>

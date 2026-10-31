@@ -183,7 +183,7 @@ function useConfigSave(snapshot: () => ServerSnapshot, configuration: () => Back
       const failure = reason as ServerCommandError;
       intents.settle(failure);
       setUncertain(intents.uncertain);
-      if (failure.code === 'stale_target') {
+      if (failure.code === 'stale_target' || failure.code === 'conflict') {
         // Someone else saved first: load theirs and keep this draft on top for review.
         setStale(true);
         await reload();

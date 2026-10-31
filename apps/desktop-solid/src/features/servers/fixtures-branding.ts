@@ -31,7 +31,7 @@ export function createBrandingFixtures(host: BrandingHost) {
       await host.wait(); host.requireCapability(host.server(id), 'config.edit');
       const value = current(id);
       if (!/^(0|[1-9][0-9]*)$/.test(expectedRevision)) fail('invalid_input');
-      if (value.revision !== expectedRevision) fail('stale_target');
+      if (value.revision !== expectedRevision) throw { code: 'conflict', current: { ...clone(value) } } satisfies ServerCommandError;
       if (!Object.keys(patch).length || Object.keys(patch).some((k) => k !== 'name' && k !== 'description')) fail('invalid_input');
       if (patch.name !== undefined && (typeof patch.name !== 'string' || !patch.name.trim() || [...patch.name].length > 128 || bytes(patch.name) > 512 || controls.test(patch.name))) fail('invalid_input');
       if (patch.description !== undefined && (typeof patch.description !== 'string' || [...patch.description].length > 1024 || bytes(patch.description) > 4096 || controls.test(patch.description.replaceAll('\n', '')))) fail('invalid_input');
