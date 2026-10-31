@@ -19,7 +19,8 @@ export type PackFileOperation = { operation: 'write'; root: PackOverrideRoot; pa
 export interface PackFileMutation { expectedRevision: string; change: PackFileOperation }
 export interface PackFileRead { expectedRevision: string; root: PackOverrideRoot; path: string }
 export interface PackFileBody { revision: string; sha256: string; contentBase64: string }
-export interface PackManifest { overrideFiles?: PackOverrideFile[]; name: string; summary: string; icon: string | null; displayVersion: string; minecraftVersion: string; loader: PackLoader; loaderVersion: string | null; entries: PackEntry[] }
+export interface ClientModpackLink extends ContentProvider { entries: string[]; overrides: [string, string][] }
+export interface PackManifest { modpackLink?: ClientModpackLink | null; overrideFiles?: PackOverrideFile[]; name: string; summary: string; icon: string | null; displayVersion: string; minecraftVersion: string; loader: PackLoader; loaderVersion: string | null; entries: PackEntry[] }
 export interface PackArchiveInspection {
   format: 'mrpack' | 'curseforge' | 'zip' | 'vesta'; manifest: PackManifest; entryCount: number;
   providerEntries: ContentProvider[]; unresolvedFiles: string[]; overrides: string[];
@@ -37,7 +38,7 @@ export interface PackWorkspace { installProgress?: PackInstallProgress | null; s
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
 export interface PackProviderSelection extends ContentProvider { required: boolean }
 export interface PackBrowseAdd extends ContentProvider { expectedRevision: string; required: boolean; dependencies: PackProviderSelection[] }
-export type PackImport = { source: 'archive'; expectedRevision: string; contentBase64: string } | { source: 'uploaded_archive'; expectedRevision: string; uploadId: string } | { source: 'published'; expectedRevision: string; expectedPublishedRevision: string };
+export type PackImport = ({ source: 'provider'; expectedRevision: string } & ContentProvider) | { source: 'unlink'; expectedRevision: string; choice: 'keep_everything' | 'keep_resources' | 'remove_everything' } | { source: 'archive'; expectedRevision: string; contentBase64: string } | { source: 'uploaded_archive'; expectedRevision: string; uploadId: string } | { source: 'published'; expectedRevision: string; expectedPublishedRevision: string };
 export interface PackSuggestion { id: string; kind: 'client_mod_missing' | 'newer_compatible_version' | 'server_mod_removed' | 'minecraft_version_drift'; entryId: string | null; provider: ContentProvider | null; path: string | null }
 export interface PackSuggestions { draftRevision: string; items: PackSuggestion[]; warnings: string[]; potentiallyOutdated: boolean }
 export interface PackIssue { code: string; entryId: string | null; severity: 'warning' | 'error' }
