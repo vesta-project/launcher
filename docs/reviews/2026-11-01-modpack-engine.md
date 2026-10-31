@@ -18,3 +18,15 @@ A direct dependency on piston-lib would reuse parsing but not the update engine 
 ## Validation
 
 Run UI typecheck/build and server/Browse checks, agent file/workspace/transport tests and touched native tests. Exercise CurseForge COBBLEVERSE 1173260/6060565 and RLCraft 285109/4612979 with the configured key kept out of logs. Record failures honestly, including whether validation reached actual file application.
+
+## Implementation status and validation handoff
+
+This branch is a **partial implementation**, not completion of the shared-engine requirement.
+
+Implemented: the default launcher flow uses existing server panels inline, defers preparation until Install, shows preparation file counters and waits for software jobs before showing Done. Stopped-state gates cover Browse cards/version actions and server pack controls. Start shows Starting in its primary action. Agent transport holds stopped process ownership and refuses active Minecraft with `modpack_requires_stopped`; confirmed pack journals apply immediately, including unlink, with an installed outcome. Protected Minecraft settings cannot enter pack writes.
+
+Still required: extract and use the same launcher install/update engine; metadata/manifest-only planning in the agent; a durable download job with byte progress; diagnose/fix upload busy/connection errors. The current agent `install_plan` still downloads synchronously. Deferring its invocation in the UI is not a substitute for that backend change. Internal durable file intents remain for recovery, though the successful modpack flow no longer waits for restart.
+
+Validation so far: UI typecheck and `bun run build` pass; full server/Browse checks: 501 pass, one console timing/diagnostics failure. All 27 focused reactivity/pack-loading/Browse target checks and four error/review checks pass in isolation. Agent `cargo check -p vesta-transport` and five HTTPS pack-workspace integration tests pass. A broad library run was interrupted; final focused native results are recorded in the implementation handoff.
+
+Live provider checks used the configured key without logging it. CurseForge identifies the supplied 1173260/6060565 as **Cobblemon 3D Poke Rods**, class 12 (resource pack), not COBBLEVERSE; its 206-file install reached application successfully. The existing correct COBBLEVERSE reference is project 1210677, file 8488030 (COBBLEVERSE 1.7.42); its live install has not been validated here. RLCraft 285109/4612979 prepared successfully in about 435 seconds, selecting its server archive; application was progressing (504 of 3,554 journaled files applied) when the lengthy attempt was stopped. This is not an end-to-end pass, and no Minecraft launch was attempted. Tests use a real local temporary agent engine/database/filesystem, not a running development agent over TLS.
