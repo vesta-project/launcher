@@ -1,3 +1,4 @@
+import { isContentEntry } from '../../../features/servers/content-kind';
 import { Badge, Button, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
 import { For, Show, createMemo, type Component } from 'solid-js';
 import { Dynamic } from '@solidjs/web';
@@ -104,7 +105,7 @@ function ClientPack() {
   const count = (tab: ModpackSubTab) => {
     const manifest = area.workspace()?.draft.manifest;
     if (!manifest) return undefined;
-    if (tab === 'content') return manifest.entries.length;
+    if (tab === 'content') return manifest.entries.filter(isContentEntry).length;
     if (tab === 'files') return (manifest.overrideFiles ?? []).filter((file) => !file.trashed && file.sha256 !== null).length;
     return undefined;
   };
