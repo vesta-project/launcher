@@ -17,30 +17,30 @@
   },
   "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "@solidjs/diagnostics": "^2.0.0-rc.14",
-    "@solidjs/vite-plugin": "^3.0.0-next.48",
-    "@tauri-apps/cli": "2.11.0",
-    "@types/node": "^26.6.5",
+    "@solidjs/diagnostics": "^2.0.0-rc.20",
+    "@solidjs/vite-plugin": "^3.0.0-next.54",
+    "@tauri-apps/cli": "2.12.4",
+    "@types/node": "^26.6.6",
     "eslint-plugin-solid": "~0.18.1",
-    "oxlint": "~1.79.0",
-    "typescript": "^5.9.2",
-    "vite": "^8.1.5"
+    "oxlint": "~1.90.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
   },
   "dependencies": {
     "@fluent/bundle": "^0.19.1",
     "@kobalte/core": "2.0.0-alpha.2",
-    "@solid-primitives/props": "4.0.0-next.3",
-    "@solidjs/web": "^2.0.0-rc.14",
+    "@solid-primitives/props": "4.0.0-next.5",
+    "@solidjs/web": "^2.0.0-rc.20",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
-    "@tauri-apps/plugin-dialog": "^2.8.3",
-    "@tauri-apps/plugin-shell": "^2.5.0",
-    "@tauri-apps/plugin-updater": "^2.14.0",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@tauri-apps/plugin-shell": "^2.6.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "dompurify": "^3.4.17",
-    "marked": "^18.1.1",
+    "marked": "^18.1.2",
     "skinview3d": "^3.4.2",
-    "solid-js": "^2.0.0-rc.14"
+    "solid-js": "^2.0.0-rc.20"
   },
   "patchedDependencies": {
     "@kobalte/core@2.0.0-alpha.2": "patches/@kobalte%2Fcore@2.0.0-alpha.2.patch"
