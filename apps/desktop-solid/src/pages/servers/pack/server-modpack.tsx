@@ -1,3 +1,4 @@
+import { contentPathKind, isContentEntry } from '../../../features/servers/content-kind';
 import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Progress, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
@@ -250,6 +251,8 @@ const ownedKindIcon: Record<ServerContentEntry['kind'], string> = {
   mod: 'icons/content/cube',
   plugin: 'icons/content/dependencies',
   datapack: 'icons/content/layers',
+  resource_pack: 'icons/content/layers',
+  shader: 'icons/content/layers',
 };
 
 interface OwnedResource { path: string; kind: ServerContentEntry['kind']; entry?: ServerContentEntry }
@@ -261,11 +264,11 @@ interface OwnedResource { path: string; kind: ServerContentEntry['kind']; entry?
 function ownedResources(owned: readonly string[], inventory: readonly ServerContentEntry[] | undefined): OwnedResource[] {
   if (inventory) {
     const paths = new Set(owned);
-    return inventory.filter((entry) => isModpackOwned(entry, paths)).map((entry) => ({ path: entry.path, kind: entry.kind, entry }));
+    return inventory.filter((entry) => isContentEntry(entry) && isModpackOwned(entry, paths)).map((entry) => ({ path: entry.path, kind: entry.kind, entry }));
   }
   return owned.flatMap((path): OwnedResource[] => {
-    if (!/\.(jar|zip)$/i.test(path)) return [];
-    return [{ path, kind: path.startsWith('plugins/') ? 'plugin' : path.includes('datapacks/') ? 'datapack' : 'mod' }];
+    const kind = contentPathKind(path);
+    return kind ? [{ path, kind }] : [];
   });
 }
 

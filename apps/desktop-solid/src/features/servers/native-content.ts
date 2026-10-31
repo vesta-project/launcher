@@ -3,7 +3,7 @@ import type { ConnectionId } from './native';
 import type { SoftwareJob } from './hosting-native';
 import type { ResourceProject, ResourceVersion } from '../browse/browse-model';
 
-export type ServerContentKind = 'mod' | 'plugin' | 'datapack';
+export type ServerContentKind = 'mod' | 'plugin' | 'datapack' | 'resource_pack' | 'shader';
 export type ContentPending = 'install' | 'remove' | 'update' | 'enable' | 'disable';
 export interface ContentProvider { provider: 'modrinth' | 'curseforge'; projectId: string; versionId: string }
 export interface ContentDeclared { loader: string | null; side: string | null; name: string | null; version: string | null; dependencies: string[] }
