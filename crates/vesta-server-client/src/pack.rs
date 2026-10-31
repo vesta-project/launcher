@@ -80,9 +80,13 @@ dto!(PackEntry {
     environment: Environment,
     source: EntrySource
 });
+dto!(ClientModpackLink {provider:String,project_id:String,version_id:String,entries:Vec<String>,overrides:Vec<(String,String)>});
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackManifest {
+    #[serde(default)]
+    pub modpack_link: Option<ClientModpackLink>,
     pub name: String,
     pub summary: String,
     pub icon: Option<String>,
@@ -226,6 +230,8 @@ dto!(UploadReceipt {
     deny_unknown_fields
 )]
 pub enum ImportRequest {
+    Provider { expected_revision: String, provider: String, project_id: String, version_id: String },
+    Unlink { expected_revision: String, choice: String },
     Archive {
         expected_revision: String,
         content_base64: String,
@@ -633,5 +639,22 @@ mod server_link_wire_tests {
         let config: ClientPackConfig =
             from_wire(serde_json::json!({"mode":"server-modpack","require_update":true})).unwrap();
         assert!(config.require_update);
+    }
+}
+
+#[cfg(test)]
+mod custom_link_wire_tests {
+    use super::*;
+    #[test]
+    fn custom_link_and_unlink_cross_the_existing_import_contract() {
+        let link: ImportRequest = serde_json::from_value(serde_json::json!({"source":"provider","expectedRevision":"7","provider":"modrinth","projectId":"pack","versionId":"release"})).unwrap();
+        let wire = serde_json::to_value(link).unwrap();
+        assert_eq!(wire["projectId"], "pack");
+        for choice in ["keep_everything", "keep_resources", "remove_everything"] {
+            let request: ImportRequest = serde_json::from_value(serde_json::json!({"source":"unlink","expectedRevision":"8","choice":choice})).unwrap();
+            assert_eq!(serde_json::to_value(request).unwrap()["choice"], choice);
+        }
+        let manifest: PackManifest = serde_json::from_value(serde_json::json!({"name":"Custom","summary":"","icon":null,"displayVersion":"1","minecraftVersion":"1.21.1","loader":"none","loaderVersion":null,"entries":[],"modpackLink":{"provider":"curseforge","projectId":"123","versionId":"456","entries":["mod"],"overrides":[["overrides","config/test.txt"]]}})).unwrap();
+        assert_eq!(manifest.modpack_link.unwrap().overrides[0].1, "config/test.txt");
     }
 }

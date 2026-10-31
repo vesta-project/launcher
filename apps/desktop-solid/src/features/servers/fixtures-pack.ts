@@ -55,10 +55,15 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     const next = previous.catch(() => {}).then(async () => { requireCap(id); const key = `${id}:${intent}`, binding = JSON.stringify(input), old = receipts.get(key); if (old) { if (old.input !== binding) fail('conflict', 'idempotency_conflict'); return clone(old.result) as T; } const result = await action(); receipts.set(key, { input: binding, result: clone(result) }); return clone(result); });
     tails.set(id, next); return next;
   };
-  const save = (id: string, expected: string, manifest: PackManifest) => {
+  const save = (id: string, expected: string, manifest: PackManifest, providerChange = false) => {
     const s = state(id); if (s.view.draft.revision !== expected) fail('stale_target');
     if (manifest.minecraftVersion !== s.view.serverMinecraftVersion) fail('stale_target', 'pack_release_revision_mismatch');
     if ((manifest.loader === 'none') !== (manifest.loaderVersion === null) || manifest.entries.length > 256 || !/^\d+(\.\d+)*$/.test(manifest.displayVersion)) fail('invalid_input');
+    if (!providerChange) {
+      const old = s.view.draft.manifest, link = old.modpackLink;
+      if (JSON.stringify(link ?? null) !== JSON.stringify(manifest.modpackLink ?? null)) fail('conflict');
+      if (link && (old.loader !== manifest.loader || old.loaderVersion !== manifest.loaderVersion || link.entries.some(id => JSON.stringify(old.entries.find(e => e.id === id)) !== JSON.stringify(manifest.entries.find(e => e.id === id))) || link.overrides.some(([root,path]) => JSON.stringify(old.overrideFiles?.find(f => f.root === root && f.path === path)) !== JSON.stringify(manifest.overrideFiles?.find(f => f.root === root && f.path === path))))) fail('conflict');
+    }
     const paths = new Set<string>(), ids = new Set<string>();
     for (const e of manifest.entries) { if (e.path.includes('..') || e.path.includes('\\') || !/^(mods|resourcepacks|shaderpacks|datapacks|config)\/.+/.test(e.path) || paths.has(e.path.toLowerCase()) || ids.has(e.id)) fail('invalid_input'); paths.add(e.path.toLowerCase()); ids.add(e.id); if (e.source.type === 'upload' && !blobs.has(`${id}:${e.source.sha256}`)) fail('invalid_input'); }
     s.view.draft = { revision: String(BigInt(expected) + 1n), manifest: clone(manifest) }; return s.view.draft;
@@ -202,9 +207,28 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
       if (!upload.complete || !upload.request.archive) fail('conflict');
       return seedArchiveInspection('mrpack');
     },
-    async packImport(id, request: PackImport, intent) { return mutate(id, intent, request, async () => { const s = state(id); if (request.source === 'published') { if (s.view.publishedRevision !== request.expectedPublishedRevision) fail('stale_target'); s.view.customizingProvider = !!s.view.providerPack; return save(id, request.expectedRevision, s.published); } // Archive fixtures use a deterministic imported manifest; archive parsing is covered by agent Rust tests.
+    async packImport(id, request: PackImport, intent) { return mutate(id, intent, request, async () => { const s = state(id);
+      if (request.source === 'unlink' || request.source === 'provider') {
+        const m = clone(s.view.draft.manifest), old = m.modpackLink;
+        const choice = request.source === 'unlink' ? request.choice : 'remove_everything';
+        if (old && choice !== 'keep_everything') {
+          m.entries = m.entries.filter(e => !old.entries.includes(e.id) || (choice === 'keep_resources' && e.kind !== 'config_override'));
+          m.overrideFiles = (m.overrideFiles ?? []).filter(f => !old.overrides.some(([root,path]) => f.root === root && f.path === path));
+        }
+        m.modpackLink = null;
+        if (request.source === 'provider') {
+          const base = seedPackWorkspace('fabric').draft.manifest;
+          const entries = base.entries.map(e => ({ ...e, id: 'linked-' + e.id, path: e.path.replace(/([^/]+)$/, 'linked-$1') }));
+          const bytes = new TextEncoder().encode('linked pack config'); const sha256 = await bytesHash(bytes); blobs.set(id + ':' + sha256, bytes);
+          m.overrideFiles = [...(m.overrideFiles ?? []), { root: 'overrides', path: 'config/linked-pack.txt', sha256, trashed: false }];
+          m.modpackLink = { provider: request.provider, projectId: request.projectId, versionId: request.versionId, entries: entries.map(e => e.id), overrides: [['overrides', 'config/linked-pack.txt']] };
+          m.entries.push(...entries); m.loader = base.loader; m.loaderVersion = base.loaderVersion;
+        }
+        return save(id, request.expectedRevision, m, true);
+      }
+      if (request.source === 'published') { if (s.view.publishedRevision !== request.expectedPublishedRevision) fail('stale_target'); s.view.customizingProvider = !!s.view.providerPack; return save(id, request.expectedRevision, s.published, true); } // Archive fixtures use a deterministic imported manifest; archive parsing is covered by agent Rust tests.
       if (request.source === 'uploaded_archive' && !uploads.get(`${id}:${request.uploadId}`)?.complete) fail('invalid_input');
-      const m = clone(seedPackWorkspace('fabric').draft.manifest); m.name = 'Imported client pack'; return save(id, request.expectedRevision, m); }); },
+      const m = clone(seedPackWorkspace('fabric').draft.manifest); m.name = 'Imported client pack'; return save(id, request.expectedRevision, m, true); }); },
     packSuggestions: suggestions,
     async packDependencies(id, source, projectId, versionId) { const target = clone(state(id).view); if (target.minecraftDrift) fail('stale_target'); const r = resource(id, { provider: source, projectId, versionId }, true); const dependencies = projectId === 'needs-api' ? [{ ...resource(id, provider('fabric-api'), true), required: true, installed: target.draft.manifest.entries.some(e => e.id === 'modrinth-fabric-api') }] : []; return { target, ...r, dependencies, warnings: [] }; },
     packPreview: preview,
