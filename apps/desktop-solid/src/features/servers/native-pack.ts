@@ -33,8 +33,8 @@ export interface ServerModpackVersion { source: PackInstallSource; displayVersio
 export interface ServerModpackUpdate { installed: ServerModpackVersion | null; pending: ServerModpackVersion | null; available: PackInstallSource | null }
 export interface ServerModpackLink { installed?: ServerModpackVersion | null; pending?: ServerModpackVersion | null; pendingIds?: string[]; source: PackInstallSource; displayVersion: string; files: Record<string,string>; state: string }
 export interface ClientPackConfig { allowCustomContent?: boolean; mode: 'none' | 'server-modpack' | 'custom'; requireUpdate: boolean }
-export interface PackInstallProgress { stage: 'archive' | 'metadata' | 'download_verify' | 'review'; completed: number; total: number }
-export interface PackWorkspace { installProgress?: PackInstallProgress | null; serverModpack?: ServerModpackLink | null; clientPack?: ClientPackConfig; customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
+export interface PackInstallProgress { stage: 'archive' | 'metadata' | 'download_verify' | 'review' | 'writing'; completed: number; total: number; bytesCompleted?: number }
+export interface PackWorkspace { installJob?: {id: string; state: string; error: string | null} | null; installProgress?: PackInstallProgress | null; serverModpack?: ServerModpackLink | null; clientPack?: ClientPackConfig; customizingProvider?: boolean; providerPack?: ContentProvider | null; draft: PackDraft; serverMinecraftVersion: string; minecraftDrift: boolean; publishedRevision: string; minimumRevision: string; pendingPublication: boolean; safetySnapshotRecommended: boolean }
 export interface PackDraftWrite { expectedRevision: string; manifest: PackManifest }
 export interface PackProviderSelection extends ContentProvider { required: boolean }
 export interface PackBrowseAdd extends ContentProvider { expectedRevision: string; required: boolean; dependencies: PackProviderSelection[] }

@@ -1,6 +1,8 @@
+import { serverCommand } from '../../../features/servers/store';
+import type { PackWorkspace } from '../../../features/servers/native-pack';
 import { isContentEntry } from '../../../features/servers/content-kind';
-import { Badge, Button, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { Badge, Button, Progress, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
+import { For, Show, createMemo, createSignal, createEffect, onCleanup, type Component } from 'solid-js';
 import { Dynamic } from '@solidjs/web';
 import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
@@ -44,6 +46,7 @@ export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   return (
     <ModpackAreaContext value={area}>
       <div data-vesta="modpack">
+        <Show when={area.gates().edit}><InstallJobStatus /></Show>
         <Show when={area.gates().edit} fallback={<PlayerView />}>
           <Show when={area.install()} keyed fallback={<EditorView />}>{request => <InstallOnServerDialog request={request} />}</Show>
         </Show>
@@ -157,4 +160,29 @@ function CustomizeFirst() {
       </EmptyState>
     </div>
   );
+}
+
+/** Agent-owned job status is read afresh when the launcher reconnects. */
+function InstallJobStatus() {
+  const area = useModpackArea();
+  const [value, setValue] = createSignal<PackWorkspace | null>(null);
+  createEffect(() => area.id(), id => {
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try { const next = await serverCommand(api => api.packDraft(id)); if (!disposed) setValue(next); } catch { /* Reconnect polling retries without changing the job. */ }
+      if (!disposed) timer = setTimeout(() => void poll(), 2000);
+    };
+    void poll();
+    onCleanup(() => { disposed = true; clearTimeout(timer); });
+  });
+  const job = () => value()?.installJob;
+  const progress = () => value()?.installProgress;
+  const active = () => ['queued','staging','activating'].includes(job()?.state ?? '');
+  return <Show when={job()}><div data-vesta="pack-install-job" role="status">
+    <Show when={active()} fallback={<span>{job()?.state === 'succeeded' ? t('server-pack.done') : job()?.error}</span>}>
+      <Progress value={progress()?.total ? progress()!.completed / progress()!.total * 100 : undefined}
+        label={`${t('server-pack.install-planning')} ${progress()?.completed ?? 0}/${progress()?.total ?? 0}${progress()?.bytesCompleted ? ` ? ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
+    </Show>
+  </div></Show>;
 }
