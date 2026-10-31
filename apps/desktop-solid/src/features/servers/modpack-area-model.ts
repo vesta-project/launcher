@@ -1,3 +1,4 @@
+import { contentPathKind, isContentEntry } from './content-kind';
 // Pure decisions for a server's Modpack area. Two independent, optional links:
 //  - the server modpack: the server installation linked to a modpack, like an instance linked
 //    to a modpack (link review, installed vs pending version, update, ownership, unlink);
@@ -73,7 +74,7 @@ export function serverLinkView(workspace: PackWorkspace | undefined): ServerLink
   const phase: ServerLinkPhase = pending ? (installed ? 'updating' : 'installing') : 'installed';
   return {
     phase, source: (installed ?? pending ?? selected).source, installed, pending, pendingIds: link.pendingIds ?? [],
-    owned: Object.keys(link.files ?? {}).sort(), canChange: !pending,
+    owned: Object.keys(link.files ?? {}).filter(path => contentPathKind(path) !== null).sort(), canChange: !pending,
   };
 }
 
@@ -338,13 +339,14 @@ export const entryFileName = (entry: Pick<PackEntry, 'path'>) => entry.path.spli
 /** Kinds present, in a stable order, for the filter control. */
 export function entryKinds(entries: readonly PackEntry[]): PackEntryKind[] {
   const order: PackEntryKind[] = ['mod', 'resource_pack', 'shader', 'datapack', 'config_override'];
-  return order.filter((kind) => entries.some((entry) => entry.kind === kind));
+  return order.filter((kind) => entries.some((entry) => isContentEntry(entry) && entry.kind === kind));
 }
 
 /** Search matches the display name (when known), file name or project id. */
 export function filterEntries(entries: readonly PackEntry[], query: string, kind: EntryFilter, names: (entry: PackEntry) => string | undefined = () => undefined): PackEntry[] {
   const needle = query.trim().toLowerCase();
   return entries.filter((entry) => {
+    if (!isContentEntry(entry)) return false;
     if (kind !== 'all' && entry.kind !== kind) return false;
     if (!needle) return true;
     const haystack = [names(entry), entryFileName(entry), entry.source.type === 'provider' ? entry.source.projectId : ''].join(' ').toLowerCase();

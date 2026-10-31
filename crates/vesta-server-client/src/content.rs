@@ -13,6 +13,8 @@ fn unsupported() -> Error {
 pub enum ContentKind {
     Mod,
     Plugin,
+    ResourcePack,
+    Shader,
     Datapack,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]

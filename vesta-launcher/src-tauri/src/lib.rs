@@ -235,6 +235,8 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_startup_whitelist_update,
             commands::servers::server_moderate_confirm,
             commands::servers_hosting::server_world,
+            commands::servers_hosting::server_eula,
+            commands::servers_hosting::server_eula_update,
             commands::servers_pack::server_pack_draft,
             commands::servers_pack::server_pack_icon,
             commands::servers_pack::server_pack_write,

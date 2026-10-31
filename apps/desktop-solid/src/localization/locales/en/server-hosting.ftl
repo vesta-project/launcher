@@ -188,3 +188,11 @@ server-hosting-custom-jar-java = Java
 server-hosting-custom-jar-java-current = { $name } provides Java { $version }. Vesta can’t tell which Java this JAR needs.
 server-hosting-custom-jar-java-unknown = The server’s selected Java. Vesta can’t tell which Java this JAR needs.
 server-hosting-custom-jar-apply = Use this JAR
+
+servers-eula-title = Minecraft EULA
+servers-eula-description = To start this server, read and accept the Minecraft End User License Agreement.
+servers-eula-read = Read the Minecraft EULA
+servers-eula-accept-start = Accept and start
+servers-eula-setting-description = Accept the Minecraft End User License Agreement for this server.
+server-pack-create-no-pack = This server has no published client pack. Create an instance using its Minecraft version.
+server-pack-create-failed = Could not prepare an instance from this server. { $message }

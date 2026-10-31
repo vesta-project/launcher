@@ -370,7 +370,7 @@ export function dependencyRows(candidates: readonly DependencyCandidate[]): Depe
 const PROVIDERS: readonly string[] = ['modrinth', 'curseforge'];
 export const isContentProvider = (source: string): source is ContentProvider['provider'] => PROVIDERS.includes(source);
 const SERVER_KINDS: readonly ResourceType[] = ['mod', 'plugin', 'datapack'];
-export const isServerContentKind = (kind: ResourceType): kind is ServerContentKind => SERVER_KINDS.includes(kind);
+export const isServerContentKind = (kind: ResourceType): kind is Extract<ServerContentKind, ResourceType> => SERVER_KINDS.includes(kind);
 
 /** The shared resolver's rows, as the install dialog shows them. */
 export function previewCandidates(preview: Pick<ServerDependencyPreview, 'dependencies'>): DependencyCandidate[] {

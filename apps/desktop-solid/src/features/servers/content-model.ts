@@ -1,3 +1,4 @@
+import { contentPathKind, isContentEntry } from './content-kind';
 // Pure decisions for the server Resources tab and the custom-JAR flow: which kinds a server
 // lists, the rows (grouped, filtered, searched), what each row may do, the staged-change
 // labels, update availability and the request each action sends. No IO here.
@@ -16,17 +17,21 @@ import type {
 /* ---- Kinds and filters ---- */
 
 export type ContentFilter = 'all' | ServerContentKind;
-export const CONTENT_KINDS: readonly ServerContentKind[] = ['mod', 'plugin', 'datapack'];
+export const CONTENT_KINDS: readonly ServerContentKind[] = ['mod', 'plugin', 'datapack', 'resource_pack', 'shader'];
 
 export const kindLabel: Record<ServerContentKind, MessageId> = {
   mod: 'server-content.kind-mod',
   plugin: 'server-content.kind-plugin',
   datapack: 'server-content.kind-datapack',
+  resource_pack: 'server-pack.kind-resource-pack',
+  shader: 'server-pack.kind-shader',
 };
 export const groupLabel: Record<ServerContentKind, MessageId> = {
   mod: 'server-content.group-mods',
   plugin: 'server-content.group-plugins',
   datapack: 'server-content.group-datapacks',
+  resource_pack: 'server-pack.kind-resource-pack',
+  shader: 'server-pack.kind-shader',
 };
 
 /**
@@ -34,7 +39,7 @@ export const groupLabel: Record<ServerContentKind, MessageId> = {
  * unsupported leftover is still shown, never hidden). Datapacks work on every server.
  */
 export function contentKinds(inventory: Pick<ServerContentInventory, 'capabilities' | 'items'>): ServerContentKind[] {
-  const present = new Set(inventory.items.map((item) => item.kind));
+  const present = new Set(inventory.items.filter(isContentEntry).map((item) => item.kind));
   return CONTENT_KINDS.filter((kind) =>
     kind === 'datapack'
     || present.has(kind)
@@ -43,7 +48,7 @@ export function contentKinds(inventory: Pick<ServerContentInventory, 'capabiliti
 }
 
 /** The kind Add content opens Browse on: the software's own kind first. */
-export function primaryKind(inventory: Pick<ServerContentInventory, 'capabilities'>): ServerContentKind {
+export function primaryKind(inventory: Pick<ServerContentInventory, 'capabilities'>): 'mod' | 'plugin' | 'datapack' {
   if (inventory.capabilities.modsSupported) return 'mod';
   if (inventory.capabilities.pluginsSupported) return 'plugin';
   return 'datapack';
@@ -87,6 +92,7 @@ export interface ContentListInput {
 export function contentRows(items: readonly ServerContentEntry[], input: ContentListInput): ContentRowModel[] {
   const needle = input.query.trim().toLowerCase();
   return items
+    .filter(isContentEntry)
     .filter((entry) => input.filter === 'all' || entry.kind === input.filter)
     .map((entry): ContentRowModel => ({
       key: entryKey(entry),
@@ -185,7 +191,7 @@ export interface RowActions {
  * the link's recorded path (agents that do not mark rows yet). User additions never match.
  */
 export const isModpackOwned = (entry: Pick<ServerContentEntry, 'path' | 'modpackOwned'>, owned?: ReadonlySet<string>) =>
-  entry.modpackOwned === true || !!owned?.has(entry.path);
+  (entry.modpackOwned === true || !!owned?.has(entry.path)) && (contentPathKind(entry.path) !== null || (entry.path.includes('/datapacks/') && !entry.path.split('/').at(-1)?.includes('.')));
 
 /**
  * What one row may do. A queued change blocks others until it applies or is cancelled; an
@@ -218,7 +224,7 @@ export function contentUpdate(
   inventory: Pick<ServerContentInventory, 'minecraftVersion' | 'software'>,
 ): ResourceVersion | undefined {
   if (!entry.provider || !versions?.length) return undefined;
-  const best = serverVersion(versions, { minecraftVersion: inventory.minecraftVersion, software: inventory.software }, entry.kind, entry.provider.provider);
+  const best = serverVersion(versions, { minecraftVersion: inventory.minecraftVersion, software: inventory.software }, entry.kind === 'resource_pack' ? 'resourcepack' : entry.kind, entry.provider.provider);
   if (!best || best.id === entry.provider.versionId) return undefined;
   // Only offer newer: an installed version missing from the list is left alone.
   const installed = versions.findIndex((version) => version.id === entry.provider!.versionId);

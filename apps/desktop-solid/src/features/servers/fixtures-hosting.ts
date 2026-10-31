@@ -51,6 +51,7 @@ const catalog: SoftwareDescriptor[] = SOFTWARE_IDS.map((software) => ({
 const javaFor = (version: string) => (/^1\.(2[1-9]|20\.[5-9])/.test(version) ? 21 : /^1\.(1[89]|20)/.test(version) ? 17 : 8);
 
 interface HostingState {
+  eula: boolean;
   java: ServerJavaInventory;
   world: ServerWorld;
   worlds: string[];
@@ -65,6 +66,7 @@ interface HostingState {
 function seed(): HostingState {
   const now = Date.now();
   return {
+    eula: true,
     java: { runtimes: [17, 21, 25].map(major => ({ id: `java-${major}`, path: `C:/Program Files/Eclipse Adoptium/jdk-${major}/bin/java.exe`, version: `${major}.0.3`, major, vendor: major === 17 ? 'Microsoft' : 'Eclipse Adoptium', arch: 'amd64', managed: false })), selected: { id: 'java-21', path: 'C:/Program Files/Eclipse Adoptium/jdk-21/bin/java.exe', version: '21.0.3', major: 21, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: false }, customPathsAllowed: true, managedMajors: [] },
     world: { sizeBytes: '2846072184', sizeComplete: true, sizeObservedAtMs: now - 12_000, lastModifiedAtMs: now - 18_000, lastPlayedAtMs: now - 48_000, dimensions: [{ id: 'overworld', present: true, folders: ['world'], layout: 'nested' }, { id: 'nether', present: true, folders: ['world_nether/DIM-1'], layout: 'split' }, { id: 'end', present: true, folders: ['world_the_end/DIM1'], layout: 'split' }], datapacks: [{ id: 'vanilla', name: 'Vanilla', kind: 'builtin', path: null, enabled: true }, { id: 'file/terralith.zip', name: 'terralith.zip', kind: 'zip', path: 'world/datapacks/terralith.zip', enabled: true }, { id: 'file/seasonal', name: 'seasonal', kind: 'folder', path: 'world/datapacks/seasonal', enabled: false }, { id: 'file/new-pack.zip', name: 'new-pack.zip', kind: 'zip', path: 'world/datapacks/new-pack.zip', enabled: null }], datapackStateSource: 'saved_level_dat', name: 'world', seed: '-4172144997902289642', configuredSeed: '', exists: true, revision: '3' },
     worlds: ['world'],
@@ -171,6 +173,11 @@ export function createHostingFixtures(host: HostingHost) {
           if (!current.java.managedMajors.includes(major)) { current.java.managedMajors.push(major); current.java.runtimes.push({ id: `managed-${major}`, path: `private/managed-java/temurin-${major}/bin/java.exe`, major, version: `${major}.0.3`, vendor: 'Eclipse Adoptium', arch: 'amd64', managed: true }); }
         }); return job;
       });
+    },
+    async eula(connectionId: ConnectionId) { host.requireCapability(host.server(connectionId), 'config.view'); await host.wait(); return { accepted: state(connectionId).eula }; },
+    async eulaUpdate(connectionId: ConnectionId, accepted: boolean, intentId: string) {
+      host.requireCapability(host.server(connectionId), 'config.edit');
+      await host.wait(); return once(state(connectionId), intentId, { accepted }, () => { state(connectionId).eula = accepted; return { accepted }; });
     },
     async world(connectionId: ConnectionId): Promise<ServerWorld> {
       await host.wait();

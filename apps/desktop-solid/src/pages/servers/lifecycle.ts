@@ -1,3 +1,6 @@
+import { requestEulaConsent } from '../../features/servers/eula-dialog';
+import { seedServerResource } from '../../features/servers/resources';
+import { eulaResource } from '../../features/servers/server-resources';
 // Lifecycle requests shared by the header, the server cards and the rail pins: one intent
 // per action and run, so a retry after an uncertain outcome reuses it.
 import { toast } from '@vesta/ui';
@@ -34,25 +37,38 @@ export function useLifecycle(snapshot: () => ServerSnapshot) {
   const [busy, setBusy] = createSignal<LifecycleAction | null>(null, { name: 'server-lifecycle:busy' });
   const [uncertain, setUncertain] = createSignal(false, { name: 'server-lifecycle:uncertain' });
   const intents = new IntentMemo();
+  const eulaIntents = new IntentMemo();
   const id = () => snapshot().connection.id;
   const pending = (action: LifecycleAction) => busyIntent(serverOperations(id()), `lifecycle.${action}`);
 
   const submit = async (action: SubmittableAction) => {
     if (busy()) return;
     // Wake and stop-from-sleeping have no running game to target.
+    const connectionId = id();
     const generation = snapshot().status?.generation ?? null;
     const intentId = intents.idFor({ action, generation });
     setBusy(action);
     try {
-      const operation = await serverCommand((client) => client.lifecycle(id(), action, generation, intentId));
+      if (action === 'start' || action === 'wake' || action === 'restart') {
+        const eula = await serverCommand(client => client.eula(connectionId));
+        if (!eula.accepted) {
+          if (!await requestEulaConsent()) return;
+          if (id() !== connectionId) return;
+          seedServerResource(connectionId, eulaResource, await serverCommand(client => client.eulaUpdate(connectionId, true, eulaIntents.idFor({ connectionId, accepted: true }))));
+        }
+      }
+      if (id() !== connectionId) return;
+      eulaIntents.settle();
+      const operation = await serverCommand((client) => client.lifecycle(connectionId, action, generation, intentId));
       intents.settle();
-      putOperations(id(), [{ ...operation, intent: operation.intent ?? `lifecycle.${action}` }]);
+      putOperations(connectionId, [{ ...operation, intent: operation.intent ?? `lifecycle.${action}` }]);
       toast.show({ title: t('servers.operation.accepted-toast', { name: t(actionLabels[action]) }), tone: 'neutral' });
     } catch (reason) {
       const error = reason as ServerCommandError;
       intents.settle(error);
+      eulaIntents.settle(error);
       toast.show({ title: t(errorMessage(error)), tone: error.code === 'stale_target' ? 'warning' : 'danger' });
-      if (error.code === 'stale_target') void serverCommand((client) => client.snapshot(id(), true)).then(putSnapshot).catch(() => {});
+      if (error.code === 'stale_target') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
     } finally {
       setUncertain(intents.uncertain);
       setBusy(null);

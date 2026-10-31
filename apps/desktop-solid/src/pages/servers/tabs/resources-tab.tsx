@@ -31,6 +31,8 @@ const kindIcon: Record<ServerContentEntry['kind'], string> = {
   mod: 'icons/content/cube',
   plugin: 'icons/content/dependencies',
   datapack: 'icons/content/layers',
+  resource_pack: 'icons/content/layers',
+  shader: 'icons/content/layers',
 };
 
 /**
@@ -222,7 +224,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     browseForServer({
       id: id(),
       name: props.snapshot.connection.name,
-      type: current === 'all' ? (value ? primaryKind(value) : 'datapack') : current,
+      type: current === 'all' ? (value ? primaryKind(value) : 'datapack') : current === 'resource_pack' ? 'resourcepack' : current,
       minecraftVersion: value?.minecraftVersion ?? props.snapshot.info?.minecraftVersion ?? null,
       loader: value?.software ?? null,
     });
@@ -239,11 +241,15 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     const working = () => busy().has(row().key);
     const link = () => {
       const provider = entry().provider;
-      return provider && project() ? projectPath(provider.provider, provider.projectId) : undefined;
+      return provider ? projectPath(provider.provider, provider.projectId) : undefined;
     };
     return (
       <div data-vesta="table-row" role="presentation" class={{ 'resource-row': true, 'row-disabled': entry().enabled === false || entry().pending === 'remove' }}
-        data-pending={entry().pending ?? undefined}>
+        data-pending={entry().pending ?? undefined}
+        onClick={event => {
+          if ((event.target as Element).closest('a,button,input,[role="switch"],[role="menuitem"]')) return;
+          const path = link(); if (path) navigate(path);
+        }}>
         <div data-vesta="table-cell" role="cell" class="col-name">
           <a data-vesta="resource-identity" href={link() ? `#${link()}` : undefined}
             onPointerEnter={() => { const provider = entry().provider; if (provider) prefetchProject(provider.provider, provider.projectId); }}

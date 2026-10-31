@@ -1,4 +1,4 @@
-import { Button, Skeleton, TextArea, TextField, toast } from '@vesta/ui';
+import { Button, Switch, Skeleton, TextArea, TextField, toast } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
@@ -8,7 +8,7 @@ import { stableConnectionId } from '../../../features/servers/connection-id';
 import { normalizeServerIcon } from '../../../features/servers/icon-image';
 import { IntentMemo } from '../../../features/servers/model';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
-import { brandingResource } from '../../../features/servers/server-resources';
+import { brandingResource, eulaResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { serverCommand, serverIcon, setServerIcon } from '../../../features/servers/store';
 import { ServerErrorNote } from '../parts';
@@ -20,6 +20,7 @@ const DESCRIPTION_LIMIT = 1024;
 /** General: the server-owned name, description and icon that every connected player sees. */
 export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
+  const eula = useServerResource(id, eulaResource);
   const branding = useServerResource(id, brandingResource);
   // Null drafts read through to the saved profile.
   const [nameDraft, setNameDraft] = createSignal<string | null>(null, { name: 'server-profile:name' });
@@ -28,6 +29,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const [busy, setBusy] = createSignal(false, { name: 'server-profile:busy' });
   const textIntents = new IntentMemo();
   const iconIntents = new IntentMemo();
+  const eulaIntents = new IntentMemo();
   let picker: HTMLInputElement | undefined;
   const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
 
@@ -97,6 +99,14 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   };
   const clear = () => writeIcon((intentId) => serverCommand((client) => client.clearIcon(id(), intentId)), { clear: true }, null);
 
+  const setEula = async (accepted: boolean) => {
+    if (busy()) return;
+    setBusy(true); setError(null);
+    const intent = eulaIntents.idFor({ accepted });
+    try { seedServerResource(id(), eulaResource, await serverCommand(client => client.eulaUpdate(id(), accepted, intent))); eulaIntents.settle(); }
+    catch (reason) { const failure = reason as ServerCommandError; eulaIntents.settle(failure); setError(failure); }
+    finally { setBusy(false); }
+  };
   const fallbackArt = () => serverArt(props.snapshot.connection.serverId || id(), initials(branding.value()?.name ?? props.snapshot.connection.name));
 
   return (
@@ -105,6 +115,11 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
         disabled={!canEdit() || !!nameProblem() || !!descriptionProblem()} onDiscard={discard} onSave={() => void save()} />
     }>
       <SettingsPanel title={t('servers.profile.title')} name="profile">
+        <SettingRow label={t('servers.eula.title')} description={t('servers.eula.setting-description')}>
+          <Switch checked={eula.value()?.accepted ?? false} disabled={busy() || !canEdit() || !eula.value()} onChange={value => void setEula(value)} aria-label={t('servers.eula.title')} />
+        </SettingRow>
+        <ServerErrorNote error={eula.error()} onRetry={() => void eula.refresh()} />
+
         <ServerErrorNote error={error() ?? branding.error()} onRetry={() => void branding.refresh()} />
         <Show when={branding.value()} fallback={<Show when={!branding.error()}><Skeleton height={180} radius={0} /></Show>}>
           <div data-vesta="settings-panel-body" data-server-profile>
