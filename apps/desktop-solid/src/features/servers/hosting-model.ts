@@ -107,7 +107,7 @@ const reasons: Record<string, MessageId> = {
 };
 
 /** Specific copy for a reason code, or null to fall back to the closed error model. */
-export const reasonMessage = (reason: string | null | undefined): MessageId | null => (reason ? reasons[reason] ?? null : null);
+export const reasonMessage = (reason: string | null | undefined): MessageId | null => (reason && Object.hasOwn(reasons, reason) ? reasons[reason]! : null);
 
 /** The message for a rejection: its reason when known, otherwise null (use ServerErrorNote). */
 export const rejectionMessage = (error: Pick<ServerCommandError, 'reason'> | null | undefined) => reasonMessage(error?.reason);
