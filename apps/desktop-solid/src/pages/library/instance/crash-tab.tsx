@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Button } from "@vesta/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { nativeInstances, nativeRecord, performNative, reportInstanceError } from "../../../features/instances/native-service";
@@ -64,7 +65,7 @@ export function CrashTab(props: { entry: InstanceEntry }) {
       <header data-vesta="crash-summary">
         <div>
           <p data-vesta="crash-category">
-            {t(memory() ? "crash.memory-category" : "crash.game-category")}<Show when={!nativeInstances}> · {t("crash.last-launch-exit-code", { code: 1 })}</Show>
+            <Metadata parts={[t(memory() ? "crash.memory-category" : "crash.game-category"), !nativeInstances ? t("crash.last-launch-exit-code", { code: 1 }) : null]} />
           </p>
           <h2>
             {memory()

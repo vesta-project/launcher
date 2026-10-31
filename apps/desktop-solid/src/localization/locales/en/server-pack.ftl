@@ -109,7 +109,7 @@ server-pack-get-target = Install into
 server-pack-get-new = A new instance
 server-pack-get-review-new = Review installation
 server-pack-get-review-link = Review linking
-server-pack-get-changes = { $added } to add · { $updated } to update · { $removed } to remove
+server-pack-get-changes = Add { $added }, update { $updated }, and remove { $removed }
 server-pack-get-show-changes = Show every change
 server-pack-get-consent = I approve the executable changes in revision { $version }
 server-pack-get-consent-help = Mods and scripts run code on your computer.
@@ -510,3 +510,7 @@ server-pack-provider-redirect = The download redirected too many times. Try agai
 server-pack-provider-manual = This file requires a manual download from the provider.
 server-pack-review-note-stop = Stop Minecraft to switch the software.
 server-pack-review-note = Applies on server restart.
+
+server-pack-get-added = { $count } to add
+server-pack-get-updated = { $count } to update
+server-pack-get-removed = { $count } to remove

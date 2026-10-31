@@ -171,6 +171,7 @@
 
   :where([data-vesta='segmented-label']) {
     display: inline-flex;
+    gap: var(--vesta-space-2);
     align-items: center;
     justify-content: center;
     line-height: var(--vesta-leading-tight);

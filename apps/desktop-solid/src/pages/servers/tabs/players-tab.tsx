@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import { EmptyLine, EmptyState } from '../../../components/empty-state';
@@ -263,11 +264,11 @@ function PlayerRow(props: {
                   <p>
                     {entry().reason || t('servers.people.no-reason')}
                     <small>
-                      {[
+                      <Metadata parts={[
                         entry().source ? t('servers.people.ban-by', { name: entry().source }) : null,
                         created() ? t('servers.people.ban-since', { time: created()! }) : null,
                         expiry() && !expiry()!.permanent ? t('servers.people.ban-ends', { time: props.date((expiry() as { atMs: number }).atMs) }) : t('servers.people.ban-permanent'),
-                      ].filter(Boolean).join(' · ')}
+                      ]} />
                     </small>
                   </p>
                 )}

@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Button, Checkbox, Dialog, Progress, Select } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
@@ -136,7 +137,7 @@ export function GetModpackDialog(props: { snapshot: ServerSnapshot; mode: GetMod
               </div>
               <Show when={value().changes.length} fallback={<span data-vesta="server-muted">{t('server-pack.review-nothing')}</span>}>
                 <details data-vesta="pack-review-notes">
-                  <summary>{t('server-pack.get-changes', counts()!)}</summary>
+                  <summary><Metadata parts={[t('server-pack.get-added', { count: counts()!.added }), t('server-pack.get-updated', { count: counts()!.updated }), t('server-pack.get-removed', { count: counts()!.removed })]} /></summary>
                   <ul><For each={value().changes}>{(change) => <li><code>{change.path}</code></li>}</For></ul>
                 </details>
               </Show>

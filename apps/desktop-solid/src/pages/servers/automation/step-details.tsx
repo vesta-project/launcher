@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 // One step's details: what it does first, then folded groups for timing and branching and
 // for the step id (only jumps use it, so it stays out of the way).
 import { Button, IconButton, NumberField, Select, TextArea, TextField } from '@vesta/ui';
@@ -67,7 +68,7 @@ export function StepDetails(props: {
   const flowSummary = () => [
     t('server-automation.timeout-after', { time: durationText(props.step.timeoutSecs) }),
     ...stepNotes(props.steps, props.index).map((note) => t(note.message, note.args)),
-  ].join(' · ');
+  ];
   const flowInvalid = () => ['timeout', 'retries', 'backoff', 'onSuccess', 'onFailure'].some((field) => props.invalidAt(`${at()}.${field}`));
 
   return (
@@ -98,7 +99,7 @@ export function StepDetails(props: {
           onChange={(action) => props.onChange({ ...props.step, action })} />
       </div>
 
-      <Group title={t('server-automation.timing-failure')} summary={flowSummary()} open={flowOpen()} invalid={flowInvalid()} onToggle={() => setFlowOpen(!flowOpen())}>
+      <Group title={t('server-automation.timing-failure')} summary={<Metadata parts={flowSummary()} />} open={flowOpen()} invalid={flowInvalid()} onToggle={() => setFlowOpen(!flowOpen())}>
         <div data-vesta="server-automation-details-grid">
           <div data-problem-path={`${at()}.timeout`}>
             <NumberField size="sm" label={t('server-automation.timeout')} value={props.step.timeoutSecs} min={BOUNDS.timeout[0]} max={BOUNDS.timeout[1]} disabled={props.disabled}
@@ -136,7 +137,7 @@ export function StepDetails(props: {
 }
 
 /** A folded group with a one-line summary of what is inside. */
-function Group(props: { title: string; summary: string; mono?: boolean; open: boolean; invalid: boolean; onToggle: () => void; children: JSX.Element }) {
+function Group(props: { title: string; summary: JSX.Element; mono?: boolean; open: boolean; invalid: boolean; onToggle: () => void; children: JSX.Element }) {
   return (
     <div data-vesta="server-automation-group" data-open={props.open ? '' : undefined} data-invalid={props.invalid ? '' : undefined}>
       <button type="button" data-vesta="server-automation-group-head" aria-expanded={props.open ? 'true' : 'false'} onClick={() => props.onToggle()}>

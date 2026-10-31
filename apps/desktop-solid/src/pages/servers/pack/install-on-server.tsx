@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { sameReviewedPlan } from '../../../features/servers/review-plan';
 import { Badge, Button, Checkbox, Dialog, Progress, SegmentedControl, Select, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
@@ -362,7 +363,7 @@ function VersionCard(props: { source: PackInstallSource; onSource: (source: Pack
           <Select size="sm" aria-label={t('server-pack.review-version')} value={value().versionId} disabled={props.disabled || !versions().length}
             onChange={(versionId: string) => { if (versionId && versionId !== value().versionId) props.onSource({ source: 'provider', provider: value().provider, projectId: value().projectId, versionId }); }}
             placeholder={versionName(value().versionId)}
-            options={versions().map((version) => ({ value: version.id, label: version.version_number, description: `${version.game_versions.slice(0, 2).join(', ')} · ${version.loaders.join(', ')}` }))} />
+            options={versions().map((version) => ({ value: version.id, label: version.version_number, description: <Metadata parts={[version.game_versions.slice(0, 2).join(', '), version.loaders.join(', ')]} /> }))} />
         )}
       </Show>
       <span data-vesta="pack-review-version-meta">

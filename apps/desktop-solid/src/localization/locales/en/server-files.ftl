@@ -123,9 +123,9 @@ server-settings-unsaved = { $count ->
    *[other] { $count } unsaved changes
   }
 server-settings-hidden-value = Not reported by the server
-server-settings-read-only-key = { $name } · set when the world is created
-server-settings-malformed = { $name } · the current value couldn't be read, so the default is shown
-server-settings-secret-description = { $name } · never shown; leave empty to keep it
+server-settings-read-only-key = { $name } is set when the world is created
+server-settings-malformed = The current value of { $name } couldn't be read, so the default is shown
+server-settings-secret-description = { $name } is never shown; leave empty to keep it
 server-settings-secret-unchanged = Unchanged
 server-settings-motd-preview = Server list preview
 server-settings-invalid = Enter a valid value.

@@ -27,7 +27,7 @@ activity-step-count = { $count }/{ $max }
 activity-failed = Failed
 activity-open = Open
 activity-cancel = Cancel { $title }
-activity-cancelled-ago = Cancelled · { $time }
+activity-cancelled-ago = Cancelled { $time }
 activity-quiet-more = { $title } and { $count } more
 # Accessible names and polite announcements; progress ticks are not announced.
 activity-status-quiet = Working in the background: { $title }
@@ -119,10 +119,10 @@ activity-subject-resource = resource
 activity-subject-java = runtime
 activity-transfer-subtitle = { $source } → { $target }
 activity-duplicate-subtitle = From { $name }
-activity-stage-items = { $stage } · { $done }/{ $total }
-activity-stage-items-done = { $stage } · { $done }
-activity-stage-bytes = { $stage } · { $done } / { $total }
-activity-stage-bytes-done = { $stage } · { $done }
+activity-stage-items = { $stage } ({ $done }/{ $total })
+activity-stage-items-done = { $stage } ({ $done })
+activity-stage-bytes = { $stage } ({ $done } / { $total })
+activity-stage-bytes-done = { $stage } ({ $done })
 activity-counter = { $done } / { $total }
 activity-recent = Recent
 activity-done-instance-install = Installed { $name }
@@ -143,3 +143,8 @@ activity-done-instance-delete = Deleted { $name }
 activity-done-world-transfer = Copied { $name }
 activity-done-world-move = Moved { $name }
 activity-done-drop-apply = Added resources to { $name }
+
+activity-instance-subtitle = { $loader ->
+    [vanilla] Minecraft { $version }
+   *[other] { $loader } for Minecraft { $version }
+    }

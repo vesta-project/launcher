@@ -8,6 +8,8 @@ import './segmented-control.css';
 export interface SegmentedControlOption {
   value: string;
   label: string;
+  /** Secondary content, such as a count, beside the label. */
+  suffix?: JSX.Element;
   /** Icon before the label. With `iconOnly` it is the only visible content. */
   icon?: JSX.Element;
   disabled?: boolean;
@@ -96,6 +98,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                 </Show>
                 <KobalteSegmentedControl.ItemLabel data-vesta="segmented-label">
                   <span data-vesta="segmented-text">{option.label}</span>
+                  {option.suffix}
                 </KobalteSegmentedControl.ItemLabel>
               </KobalteSegmentedControl.Item>
             );

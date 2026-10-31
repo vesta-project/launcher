@@ -147,8 +147,8 @@ server-hosting-sftp-service = Service
 server-hosting-sftp-status-off = Off
 server-hosting-sftp-sessions = { $count ->
     [0] On
-    [one] On · { $count } connected
-   *[other] On · { $count } connected
+    [one] On with { $count } connected
+   *[other] On with { $count } connected
 }
 server-hosting-sftp-sign-in = Sign-in methods
 server-hosting-port-invalid = Use a port from 1 to 65535.
@@ -168,7 +168,7 @@ server-hosting-custom-jar-risk-executes = The server runs this JAR with full acc
 server-hosting-custom-jar-title = Custom server JAR
 server-hosting-custom-jar-description = Run a JAR that’s already in the server files instead of managed software. The selected Java and JVM flags still apply.
 server-hosting-custom-jar-active = Running { $path }, a JAR you chose. Vesta doesn’t update it.
-server-hosting-custom-jar-summary = Custom JAR · { $path }
+server-hosting-custom-jar-summary = Custom JAR at { $path }
 server-hosting-custom-jar-choose = Use a JAR from the server files…
 server-hosting-custom-jar-choose-other = Choose another JAR…
 server-hosting-custom-jar-restore = Return to managed software
@@ -185,6 +185,6 @@ server-hosting-custom-jar-path = JAR
 server-hosting-custom-jar-main-class = Main class
 server-hosting-custom-jar-main-class-none = Not found in the manifest
 server-hosting-custom-jar-java = Java
-server-hosting-custom-jar-java-current = { $name } · Java { $version }. Vesta can’t tell which Java this JAR needs.
+server-hosting-custom-jar-java-current = { $name } provides Java { $version }. Vesta can’t tell which Java this JAR needs.
 server-hosting-custom-jar-java-unknown = The server’s selected Java. Vesta can’t tell which Java this JAR needs.
 server-hosting-custom-jar-apply = Use this JAR

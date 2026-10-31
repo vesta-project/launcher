@@ -1,3 +1,4 @@
+import '../../../components/metadata.css';
 import { IconTile } from '../../../components/icon-tile';
 import { Badge, Button, Checkbox, IconButton, SegmentedControl, Skeleton, Switch, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
@@ -117,17 +118,18 @@ function Overview(props: { onOpen: (id: SyncCategoryId) => void }) {
                         when={live()}
                         fallback={category.disabled ? t('prefs.coming-soon') : t(category.description)}
                       >
-                        {hasValues(category.id)
+                        <span data-vesta="metadata">
+                          <span>{hasValues(category.id)
                           ? source()
                             ? t('prefs.sync.summary-source', { name: source()! })
                             : t('prefs.sync.no-source')
                           : t('prefs.sync.summary-servers', { count: state().servers.length })}
-                        {' · '}
-                        {t('prefs.sync.summary-instances', { count: state().linked.length })}
+                          </span>
+                          <span>{t('prefs.sync.summary-instances', { count: state().linked.length })}</span>
                         <Show when={hasValues(category.id) && counts().total > 0}>
-                          {' · '}
-                          {t('prefs.sync.summary-values', { count: counts().selected, max: counts().total })}
+                          <span>{t('prefs.sync.summary-values', { count: counts().selected, max: counts().total })}</span>
                         </Show>
+                        </span>
                       </Show>
                     </span>
                     <Show when={live() && pending() > 0}>

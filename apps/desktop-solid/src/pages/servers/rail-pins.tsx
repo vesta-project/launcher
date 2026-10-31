@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
 import { For, Show } from 'solid-js';
 import { route } from '../../app/router';
@@ -21,12 +22,13 @@ export function RailServerPins() {
             const lifecycle = useLifecycle(snapshot);
             const quick = () => quickAction(snapshot());
             const busy = () => !!lifecycle.busy() || lifecycleControls(snapshot()).progress !== null;
-            const label = () => `${snapshot().connection.name} · ${t(minecraftFact(snapshot().status).message)}`;
+            const label = () => `${snapshot().connection.name}
+${t(minecraftFact(snapshot().status).message)}`;
             return (
               <ContextMenu
                 trigger={(contextProps) => (
                   <Tooltip
-                    content={label()}
+                    content={<Metadata parts={[snapshot().connection.name, t(minecraftFact(snapshot().status).message)]} />}
                     placement="right"
                     trigger={(triggerProps) => (
                       <a

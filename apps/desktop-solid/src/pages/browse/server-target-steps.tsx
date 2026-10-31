@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import { Badge, Checkbox } from '@vesta/ui';
 import { For, Show } from 'solid-js';
 import { EmptyLine } from '../../components/empty-state';
@@ -75,14 +76,12 @@ export function ServerRow(props: {
         <span data-vesta="browse-picker-text">
           <strong>{props.target.name}</strong>
           <span>
-            {[
+            <Metadata parts={[
               props.target.minecraftVersion,
               props.target.connection === 'online' || props.target.software !== undefined
                 ? softwareText(props.target.software)
                 : undefined,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+            ]} />
           </span>
         </span>
         <span data-vesta="browse-picker-connection" data-state={props.target.connection}>
@@ -114,7 +113,7 @@ export function TargetStep(props: {
         <span data-vesta="browse-picker-text">
           <strong>{props.target.name}</strong>
           <span>
-            {props.target.minecraftVersion} · {softwareText(props.target.software)}
+            <Metadata parts={[props.target.minecraftVersion, softwareText(props.target.software)]} />
           </span>
         </span>
       </div>

@@ -77,7 +77,7 @@ overview-instance = Instance
 overview-played = Played
 overview-last-played = Last played
 overview-resources = Resources
-overview-off-count = · { $count } off
+overview-off-count = { $count } off
 overview-memory = Memory
 overview-update-one = { $count } update available
 overview-update-other = { $count } updates available
@@ -163,7 +163,7 @@ settings-new-instance-title = New instance
 
 crash-memory-category = Memory
 crash-game-category = Game crash
-crash-last-launch-exit-code = Last launch · Exit code { $code }
+crash-last-launch-exit-code = Last launch exited with code { $code }
 crash-out-of-memory-title = The game ran out of memory
 crash-unexpected-stop-title = The game stopped unexpectedly
 crash-share-log = Share log

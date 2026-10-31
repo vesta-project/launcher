@@ -41,7 +41,7 @@ describe('[world] one world, no creation', () => {
 
 describe('[software] review, apply and follow', () => {
   test('labels, job states and the bounded follow cadence', () => {
-    expect(launchSummary({ software: 'paper', version: '1.21.4', build: 130, installationId: 'x' })).toBe('Paper 1.21.4 · build 130');
+    expect(launchSummary({ software: 'paper', version: '1.21.4', build: 130, installationId: 'x' })).toBe('Paper 1.21.4 with build 130');
     expect(launchSummary({ software: null, version: null, build: null, installationId: 'original' })).toBeNull();
     expect(jobActive({ state: 'staging' })).toBe(true);
     expect(jobActive({ state: 'recovery_required' })).toBe(false);

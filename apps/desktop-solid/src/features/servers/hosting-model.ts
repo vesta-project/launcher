@@ -23,7 +23,7 @@ export function launchSummary(launch: SoftwareLaunch | null | undefined): string
   const parts = [`${softwareName(launch.software)} ${launch.version ?? ''}`.trim()];
   if (launch.loaderVersion) parts.push(`loader ${launch.loaderVersion}`);
   if (launch.build !== null && launch.build !== undefined) parts.push(`build ${launch.build}`);
-  return parts.join(' · ');
+  return parts[0] + (parts.length > 1 ? ` with ${parts.slice(1).join(' and ')}` : '');
 }
 
 export function softwareRestoreKind(state: Pick<SoftwareState, 'previous' | 'previousRestorable' | 'recoveryRequired'>): 'software' | 'launch' | null {

@@ -61,7 +61,7 @@ server-automation-name-placeholder = Nightly backup
 server-automation-run-as = Run as
 server-automation-run-as-help = Steps run with this person's permissions. You can choose yourself or someone whose role ranks below yours.
 server-automation-run-as-placeholder = Choose who runs it
-server-automation-principal-option = { $name } · { $value }
+server-automation-principal-option = { $name } as { $value }
 server-automation-enable-on-create = Turn on after saving
 server-automation-enable-on-create-help = Off keeps the workflow saved without running it.
 server-automation-trigger = Trigger
@@ -120,7 +120,7 @@ server-automation-branch-next = Continue to the next step
 server-automation-branch-end = Finish the workflow
 server-automation-branch-fail = Stop the workflow as failed
 server-automation-branch-continue = Continue anyway
-server-automation-branch-goto = Jump to step { $count } · { $name }
+server-automation-branch-goto = Jump to { $name } at step { $count }
 server-automation-branch-goto-missing = Jump to { $name } (not a later step)
 server-automation-branch-conditional = Depends on the output (kept as is)
 server-automation-delay = Wait (seconds)
@@ -195,7 +195,7 @@ server-automation-sentence-backup-failed-profile = When a { $name } backup fails
 server-automation-sentence-daily = Every day at { $time } ({ $value })
 server-automation-sentence-weekdays = Weekdays at { $time } ({ $value })
 server-automation-sentence-weekly = Every { $name } at { $time } ({ $value })
-server-automation-sentence-cron = On the schedule { $name } ({ $value })
+server-automation-sentence-cron = On the schedule { $name } as { $value }
 server-automation-sentence-every-days = { $count ->
     [one] Every day
    *[other] Every { $count } days

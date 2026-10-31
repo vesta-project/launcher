@@ -1,3 +1,4 @@
+import { Metadata } from '../metadata';
 import type { JSX } from "@solidjs/web";
 import {
   Button,
@@ -45,7 +46,7 @@ const levels = [
 export interface LogViewSource {
   value: string;
   label: string;
-  description?: string;
+  description?: JSX.Element;
 }
 
 export interface LogViewProps {
@@ -75,7 +76,7 @@ export interface LogViewProps {
   /** Content between the toolbar and the log, such as a notice. */
   banner?: JSX.Element;
   /** Prefix for the footer's line count, such as a file path. */
-  footerDetail?: () => string | undefined;
+  footerDetail?: () => readonly (string | null | undefined)[] | undefined;
   footerTitle?: () => string | undefined;
 }
 
@@ -397,7 +398,7 @@ export function LogView(props: LogViewProps) {
             (props.live() && !props.state().follow
               ? t("console.following-paused")
               : props.footerDetail?.()
-                ? `${props.footerDetail?.()} · ${count()}`
+                ? <Metadata parts={[...(props.footerDetail?.() ?? []), count()]} />
                 : count())}
         </span>
         <Show when={props.live() && !props.state().follow}>
@@ -437,7 +438,8 @@ function LogLine(props: { entry: LogEntry }) {
     <div
       data-vesta="log-line"
       data-level={line()?.level}
-      title={`${line()?.level} · ${line()?.thread}`}
+      title={`${line()?.level}
+${line()?.thread}`}
     >
       <time>{line()?.timestamp}</time>
       <span data-vesta="log-level">

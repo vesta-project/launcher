@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { IconTile } from '../../../components/icon-tile';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { Button, Dialog, SegmentedControl } from '@vesta/ui';
@@ -42,7 +43,7 @@ export function StorageSettings() {
           bytes: instance.bytes,
           image: meta?.image,
           detail: meta
-            ? [meta.modloader === 'vanilla' ? null : meta.modloader, meta.minecraftVersion].filter(Boolean).join(' · ')
+            ? <Metadata parts={[meta.modloader === 'vanilla' ? null : meta.modloader, meta.minecraftVersion]} />
             : '',
           percent: instance.bytes > 0 ? Math.max((instance.bytes / largest) * 100, 2) : 0,
         };
@@ -94,7 +95,8 @@ export function StorageSettings() {
                       'flex-grow': category.bytes,
                     } as never
                   }
-                  data-tip={`${category.label} · ${formatBytes(category.bytes)}`}
+                  data-tip={`${category.label}
+${formatBytes(category.bytes)}`}
                 />
               )}
             </For>
@@ -120,7 +122,9 @@ export function StorageSettings() {
                 <li
                   tabindex={0}
                   data-active={hovered() === category.label ? '' : undefined}
-                  data-tip={`${category.label} · ${formatBytes(category.bytes)} · ${Math.round((category.bytes / total()) * 100)}%`}
+                  data-tip={`${category.label}
+${formatBytes(category.bytes)}
+${Math.round((category.bytes / total()) * 100)}%`}
                   {...hover(category.label)}
                 >
                   <i style={{ '--part-hue': hues[index() % hues.length] } as never} />

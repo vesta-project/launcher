@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Button, Dialog, Select } from '@vesta/ui';
 import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -26,7 +27,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
     catch { if (!disposed) setFailed(true); }
     finally { if (!disposed) setLoading(false); }
   };
-  untrack(() => void load());
+  createEffect(() => null, () => { void load(); }, { name: 'modpack-pick:load-versions' });
   const versions = () => peekVersions(props.pick.provider, props.pick.projectId) ?? [];
   const chosen = createMemo(() => versionId() ?? pickProviderVersion(versions(), area.workspace()?.serverMinecraftVersion ?? '')?.id ?? null, { name: 'modpack-pick:chosen' });
   const current = () => linkProvider(area.link().source);
@@ -74,7 +75,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
           placeholder={t(loading() ? 'server-pack.loading-versions' : failed() ? 'server-pack.versions-failed' : 'server-pack.versions-empty')}
           options={versions().map((version) => ({
             value: version.id, label: version.version_number,
-            description: `${version.game_versions.slice(0, 3).join(', ')} · ${version.loaders.join(', ')}`,
+            description: <Metadata parts={[version.game_versions.slice(0, 3).join(', '), version.loaders.join(', ')]} />,
           }))} />
         <Show when={failed()}>
           <p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.versions-failed')}

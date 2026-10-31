@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import { Checkbox, Select, Skeleton } from '@vesta/ui';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../components/icon';
@@ -64,9 +65,7 @@ export function ImportPicker(props: {
   };
   const all = () => available().length > 0 && selection().length === available().length;
   const meta = (row: ImportCandidate) =>
-    [row.minecraft, row.loader, row.modCount ? t('import.picker-mods', { count: row.modCount }) : undefined]
-      .filter(Boolean)
-      .join(' · ');
+    <Metadata parts={[row.minecraft, row.loader, row.modCount ? t('import.picker-mods', { count: row.modCount }) : undefined]} />;
 
   return (
     <div data-vesta="import-picker">

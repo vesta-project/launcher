@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Select, Switch, TextField, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { navigate, setLeaveGuard } from '../../../app/router';
@@ -275,7 +276,7 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
   const describe = (entry: Problem) => {
     const target = problemArea(entry.path);
     const where = target.step !== null
-      ? `${t('server-automation.step-number', { count: target.step + 1 })} · ${t(fieldLabels[target.field.startsWith('action.params') ? 'action.params' : target.field] ?? 'server-automation.step')}`
+      ? <Metadata parts={[t('server-automation.step-number', { count: target.step + 1 }), t(fieldLabels[target.field.startsWith('action.params') ? 'action.params' : target.field] ?? 'server-automation.step')]} />
       : t(areaLabels[target.area] ?? 'server-automation.workflow');
     return { where, message: t(entry.message, entry.args) };
   };

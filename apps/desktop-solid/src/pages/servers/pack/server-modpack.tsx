@@ -127,7 +127,6 @@ function LinkCard() {
             <Show when={area.link().installed} fallback={<span>{t('server-pack.link-not-confirmed')}</span>}>
               {(installed) => <span>{t('server-pack.link-installed', { version: label(installed()) })}</span>}
             </Show>
-            <span aria-hidden="true">·</span>
             <span>{t('server-pack.minecraft', { version: area.workspace()!.serverMinecraftVersion })}</span>
           </span>
         </span>
