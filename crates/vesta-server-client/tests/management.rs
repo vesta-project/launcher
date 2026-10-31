@@ -15,6 +15,38 @@ use vesta_server_client::{
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[tokio::test]
+async fn pack_upload_retries_pressure_with_identical_chunk_and_intent() {
+    use vesta_server_client::pack::UploadChunk;
+    let _owner = OWNER.lock().await;
+    for (status, code) in [(503, "temporarily_unavailable"), (429, "rate_limited"), (502, "gateway_lost_reply")] {
+        let a = Agent::start().await;
+        let route = "/api/v3/manage/pack/draft/uploads/chunk";
+        a.set("POST", route, json!({"upload_id":"upload", "size":"3", "sha256":"a".repeat(64), "complete":false}));
+        a.state.lock().unwrap().once.insert(("POST".into(), route.into()), (status, json!({"code":code})));
+        let receipt = a.client.pack_upload_chunk(UploadChunk { upload_id:"upload".into(), offset:"0".into(), content_base64:"YWJj".into() }, "same-chunk").await.unwrap();
+        assert_eq!(receipt.size, "3");
+        let calls = a.calls(route);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].body, calls[1].body);
+        assert!(calls[0].key.is_some());
+        assert_eq!(calls[0].key, calls[1].key);
+    }
+}
+
+#[tokio::test]
+async fn pack_upload_retry_is_bounded_and_refusals_stop_immediately() {
+    use vesta_server_client::pack::UploadChunk;
+    let _owner = OWNER.lock().await;
+    for (status, code, attempts) in [(503, "temporarily_unavailable", 4), (409, "idempotency_conflict", 1), (403, "forbidden", 1)] {
+        let a = Agent::start().await;
+        let route = "/api/v3/manage/pack/draft/uploads/chunk";
+        a.reply("POST", route, status, json!({"code":code}));
+        assert!(a.client.pack_upload_chunk(UploadChunk { upload_id:"upload".into(), offset:"0".into(), content_base64:"YWJj".into() }, "same-chunk").await.is_err());
+        assert_eq!(a.calls(route).len(), attempts);
+    }
+}
+
+#[tokio::test]
 async fn backup_configuration_bridge_maps_closed_drafts_and_preserves_retry_intents() {
     use vesta_server_client::backups_config::{BackupConfigDraft, BackupConfigLimits, BackupProfileConfig};
     let _owner = OWNER.lock().await;
@@ -391,6 +423,7 @@ struct Call {
 #[derive(Default)]
 struct State {
     routes: HashMap<(String, String), (u16, Value)>,
+    once: HashMap<(String, String), (u16, Value)>,
     calls: Vec<Call>,
     icon: Option<Vec<u8>>,
     icon_conflict: bool,
@@ -557,10 +590,9 @@ async fn route(
         )
     } else {
         assert_eq!(req.headers()["authorization"], "Bearer session");
-        let (status, data) = state
-            .routes
-            .get(&(method, full))
-            .cloned()
+        let route_key = (method, full);
+        let (status, data) = state.once.remove(&route_key)
+            .or_else(|| state.routes.get(&route_key).cloned())
             .unwrap_or((501, json!({"code":"not_implemented"})));
         (
             status,
@@ -571,10 +603,11 @@ async fn route(
             },
         )
     };
-    Ok(Response::builder()
-        .status(status)
-        .body(Body::from(value.to_string()))
-        .unwrap())
+    let mut response = Response::builder().status(status);
+    if status == 429 {
+        response = response.header("Retry-After", "1");
+    }
+    Ok(response.body(Body::from(value.to_string())).unwrap())
 }
 fn role() -> Value {
     json!({"id":"viewer","name":"Viewer","rank":10,"builtin":true,"capabilities":[{"capability":"status.view","scope":"*"}]})

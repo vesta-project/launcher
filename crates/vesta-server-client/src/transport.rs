@@ -78,6 +78,17 @@ pub(crate) fn server_busy_retry_delay(error: &Error) -> Option<Duration> {
         .unwrap_or(Duration::from_millis(150));
     (delay <= Duration::from_secs(2)).then_some(delay)
 }
+
+fn upload_retry_delay(error: &Error, attempt: u32) -> Option<Duration> {
+    if attempt >= 3 || !matches!(error.code, ErrorCode::RateLimited | ErrorCode::ServerBusy
+        | ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::OutcomeUnknown) {
+        return None;
+    }
+    let backoff = Duration::from_millis(250 * (1 << attempt));
+    let delay = error.retry_after_ms.map(Duration::from_millis).unwrap_or(backoff).max(backoff);
+    // Do not shorten a server's Retry-After or hold an upload indefinitely.
+    (delay <= Duration::from_secs(30)).then_some(delay)
+}
 use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, protocol::WebSocketConfig},
     Connector, MaybeTlsStream, WebSocketStream,
@@ -257,6 +268,23 @@ impl Transport {
         key: Option<&str>,
         interactive: bool,
     ) -> Result<Value> {
+        // Upload receipts are durable and bound to the body and idempotency key.
+        // Retry the same chunk after pacing or a lost reply; never restart the upload.
+        let upload = method == Method::POST && key.is_some() && matches!(path,
+            "/api/v3/manage/pack/draft/uploads/begin"
+            | "/api/v3/manage/pack/draft/uploads/chunk"
+            | "/api/v3/manage/pack/draft/uploads/finish");
+        if upload {
+            for attempt in 0..4 {
+                let result = self.execute_once(method.clone(), path, token, body.clone(), key, interactive).await;
+                let delay = result.as_ref().err().and_then(|error| upload_retry_delay(error, attempt));
+                match delay {
+                    Some(delay) => tokio::time::sleep(delay).await,
+                    None => return result,
+                }
+            }
+            unreachable!("the last upload attempt never retries");
+        }
         let retryable = method == Method::GET && interactive;
         let result = self
             .execute_once(method.clone(), path, token, body.clone(), key, interactive)
@@ -534,6 +562,23 @@ impl Transport {
 #[cfg(test)]
 mod priority_tests {
     use super::*;
+
+    #[test]
+    fn upload_retry_honors_pacing_and_never_retries_refusals() {
+        let mut error = Error::new(ErrorCode::RateLimited).local_pressure();
+        error.retry_after_ms = Some(1500);
+        assert_eq!(upload_retry_delay(&error, 0), Some(Duration::from_millis(1500)));
+        assert_eq!(upload_retry_delay(&error, 3), None);
+        error.retry_after_ms = Some(30_001);
+        assert_eq!(upload_retry_delay(&error, 0), None);
+        for code in [ErrorCode::Timeout, ErrorCode::Unreachable, ErrorCode::OutcomeUnknown] {
+            assert!(upload_retry_delay(&Error::new(code), 0).is_some());
+        }
+        for code in [ErrorCode::InvalidInput, ErrorCode::Forbidden, ErrorCode::Conflict,
+            ErrorCode::TlsFailed, ErrorCode::FingerprintMismatch, ErrorCode::Unsupported] {
+            assert_eq!(upload_retry_delay(&Error::new(code), 0), None);
+        }
+    }
 
     #[test]
     fn only_closed_control_and_session_routes_are_urgent() {
