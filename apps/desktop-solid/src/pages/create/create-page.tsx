@@ -543,6 +543,9 @@ function InstanceInstallForm() {
                         </dd>
                       </div>
                     </dl>
+                    <Show when={pack()?.versionFromManifest}>
+                      <p>{t("install.version-from-manifest")}</p>
+                    </Show>
                     <Show when={releaseError()}>
                       <p role="alert">{releaseError()}</p>
                       <Button

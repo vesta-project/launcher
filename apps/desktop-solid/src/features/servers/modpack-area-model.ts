@@ -596,11 +596,13 @@ const installWarnings: Record<string, MessageId> = {
   unknown_or_optional_server_side: 'server-pack.warning-unknown-side',
   archive_loader_inferred_from_server_review_required: 'server-pack.warning-loader-inferred',
   retained_unidentified_content: 'server-pack.warning-retained',
+  version_from_pack_manifest: 'install.version-from-manifest',
   loader_inferred_from_server: 'server-pack.warning-loader-inferred',
 };
 
 /** Agent warnings are `code` or `code:path`; known codes read as sentences, others stay as sent. */
 export function installWarning(warning: string | import('./native-pack').PackInstallWarning, translate: (id: MessageId, args: Record<string, string>) => string): string {
+  if (typeof warning !== 'string' && warning.code === 'version_from_pack_manifest') return translate('install.version-from-manifest', {});
   if (typeof warning !== 'string' && warning.code === 'archive_limit_warning') {
     const messages: Record<string, MessageId> = {
       legacy_archive_bytes: 'server-pack.warning-legacy-archive-bytes',

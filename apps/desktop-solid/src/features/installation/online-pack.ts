@@ -33,3 +33,15 @@ export function onlinePackInfo({ project, release }: OnlinePackSelection): PackI
     modpackPlatform: project.source,
   };
 }
+
+export async function resolveOnlinePack(selection: OnlinePackSelection, inspect: () => Promise<PackInfo>): Promise<PackInfo> {
+  const info = onlinePackInfo(selection);
+  if (selection.project.source !== 'curseforge' || (info.minecraftVersion &&
+      selection.release.loaders.some(loader => ['forge', 'fabric', 'quilt', 'neoforge'].includes(loader)))) return info;
+  const manifest = await inspect();
+  if (!manifest.minecraftVersion || !manifest.modloader || manifest.modloader === 'unknown')
+    throw new Error('Pack manifest does not specify a Minecraft version and loader');
+  return { ...info, minecraftVersion: manifest.minecraftVersion, modloader: manifest.modloader,
+    modloaderVersion: manifest.modloaderVersion, modCount: manifest.modCount,
+    recommendedRamMb: manifest.recommendedRamMb, versionFromManifest: true };
+}
