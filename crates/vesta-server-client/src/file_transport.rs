@@ -133,7 +133,8 @@ impl Transport {
                     .and_then(Value::as_str)
                     .unwrap_or(""),
                 retry,
-            ));
+            ).with_wire_reason(value.pointer("/error/reason").unwrap_or(&Value::Null))
+             .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null)));
         }
         Ok(response)
     }
