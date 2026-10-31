@@ -134,7 +134,7 @@ impl ThreeWayDiffer {
             (Some(_old_m), Some(new_m)) => {
                 if let Some(ch) = cur_hash {
                     if let Some(oh) = old_hash {
-                        if ch.to_lowercase() != oh.to_lowercase() {
+                        if modpack_engine::decide(false, true, true, Some(oh), Some(ch), new_hash.as_deref()) == modpack_engine::Decision::Protect {
                             // User modified binary → protect
                             tree.add_action(SyncAction::Skip {
                                 path: display_path.to_string(),
@@ -177,7 +177,7 @@ impl ThreeWayDiffer {
                         // Only remove if user hasn't modified it
                         old_hash
                             .as_ref()
-                            .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase())
+                            .is_none_or(|oh| modpack_engine::recorded_hash_matches(Some(oh), Some(ch)))
                     }
                     None => true, // File doesn't exist on disk, nothing to remove
                 };
@@ -211,7 +211,7 @@ impl ThreeWayDiffer {
             let should_remove = match cur_hash {
                 Some(ch) => old_hash
                     .as_ref()
-                    .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase()),
+                    .is_none_or(|oh| modpack_engine::recorded_hash_matches(Some(oh), Some(ch))),
                 None => true,
             };
             if should_remove {
@@ -263,7 +263,7 @@ impl ThreeWayDiffer {
             (true, true) => {
                 if let Some(ch) = cur_hash {
                     if let Some(oh) = old_hash {
-                        if ch.to_lowercase() == oh.to_lowercase() {
+                        if modpack_engine::recorded_hash_matches(Some(oh), Some(ch)) {
                             // User didn't change → just update to new version
                             tree.add_action(SyncAction::Add {
                                 path: display_path.to_string(),

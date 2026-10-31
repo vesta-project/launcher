@@ -16,6 +16,7 @@ libsqlite3-sys = { version = "0.37.0", features = ["bundled"] }
 dotenvy = "0.15"
 
 [dependencies]
+modpack-engine = { path = "../../crates/modpack-engine" }
 lightningcss = { version = "=1.0.0-alpha.72", default-features = false }
 cssparser = "0.37"
 piston-lib = { path = "../../crates/piston-lib" }
