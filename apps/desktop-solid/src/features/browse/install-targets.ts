@@ -114,6 +114,7 @@ export interface ServerTarget {
   /** May install into the server's files (`content.install`). */
   canInstall: boolean;
   canInstallModpack?: boolean;
+  minecraftStopped?: boolean;
   /** May edit the client modpack draft (`pack.edit`). */
   canEditPack: boolean;
   /** Per-server setup, independent from global API support and edit permission. */
@@ -156,6 +157,7 @@ export function serverTargets(
         minecraftVersion: snapshot.info?.minecraftVersion || null,
         software: software(connection.id),
         connection: connectionState(snapshot),
+        minecraftStopped: snapshot.status?.state === 'stopped' && !['starting', 'waking'].includes(snapshot.status?.lifecycle ?? ''),
         canInstall: allowed.server,
         canInstallModpack: canInstallServerModpack(snapshot.capabilities, connection.role),
         canEditPack: allowed.modpack,
@@ -175,6 +177,7 @@ export { MODPACK_TARGET_READY } from '../servers/native-pack';
 import { MODPACK_TARGET_READY } from '../servers/native-pack';
 
 export type TargetReason =
+  | 'stop-to-install'
   | 'offline'
   | 'connecting'
   | 'access'

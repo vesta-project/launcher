@@ -45,9 +45,9 @@ export function ModpackTab(props: { snapshot: ServerSnapshot }) {
     <ModpackAreaContext value={area}>
       <div data-vesta="modpack">
         <Show when={area.gates().edit} fallback={<PlayerView />}>
-          <EditorView />
+          <Show when={area.install()} keyed fallback={<EditorView />}>{request => <InstallOnServerDialog request={request} />}</Show>
         </Show>
-        <Show when={area.install()} keyed>{(request) => <InstallOnServerDialog request={request} />}</Show>
+
         <Show when={area.gates().edit && area.workspace() ? modpackPick(area.id()) : undefined} keyed>
           {(pick) => <ProviderPickDialog pick={pick} />}
         </Show>

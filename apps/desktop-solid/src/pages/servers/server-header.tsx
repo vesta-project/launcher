@@ -140,6 +140,9 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
   const [killOpen, setKillOpen] = createSignal(false, { name: 'server-lifecycle:kill-open' });
   const controls = () => lifecycleControls(props.snapshot);
   const { busy, pending, submit, uncertain } = props.lifecycle;
+  // A submitted start shows Starting before the snapshot reports it.
+  const startProgress = (): 'starting' | 'waking' | null =>
+    controls().progress ?? (busy() === 'start' || pending('start') ? 'starting' : null);
 
   return (
     <div data-vesta="server-lifecycle">
@@ -155,10 +158,10 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
           {t('servers.lifecycle.restart')}
         </Button>
       </Show>
-      <Show when={controls().progress}>
+      <Show when={startProgress()}>
         {(progress) => <StartKillButton progress={progress()} canKill={controls().primary === 'kill'} onKill={() => setKillOpen(true)} />}
       </Show>
-      <Show when={!controls().progress && controls().primary}>
+      <Show when={!startProgress() && controls().primary}>
         {(primary) => (
           <Show
             when={primary() === 'kill'}

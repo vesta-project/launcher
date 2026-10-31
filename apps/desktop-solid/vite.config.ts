@@ -6,10 +6,8 @@ export default defineConfig({
   // the entries around src/App.tsx (wrapped in src/Document.tsx) and `vite build`
   // prerenders the shell into a purely static dist/client.
   plugins: [
-    // Solid RC refresh proxies can become recursive after repeated edits and
-    // halt the reactive runtime. Use full reloads for code edits until the
-    // installed refresh runtime is fixed; keep dev diagnostics enabled.
-    solid({ start: true, diagnostics: true, hot: false }), // add `ssr: true` for streaming SSR
+    // Keep diagnostics enabled using the installed RC plugin options.
+    solid({ start: true, diagnostics: true }), // add `ssr: true` for streaming SSR
   ],
   resolve: {
     tsconfigPaths: true,

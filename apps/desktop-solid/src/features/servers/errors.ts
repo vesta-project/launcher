@@ -38,6 +38,7 @@ export function toServerError(reason: unknown): ServerCommandError {
 }
 
 const packReasons: Record<string, { message: MessageId; action: RecoveryAction }> = {
+  modpack_requires_stopped: { message: 'server-pack.stop-to-install', action: 'none' },
   pack_limit_invalid: { message: 'server-pack.error-pack-limit-invalid', action: 'none' },
   pack_path_protected: { message: 'server-pack.error-pack-path-protected', action: 'none' },
   pack_path_linked: { message: 'server-pack.error-pack-path-linked', action: 'none' },

@@ -787,7 +787,7 @@ export type InstallState =
   | { kind: 'installed' }
   | { kind: 'update' }
   | { kind: 'installing' }
-  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'no-version' | 'game' };
+  | { kind: 'unavailable'; reason: 'stop-to-install' | 'vanilla' | 'loader' | 'no-version' | 'game' };
 
 export const sameState = (a: InstallState, b: InstallState) =>
   a.kind === b.kind && (a.kind !== 'unavailable' || (b.kind === 'unavailable' && a.reason === b.reason));

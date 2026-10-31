@@ -32,7 +32,7 @@ import { ModpackLinkCard } from './link-card';
 export function ServerModpack() {
   const area = useModpackArea();
   return (
-    <div data-vesta="modpack-scroll">
+    <div data-vesta="modpack-scroll"><Show when={area.snapshot().status?.state !== 'stopped'}><p data-vesta="server-muted">{t('server-pack.stop-to-install')}</p></Show>
       <Show when={area.link().phase !== 'unlinked'} fallback={<FirstRun section="server" />}>
         <div data-vesta="modpack-server">
           <LinkCard />
@@ -131,13 +131,13 @@ function LinkCard() {
             </Show>
           }>
             {(next) => (
-              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" size={14} />} disabled={!canManage()} onClick={() => reviewUpdate(next)}>
+              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" size={14} />} disabled={!canManage()} title={!canManage() ? t('server-pack.stop-to-install') : undefined} onClick={() => reviewUpdate(next)}>
                 {t('server-pack.link-update-to', { version: label(next) })}
               </Button>
             )}
           </Show>
         </Show>
-        <Show when={canManage()}>
+        <Show when={area.gates().edit}>
           <Menu placement="bottom-end" trigger={(menuProps) => (
             <IconButton {...menuProps} size="sm" variant="ghost" label={t('server-pack.link-actions')} icon={<Icon name="icons/controls/ellipsis-horizontal" size={16} />} />
           )}>
@@ -145,7 +145,7 @@ function LinkCard() {
               {t('server-pack.link-check')}
             </MenuItem>
             <Show when={provider()}>
-              <MenuItem icon={<Icon name="icons/actions/swap" />} disabled={!area.link().canChange} onSelect={changeVersion}>{t('server-pack.change-version')}</MenuItem>
+              <MenuItem icon={<Icon name="icons/actions/swap" />} disabled={!area.link().canChange || !canManage()} onSelect={changeVersion}>{t('server-pack.change-version')}</MenuItem>
             </Show>
             <MenuItem icon={<Icon name="icons/content/storage" />} onSelect={() => transitionTo(`/servers/${area.id()}/resources`)}>{t('server-pack.link-open-resources')}</MenuItem>
             <MenuSeparator />
@@ -323,7 +323,7 @@ function UnlinkDialog(props: { name: string; onClose: () => void }) {
       title={t('server-pack.unlink-title', { name: props.name })} description={t('server-pack.unlink-description')}
       footer={<>
         <Button variant="ghost" disabled={busy()} onClick={props.onClose}>{t('common.cancel')}</Button>
-        <Button tone="danger" disabled={busy()} onClick={() => void unlink()}>{t('server-pack.unlink')}</Button>
+        <Button tone="danger" disabled={busy() || !area.gates().installOnServer} title={!area.gates().installOnServer ? t('server-pack.stop-to-install') : undefined} onClick={() => void unlink()}>{t('server-pack.unlink')}</Button>
       </>}>
       <div data-vesta="modpack-modes" role="radiogroup" aria-label={t('server-pack.unlink-title', { name: props.name })}>
         <For each={options}>

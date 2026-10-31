@@ -548,3 +548,7 @@ server-pack-client-link-custom = Your additions
 
 server-pack-review-warnings-ack = Continue despite these warnings
 server-pack-warning-software-checksum = The required server software uses upstream SHA-1 checksums. Downloads are checked against those values.
+
+server-pack-stop-to-install = Stop the server to install
+server-pack-show-changes = Show changes
+server-pack-install-complete = Modpack installed

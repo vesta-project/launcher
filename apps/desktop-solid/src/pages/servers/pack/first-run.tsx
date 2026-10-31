@@ -122,7 +122,7 @@ export function FirstRun(props: { section: ModpackSection }) {
         </div>
       </header>
       <Show when={section === 'server' && !area.gates().installOnServer}>
-        <p data-vesta="server-muted">{t('server-pack.link-no-permission')}</p>
+        <p data-vesta="server-muted">{t(area.snapshot().status?.state === 'stopped' ? 'server-pack.link-no-permission' : 'server-pack.stop-to-install')}</p>
       </Show>
       <ServerErrorNote error={error()} />
       <input ref={(element) => { picker = element; }} type="file" accept=".mrpack,.zip,application/zip" hidden

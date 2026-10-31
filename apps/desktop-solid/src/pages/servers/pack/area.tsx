@@ -77,7 +77,8 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   const access = createMemo(() => ({ capabilities: context().capabilities, role: context().role }), {
     name: 'modpack:access', equals: (a, b) => a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
   });
-  const gates = createMemo(() => modpackGates(access().capabilities, access().role), {
+  const minecraftStopped = createMemo(() => snapshot().status?.state === 'stopped' && !['starting', 'waking'].includes(snapshot().status?.lifecycle ?? ''), { name: 'modpack:minecraft-stopped' });
+  const gates = createMemo(() => ({ ...modpackGates(access().capabilities, access().role), installOnServer: modpackGates(access().capabilities, access().role).installOnServer && minecraftStopped() }), {
     name: 'modpack:gates', equals: (a, b) => (Object.keys(a) as (keyof ModpackGates)[]).every(key => a[key] === b[key]),
   });
   const [workspaceData, setWorkspaceData] = createSignal(untrack(() => ({ serverId: id(), value: peekServerResource(id(), packWorkspaceResource) })), { name: 'modpack:workspace-data' });

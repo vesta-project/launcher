@@ -162,3 +162,9 @@ describe('installed marking', () => {
     expect(serverInstallState(project({ categories: ['forge'] }), server({ software: undefined }), installed)).toEqual({ kind: 'install' });
   });
 });
+
+test('server modpack installs require stopped Minecraft on cards and version actions', () => {
+  const pack = project({ resource_type: 'modpack' });
+  expect(serverInstallState(pack, server({ minecraftStopped: false }), new Set())).toEqual({ kind: 'unavailable', reason: 'stop-to-install' });
+  expect(serverInstallState(pack, server({ minecraftStopped: true }), new Set())).toEqual({ kind: 'install' });
+});

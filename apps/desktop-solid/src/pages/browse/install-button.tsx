@@ -6,6 +6,7 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 
 const reasons = {
+  'stop-to-install': 'server-pack.stop-to-install',
   vanilla: 'browse.reason-vanilla',
   loader: 'browse.reason-loader',
   'no-version': 'browse.reason-no-version',

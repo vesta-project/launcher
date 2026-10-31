@@ -143,6 +143,7 @@ export const sameServerTarget = (a: ServerTarget | undefined, b: ServerTarget | 
     !!b &&
     a.id === b.id &&
     a.name === b.name &&
+    a.minecraftStopped === b.minecraftStopped &&
     a.minecraftVersion === b.minecraftVersion &&
     a.software === b.software &&
     a.connection === b.connection &&
@@ -237,7 +238,7 @@ export function searchExample(input: {
  * one does not fit (a Paper server opens on Plugins, a vanilla one on Datapacks).
  */
 export function serverScope(
-  target: Pick<ServerTarget, 'minecraftVersion' | 'software' | 'canEditPack'>,
+  target: Pick<ServerTarget, 'minecraftVersion' | 'software' | 'canEditPack' | 'minecraftStopped'>,
   current: ResourceType,
 ): ServerFilters & { type: ResourceType; types: ResourceType[] | undefined } {
   const types = serverTypes(target);
@@ -261,7 +262,7 @@ export function serverInstalledKeys(items: readonly Pick<ServerContentEntry, 'pr
 export type ServerInstallState =
   | { kind: 'install' }
   | { kind: 'installed' }
-  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' };
+  | { kind: 'unavailable'; reason: 'vanilla' | 'loader' | 'stop-to-install' };
 
 /**
  * A result card's state with a server target. Installed comes from the inventory; the rest is
@@ -269,11 +270,11 @@ export type ServerInstallState =
  */
 export function serverInstallState(
   project: Pick<ResourceProject, 'source' | 'id' | 'categories' | 'resource_type'>,
-  target: Pick<ServerTarget, 'minecraftVersion' | 'software' | 'canEditPack'>,
+  target: Pick<ServerTarget, 'minecraftVersion' | 'software' | 'canEditPack' | 'minecraftStopped'>,
   installed: ReadonlySet<string>,
 ): ServerInstallState {
   const kind = project.resource_type;
-  if (kind === 'modpack') return { kind: 'install' };
+  if (kind === 'modpack') return target.minecraftStopped === false ? { kind: 'unavailable', reason: 'stop-to-install' } : { kind: 'install' };
   if (installed.has(projectKey(project.source, project.id))) return { kind: 'installed' };
   const family = softwareFamily(target.software);
   if (family === 'unknown') return { kind: 'install' };
