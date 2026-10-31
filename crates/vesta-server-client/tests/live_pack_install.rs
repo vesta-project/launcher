@@ -250,7 +250,7 @@ async fn real_provider_packs_stage_through_launcher_apis_and_survive_reconnect()
         assert!(plan.valid && !plan.software_switch_required);
         let outcome = client
             .pack_install_apply(
-                PackInstallApply {
+                PackInstallApply { acknowledge_warnings: true,
                     acknowledge_software_switch: false,
                     plan_id: plan.plan_id,
                     confirmation_token: plan.confirmation_token,

@@ -60,6 +60,14 @@ pub struct ProviderErrorDetails {
     pub filename: Option<String>,
 }
 impl Error {
+    /// A newer agent may retain a domain cause beside its compatibility code.
+    pub(crate) fn with_wire_reason(mut self, value: &serde_json::Value) -> Self {
+        if let Some(reason) = value.as_str().filter(|reason| !reason.is_empty() && reason.len() <= 96
+            && reason.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))) {
+            self.reason = Some(reason.to_owned());
+        }
+        self
+    }
     pub(crate) fn with_pack_issue(mut self, value: &serde_json::Value) -> Self {
         self.issue = serde_json::from_value::<PackRefusal>(value.clone()).ok().filter(|issue| {
             Some(issue.code.as_str()) == self.reason.as_deref() && issue.rule.len() <= 96
@@ -132,21 +140,11 @@ impl Error {
         self
     }
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
-        let reason = (code.len() <= 96
-            && code
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))
-            && [
-                "software_",
-                "world_",
-                "sftp_",
-                "content_",
-                "pack_",
-                "server_install.",
-            ]
-            .iter()
-            .any(|prefix| code.starts_with(prefix)))
-        .then(|| code.to_owned());
+        // Preserve bounded machine codes across IPC, independently of the closed
+        // status category; presentation owns the explicit known-code allowlist.
+        let reason = (!code.is_empty() && code.len() <= 96
+            && code.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.')))
+            .then(|| code.to_owned());
         use ErrorCode::*;
         let code = match code {
             "content_pack_source_unsafe" | "content_pack_metadata_invalid"
@@ -712,5 +710,18 @@ mod pack_issue_tests {
         assert_eq!(error.issue.as_ref().unwrap().item, "../outside.jar");
         assert_eq!(serde_json::to_value(error).unwrap()["issue"]["rule"], "safe_relative_path");
         assert!(Error::wire(400, "pack_path_invalid", None).with_pack_issue(&serde_json::json!({"code":"different","rule":"safe_relative_path","item":"file"})).issue.is_none());
+    }
+}
+#[cfg(test)]
+mod wire_reason_tests {
+    use super::*;
+    #[test]
+    fn additive_domain_reason_overrides_only_with_a_bounded_machine_code() {
+        let error = Error::wire(400, "invalid_request", None)
+            .with_wire_reason(&serde_json::json!("file_path_protected"));
+        assert_eq!(error.reason.as_deref(), Some("file_path_protected"));
+        for value in [serde_json::json!(""), serde_json::json!("secret message"), serde_json::json!(42), serde_json::Value::Null] {
+            assert_eq!(error.clone().with_wire_reason(&value).reason, error.reason);
+        }
     }
 }

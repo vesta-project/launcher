@@ -136,7 +136,7 @@ fn management_error_mapping_is_closed_and_covers_wire_codes() {
     }
     assert_eq!(
         serde_json::to_value(Error::wire(429, "rate_limited", Some(2500))).unwrap(),
-        serde_json::json!({"code":"rate_limited","retryAfterMs":2500})
+        serde_json::json!({"code":"rate_limited","reason":"rate_limited","retryAfterMs":2500})
     );
 }
 #[test]

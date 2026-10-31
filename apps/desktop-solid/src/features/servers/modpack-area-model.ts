@@ -601,6 +601,20 @@ const installWarnings: Record<string, MessageId> = {
 
 /** Agent warnings are `code` or `code:path`; known codes read as sentences, others stay as sent. */
 export function installWarning(warning: string | import('./native-pack').PackInstallWarning, translate: (id: MessageId, args: Record<string, string>) => string): string {
+  if (typeof warning !== 'string' && warning.code === 'archive_limit_warning') {
+    const messages: Record<string, MessageId> = {
+      legacy_archive_bytes: 'server-pack.warning-legacy-archive-bytes',
+      legacy_archive_entries: 'server-pack.warning-legacy-archive-entries',
+      legacy_member_bytes: 'server-pack.warning-legacy-member-bytes',
+      legacy_blob_bytes: 'server-pack.warning-legacy-blob-bytes',
+      catalogue_file_count: 'server-pack.warning-catalogue-file-count',
+      catalogue_metadata_bytes: 'server-pack.warning-catalogue-metadata-bytes',
+      catalogue_file_bytes: 'server-pack.warning-catalogue-file-bytes',
+      catalogue_total_bytes: 'server-pack.warning-catalogue-total-bytes',
+    };
+    const id = messages[warning.rule];
+    if (id) return `${translate(id, {})} (${warning.item}: ${warning.detail})`;
+  }
   if (typeof warning !== 'string') return `${installWarning(warning.detail, translate)} (${warning.code}: ${warning.rule}, ${warning.item})`;
   if (warning.startsWith("unusual_content_directory:")) return `Unusual content destination: ${warning.slice(26)}. Check the file before installing.`;
   if (warning.startsWith("pack_size_warning:")) return `Large download: ${Math.ceil(Number(warning.slice(18)) / 1048576)} MiB. Check free space before installing.`;

@@ -382,6 +382,11 @@ async fn route(
         }
         "/api/v3/manage/pack/install/plan" => {
             let mode = state.pack_plan_error_mode.load(Ordering::SeqCst);
+            if mode == 4 {
+                let mut response = plain(json!({"api_version":"3","error":{"code":"invalid_request","reason":"file_path_protected","issue":{"code":"file_path_protected","rule":"protected_server_control_file","item":"wrapper-config.toml"}}}));
+                *response.status_mut() = StatusCode::BAD_REQUEST;
+                return Ok(response);
+            }
             if mode == 3 {
                 tokio::time::sleep(std::time::Duration::from_secs(16)).await;
             }
@@ -446,6 +451,11 @@ async fn pack_review_failure_preserves_file_identity_over_pinned_https() {
             .code,
         ErrorCode::OutcomeUnknown
     );
+    agent.state.pack_plan_error_mode.store(4, Ordering::SeqCst);
+    let refusal = client.pack_install_plan(input.clone()).await.unwrap_err();
+    assert_eq!(refusal.code, ErrorCode::InvalidInput);
+    assert_eq!(refusal.reason.as_deref(), Some("file_path_protected"));
+    assert_eq!(refusal.issue.as_ref().unwrap().item, "wrapper-config.toml");
     // A real slow HTTPS response must survive the ordinary 15 s request limit.
     agent.state.pack_plan_error_mode.store(3, Ordering::SeqCst);
     assert_eq!(

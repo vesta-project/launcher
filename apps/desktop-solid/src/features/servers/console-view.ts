@@ -2,7 +2,7 @@
 // viewer settings for the session, so switching tabs or servers doesn't reset them.
 import { createSignal, type Accessor } from 'solid-js';
 import { parseLog } from '../instances/interaction-utils';
-import { LOG_LEVELS, type LogEntry, type LogViewState } from '../../components/log-view/log-model';
+import { LOG_LEVELS, type LogEntry, type LogLineEntry, type LogViewState } from '../../components/log-view/log-model';
 import type { ConsoleDisplayBoundary, ConsoleEntry } from './console-model';
 import type { ConnectionId } from './native';
 
@@ -22,7 +22,11 @@ export function toLogEntries(entries: readonly ConsoleEntry[], gap: GapCopy, cac
     }
     let row = cache.get(entry);
     if (!row) {
-      row = { ...parseLog(entry.text, entry.id), kind: 'line', truncated: entry.truncated };
+      // parseLog returns a fresh row; attach viewer fields without allocating a second copy.
+      const parsed = parseLog(entry.text, entry.id) as LogLineEntry;
+      parsed.kind = 'line';
+      parsed.truncated = entry.truncated;
+      row = parsed;
       cache.set(entry, row);
     }
     rows[index] = row;

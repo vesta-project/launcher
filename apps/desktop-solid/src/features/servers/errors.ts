@@ -1,4 +1,5 @@
 // One localized message and one recovery action for every closed client error code.
+import { knownServerErrors } from './known-errors';
 import { reasonMessage } from './hosting-model';
 import type { MessageId } from '../../localization/messages';
 import { isServerCommandError, type ServerCommandError, type ServerErrorCode } from './native';
@@ -32,7 +33,7 @@ export const errorPresentation: Record<ServerErrorCode, { message: MessageId; ac
 
 /** Normalizes anything a command rejected with into the closed model. */
 export function toServerError(reason: unknown): ServerCommandError {
-  if (isServerCommandError(reason) && reason.code in errorPresentation) return reason;
+  if (isServerCommandError(reason) && Object.hasOwn(errorPresentation, reason.code)) return reason;
   return { code: 'internal' };
 }
 
@@ -71,9 +72,17 @@ const providerFailureMessages: Record<string, MessageId> = {
 
 export function serverErrorPresentation(reason: unknown) {
   const error = toServerError(reason);
-  const providerReason = providerDetails(error)?.reason;
-  if (providerReason && providerFailureMessages[providerReason]) return {message:providerFailureMessages[providerReason]!, action:'none' as const};
-  if (error.reason && packReasons[error.reason]) return packReasons[error.reason]!;
+  const issueReasons: Record<string, string> = {
+    download_redirect_limit: 'redirect_limit_exceeded',
+    download_https_without_credentials: 'download_host_not_allowed',
+    download_url_valid: 'download_host_not_allowed',
+  };
+  const issueReason = error.issue?.code === error.reason && error.issue && Object.hasOwn(issueReasons, error.issue.rule)
+    ? issueReasons[error.issue.rule] : undefined;
+  const providerReason = providerDetails(error)?.reason ?? issueReason ?? error.reason;
+  if (providerReason && Object.hasOwn(providerFailureMessages, providerReason)) return {message:providerFailureMessages[providerReason]!, action:'none' as const};
+  if (error.reason && Object.hasOwn(knownServerErrors, error.reason)) return knownServerErrors[error.reason]!;
+  if (error.reason && Object.hasOwn(packReasons, error.reason)) return packReasons[error.reason]!;
   if (error.reason === 'content_provider_not_configured')
     return { message: 'server-pack.provider-not-configured' as MessageId, action: 'none' as const };
   if (error.reason === 'content_provider_unavailable')
@@ -116,4 +125,11 @@ export function serverErrorDetails(reason: unknown): string {
     if (filename) lines.push(filename);
   }
   return lines.join('\n');
+}
+
+/** Used by the inventory coverage check; unknown codes must never count as mapped. */
+export function hasExplicitServerErrorPresentation(code: string): boolean {
+  return Object.hasOwn(knownServerErrors, code) || Object.hasOwn(packReasons, code)
+    || Object.hasOwn(providerFailureMessages, code) || reasonMessage(code) !== null
+    || ['content_provider_not_configured', 'content_provider_unavailable'].includes(code);
 }

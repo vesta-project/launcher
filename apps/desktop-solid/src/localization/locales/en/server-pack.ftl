@@ -526,3 +526,12 @@ server-pack-error-pack-custom-content-disabled = This server does not allow cust
 server-pack-get-added = { $count } to add
 server-pack-get-updated = { $count } to update
 server-pack-get-removed = { $count } to remove
+
+server-pack-warning-legacy-archive-bytes = This archive exceeds the former download size limit; check available space before continuing.
+server-pack-warning-legacy-archive-entries = This archive exceeds the former file count limit; check the file list before continuing.
+server-pack-warning-legacy-member-bytes = This file exceeds the former import size limit; check available space before continuing.
+server-pack-warning-legacy-blob-bytes = These files exceed the former combined import size limit; check available space before continuing.
+server-pack-warning-catalogue-file-count = This pack exceeds the former file count limit; check the file list before continuing.
+server-pack-warning-catalogue-metadata-bytes = This pack exceeds the former metadata size limit; allow extra memory before continuing.
+server-pack-warning-catalogue-file-bytes = This file exceeds the former 8 GiB size limit; check available space before continuing.
+server-pack-warning-catalogue-total-bytes = This pack exceeds the former 128 GiB size limit; check available space before continuing.
