@@ -1,5 +1,9 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "servers.people.previous-page",
+  "servers.people.next-page",
+  "servers.people.preview-limit",
+  "servers.conflict.review",
   "servers.eula.title",
   "servers.eula.description",
   "servers.eula.read",

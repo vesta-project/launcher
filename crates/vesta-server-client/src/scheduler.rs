@@ -66,6 +66,7 @@ impl TokenBucket {
                 reason: None,
                 details: None,
                 issue: None,
+                current: None,
                 retry_after_ms: Some(wait.as_millis().max(1) as u64),
             });
         }
@@ -130,6 +131,7 @@ impl Scheduler {
                 reason: None,
                 details: None,
                 issue: None,
+                current: None,
                 retry_after_ms: Some(self.paused_for().as_millis() as u64),
             });
         }

@@ -8,7 +8,8 @@ describe('server branding fixtures', () => {
     const initial = await api.branding('fixture-survival');
     const saved = await api.updateBranding('fixture-survival', { description: 'A friendly server' }, initial.revision, 'b1');
     expect(saved).toEqual({ name: initial.name, description: 'A friendly server', revision: '1' });
-    await expect(api.updateBranding('fixture-survival', { name: 'New' }, '0', 'b2')).rejects.toMatchObject({ code: 'stale_target' });
+    await expect(api.updateBranding('fixture-survival', { name: 'New' }, '0', 'b2')).rejects.toMatchObject({ code: 'conflict', current: saved });
+    expect(await api.branding('fixture-survival')).toEqual(saved);
     await expect(api.updateBranding('fixture-survival', { name: '' }, '1', 'b3')).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(api.updateBranding('fixture-survival', {}, '1', 'b4')).rejects.toMatchObject({ code: 'invalid_input' });
     const cleared = await api.updateBranding('fixture-survival', { description: '' }, '1', 'b5');

@@ -449,7 +449,7 @@ impl Transport {
             return Err(Error::new(ErrorCode::OutcomeUnknown));
         }
         if !status.is_success() {
-            let error = Error::wire_for_route(
+            let mut error = Error::wire_for_route(
                 status.as_u16(),
                 value
                     .pointer("/error/code")
@@ -462,6 +462,9 @@ impl Transport {
             .with_wire_reason(value.pointer("/error/reason").unwrap_or(&Value::Null))
             .with_provider_details(value.pointer("/error/details").unwrap_or(&Value::Null))
             .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null));
+            if error.code == ErrorCode::Conflict {
+                error.current = value.pointer("/error/current").filter(|v| v.is_object()).cloned();
+            }
             // Some policy adapters signal revision conflicts by wire code with
             // another status. Apply the same rule after closed-code decoding.
             if mutation

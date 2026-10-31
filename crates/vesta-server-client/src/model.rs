@@ -44,6 +44,9 @@ pub struct Error {
     pub details: Option<Box<ProviderErrorDetails>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub issue: Option<PackRefusal>,
+    /// Authorized current editable resource, present only on a revision conflict.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current: Option<serde_json::Value>,
 }
 /// A bounded public file identity, never a provider response, URL or credential.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -133,6 +136,7 @@ impl Error {
             reason: None,
             details: None,
             issue: None,
+            current: None,
         }
     }
     pub fn local_pressure(mut self) -> Self {
@@ -191,6 +195,7 @@ impl Error {
             reason,
             details: None,
             issue: None,
+            current: None,
         }
     }
 }
