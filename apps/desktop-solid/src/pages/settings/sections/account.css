@@ -10,11 +10,9 @@
     flex: none;
     inline-size: var(--head-size);
     block-size: var(--head-size);
-    border-radius: calc(var(--head-size) * 0.18);
+    border-radius: var(--vesta-radius-container);
     background: linear-gradient(135deg, var(--vesta-color-fill-hover), var(--vesta-color-fill)) center / cover no-repeat;
-    box-shadow:
-      0 0 0 1px var(--vesta-color-border-strong),
-      0 6px 18px oklch(0 0 0 / 0.28);
+    box-shadow: var(--vesta-shadow-md);
     image-rendering: pixelated;
   }
 

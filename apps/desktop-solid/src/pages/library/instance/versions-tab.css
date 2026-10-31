@@ -194,8 +194,8 @@
     flex: none;
     padding: 0 6px;
     border-radius: var(--vesta-radius-sm);
-    background: oklch(0.65 0.14 var(--source-hue) / 0.18);
-    color: oklch(0.8 0.12 var(--source-hue));
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    color: var(--vesta-color-accent-text);
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
     line-height: 18px;
@@ -215,7 +215,7 @@
   }
 
   :where([data-vesta-scheme='light']) :where([data-vesta='source-tag']) {
-    color: oklch(0.45 0.12 var(--source-hue));
+    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta='pack-releases']) {
@@ -388,7 +388,7 @@
     padding: var(--vesta-space-3) var(--vesta-space-3) var(--vesta-space-3) calc(var(--vesta-space-3) * 2 + 16px);
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
     background: var(--vesta-color-surface-sunken);
-    box-shadow: inset 0 3px 4px -3px oklch(0 0 0 / 0.18);
+    box-shadow: var(--vesta-shadow-md);
   }
 
   :where([data-vesta='changelog']) {

@@ -11,7 +11,7 @@
   :where([data-vesta='skeleton']) {
     --skeleton-bg: var(--vesta-color-fill);
     --skeleton-highlight: var(--vesta-color-fill-hover);
-    --skeleton-radius: var(--vesta-radius-sm);
+    --skeleton-radius: var(--skeleton-preferred-radius, var(--vesta-radius-sm));
 
     display: inline-block;
     max-inline-size: 100%;

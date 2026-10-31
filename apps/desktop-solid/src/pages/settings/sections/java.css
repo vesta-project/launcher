@@ -84,7 +84,7 @@
     flex: none;
     inline-size: 14px;
     block-size: 14px;
-    border: 2px solid var(--vesta-color-border-strong);
+    border: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-border-strong);
     border-radius: 50%;
   }
 

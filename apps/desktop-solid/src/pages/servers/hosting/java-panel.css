@@ -51,7 +51,7 @@
     flex: none;
     inline-size: 14px;
     block-size: 14px;
-    border: 2px solid var(--vesta-color-border-strong);
+    border: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-border-strong);
     border-radius: 50%;
   }
   :where([data-vesta="server-java-group"]) li[data-active] :where([data-vesta="server-java-radio"]) {
@@ -111,8 +111,8 @@
     font-size: var(--vesta-text-sm);
   }
   :where([data-vesta="server-java-compat"][data-state="incompatible"]) {
-    border-color: color-mix(in oklab, var(--vesta-color-warning, #d9a23a) 45%, var(--vesta-color-border));
-    background: color-mix(in oklab, var(--vesta-color-warning, #d9a23a) 8%, transparent);
+    border-color: color-mix(in oklab, var(--vesta-color-warning) 45%, var(--vesta-color-border));
+    background: color-mix(in oklab, var(--vesta-color-warning) 8%, transparent);
   }
   :where([data-vesta="server-java-compat-text"]) { flex: 1 1 260px; }
 }

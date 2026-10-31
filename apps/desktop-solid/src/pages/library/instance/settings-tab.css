@@ -66,7 +66,7 @@
     inset-block: 8px;
     inset-inline-start: -8px;
     inline-size: 3px;
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 var(--vesta-radius-sm) var(--vesta-radius-sm) 0;
     background: var(--vesta-color-accent);
   }
 
@@ -304,7 +304,7 @@
     border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
     border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-surface-raised);
-    box-shadow: 0 8px 24px oklch(0 0 0 / 0.35);
+    box-shadow: var(--vesta-shadow-md);
     font-size: var(--vesta-text-sm);
     animation: settings-savebar 200ms var(--vesta-ease-out) both;
   }

@@ -23,7 +23,7 @@
     inline-size: 100%;
     block-size: 100%;
     padding: var(--vesta-space-3);
-    border: 2px solid transparent;
+    border: calc(var(--vesta-border-width) * 2) solid transparent;
     border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text);
@@ -41,7 +41,7 @@
   }
 
   :where([data-vesta='prefs-presets'] button > [data-vesta='icon']) {
-    color: oklch(0.75 0.14 var(--preset-hue));
+    color: var(--vesta-color-accent-text);
   }
 
   :where([data-vesta='prefs-presets'] button > span:not([data-vesta])) {
@@ -54,8 +54,8 @@
   }
 
   :where([data-vesta='prefs-presets'] button[aria-checked='true']) {
-    border-color: oklch(0.7 0.14 var(--preset-hue));
-    background: oklch(0.7 0.14 var(--preset-hue) / 0.12);
+    border-color: var(--vesta-color-accent-text);
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
   }
 
   :where([data-vesta='prefs-folders']) {

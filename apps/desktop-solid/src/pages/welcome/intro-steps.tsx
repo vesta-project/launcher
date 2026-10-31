@@ -35,8 +35,8 @@ export function SplashStep() {
 }
 
 const credits = [
-  { name: 'Modrinth', icon: 'branding/sources/modrinth', color: '#1bd96a' },
-  { name: 'CurseForge', icon: 'branding/sources/curseforge', color: '#f16436' },
+  { name: 'Modrinth', icon: 'branding/sources/modrinth', color: 'var(--vesta-brand-modrinth)' },
+  { name: 'CurseForge', icon: 'branding/sources/curseforge', color: 'var(--vesta-brand-curseforge)' },
   { name: 'Fabric', icon: 'branding/modloaders/fabric-colored' },
   { name: 'Forge', icon: 'branding/modloaders/forge-colored' },
   { name: 'NeoForge', icon: 'branding/modloaders/neoforge-colored' },

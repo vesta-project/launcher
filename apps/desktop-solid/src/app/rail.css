@@ -127,7 +127,7 @@
     flex: none;
     inline-size: var(--rail-button-size);
     block-size: var(--rail-button-size);
-    border: var(--vesta-border-width) solid oklch(1 0 0 / 0.15);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-text) 15%, transparent);
     border-radius: var(--rail-button-radius);
     /* The art stops at the border, so the ring is a clean line like the profile button's. */
     background: var(--vesta-color-fill);
@@ -146,7 +146,7 @@
   }
 
   :where([data-vesta="rail-pin"]:hover) {
-    border-color: oklch(1 0 0 / 0.3);
+    border-color: color-mix(in oklab, var(--vesta-color-text) 30%, transparent);
   }
 
   :where([data-vesta="rail-pin"][aria-current="page"]) {

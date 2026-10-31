@@ -57,6 +57,11 @@
     --vesta-radius-control: var(--vesta-radius-md);
     --vesta-radius-container: var(--vesta-radius-lg);
 
+    /* Content over artwork: independent of the surrounding light/dark scheme. */
+    --vesta-color-media-text: oklch(0.98 0 0);
+    --vesta-color-media-shade: oklch(0 0 0);
+    --vesta-shadow-text: 0 1px 4px color-mix(in oklab, var(--vesta-color-media-shade) 75%, transparent);
+
     /* Borders and focus. */
     --vesta-border-width: 1px;
     --vesta-focus-width: 2px;

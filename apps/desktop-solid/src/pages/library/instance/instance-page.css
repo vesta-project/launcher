@@ -82,7 +82,7 @@
     inset-inline: var(--tab-padding-x);
     inset-block-end: -1px;
     block-size: 2px;
-    border-radius: 2px 2px 0 0;
+    border-radius: var(--vesta-radius-sm) var(--vesta-radius-sm) 0 0;
     background: var(--vesta-color-accent);
   }
 
@@ -127,7 +127,7 @@
     inset-inline: -8px auto;
     inline-size: 3px;
     block-size: auto;
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 var(--vesta-radius-sm) var(--vesta-radius-sm) 0;
   }
 
   .instance-tabs[data-orientation="vertical"]
@@ -201,8 +201,8 @@
     flex: none;
     padding: 0 6px;
     border-radius: var(--vesta-radius-sm);;
-    background: oklch(0.65 0.13 var(--mode-hue) / 0.18);
-    color: oklch(0.8 0.12 var(--mode-hue));
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    color: var(--vesta-color-accent-text);
     font-size: 11px;
     font-weight: var(--vesta-weight-semibold);
     line-height: 17px;
@@ -217,6 +217,6 @@
   }
 
   :where([data-vesta-scheme="light"]) :where([data-vesta="mode-tag"]) {
-    color: oklch(0.45 0.13 var(--mode-hue));
+    color: var(--vesta-color-accent-text);
   }
 }

@@ -72,7 +72,7 @@
   }
 
   :where([data-vesta='rich-text']) :where(a:focus-visible) {
-    border-radius: 2px;
+    border-radius: var(--vesta-radius-sm);
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
   }
 

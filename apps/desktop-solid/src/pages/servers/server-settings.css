@@ -57,7 +57,7 @@
     border: 0;
     border-radius: inherit;
     background: none;
-    color: var(--vesta-color-text-muted);
+    color: var(--vesta-color-text);
     font: inherit;
     text-align: start;
     cursor: default;
@@ -138,38 +138,38 @@
   /* ---- Minecraft server-list entry, drawn like the multiplayer screen ---- */
   :where([data-vesta="server-motd"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-4); }
   :where([data-vesta="server-motd-entry"]) {
-    --mc-gray: #aaaaaa;
+    --mc-gray: color-mix(in oklab, var(--vesta-color-media-text) 70%, transparent);
 
     display: grid;
     grid-template-columns: 64px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
     padding: 8px;
-    border: 1px solid oklch(1 0 0 / 0.1);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-media-text) 10%, transparent);
     border-radius: var(--vesta-radius-md);
-    background: linear-gradient(oklch(0.2 0 0 / 0.92), oklch(0.16 0 0 / 0.92)), #262626;
+    background: linear-gradient(color-mix(in oklab, var(--vesta-color-media-shade) 92%, transparent), color-mix(in oklab, var(--vesta-color-media-shade) 92%, transparent)), var(--vesta-color-media-shade);
     color: var(--mc-gray);
     font-family: var(--vesta-font-mono);
     font-size: 13px;
     line-height: 18px;
-    text-shadow: 1px 1px 0 oklch(0 0 0 / 0.45);
+    text-shadow: var(--vesta-shadow-text);
   }
   :where([data-vesta="server-motd-entry"]) > img {
     inline-size: 64px;
     block-size: 64px;
-    border-radius: 3px;
+    border-radius: var(--vesta-radius-sm);
     object-fit: cover;
     image-rendering: pixelated;
   }
   :where([data-vesta="server-motd-entry-body"]) { display: flex; flex-direction: column; min-inline-size: 0; }
-  :where([data-vesta="server-motd-entry-title"]) { display: flex; align-items: center; gap: var(--vesta-space-3); color: #ffffff; }
+  :where([data-vesta="server-motd-entry-title"]) { display: flex; align-items: center; gap: var(--vesta-space-3); color: var(--vesta-color-media-text); }
   :where([data-vesta="server-motd-entry-title"]) > span:first-child { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   :where([data-vesta="server-motd-entry-players"]) { display: inline-flex; align-items: center; gap: 8px; color: var(--mc-gray); white-space: nowrap; }
-  :where([data-vesta="server-motd-entry-version"]) { color: #ff5555; }
+  :where([data-vesta="server-motd-entry-version"]) { color: var(--vesta-color-danger-text); }
   :where([data-vesta="server-motd-entry-line"]) { min-block-size: 18px; overflow: hidden; white-space: pre; text-overflow: ellipsis; }
   /* Signal bars, like the list's ping indicator. */
   :where([data-vesta="server-motd-ping"]) { display: inline-flex; align-items: flex-end; gap: 1px; block-size: 10px; }
-  :where([data-vesta="server-motd-ping"]) > i { inline-size: 2px; background: #55ff55; box-shadow: 1px 1px 0 oklch(0 0 0 / 0.45); }
+  :where([data-vesta="server-motd-ping"]) > i { inline-size: 2px; background: var(--vesta-color-success-text); box-shadow: var(--vesta-shadow-md); }
   :where([data-vesta="server-motd-ping"]) > i:nth-child(1) { block-size: 2px; }
   :where([data-vesta="server-motd-ping"]) > i:nth-child(2) { block-size: 4px; }
   :where([data-vesta="server-motd-ping"]) > i:nth-child(3) { block-size: 6px; }
@@ -184,16 +184,16 @@
   :where([data-vesta="server-motd-current"]) {
     inline-size: 12px;
     block-size: 12px;
-    border: 1px solid oklch(1 0 0 / 0.3);
-    border-radius: 3px;
-    background: var(--swatch, #aaaaaa);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-text) 30%, transparent);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--swatch, var(--vesta-color-text-muted));
   }
   :where([data-vesta="server-motd-swatches"]) { display: grid; grid-template-columns: repeat(8, 24px); gap: 6px; }
   :where([data-vesta="server-motd-swatch"]) {
     inline-size: 24px;
     block-size: 24px;
     padding: 0;
-    border: 1px solid oklch(1 0 0 / 0.25);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-text) 25%, transparent);
     border-radius: var(--vesta-radius-sm);
     background: var(--swatch);
     cursor: default;
@@ -206,7 +206,7 @@
     position: relative;
     border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
     border-radius: var(--vesta-radius-md);
-    background: #1c1c1c;
+    background: var(--vesta-color-media-shade);
     font-family: var(--vesta-font-mono);
     font-size: 13px;
     line-height: 20px;
@@ -229,9 +229,9 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
-    color: #aaaaaa;
+    color: var(--vesta-color-media-text);
     pointer-events: none;
-    text-shadow: 1px 1px 0 oklch(0 0 0 / 0.45);
+    text-shadow: var(--vesta-shadow-text);
   }
   :where([data-vesta="server-motd-field"]) > textarea {
     position: relative;
@@ -240,13 +240,13 @@
     overflow: hidden;
     background: transparent;
     color: transparent;
-    caret-color: #ffffff;
+    caret-color: var(--vesta-color-media-text);
     outline: none;
   }
-  :where([data-vesta="server-motd-field"]) > textarea::selection { background: oklch(0.6 0.12 250 / 0.45); color: transparent; }
-  :where([data-vesta="server-motd-field"]) > textarea::placeholder { color: oklch(1 0 0 / 0.35); }
-  :where([data-vesta="server-motd-mirror"]) [data-code] { color: oklch(1 0 0 / 0.28); text-shadow: none; font-weight: 400; font-style: normal; text-decoration: none; }
-  :where([data-vesta="server-motd-mirror"]) [data-placeholder] { border-radius: 3px; background: oklch(1 0 0 / 0.1); }
+  :where([data-vesta="server-motd-field"]) > textarea::selection { background: color-mix(in oklab, var(--vesta-color-accent) 45%, transparent); color: transparent; }
+  :where([data-vesta="server-motd-field"]) > textarea::placeholder { color: color-mix(in oklab, var(--vesta-color-media-text) 35%, transparent); }
+  :where([data-vesta="server-motd-mirror"]) [data-code] { color: color-mix(in oklab, var(--vesta-color-media-text) 28%, transparent); text-shadow: none; font-weight: 400; font-style: normal; text-decoration: none; }
+  :where([data-vesta="server-motd-mirror"]) [data-placeholder] { border-radius: var(--vesta-radius-sm); background: color-mix(in oklab, var(--vesta-color-media-text) 10%, transparent); }
   :where([data-vesta="server-motd-meta"]) { display: flex; justify-content: space-between; gap: var(--vesta-space-3); margin-block-start: calc(-1 * var(--vesta-space-2)); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-motd-meta"][data-tone="danger"]) { color: var(--vesta-color-danger-text); }
   :where([data-vesta="server-motd-fields"]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--vesta-space-3); }
@@ -342,7 +342,7 @@
     flex-direction: column;
     margin: calc(-1 * var(--vesta-space-1)) var(--vesta-space-4) var(--vesta-space-3) calc(var(--vesta-space-4) + 15px);
     padding: 0 0 0 calc(var(--vesta-space-3) + 2px);
-    border-inline-start: 2px solid var(--vesta-color-border);
+    border-inline-start: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-border);
     list-style: none;
   }
   :where([data-vesta="server-access-devices"]) li {

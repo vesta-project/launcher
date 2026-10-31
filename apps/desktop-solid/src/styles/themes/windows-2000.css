@@ -6,6 +6,17 @@
 @layer theme {
   [data-vesta-theme-example='windows-2000'] {
     color-scheme: light;
+    --vesta-color-media-text: #fff;
+    --vesta-color-media-shade: #000;
+    --vesta-shadow-text: none;
+    --vesta-shadow-sm: none;
+    --vesta-shadow-md: none;
+    --vesta-shadow-lg: none;
+    --vesta-brand-modrinth: #145214;
+    --vesta-brand-curseforge: #654500;
+    --vesta-color-success: #145214;
+    --vesta-color-warning: #654500;
+    --vesta-font-mono: Consolas, 'Courier New', monospace;
     --vesta-font-sans: Tahoma, 'MS Sans Serif', Arial, sans-serif;
     --vesta-color-canvas: #3a6ea5;
     --vesta-color-canvas-fill: #3a6ea5;
