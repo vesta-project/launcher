@@ -1,5 +1,6 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "install.version-from-manifest",
   "server-pack.warning-legacy-archive-bytes",
   "server-pack.warning-legacy-archive-entries",
   "server-pack.warning-legacy-member-bytes",

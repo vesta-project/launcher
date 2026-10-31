@@ -487,6 +487,7 @@ pub fn run(context: tauri::Context) {
             commands::modpacks::get_modpack_info,
             commands::modpacks::get_modpack_info_from_url,
             commands::modpacks::get_modpack_archive_summary_from_url,
+            commands::modpacks::get_modpack_manifest_info_from_url,
             commands::modpacks::match_local_modpack_source,
             commands::modpacks::get_system_memory_mb,
             commands::modpacks::get_hardware_info,

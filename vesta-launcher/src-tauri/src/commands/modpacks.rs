@@ -1932,6 +1932,21 @@ pub async fn match_local_modpack_source(
 }
 
 #[command]
+pub async fn get_modpack_manifest_info_from_url(
+    app: AppHandle,
+    url: String,
+) -> Result<ModpackInfo, String> {
+    let (_, path) = get_or_download_summary_archive(&app, &url).await?;
+    let metadata = run_blocking_modpack_io("inspect pack runtime", move || {
+        get_modpack_metadata(&path).map_err(|e| anyhow::anyhow!("Failed to parse pack manifest: {e}"))
+    }).await?;
+    if metadata.minecraft_version.trim().is_empty() || metadata.modloader_type.trim().is_empty() {
+        return Err("Pack manifest does not specify a Minecraft version and loader".into());
+    }
+    Ok(modpack_info_from_metadata(metadata, None, None))
+}
+
+#[command]
 pub async fn get_modpack_archive_summary_from_url(
     app: AppHandle,
     url: String,
@@ -2720,6 +2735,26 @@ mod tests {
         assert_eq!(summary.resource_count, 2);
         assert_eq!(summary.recommended_ram_mb, Some(9504));
         assert_eq!(summary.format, "CurseForge");
+    }
+
+    #[test]
+    fn legacy_curseforge_manifest_supplies_exact_runtime() {
+        let file = write_zip(&[("manifest.json", r#"{"manifestType":"minecraftModpack","manifestVersion":1,"name":"RLCraft","version":"2.9.3","minecraft":{"version":"1.12.2","modLoaders":[{"id":"forge-14.23.5.2860","primary":true}]},"files":[],"overrides":"overrides"}"#)]);
+        let metadata = get_modpack_metadata(file.path()).unwrap();
+        assert_eq!(metadata.minecraft_version, "1.12.2");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("14.23.5.2860"));
+    }
+
+    #[test]
+    #[ignore = "requires a locally downloaded RLCraft archive (RLCRAFT_ARCHIVE)"]
+    fn live_rlcraft_manifest_plan() {
+        let path = std::env::var("RLCRAFT_ARCHIVE").unwrap();
+        let metadata = get_modpack_metadata(Path::new(&path)).unwrap();
+        assert_eq!(metadata.minecraft_version, "1.12.2");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("14.23.5.2860"));
+        eprintln!("RLCRAFT launcher manifest plan: {}/{}/{:?}, mods={}", metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version, metadata.mods.len());
     }
 
     #[test]

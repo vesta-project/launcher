@@ -1,6 +1,6 @@
 import { loadVersions } from "../browse/browse-projects";
 import { hasDownloadableArtifact, isSourceId } from "../browse/browse-model";
-import { onlinePackInfo, type OnlinePackSelection } from "./online-pack";
+import { resolveOnlinePack, type OnlinePackSelection } from "./online-pack";
 import type { PackSourceMatch } from "./pack-metadata";
 import { invoke } from "@tauri-apps/api/core";
 import { newNativeInstance, type NativeInstance } from "../instances/native-model";
@@ -23,6 +23,7 @@ export interface PackInfo {
   modpackPlatform?: string;
   fullMetadata?: unknown;
   downloadCount?: number | null;
+  versionFromManifest?: boolean;
 }
 export const matchLocalPack = (path: string) =>
   invoke<PackSourceMatch>("match_local_modpack_source", { path });
@@ -42,11 +43,15 @@ export interface InstallDraft {
   loaderVersion: string;
   memory: number[];
 }
-export const readPack = (source: PackSource): Promise<PackInfo> =>
-  source.online ? Promise.resolve(onlinePackInfo(source.online)) : invoke<PackInfo>(
+export const readPack = async (source: PackSource): Promise<PackInfo> => {
+  if (source.online) {
+    return resolveOnlinePack(source.online, () => invoke<PackInfo>('get_modpack_manifest_info_from_url', { url: source.value }));
+  }
+  return invoke<PackInfo>(
     source.kind === "file" ? "get_modpack_info" : "get_modpack_info_from_url",
     source.kind === "file" ? { path: source.value } : { url: source.value },
   );
+};
 /** Share Browse's version cache and in-flight reads instead of repeating the same IPC. */
 export const packReleases = (info: PackInfo): Promise<PackRelease[]> =>
   info.modpackId && info.modpackPlatform && isSourceId(info.modpackPlatform)
