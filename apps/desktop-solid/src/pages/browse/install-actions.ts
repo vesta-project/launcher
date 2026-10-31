@@ -18,6 +18,7 @@ import {
   loader,
   serverTarget,
   serverTargetId,
+  serverDestinationHint,
   setNotice,
   type InstallOutcome,
 } from '../../features/browse/browse-store';
@@ -93,15 +94,15 @@ export function installModpackOnServer(
 ): void {
   if (project.source !== 'modrinth' && project.source !== 'curseforge') return;
   const target = untrack(serverTarget);
-  if (!target || target.id !== server.id || !target.canInstallModpack) {
+  if (!target || target.id !== server.id || !(untrack(serverDestinationHint) === 'modpack' ? target.canEditPack : target.canInstallModpack)) {
     setNotice({ tone: 'danger', text: t('server-pack.link-no-permission') });
     return;
   }
   offerModpack({
-    serverId: server.id, provider: project.source, projectId: project.id, versionId: pinned?.id ?? null,
+    destination: untrack(serverDestinationHint), serverId: server.id, provider: project.source, projectId: project.id, versionId: pinned?.id ?? null,
     name: project.name, iconUrl: project.icon_url,
   });
-  navigate(`/servers/${encodeURIComponent(server.id)}/pack`);
+  navigate(`/servers/${encodeURIComponent(server.id)}/${untrack(serverDestinationHint) === 'modpack' ? 'pack/client' : 'pack'}`);
 }
 
 export function reportOutcome(project: ResourceProject, instanceName: string, outcome: InstallOutcome) {

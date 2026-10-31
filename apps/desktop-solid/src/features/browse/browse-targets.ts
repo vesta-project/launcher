@@ -96,7 +96,7 @@ export function buildTargetOptions(input: {
   const needle = normalize(input.query).trim();
   const instances = input.kind === 'modpack' ? [] : input.instances;
   const servers = serverTargets(input.snapshots, input.software)
-    .filter(target => input.kind !== 'modpack' || target.canInstallModpack)
+    .filter(target => input.kind !== 'modpack' || (target.canInstallModpack || target.canEditPack))
     .map((target) => ({
       ...target,
       minecraftVersion: input.minecraftVersion?.(target.id) || target.minecraftVersion,

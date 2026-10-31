@@ -15,6 +15,7 @@ import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
+import { ClientModpackPanel } from './client-link';
 import { ClientModePanel } from './client-mode';
 
 const ICON_LIMIT = 256 * 1024;
@@ -26,6 +27,7 @@ export function ModpackOverview() {
     <div data-vesta="modpack-scroll">
       <div data-vesta="modpack-client">
       <ClientModePanel />
+      <Show when={area.clientMode() === 'custom'}><ClientModpackPanel /></Show>
       <div data-vesta="modpack-overview">
         <div data-vesta="modpack-overview-main">
           <Show when={area.kind() === 'provider'} fallback={<IdentityPanel />}>
@@ -127,13 +129,13 @@ function IdentityPanel() {
           <TextArea size="sm" label={t('server-pack.summary')} value={value().summary} rows={2} disabled={busy()} onChange={(summary) => edit({ summary })} />
           <TextField size="sm" label={t('server-pack.version')} description={t('server-pack.version-help')} value={value().displayVersion} disabled={busy()} onChange={(displayVersion) => edit({ displayVersion })} />
           <div data-vesta="modpack-field-row">
-            <Select size="sm" label={t('server-pack.loader')} value={value().loader} disabled={busy()}
+            <Select size="sm" label={t('server-pack.loader')} value={value().loader} disabled={busy() || !!workspace().draft.manifest.modpackLink}
               options={packLoaders.map((loader) => ({ value: loader, label: loader === 'none' ? t('server-pack.loader-none') : packLoaderName(loader), icon: () => <Icon name={softwareIcon[loader === 'none' ? 'vanilla' : loader]} size={14} /> }))}
               onChange={(loader) => chooseLoader(loader as PackLoader)} />
             <Show when={value().loader !== 'none'}>
               <Select size="sm" label={t('server-pack.loader-version')} value={value().loaderVersion ?? ''}
                 placeholder={t(metadata() || metadataError() ? 'server-pack.no-loader-versions' : 'server-pack.loading-versions')}
-                disabled={busy() || !versionOptions().length} options={versionOptions()}
+                disabled={busy() || !!workspace().draft.manifest.modpackLink || !versionOptions().length} options={versionOptions()}
                 onChange={(loaderVersion) => edit({ loaderVersion })} />
             </Show>
           </div>
