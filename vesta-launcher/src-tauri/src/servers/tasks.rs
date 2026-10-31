@@ -219,6 +219,7 @@ impl ServerManager {
                         .iter()
                         .filter(|intent| {
                             intent.connection_id == id
+                                && store.intent_uses_current_auth(intent)
                                 && !intent.terminal
                                 && intent.action != "players.whitelist.desired"
                         })
@@ -399,22 +400,27 @@ impl ServerManager {
         Ok(())
     }
     pub(super) async fn resume_operations(self: &Arc<Self>, app: &AppHandle, id: &str) {
-        let pending = self.store.lock().await.intents.iter().any(|i| {
+        let store = self.store.lock().await;
+        let pending = store.intents.iter().any(|i| {
             i.connection_id == id
+                && store.intent_uses_current_auth(i)
                 && !i.terminal
                 && i.operation_id.is_some()
                 && i.action != "players.whitelist.desired"
         });
-        if pending {
-            let _ = self.ensure_operation_tracker(app, id);
-        }
-        if self.store.lock().await.intents.iter().any(|i| {
+        let whitelist = store.intents.iter().any(|i| {
             i.connection_id == id
+                && store.intent_uses_current_auth(i)
                 && i.action == "players.whitelist.desired"
                 && !i.terminal
                 && !i.uncertain
                 && i.operation_id.is_some()
-        }) {
+        });
+        drop(store);
+        if pending {
+            let _ = self.ensure_operation_tracker(app, id);
+        }
+        if whitelist {
             let _ = self.ensure_whitelist_tracker(app, id);
         }
     }
@@ -441,7 +447,8 @@ impl ServerManager {
                 tokio::time::sleep(Duration::from_secs(delay)).await;
                 let Some(manager)=weak.upgrade() else {break};
                 let store=manager.store.lock().await;
-                let pending=store.intents.iter().filter(|i|i.connection_id==id && i.action=="players.whitelist.desired" && !i.terminal && !i.uncertain).filter_map(|i|i.operation_id.clone()).take(32).collect::<Vec<_>>();
+                let auth_revision=store.connections.iter().find(|r|r.snapshot.connection.id==id).and_then(|r|r.snapshot.connection.auth_revision.clone());
+                let pending=store.intents.iter().filter(|i|store.intent_uses_current_auth(i) && i.connection_id==id && i.action=="players.whitelist.desired" && !i.terminal && !i.uncertain).filter_map(|i|i.operation_id.clone()).take(32).collect::<Vec<_>>();
                 if pending.is_empty() {
                     if let Ok(mut tasks)=manager.trackers.lock() {tasks.remove(&tracker_key);}
                     break;
@@ -454,7 +461,7 @@ impl ServerManager {
                 };
                 let unknown=receipts.iter().filter(|r|r.status=="unknown").map(|r|r.id.clone()).collect::<Vec<_>>();
                 if !unknown.is_empty() {
-                    let _=manager.edit_store(|s| {for i in s.intents.iter_mut().filter(|i|i.connection_id==id && i.action=="players.whitelist.desired") {if i.operation_id.as_ref().is_some_and(|receipt|unknown.contains(receipt)) {i.uncertain=true;}}Ok(())}).await;
+                    let _=manager.edit_store(|s| {for i in s.intents.iter_mut().filter(|i|i.auth_revision==auth_revision && i.connection_id==id && i.action=="players.whitelist.desired") {if i.operation_id.as_ref().is_some_and(|receipt|unknown.contains(receipt)) {i.uncertain=true;}}Ok(())}).await;
                     client.retire_player_reads();
                     let topic=if manager.demanded(&id,ServerTopic::Status) {ServerTopic::Status} else {ServerTopic::Operations};
                     manager.deliver(&id,topic,ServerEvent::PlayerListsChanged);

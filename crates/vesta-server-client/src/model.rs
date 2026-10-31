@@ -211,7 +211,7 @@ macro_rules! dto {
 dto!(ServerConnection {
     id: String, name: String, endpoint: String, server_id: String, fingerprint: String,
     role: Option<String>, sign_in_method: String, memory_only: bool, pinned: bool,
-    added_at_ms: i64, last_connected_at_ms: Option<i64>,
+    added_at_ms: i64, last_connected_at_ms: Option<i64>, auth_revision: Option<String>,
 });
 dto!(ConnectionState {
     phase: String, access: String, retry_at_ms: Option<i64>,

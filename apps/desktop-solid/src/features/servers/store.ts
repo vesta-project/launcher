@@ -109,7 +109,16 @@ const bumpConsole = (id: ConnectionId) => consoleVersions.update(id, (current) =
 
 export function putSnapshot(snapshot: ServerSnapshot) {
   const id = snapshot.connection.id;
+  const previous = untrack(() => snapshots.get(id));
   snapshots.update(id, () => snapshot);
+  if (previous && previous.connection.authRevision !== snapshot.connection.authRevision) {
+    invalidateServerResources(id, undefined, true);
+    operations.update(id, () => []);
+    metrics.update(id, () => []);
+    consoles.delete(id);
+    bumpConsole(id);
+    players.update(id, () => ({ known: false }));
+  }
   const roster = untrack(() => players.get(id));
   if (roster.known && (snapshot.state.phase !== 'online' || snapshot.state.access !== 'paired'
     || snapshot.status?.state !== 'running' || snapshot.status.generation !== roster.generation)) {

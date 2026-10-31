@@ -396,14 +396,19 @@ impl ServerManager {
         };
         {
             let store = self.store.lock().await;
-            if store
-                .connections
-                .iter()
-                .any(|r| r.snapshot.connection.server_id == discovery.server_id)
-            {
-                return Err(Error::new(ErrorCode::Conflict));
+            let existing = store.connections.iter().find(|r| r.snapshot.connection.server_id == discovery.server_id);
+            if let Some(record) = existing {
+                if discovery.existing_connection_id.as_deref() != Some(record.snapshot.connection.id.as_str()) {
+                    return Err(Error::new(ErrorCode::Conflict));
+                }
+                if record.snapshot.connection.fingerprint != discovery.fingerprint {
+                    return Err(Error::new(ErrorCode::FingerprintMismatch));
+                }
+                if !record.snapshot.connection.memory_only && store.pending_credential_deletions.len() >= 256 {
+                    return Err(Error::new(ErrorCode::ServerBusy));
+                }
             }
-            if store.connections.len() >= 100 || store.pending_enrollment_keys.len() >= 32 {
+            if (existing.is_none() && store.connections.len() >= 100) || store.pending_enrollment_keys.len() >= 32 {
                 return Err(Error::new(ErrorCode::ServerBusy));
             }
         }
@@ -442,7 +447,7 @@ impl ServerManager {
         }
     }
     async fn finish_enrollment(
-        &self,
+        self: &Arc<Self>,
         app: &AppHandle,
         discovery: Discovery,
         transport: Arc<Transport>,
@@ -453,7 +458,7 @@ impl ServerManager {
         role: Option<String>,
         method: &str,
     ) -> Result<ServerSnapshot> {
-        let id = new_id();
+        let id = discovery.existing_connection_id.clone().unwrap_or_else(new_id);
         let connection = ServerConnection {
             id: id.clone(),
             name: discovery.endpoint.clone(),
@@ -466,6 +471,7 @@ impl ServerManager {
             pinned: false,
             added_at_ms: vesta_server_client::now_ms(),
             last_connected_at_ms: None,
+            auth_revision: Some(new_id()),
         };
         let snapshot = ServerSnapshot {
             connection,
@@ -486,26 +492,42 @@ impl ServerManager {
             public_lifecycle: discovery.public_lifecycle.clone(),
         };
         let client = Client::new(transport, discovery.server_id, device.clone(), signer);
-        self.edit_store(|s| {
-            s.connections.push(Record {
+        let slot = self.slot(&id)?;
+        let refresh = slot.refresh.lock().await;
+        let management = slot.management.lock().await;
+        let snapshot = self.edit_store(|s| {
+            s.enroll(Record {
                 snapshot: snapshot.clone(),
                 device_id: device,
                 key_reference: reference.clone(),
-            });
-            s.pending_enrollment_keys.retain(|r| r != &reference);
-            Ok(())
+            }, discovery.existing_connection_id.as_deref())
         })
         .await?;
-        *self.slot(&id)?.client.lock().await = Some(client);
+        if let Some(worker) = slot.worker.lock().map_err(|_| internal())?.take() { worker.abort(); }
+        if let Ok(mut trackers) = self.trackers.lock() {
+            for key in [&id, &format!("{id}:whitelist")] {
+                if let Some(task) = trackers.remove(key) { task.abort(); }
+            }
+        }
+        self.subscriptions.lock().map_err(|_| internal())?.reset_connection(&id);
+        *slot.client.lock().await = Some(client);
+        slot.info_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
+        slot.capabilities_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
+        *slot.players.lock().map_err(|_| internal())? = None;
+        self.deliver(&id, ServerTopic::Status, ServerEvent::Snapshot { snapshot: Box::new(snapshot) });
         self.contacts.lock().await.remove(&discovery.discovery_id);
         self.changed(app);
+        drop(management);
+        drop(refresh);
+        self.cleanup_deleted_credentials().await;
         // Enrollment succeeded even if a follow-up read fails. Return an honest
         // classified connection snapshot rather than encouraging code redemption again.
         let _ = self.refresh(app, &id, true).await;
+        self.ensure_worker(app, &id)?;
         Ok(self.record(&id).await?.snapshot)
     }
     pub async fn pair(
-        &self,
+        self: &Arc<Self>,
         app: &AppHandle,
         discovery_id: &str,
         code: &str,
@@ -560,7 +582,7 @@ impl ServerManager {
         .await
     }
     pub async fn minecraft(
-        &self,
+        self: &Arc<Self>,
         app: &AppHandle,
         discovery_id: &str,
         account_uuid: &str,
@@ -930,12 +952,14 @@ impl ServerManager {
                 .as_slice(),
         );
         self.edit_store(|s| {
+            let auth_revision = s.connections.iter().find(|r| r.snapshot.connection.id == id)
+                .and_then(|r| r.snapshot.connection.auth_revision.clone());
             if let Some(old) = s
                 .intents
                 .iter()
                 .find(|i| i.connection_id == id && i.key == key)
             {
-                if old.action != action || old.payload_hash != digest {
+                if old.action != action || old.payload_hash != digest || old.auth_revision != auth_revision {
                     return Err(Error::new(ErrorCode::Conflict));
                 }
                 // The same explicit intent may replay the agent's durable receipt.
@@ -948,6 +972,7 @@ impl ServerManager {
                 connection_id: id.into(),
                 key: key.clone(),
                 key_version: 2,
+                auth_revision,
                 action: action.into(),
                 payload_hash: digest,
                 operation_id: operation_id.map(str::to_owned),

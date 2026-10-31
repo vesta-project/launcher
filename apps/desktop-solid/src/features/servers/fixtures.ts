@@ -301,7 +301,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
         address,
         discoveryId: `discovery-${hex(8)}`,
         endpoint: target.display,
-        serverId: parsed.kind === 'link' && parsed.serverId ? parsed.serverId : `srv_${hex(12)}`,
+        serverId: parsed.kind === 'link' && parsed.serverId ? parsed.serverId : existing?.snapshot.connection.serverId ?? `srv_${hex(12)}`,
         fingerprint,
         publicLifecycle: 'online',
         expectedFingerprint: parsed.kind === 'link' ? parsed.fingerprint : null,
@@ -324,11 +324,13 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       if (!isPairingCode(normalized)) fail('pair_code_invalid');
       if (normalized.startsWith('lost')) fail('pair_outcome_unknown');
       if (normalized.startsWith('bad')) fail('pair_code_invalid');
-      const id = `fixture-${hex(6)}`;
+      const existing = discovery.existingConnectionId ? server(discovery.existingConnectionId).snapshot.connection : undefined;
+      if (existing && existing.fingerprint !== discovery.fingerprint) fail('fingerprint_mismatch');
+      const id = existing?.id ?? `fixture-${hex(6)}`;
       const name = discovery.endpoint.split(':')[0].replace(/^\[|\]$/g, '');
       const entry: FixtureServer = {
         snapshot: {
-          connection: { ...connection(id, name, discovery.endpoint, 'owner'), serverId: discovery.serverId, fingerprint: discovery.fingerprint, lastConnectedAtMs: Date.now(), addedAtMs: Date.now(), memoryOnly: !!options.memoryOnly },
+          connection: { ...connection(id, name, discovery.endpoint, 'owner'), serverId: discovery.serverId, fingerprint: discovery.fingerprint, lastConnectedAtMs: Date.now(), addedAtMs: Date.now(), memoryOnly: !!options.memoryOnly, authRevision: hex(16), ...(existing ? { name: existing.name, pinned: existing.pinned, addedAtMs: existing.addedAtMs } : {}) },
           state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
           info: { serverId: discovery.serverId, name, agentVersion: '0.9.0', minecraftVersion: '1.21.4', packVersion: '1.0' },
           status: status('stopped', null, null),
@@ -349,11 +351,13 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       await wait(900);
       const discovery = discoveries.get(discoveryId) ?? fail('not_found');
       if (!discovery.secureStorageAvailable && !options.memoryOnly) fail('credentials_unavailable');
-      const id = `fixture-${hex(6)}`;
+      const existing = discovery.existingConnectionId ? server(discovery.existingConnectionId).snapshot.connection : undefined;
+      if (existing && existing.fingerprint !== discovery.fingerprint) fail('fingerprint_mismatch');
+      const id = existing?.id ?? `fixture-${hex(6)}`;
       const name = discovery.endpoint.split(':')[0];
       const entry: FixtureServer = {
         snapshot: {
-          connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly },
+          connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly, authRevision: hex(16), ...(existing ? { name: existing.name, pinned: existing.pinned, addedAtMs: existing.addedAtMs } : {}) },
           state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
           info: null, status: null, publicLifecycle: 'offline', statusObservedAtMs: Date.now(), pack: null,
           capabilities: { source: 'session', granted: ['public.info', 'pack.download', 'pack.realtime'], refused: [] },

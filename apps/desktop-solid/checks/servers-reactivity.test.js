@@ -7,6 +7,25 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 let builtHarness;
 const harness = () => (builtHarness ??= buildHarness());
 
+test('reauthentication retires account-scoped cache and activity without reactive diagnostics', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const id = 'reauthentication';
+    let reads = 0;
+    const resource = check.serverResource('private-data', async () => ++reads);
+    const snapshot = { connection: { id, authRevision: 'old' }, state: { phase: 'online', access: 'paired' }, status: null };
+    check.putSnapshot(snapshot);
+    expect(await check.readServerResource(id, resource)).toBe(1);
+    check.putOperations(id, [{ operationId: 'old', state: 'succeeded', createdAtMs: 1, updatedAtMs: 1, reconciling: false }]);
+    check.putSnapshot({ ...snapshot, connection: { id, authRevision: 'new' } });
+    check.flush();
+    expect(await check.readServerResource(id, resource)).toBe(2);
+    expect(check.untrack(() => check.serverOperations(id))).toEqual([]);
+    await check.removeServer(id);
+  }, { scenario: 'reauthentication-cache-isolation' });
+  check.expectNoDiagnostics(artifact);
+});
+
 test('catalogue warmup and mounted readers share one load without reactive diagnostics', async () => {
   const check = await harness();
   const { artifact } = await check.captureArtifact(async () => {
@@ -139,7 +158,7 @@ async function buildHarness() {
         export { ConsoleBuffer, clearConsoleDisplay, consoleDisplayBoundary } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-model.ts', import.meta.url)))};
         export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
-        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations } from ${JSON.stringify(storePath)};
+        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations } from ${JSON.stringify(storePath)};
         export { serverResource, readServerResource } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
         import { counts } from ${JSON.stringify(servicePath)};
         export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};

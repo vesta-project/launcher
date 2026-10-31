@@ -19,6 +19,56 @@ pub struct Record {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn reauthentication_preserves_connection_and_retires_credentials_only_after_commit() {
+        let root = tempfile::tempdir().unwrap();
+        let mut old = persistent_record();
+        old.snapshot.connection.name = "My server".into();
+        old.snapshot.connection.pinned = true;
+        old.snapshot.connection.auth_revision = Some("old-auth".into());
+        let old_key = old.key_reference.clone();
+        let old_snapshot = old.snapshot.clone();
+        let mut store = Store::default();
+        store.connections.push(old.clone());
+        let shared = Arc::new(Mutex::new(store));
+        let mut new = persistent_record();
+        new.snapshot.connection.id = "throwaway-id".into();
+        new.snapshot.connection.role = Some("owner".into());
+        new.snapshot.connection.auth_revision = Some("new-auth".into());
+        new.device_id = "new-device".into();
+        let new_key = new.key_reference.clone();
+        let blocked = root.path().join("file-not-directory");
+        std::fs::write(&blocked, b"blocked").unwrap();
+        assert!(Store::edit(&shared, &blocked, |s| s.enroll(new.clone(), Some("one"))).await.is_err());
+        assert_eq!(shared.lock().await.connections[0].key_reference, old_key);
+        assert!(shared.lock().await.pending_credential_deletions.is_empty());
+        let saved = Store::edit(&shared, root.path(), |s| s.enroll(new, Some("one"))).await.unwrap();
+        assert_eq!(saved.connection.id, "one");
+        assert_eq!(saved.connection.name, "My server");
+        assert!(saved.connection.pinned);
+        let reloaded = Store::load(root.path()).unwrap();
+        assert_eq!(reloaded.connections.len(), 1);
+        assert_eq!(reloaded.connections[0].key_reference, new_key);
+        assert_eq!(reloaded.pending_credential_deletions, [old_key]);
+        let (observation, changed) = Store::observe(&shared, root.path(), old_snapshot).await.unwrap();
+        assert_eq!(observation.connection.auth_revision.as_deref(), Some("new-auth"));
+        assert!(!changed);
+        old.snapshot.connection.fingerprint = "cd".repeat(32);
+        assert_eq!(Store::edit(&shared, root.path(), |s| s.enroll(old, Some("one"))).await.unwrap_err().code, ErrorCode::FingerprintMismatch);
+    }
+
+    #[test]
+    fn an_old_action_intent_cannot_be_replayed_using_new_authentication() {
+        let mut store = Store::default();
+        let mut record = persistent_record();
+        record.snapshot.connection.auth_revision = Some("old".into());
+        store.connections.push(record);
+        let pending = PendingIntent { connection_id: "one".into(), key: "intent".into(), key_version: 2, auth_revision: None,
+            action: "console.command".into(), payload_hash: "hash".into(), operation_id: None, created_at_ms: 1, terminal: false, uncertain: true };
+        store.reserve_management_intent(pending.clone(), false).unwrap();
+        store.connections[0].snapshot.connection.auth_revision = Some("new".into());
+        assert_eq!(store.reserve_management_intent(pending, false).unwrap_err().code, ErrorCode::Conflict);
+    }
     fn persistent_record() -> Record {
         let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
             "connection":{"id":"one","name":"Server","endpoint":"localhost:8443","serverId":"server","fingerprint":"ab".repeat(32),"role":null,"signInMethod":"pairing_code","memoryOnly":false,"pinned":false,"addedAtMs":0,"lastConnectedAtMs":null},
@@ -267,6 +317,7 @@ mod tests {
             connection_id: "connection".into(),
             key: "intent-hash".into(),
             key_version: 2,
+            auth_revision: None,
             action: "backups/restore-in-place".into(),
             payload_hash: "payload-hash".into(),
             operation_id: None,
@@ -329,6 +380,7 @@ mod tests {
             connection_id: "session-only".into(),
             key: "temporary-intent".into(),
             key_version: 2,
+            auth_revision: None,
             action: "lifecycle.start".into(),
             payload_hash: "hash".into(),
             operation_id: None,
@@ -355,6 +407,7 @@ mod tests {
             connection_id: "connection".into(),
             key: "launcher-hash".into(),
             key_version: 2,
+            auth_revision: None,
             action: "console.command".into(),
             payload_hash: "payload-hash".into(),
             operation_id: Some("operation".into()),
@@ -392,6 +445,8 @@ pub struct PendingIntent {
     /// Missing on pre-followup journals, whose wire key must survive upgrade.
     #[serde(default)]
     pub key_version: u8,
+    #[serde(default)]
+    pub auth_revision: Option<String>,
     pub action: String,
     pub payload_hash: String,
     pub operation_id: Option<String>,
@@ -420,6 +475,10 @@ fn failed(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Internal)
 }
 impl Store {
+    pub fn intent_uses_current_auth(&self, intent: &PendingIntent) -> bool {
+        self.connections.iter().any(|record| record.snapshot.connection.id == intent.connection_id
+            && record.snapshot.connection.auth_revision == intent.auth_revision)
+    }
     /// Called by a serialized maintenance owner. Re-read after each deletion so
     /// concurrent removals cannot get stranded behind a stale queue snapshot.
     pub async fn cleanup_keys<F, Fut>(
@@ -483,6 +542,11 @@ impl Store {
             .iter_mut()
             .find(|r| r.snapshot.connection.id == snapshot.connection.id)
             .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+        // An observation started before reauthentication belongs to the retired
+        // device. It must not restore its capabilities or private data.
+        if snapshot.connection.auth_revision != record.snapshot.connection.auth_revision {
+            return Ok((record.snapshot.clone(), false));
+        }
         // HTTP, stream and failure observations all pass through this merge.
         // Keep pending settings through stop; clear only on observing a new run.
         let old = record
@@ -536,15 +600,50 @@ impl Store {
         self.intents.retain(|i| i.connection_id != id);
         Ok(())
     }
+    pub fn enroll(&mut self, mut record: Record, existing: Option<&str>) -> Result<ServerSnapshot> {
+        if let Some(id) = existing {
+            let index = self.connections.iter().position(|r| r.snapshot.connection.id == id)
+                .ok_or_else(|| Error::new(ErrorCode::Conflict))?;
+            let old = &self.connections[index];
+            let before = &old.snapshot.connection;
+            let after = &mut record.snapshot.connection;
+            if before.server_id != after.server_id || before.fingerprint != after.fingerprint {
+                return Err(Error::new(ErrorCode::FingerprintMismatch));
+            }
+            if !before.memory_only {
+                if self.pending_credential_deletions.len() >= 256 { return Err(Error::new(ErrorCode::ServerBusy)); }
+                self.pending_credential_deletions.push(old.key_reference.clone());
+            }
+            after.id = before.id.clone();
+            after.name = before.name.clone();
+            after.pinned = before.pinned;
+            after.added_at_ms = before.added_at_ms;
+            self.pending_enrollment_keys.retain(|key| key != &record.key_reference);
+            let snapshot = record.snapshot.clone();
+            self.connections[index] = record;
+            Ok(snapshot)
+        } else {
+            if self.connections.len() >= 100 { return Err(Error::new(ErrorCode::ServerBusy)); }
+            if self.connections.iter().any(|r| r.snapshot.connection.server_id == record.snapshot.connection.server_id) {
+                return Err(Error::new(ErrorCode::Conflict));
+            }
+            let snapshot = record.snapshot.clone();
+            self.pending_enrollment_keys.retain(|key| key != &record.key_reference);
+            self.connections.push(record);
+            Ok(snapshot)
+        }
+    }
     /// Reserve before sending. One-shot routes bypass agent replay caches, so even
     /// an identical intent must not be submitted again after a launcher restart.
-    pub fn reserve_management_intent(&mut self, pending: PendingIntent, once: bool) -> Result<()> {
+    pub fn reserve_management_intent(&mut self, mut pending: PendingIntent, once: bool) -> Result<()> {
+        pending.auth_revision = self.connections.iter().find(|r| r.snapshot.connection.id == pending.connection_id)
+            .and_then(|r| r.snapshot.connection.auth_revision.clone());
         if let Some(old) = self
             .intents
             .iter()
             .find(|i| i.connection_id == pending.connection_id && i.key == pending.key)
         {
-            if old.action != pending.action || old.payload_hash != pending.payload_hash {
+            if old.action != pending.action || old.payload_hash != pending.payload_hash || old.auth_revision != pending.auth_revision {
                 return Err(Error::new(ErrorCode::Conflict));
             }
             return if once {

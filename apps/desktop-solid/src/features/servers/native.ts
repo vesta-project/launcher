@@ -112,6 +112,8 @@ export interface ServerConnection {
   pinned: boolean;
   addedAtMs: number;
   lastConnectedAtMs: number | null;
+  /** Local credential generation; changes invalidate account-scoped caches. */
+  authRevision?: string | null;
 }
 
 // ---------------------------------------------------------------- server data

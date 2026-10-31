@@ -8,6 +8,21 @@ const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const CODE = 'A'.repeat(43);
 
 describe('[pairing] connect flow', () => {
+  test('owner pairing replaces player authentication without duplicating or forgetting the server', async () => {
+    const servers = api();
+    const first = await servers.discover('reauth.example');
+    const player = await servers.signInMinecraft(first.discoveryId, 'uuid');
+    await servers.update(player.connection.id, { name: 'My server', pinned: true });
+    const before = await servers.list();
+    const again = await servers.discover('reauth.example');
+    expect(again.existingConnectionId).toBe(player.connection.id);
+    await expect(servers.pair(again.discoveryId, `bad${'A'.repeat(40)}`)).rejects.toMatchObject({ code: 'pair_code_invalid' });
+    expect((await servers.snapshot(player.connection.id)).connection.signInMethod).toBe('minecraft');
+    const owner = await servers.pair(again.discoveryId, CODE);
+    expect(owner.connection).toMatchObject({ id: player.connection.id, name: 'My server', pinned: true, role: 'owner', signInMethod: 'pairing_code' });
+    expect(owner.connection.authRevision).not.toBe(player.connection.authRevision);
+    expect((await servers.list()).length).toBe(before.length);
+  });
   test('discover returns an unverified identity and a pairing link pre-fills code and fingerprint', async () => {
     const servers = api();
     const plain = await servers.discover('play.example.net');

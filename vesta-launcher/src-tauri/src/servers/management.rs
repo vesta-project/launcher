@@ -66,9 +66,9 @@ impl ServerManager {
         F: FnOnce(Arc<Client>) -> Fut,
         Fut: std::future::Future<Output = Result<T>>,
     {
-        let client = self.client(id).await?;
         let slot = self.slot(id)?;
         let _gate = slot.management.lock().await;
+        let client = self.client(id).await?;
         let key = intent_key(intent)?;
         let digest = vesta_server_client::trust::leaf_fingerprint(
             &serde_json::to_vec(&payload).map_err(|_| internal())?,
@@ -79,6 +79,7 @@ impl ServerManager {
                     connection_id: id.into(),
                     key: key.clone(),
                     key_version: 2,
+                    auth_revision: None,
                     action: action.into(),
                     payload_hash: digest,
                     operation_id: None,

@@ -202,6 +202,13 @@ impl Subscriptions {
     pub fn remove_connection(&mut self, id: &str) {
         self.entries.retain(|_, s| s.connection != id);
     }
+    pub fn reset_connection(&mut self, id: &str) {
+        for subscription in self.entries.values_mut().filter(|s| s.connection == id) {
+            subscription.pending.clear();
+            subscription.bytes = 0;
+            subscription.last_sent = None;
+        }
+    }
     pub fn demand(&self, id: &str, topic: ServerTopic) -> bool {
         self.entries
             .values()
