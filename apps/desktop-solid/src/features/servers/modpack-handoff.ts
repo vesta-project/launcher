@@ -5,6 +5,7 @@ import { createSignal, untrack } from 'solid-js';
 import type { ContentProvider } from './native-content';
 
 export interface ModpackPick {
+  destination?: 'server' | 'modpack';
   serverId: string;
   provider: ContentProvider['provider'];
   projectId: string;

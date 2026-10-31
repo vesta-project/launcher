@@ -535,3 +535,13 @@ server-pack-warning-catalogue-file-count = This pack exceeds the former file cou
 server-pack-warning-catalogue-metadata-bytes = This pack exceeds the former metadata size limit; allow extra memory before continuing.
 server-pack-warning-catalogue-file-bytes = This file exceeds the former 8 GiB size limit; check available space before continuing.
 server-pack-warning-catalogue-total-bytes = This pack exceeds the former 128 GiB size limit; check available space before continuing.
+
+server-pack-client-link-use = Use a modpack
+server-pack-client-link-title = Linked modpack
+server-pack-client-link-unlink = Unlink modpack
+server-pack-client-link-help = Changes stay in the draft until published.
+server-pack-client-link-keep = Keep everything
+server-pack-client-link-resources = Keep resources only
+server-pack-client-link-remove = Remove everything
+server-pack-client-link-from = From this modpack
+server-pack-client-link-custom = Your additions

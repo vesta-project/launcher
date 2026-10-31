@@ -68,3 +68,20 @@ to that server (destination step still allows modpack/both).
   only* (mods/resource packs/shaders stay, pack overrides/configs dropped), *Remove everything*
   (drop all pack-owned entries and overrides). Mirror the instance unlink flow if one exists.
 - Distinct from client mode `server-modpack` (players get the server's own linked pack).
+
+
+### Implementation decision (2026-10-31)
+A custom pack's draft manifest records its optional provider link and the IDs/override paths
+owned by that link. Installing or switching the provider version replaces only those owned
+files; collisions with user additions refuse the change. All three unlink choices update
+only the draft. Ordinary edits cannot change provider-owned content until it is unlinked.
+
+Publication continues through the custom pack build/review pipeline. Resolvable resources use
+individual Modrinth/CurseForge project and version references in the Vesta index (the existing
+FileSource::platform format); custom uploads and override/config blobs are hosted. The whole
+pack is not reduced to a provider pointer because that would lose user additions and custom
+files. Provider identity lookup failures retain the existing import/publication validation.
+The independent server-modpack client mode is unchanged.
+
+UI audit: reused the existing modpack source card, version select, owned-content grid and radio
+choice dialog. No new CSS, metadata separators or conditional text beneath the radio choices.

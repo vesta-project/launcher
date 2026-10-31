@@ -101,7 +101,9 @@ export function ModpackContent() {
   const project = (entry: PackEntry) => (entry.source.type === 'provider' ? peekProject(entry.source.provider, entry.source.projectId) : undefined);
   const nameOf = (entry: PackEntry) => project(entry)?.name ?? entryFileName(entry);
   const kinds = createMemo(() => entryKinds(manifest().entries), { name: 'modpack-content:kinds' });
-  const visible = createMemo(() => filterEntries(manifest().entries, query(), kinds().includes(kind() as never) ? kind() : 'all', nameOf), { name: 'modpack-content:visible' });
+  const owned = (entry: PackEntry) => !!manifest().modpackLink?.entries.includes(entry.id);
+  const bundled = createMemo(() => filterEntries(manifest().entries.filter(owned), query(), kind(), nameOf), { name: 'client-link:bundled' });
+  const visible = createMemo(() => filterEntries(manifest().entries.filter(e => !owned(e)), query(), kinds().includes(kind() as never) ? kind() : 'all', nameOf), { name: 'modpack-content:visible' });
   const chosen = createMemo(() => liveSelection(selected(), manifest().entries), { name: 'modpack-content:chosen' });
   const allVisible = () => visible().length > 0 && visible().every((entry) => chosen().includes(entry.id));
   const someVisible = () => !allVisible() && visible().some((entry) => chosen().includes(entry.id));
@@ -162,6 +164,7 @@ export function ModpackContent() {
   ];
 
   const row = (entry: () => PackEntry) => {
+    const readOnly = () => area.kind() === 'provider' || !!area.workspace()?.minecraftDrift || owned(entry());
     const available = () => updates().get(entry().id);
     const link = () => (entry().source.type === 'provider' ? projectPath((entry().source as { provider: string }).provider, (entry().source as { projectId: string }).projectId) : undefined);
     const warm = () => { const source = entry().source; if (source.type === 'provider') prefetchProject(source.provider, source.projectId); };
@@ -299,6 +302,12 @@ export function ModpackContent() {
       <ServerErrorNote error={suggestionError()} />
       <span data-vesta="sr-only" role="status">{busy() ? t('server-pack.saving') : checking() ? t('server-pack.checking-content') : ''}</span>
 
+      <Show when={bundled().length}>
+        <section data-vesta="modpack-panel"><header data-vesta="modpack-panel-head"><h3>{t('server-pack.client-link-from')}</h3></header>
+          <ul data-vesta="modpack-owned"><For each={bundled()}>{entry => <li><div data-vesta="modpack-owned-item"><Show when={project(entry)?.icon_url} fallback={<span data-vesta="modpack-owned-placeholder"><Icon name={kindIcon[entry.kind]} size={14} /></span>}>{src => <img src={src()} alt="" width={24} height={24} />}</Show><span data-vesta="modpack-owned-name">{nameOf(entry)}</span></div></li>}</For></ul>
+        </section>
+        <h3>{t('server-pack.client-link-custom')}</h3>
+      </Show>
       <div data-vesta="resources-list" aria-busy={busy() ? 'true' : 'false'} tabindex={0} ref={setViewport}>
         <Show when={visible().length} fallback={
           <EmptyState variant="inline" icon="icons/content/layers"
