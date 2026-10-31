@@ -59,3 +59,12 @@ to that server (destination step still allows modpack/both).
 3. **Linked instances**: an instance linked to a server behaves exactly like an instance linked
    to a provider modpack (same link model, update checks, update flow, UI) — only the source is
    the server. Reuse the existing instance modpack-link pipeline; no parallel system.
+
+## Addendum (2026-10-31): custom client pack based on a provider modpack
+- A custom client pack may be **linked to a Modrinth/CurseForge modpack** (install a modpack into
+  the custom pack). It then behaves like an instance linked to a modpack: pack-owned entries and
+  overrides come from the provider version, update via version switch, user additions stay separate.
+- **Unlink** prompts: *Keep everything* (pack content + configs become custom), *Keep resources
+  only* (mods/resource packs/shaders stay, pack overrides/configs dropped), *Remove everything*
+  (drop all pack-owned entries and overrides). Mirror the instance unlink flow if one exists.
+- Distinct from client mode `server-modpack` (players get the server's own linked pack).
