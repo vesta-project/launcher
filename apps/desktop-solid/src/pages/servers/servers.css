@@ -288,24 +288,37 @@
   :where([data-vesta="server-header-state"]) { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--vesta-weight-semibold); }
   :where([data-server-header]) [data-vesta="server-lifecycle"] { gap: var(--vesta-space-2); }
   :where([data-server-header]) [data-vesta="server-lifecycle-note"] { color: color-mix(in oklab, var(--vesta-color-media-text) 75%, transparent); }
-  :where([data-vesta="server-lifecycle-progress"]) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
-  }
-  :where([data-server-header]) [data-vesta="server-lifecycle-progress"] { color: color-mix(in oklab, var(--vesta-color-media-text) 85%, transparent); }
   :where([data-vesta="server-lifecycle-spinner"]) {
+    display: block;
+    box-sizing: border-box;
     inline-size: 14px;
     block-size: 14px;
-    border: calc(var(--vesta-border-width) * 2) solid color-mix(in oklab, var(--vesta-color-text) 20%, transparent);
+    border: calc(var(--vesta-border-width) * 2) solid color-mix(in oklab, currentColor 25%, transparent);
     border-top-color: currentColor;
     border-radius: 50%;
     animation: server-spin 0.9s linear infinite;
   }
   @media (prefers-reduced-motion: reduce) { :where([data-vesta="server-lifecycle-spinner"]) { animation-duration: 2.4s; } }
+
+  /* Starting / Kill: both faces share one cell so the control keeps the wider face's width.
+     Hover or keyboard focus swaps them with a short fade and lift. */
+  :where([data-vesta="server-start-kill-stack"]) { display: inline-grid; place-items: center; }
+  :where([data-vesta="server-start-kill-stack"]) > :where([data-face]) {
+    grid-area: 1 / 1;
+    display: inline-grid;
+    place-items: center;
+    transition:
+      opacity var(--vesta-duration-fast) var(--vesta-ease-standard),
+      transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+  :where([data-vesta="server-start-kill-stack"]) > :where([data-face="kill"]) { opacity: 0; transform: translateY(3px); }
+  :where([data-server-start-kill][data-armed]) :where([data-vesta="server-start-kill-stack"]) > :where([data-face="progress"]) { opacity: 0; transform: translateY(-3px); }
+  :where([data-server-start-kill][data-armed]) :where([data-vesta="server-start-kill-stack"]) > :where([data-face="kill"]) { opacity: 1; transform: none; }
+  :where([data-server-start-kill][aria-disabled="true"]) { cursor: default; }
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="server-start-kill-stack"]) > :where([data-face]) { transform: none; }
+  }
+  :where(html[data-vesta-reduced-motion]) :where([data-vesta="server-start-kill-stack"]) > :where([data-face]) { transform: none; }
 
   /* Connection settings */
   :where([data-server-connection]) { block-size: 100%; }

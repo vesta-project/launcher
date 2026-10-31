@@ -14,6 +14,7 @@ import { serverRefreshing, updateServer } from '../../features/servers/store';
 import { refreshServerWithFeedback } from './refresh-button';
 import type { ServerSnapshot } from '../../features/servers/native';
 import { actionIcons, actionLabels, useLifecycle } from './lifecycle';
+import { KillDialog, StartKillQuick } from './kill';
 import { RemoveServerDialog } from './remove-dialog';
 import { GetModpackDialog, canGetModpack, offersClientPack } from './pack/get-modpack';
 import '../../features/instances/instance-card.css';
@@ -35,6 +36,7 @@ function cardState(snapshot: ServerSnapshot): { tone: string; tag: Tag | null } 
 export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
   const [removing, setRemoving] = createSignal(false, { name: 'server-card:removing' });
   const [creating, setCreating] = createSignal(false, { name: 'server-card:creating' });
+  const [killing, setKilling] = createSignal(false, { name: 'server-card:killing' });
   const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const href = () => `/servers/${id()}`;
@@ -77,9 +79,12 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
             )}
           </Show>
         </div>
-        <Show when={quick() || controls().progress}>
+        <Show when={controls().progress}>
+          {(progress) => <StartKillQuick progress={progress()} canKill={controls().primary === 'kill'} onKill={() => setKilling(true)} />}
+        </Show>
+        <Show when={!controls().progress && quick()}>
           <Tooltip
-            content={quick() ? t(actionLabels[quick()!]) : t(controls().progress === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
+            content={t(actionLabels[quick()!])}
             placement="top"
             trigger={(tooltip) => (
               <button
@@ -87,7 +92,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
                 type="button"
                 data-vesta="instance-card-play"
                 data-variant={busy() ? 'busy' : quick() === 'start' ? 'launch' : quick() === 'wake' ? 'wake' : quick() === 'sleep' ? 'sleep' : 'kill'}
-                aria-label={quick() && !busy() ? t(actionLabels[quick()!]) : t(controls().progress === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
+                aria-label={quick() && !busy() ? t(actionLabels[quick()!]) : t('servers.lifecycle.sending')}
                 aria-busy={busy() ? 'true' : undefined}
                 disabled={busy()}
                 onClick={(event) => runQuick(event)}
@@ -121,6 +126,9 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         <Show when={controls().stop}>
           <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
         </Show>
+        <Show when={controls().primary === 'kill'}>
+          <ContextMenuItem onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
+        </Show>
         <ContextMenuItem onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
         <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
           <ContextMenuItem onSelect={() => setCreating(true)}>{t('server-pack.play-create')}</ContextMenuItem>
@@ -134,6 +142,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         <ContextMenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</ContextMenuItem>
       </ContextMenu>
       <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
+      <KillDialog snapshot={props.snapshot} open={killing()} onOpenChange={setKilling} />
       <Show when={creating()}><GetModpackDialog snapshot={props.snapshot} mode="new" onClose={() => setCreating(false)} /></Show>
     </>
   );

@@ -164,6 +164,8 @@ servers-kill-prepare = Prepare force kill
 servers-kill-prepare-again = Prepare again
 servers-kill-confirm = Force kill now ({ $count } s)
 servers-kill-no-longer-needed = Minecraft has already stopped. No force kill is needed.
+servers-kill-description-starting = Minecraft is still starting. Force kill ends the process immediately.
+servers-kill-already-up = Minecraft finished starting. Use Stop instead.
 
 # Operations
 servers-intent-start = Start
@@ -719,6 +721,9 @@ servers-lifecycle-sleep = Sleep
 servers-lifecycle-wake = Wake
 servers-lifecycle-waking = Waking up…
 servers-lifecycle-starting = Starting…
+servers-lifecycle-starting-short = Starting
+servers-lifecycle-waking-short = Waking
+servers-lifecycle-kill-short = Kill
 servers-minecraft-sleeping-wakes = Sleeping until someone joins
 servers-card-sleeping = Sleeping
 

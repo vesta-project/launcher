@@ -1,18 +1,19 @@
-import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator } from '@vesta/ui';
+import { Button, IconButton, Menu, MenuItem, MenuSeparator } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
-import { lifecycleControls, minecraftFactNow, newIntentId, statusDot } from '../../features/servers/model';
+import { lifecycleControls, minecraftFactNow, statusDot } from '../../features/servers/model';
 import { gate } from '../../features/servers/capabilities';
 import { serverPressure, useServerResource } from '../../features/servers/resources';
 import { sleepPolicyResource } from '../../features/servers/server-resources';
 import { headerNotice, joinAddress, knownPlayerCount } from '../../features/servers/shell-model';
 import { sleepingMessage } from '../../features/servers/sleep-model';
-import { putOperations, serverCommand, serverIcon, serverRefreshing, updateServer, useServersClock } from '../../features/servers/store';
-import type { ServerCommandError, ServerSnapshot } from '../../features/servers/native';
+import { serverIcon, serverRefreshing, updateServer, useServersClock } from '../../features/servers/store';
+import type { ServerSnapshot } from '../../features/servers/native';
 import { actionIcons, actionLabels, useLifecycle, type Lifecycle, type SubmittableAction } from './lifecycle';
-import { Sensitive, ServerErrorNote, StatusDot } from './parts';
+import { KillDialog, StartKillButton } from './kill';
+import { Sensitive, StatusDot } from './parts';
 import { refreshServerWithFeedback } from './refresh-button';
 import { RemoveServerDialog } from './remove-dialog';
 
@@ -134,7 +135,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   );
 }
 
-/** Start / Stop / Restart, with Force kill replacing Stop while a stop is pending. */
+/** Start / Stop / Restart; Force kill replaces Stop while a stop hangs, and arms on the Starting button. */
 function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle }) {
   const [killOpen, setKillOpen] = createSignal(false, { name: 'server-lifecycle:kill-open' });
   const controls = () => lifecycleControls(props.snapshot);
@@ -149,20 +150,15 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
       <Show when={uncertain()}>
         <span data-vesta="server-lifecycle-note" role="status">{t('servers.operation.uncertain-retry')}</span>
       </Show>
-      <Show when={controls().progress}>
-        {(progress) => (
-          <span data-vesta="server-lifecycle-progress" role="status">
-            <span data-vesta="server-lifecycle-spinner" aria-hidden="true" />
-            {t(progress() === 'waking' ? 'servers.lifecycle.waking' : 'servers.lifecycle.starting')}
-          </span>
-        )}
-      </Show>
       <Show when={controls().restart}>
         <Button variant="outline" icon={<Icon name="icons/actions/reload" />} disabled={!!busy() || pending('restart')} onClick={() => void submit('restart')}>
           {t('servers.lifecycle.restart')}
         </Button>
       </Show>
-      <Show when={controls().primary}>
+      <Show when={controls().progress}>
+        {(progress) => <StartKillButton progress={progress()} canKill={controls().primary === 'kill'} onKill={() => setKillOpen(true)} />}
+      </Show>
+      <Show when={!controls().progress && controls().primary}>
         {(primary) => (
           <Show
             when={primary() === 'kill'}
@@ -183,84 +179,5 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
       </Show>
       <KillDialog open={killOpen()} onOpenChange={setKillOpen} snapshot={props.snapshot} />
     </div>
-  );
-}
-
-/** Two-step force kill bound to the exact generation, with the server's expiry. */
-function KillDialog(props: { open: boolean; onOpenChange: (open: boolean) => void; snapshot: ServerSnapshot }) {
-  const now = useServersClock();
-  const [prepared, setPrepared] = createSignal<{ intentId: string; expiresAtMs: number; generation: string } | null>(null, { name: 'server-kill:prepared' });
-  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-kill:error' });
-  const [busy, setBusy] = createSignal(false, { name: 'server-kill:busy' });
-  const generation = () => props.snapshot.status?.generation ?? null;
-  /** The kill only applies to the run it was prepared for, while that run is still stopping. */
-  const stillStopping = () => {
-    const status = props.snapshot.status;
-    const target = prepared()?.generation ?? generation();
-    return !!status && (status.state === 'stopping' || status.state === 'draining') && !!target && status.generation === target;
-  };
-  const remaining = () => Math.max(0, Math.ceil(((prepared()?.expiresAtMs ?? 0) - now()) / 1000));
-  const expired = () => !!prepared() && remaining() === 0;
-  const id = () => props.snapshot.connection.id;
-
-  const prepare = async () => {
-    const target = generation();
-    if (!target) return;
-    setBusy(true); setError(null);
-    try {
-      const intentId = newIntentId();
-      const result = await serverCommand((client) => client.killPrepare(id(), target, intentId));
-      setPrepared({ intentId, expiresAtMs: result.expiresAtMs, generation: target });
-    } catch (reason) { setError(reason as ServerCommandError); }
-    finally { setBusy(false); }
-  };
-  const confirm = async () => {
-    const current = prepared();
-    if (!current) return;
-    setBusy(true); setError(null);
-    try {
-      const operation = await serverCommand((client) => client.killConfirm(id(), current.intentId));
-      putOperations(id(), [{ ...operation, intent: operation.intent ?? 'lifecycle.kill' }]);
-      setPrepared(null);
-      props.onOpenChange(false);
-    } catch (reason) {
-      setError(reason as ServerCommandError);
-      if ((reason as ServerCommandError).code === 'confirmation_expired') setPrepared(null);
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(open) => { if (!open) { setPrepared(null); setError(null); } props.onOpenChange(open); }}
-      title={t('servers.kill.title')}
-      description={t('servers.kill.description')}
-      size="sm"
-      footer={
-        <>
-          <Button variant="ghost" onClick={() => props.onOpenChange(false)}>{stillStopping() ? t('common.cancel') : t('nav.close')}</Button>
-          <Show when={stillStopping()}>
-            <Show
-              when={prepared() && !expired()}
-              fallback={<Button tone="danger" variant="outline" disabled={busy() || !generation()} onClick={() => void prepare()}>{t(expired() ? 'servers.kill.prepare-again' : 'servers.kill.prepare')}</Button>}
-            >
-              <Button tone="danger" disabled={busy()} onClick={() => void confirm()}>{t('servers.kill.confirm', { count: remaining() })}</Button>
-            </Show>
-          </Show>
-        </>
-      }
-    >
-      <dl data-vesta="server-add-facts">
-        <dt>{t('servers.kill.target')}</dt>
-        <dd><code>{(prepared()?.generation ?? generation() ?? '').slice(0, 12)}</code></dd>
-      </dl>
-      <Show
-        when={stillStopping()}
-        fallback={<p data-vesta="server-callout" data-tone="success" role="status">{t('servers.kill.no-longer-needed')}</p>}
-      >
-        <p data-vesta="server-callout" data-tone="warning">{t('servers.kill.warning')}</p>
-      </Show>
-      <ServerErrorNote error={error()} />
-    </Dialog>
   );
 }

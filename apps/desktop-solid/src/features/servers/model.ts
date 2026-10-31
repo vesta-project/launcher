@@ -128,7 +128,7 @@ export interface LifecycleControls {
   restart: boolean;
   /** Stop offered in the overflow menu because the primary is Sleep or Wake. */
   stop: boolean;
-  /** A start or wake the server is working through; the header shows it as progress. */
+  /** A start or wake the server is working through; the primary button shows it. */
   progress: 'starting' | 'waking' | null;
   /** Reason the controls are unavailable, if they are. */
   blocked: MessageId | null;
@@ -139,7 +139,8 @@ const NONE = { restart: false, stop: false, progress: null } as const;
 /**
  * The AMP model: Sleep is primary while running when the agent can answer for a sleeping
  * server (Stop moves to the menu); a sleeping server Wakes, a stopped one Starts. Force
- * kill replaces the primary while a stop hangs. Starting and waking show as progress.
+ * kill replaces the primary while a stop hangs or a start is still coming up; starting and
+ * waking show as progress on that same button.
  */
 export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
   const caps = snapshot.capabilities;
@@ -166,9 +167,12 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
     return { ...NONE, primary: kill ? 'kill' : null, blocked: kill ? null : 'servers.lifecycle.stopping' };
   }
   const stop = can('lifecycle.stop') && status.generation !== null;
-  // Still coming up: Stop cancels it; sleeping or restarting a half-started game helps nobody.
+  // Still coming up: a graceful stop can't land yet, so the way out is Force kill.
   const coming = progress ?? (status.readiness === 'ready' || status.readiness === 'degraded' ? null : 'starting');
-  if (coming) return { ...NONE, primary: stop ? 'stop' : null, progress: coming, blocked: stop ? null : 'servers.lifecycle.not-allowed' };
+  if (coming) {
+    const kill = can('lifecycle.force_kill') && status.generation !== null;
+    return { ...NONE, primary: kill ? 'kill' : null, progress: coming, blocked: null };
+  }
   const sleep = stop && status.sleepAvailable === true;
   return {
     primary: stop ? (sleep ? 'sleep' : 'stop') : null,

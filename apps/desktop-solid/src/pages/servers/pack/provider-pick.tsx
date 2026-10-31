@@ -100,8 +100,10 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
           </p>
         </Show>
         <span data-vesta="sr-only" role="status">{loading() ? t('server-pack.loading-versions') : ''}</span>
-        <p hidden={client()} data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-server')}</p>
-        <p hidden={client()} data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-players')}</p>
+        <Show when={!client()}>
+          <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-server')}</p>
+          <p data-vesta="modpack-check-line"><Icon name="icons/controls/check" size={12} />{t('server-pack.pick-point-players')}</p>
+        </Show>
         <Show when={!client() && replacing()}>
           <p data-vesta="server-callout" data-tone="warning">{t('server-pack.pick-replaces')}</p>
         </Show>

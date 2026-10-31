@@ -19,15 +19,15 @@ import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 
 type ChoiceCopy = { icon: string; title: MessageId; description: MessageId; action: MessageId };
-const choiceCopy: Record<ModpackSection, Partial<Record<FirstRunChoice, ChoiceCopy>>> = {
-  server: {
-    provider: { icon: 'icons/rail/browse', title: 'server-pack.link-browse-title', description: 'server-pack.link-browse-description', action: 'server-pack.link-browse-action' },
-    upload: { icon: 'icons/actions/upload', title: 'server-pack.link-upload-title', description: 'server-pack.link-upload-description', action: 'server-pack.first-upload-action' },
-  },
-  client: {
-    upload: { icon: 'icons/actions/upload', title: 'server-pack.first-upload-title', description: 'server-pack.first-upload-description', action: 'server-pack.first-upload-action' },
-    scratch: { icon: 'icons/actions/add', title: 'server-pack.first-scratch-title', description: 'server-pack.first-scratch-description', action: 'server-pack.first-scratch-action' },
-  },
+const choiceCopy: Partial<Record<FirstRunChoice, ChoiceCopy>> = {
+  provider: { icon: 'icons/rail/browse', title: 'server-pack.link-browse-title', description: 'server-pack.link-browse-description', action: 'server-pack.link-browse-action' },
+  upload: { icon: 'icons/actions/upload', title: 'server-pack.link-upload-title', description: 'server-pack.link-upload-description', action: 'server-pack.first-upload-action' },
+};
+/** The client pack's starting points: one line each, the whole tile is the action. */
+const startCopy: Partial<Record<FirstRunChoice, { icon: string; title: MessageId; hint: MessageId }>> = {
+  link: { icon: 'icons/content/modpack', title: 'server-pack.first-link-title', hint: 'server-pack.first-link-hint' },
+  upload: { icon: 'icons/actions/upload', title: 'server-pack.first-file-title', hint: 'server-pack.first-file-hint' },
+  scratch: { icon: 'icons/actions/add', title: 'server-pack.first-scratch-title', hint: 'server-pack.first-scratch-hint' },
 };
 
 type Upload =
@@ -37,8 +37,8 @@ type Upload =
 
 /**
  * Nothing set up yet. `server`: the server doesn't use a modpack (fine; it is optional): link
- * one from a provider or a file through the link review. `client`: start the custom client
- * pack from a file or from scratch.
+ * one from a provider or a file through the link review. `client`: link a provider modpack (as
+ * the client pack's own link card does), start from a file, or start from scratch.
  */
 export function FirstRun(props: { section: ModpackSection }) {
   const area = useModpackArea();
@@ -62,7 +62,10 @@ export function FirstRun(props: { section: ModpackSection }) {
 
   const browse = () => {
     const workspace = area.workspace();
-    browseForServer({ id: area.id(), name: area.snapshot().connection.name, type: 'modpack', minecraftVersion: workspace?.serverMinecraftVersion ?? null, loader: null });
+    browseForServer({
+      id: area.id(), name: area.snapshot().connection.name, type: 'modpack', minecraftVersion: workspace?.serverMinecraftVersion ?? null, loader: null,
+      destination: section === 'client' ? 'modpack' : undefined,
+    });
   };
 
   const receive = async (file: File | undefined) => {
@@ -98,8 +101,13 @@ export function FirstRun(props: { section: ModpackSection }) {
       } catch (reason) { if (!disposed) { setUpload(null); setError(reason as ServerCommandError); } }
     })();
   } });
+  const fileDrop = {
+    onDragOver: (event: DragEvent) => { if (!event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); setDragging(true); },
+    onDragLeave: () => setDragging(false),
+    onDrop: (event: DragEvent) => { event.preventDefault(); setDragging(false); void receive(event.dataTransfer?.files[0]); },
+  };
   const choose = (choice: FirstRunChoice) => {
-    if (choice === 'provider') browse();
+    if (choice === 'provider' || choice === 'link') browse();
     else if (choice === 'upload') picker?.click();
     else setScratch(true);
   };
@@ -107,10 +115,10 @@ export function FirstRun(props: { section: ModpackSection }) {
   return (
     <section data-vesta="modpack-first" data-section={section} aria-labelledby="modpack-first-title">
       <header data-vesta="modpack-first-head">
-        <span data-vesta="modpack-first-mark" aria-hidden="true"><Icon name={section === 'server' ? 'icons/content/server' : 'icons/content/modpack'} size={22} /></span>
+        <Show when={section === 'server'}><span data-vesta="modpack-first-mark" aria-hidden="true"><Icon name="icons/content/server" size={22} /></span></Show>
         <div>
           <h2 id="modpack-first-title">{section === 'server' ? t('server-pack.link-none-title') : t('server-pack.first-title')}</h2>
-          <p>{section === 'server' ? t('server-pack.link-none-description') : t('server-pack.first-description')}</p>
+          <Show when={section === 'server'}><p>{t('server-pack.link-none-description')}</p></Show>
         </div>
       </header>
       <Show when={section === 'server' && !area.gates().installOnServer}>
@@ -138,15 +146,12 @@ export function FirstRun(props: { section: ModpackSection }) {
           )}
         </Show>
       }>
+        <Show when={section === 'client'} fallback={
         <div data-vesta="modpack-choices">
           <For each={firstRunChoices(section, area.gates())}>
             {(choice) => {
-              const copy = choiceCopy[section][choice.id]!;
-              const dropProps = choice.id === 'upload' ? {
-                onDragOver: (event: DragEvent) => { if (!event.dataTransfer?.types.includes('Files')) return; event.preventDefault(); setDragging(true); },
-                onDragLeave: () => setDragging(false),
-                onDrop: (event: DragEvent) => { event.preventDefault(); setDragging(false); void receive(event.dataTransfer?.files[0]); },
-              } : {};
+              const copy = choiceCopy[choice.id]!;
+              const dropProps = choice.id === 'upload' ? fileDrop : {};
               return (
                 <article ref={element => { if (choice.id === 'upload') archiveElement = element; }} data-vesta="modpack-choice" data-choice={choice.id} data-drop-target={choice.id === 'upload' && dragging() ? 'active' : undefined} {...dropProps}>
                   <span data-vesta="modpack-choice-icon" aria-hidden="true"><Icon name={copy.icon} size={18} /></span>
@@ -162,6 +167,27 @@ export function FirstRun(props: { section: ModpackSection }) {
             }}
           </For>
         </div>
+        }>
+          <div data-vesta="modpack-starts" role="group" aria-labelledby="modpack-first-title">
+            <For each={firstRunChoices(section, area.gates())}>
+              {(choice) => {
+                const copy = startCopy[choice.id]!;
+                return (
+                  <button type="button" data-vesta="modpack-start" data-choice={choice.id}
+                    ref={element => { if (choice.id === 'upload') archiveElement = element; }}
+                    data-drop-target={choice.id === 'upload' && dragging() ? 'active' : undefined}
+                    disabled={!choice.enabled} onClick={() => choose(choice.id)} {...(choice.id === 'upload' ? fileDrop : {})}>
+                    <span data-vesta="modpack-start-icon" aria-hidden="true"><Icon name={copy.icon} size={16} /></span>
+                    <span data-vesta="modpack-start-text">
+                      <strong>{t(copy.title)}</strong>
+                      <span>{t(copy.hint)}</span>
+                    </span>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
         <Show when={badFile()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.upload-bad-file')}</p></Show>
       </Show>
     </section>

@@ -13,7 +13,7 @@ import {
   type InstanceOption,
   type ServerOption,
 } from '../../features/browse/browse-targets';
-import { chooseTarget, serverTarget, targetRef, type } from '../../features/browse/browse-store';
+import { chooseServerDestination, chooseTarget, serverDestinationHint, serverTarget, targetRef, type } from '../../features/browse/browse-store';
 import { serverPermissions } from '../../features/browse/install-targets';
 import { serverSoftware } from '../../features/browse/server-install';
 import { instances } from '../../features/instances/catalog';
@@ -32,6 +32,10 @@ const connectionLabels: Record<ServerOption['connection'], MessageId> = {
   access: 'browse.server-access',
 };
 
+/** The client pack row's value; the server stays the Browse target, only the destination differs. */
+const clientPackValue = (id: string) => `pack:${id}`;
+const clientPackServer = (value: string) => (value.startsWith('pack:') ? `server:${value.slice(5)}` : undefined);
+
 /** "1.21.4 · Paper"; unreachable servers leave out software nobody could read. */
 function serverMeta(option: ServerOption) {
   const software = option.software === undefined && option.unreachable ? undefined : softwareText(option.software);
@@ -43,7 +47,8 @@ function serverMeta(option: ServerOption) {
  * one of the servers the user may install to or edit the pack of (offline ones stay
  * selectable, marked). A server filters by its version and software, marks what it already
  * has, and makes Install open at that server. Modpacks list servers only: a modpack otherwise
- * creates a new instance. Long lists get a search field.
+ * creates a new instance; each server whose pack the user may edit also offers its client pack.
+ * Long lists get a search field.
  */
 export function TargetSelect(props: {
   class?: string;
@@ -82,17 +87,18 @@ export function TargetSelect(props: {
   const all = createMemo(() => optionsFor(''), { name: 'browseTargetAll' });
   const shown = createMemo(() => (search().trim() ? optionsFor(search()) : all()), { name: 'browseTargetShown' });
 
-  /** Modpacks never take an instance target; a server one carries over. */
+  /** Modpacks never take an instance target; a server one carries over, as its client pack when chosen so. */
   const value = createMemo(
     () => {
       const ref = targetRef();
+      if (ref && modpack() && ref.kind === 'server' && serverDestinationHint() === 'modpack') return clientPackValue(ref.id);
       return ref && !(modpack() && ref.kind === 'instance') ? targetValue(ref) : '';
     },
     { name: 'browseTargetValue' },
   );
   const selected = createMemo(
     () => {
-      const current = value();
+      const current = clientPackServer(value()) ?? value();
       const options = all();
       return (
         options.instances.find((option) => option.value === current) ??
@@ -117,7 +123,11 @@ export function TargetSelect(props: {
     setOpen(false);
     setSearch('');
     if (next === untrack(value)) return;
-    (props.onChange ?? chooseTarget)(parseTargetValue(next));
+    const pack = clientPackServer(next);
+    const ref = parseTargetValue(pack ?? next);
+    // For modpacks the server row and its client pack row differ only in destination.
+    if (untrack(modpack) && ref?.kind === 'server') return chooseServerDestination(ref.id, pack ? 'modpack' : undefined, !!props.onChange);
+    (props.onChange ?? chooseTarget)(ref);
   };
 
   /** Arrow keys walk the options, from the search field too; Enter in it takes the first. */
@@ -152,8 +162,8 @@ export function TargetSelect(props: {
 
   const triggerLabel = () => {
     const option = selected();
-    if (option) return option.name;
-    const ref = parseTargetValue(value());
+    if (option) return clientPackServer(value()) ? t('browse.target-client-pack-of', { name: option.name }) : option.name;
+    const ref = parseTargetValue(clientPackServer(value()) ?? value());
     if (ref?.kind === 'server') return serverSnapshot(ref.id)?.connection.name ?? ref.id;
     return t(modpack() ? 'browse.target-new-instance' : 'browse.no-instance');
   };
@@ -175,11 +185,13 @@ export function TargetSelect(props: {
     meta?: JSX.Element;
     aside?: JSX.Element;
     offline?: boolean;
+    nested?: boolean;
   }) => (
     <button
       type="button"
       role="option"
       data-vesta="browse-target-row"
+      data-nested={row.nested ? '' : undefined}
       aria-selected={row.value === value() ? 'true' : 'false'}
       data-selected={row.value === value() ? '' : undefined}
       data-offline={row.offline ? '' : undefined}
@@ -221,6 +233,21 @@ export function TargetSelect(props: {
           {t(connectionLabels[row.option.connection])}
         </span>
       }
+    />
+  );
+
+  /** Under a server, for modpacks: link the pick as that server's client pack. */
+  const ClientPackRow = (row: { option: ServerOption }) => (
+    <Row
+      value={clientPackValue(row.option.id)}
+      name={t('browse.target-client-pack')}
+      offline={row.option.unreachable}
+      nested
+      image={() => (
+        <span data-vesta="browse-target-icon" data-empty="">
+          <Icon name="icons/content/modpack" size={14} />
+        </span>
+      )}
     />
   );
 
@@ -303,7 +330,14 @@ export function TargetSelect(props: {
                   {t('browse.picker-servers')}
                 </h3>
                 <For each={shown().servers} keyed={(option) => option.value}>
-                  {(option) => <ServerRow option={option()} />}
+                  {(option) => (
+                    <>
+                      <ServerRow option={option()} />
+                      <Show when={modpack() && option().canEditPack}>
+                        <ClientPackRow option={option()} />
+                      </Show>
+                    </>
+                  )}
                 </For>
               </div>
             </Show>

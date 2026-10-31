@@ -444,8 +444,12 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
           line(target, '[Server thread/INFO]: Starting minecraft server version 1.21.4');
           ensureTicker(target);
         }, action === 'restart' ? 2200 : 600);
+        // A start that hangs lets the preview reach Force kill while starting.
+        if (target.snapshot.connection.name.includes('stall')) return clone(operation);
         setTimeout(() => {
-          if (target.snapshot.status) target.snapshot.status = { ...target.snapshot.status, lifecycle: 'online', readiness: 'ready', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: Date.now() };
+          // Killed while coming up: the run is gone, nothing becomes ready.
+          if (target.snapshot.status?.state !== 'running') return;
+          target.snapshot.status = { ...target.snapshot.status, lifecycle: 'online', readiness: 'ready', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: Date.now() };
           target.snapshot.restartRequired = false;
           target.online = [];
           line(target, '[Server thread/INFO]: Done (4.812s)! For help, type "help"');
@@ -488,7 +492,9 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       if (pending.expiresAtMs < Date.now()) fail('confirmation_expired');
       requireCapability(target, 'lifecycle.force_kill');
       const current = target.snapshot.status;
-      if (current?.generation !== pending.generation || (current.state !== 'stopping' && current.state !== 'draining')) {
+      // A hanging stop or a run that is still coming up can be killed.
+      const starting = current?.state === 'running' && current.readiness !== 'ready' && current.readiness !== 'degraded';
+      if (current?.generation !== pending.generation || (current.state !== 'stopping' && current.state !== 'draining' && !starting)) {
         target.pending.delete(intentId);
         fail('stale_target');
       }
