@@ -5,6 +5,11 @@ import type { ConsoleLine } from './native';
 
 export const CONSOLE_LINE_LIMIT = 5000;
 
+// Appends preserve the existing prefix. Other mutations invalidate that prefix so
+// viewers can reuse converted rows without walking the entire history per batch.
+const entryEpochs = new WeakMap<readonly ConsoleEntry[], number>();
+export const consoleEntriesEpoch = (entries: readonly ConsoleEntry[]) => entryEpochs.get(entries);
+
 /**
  * `id` orders entries within one buffer: it increases from top to bottom and never
  * repeats, even when a merged tail goes on top (those take ids below the first entry).
@@ -66,7 +71,9 @@ export class ConsoleBuffer {
   dropped = 0;
 
   /** `limit` bounds all entries, gap markers included. */
-  constructor(private readonly limit = CONSOLE_LINE_LIMIT) {}
+  constructor(private readonly limit = CONSOLE_LINE_LIMIT) { entryEpochs.set(this.entries, 0); }
+
+  private invalidatePrefix() { entryEpochs.set(this.entries, entryEpochs.get(this.entries)! + 1); }
 
   /** Appends live lines, skipping cursors already present. Returns how many were added. */
   append(lines: readonly ConsoleLine[]): number {
@@ -98,6 +105,7 @@ export class ConsoleBuffer {
     if (!lines.length) return 0;
     if (lines.every((line) => this.seen.has(line.cursor))
       && !this.entries.some((entry, index) => entry.kind === 'gap' && index !== this.entries.length - 1)) return 0;
+    this.invalidatePrefix();
     const page = lines.map((line) => ({ line, position: position(line.cursor) }));
     const existing = this.entries.filter((entry) => entry.kind === 'line').map((entry) => ({ entry, position: position(entry.cursor) }));
     const scope = page[0].position?.scope;
@@ -118,22 +126,30 @@ export class ConsoleBuffer {
       const trailing = this.entries.at(-1);
       const trailingGap = trailing?.kind === 'gap' && existing.length
         && ordered.at(-1)!.value <= existing.at(-1)!.position!.value ? trailing : null;
+      // Anchor the rebuilt order to the first retained line. Older prefix recovery
+      // then keeps existing row identities and their parsed logs, including ids.
+      const anchorIndex = ordered.findIndex(item => this.seen.has(item.entry.cursor));
+      let prefixGaps = 0;
+      for (let i = 1; i <= anchorIndex; i++) if (ordered[i].value > ordered[i - 1].value + 1n) prefixGaps++;
+      let nextId = anchorIndex < 0 ? this.nextId : ordered[anchorIndex].entry.id - anchorIndex - prefixGaps;
       // Keep a visible marker only where retained cursors still prove missing output.
       this.entries.length = 0;
       this.seen.clear();
       let previous: bigint | null = null;
       for (const { entry, value: cursor } of ordered) {
         if (previous !== null && cursor > previous + 1n) {
-          this.entries.push({ key: `g:${entry.cursor}:${this.gaps++}`, id: this.nextId++, kind: 'gap', cursor: entry.cursor });
+          this.entries.push({ key: `g:${entry.cursor}:${this.gaps++}`, id: nextId++, kind: 'gap', cursor: entry.cursor });
         }
         // Parsed rows are cached by object identity. Never mutate a cached id.
-        this.entries.push({ ...entry, id: this.nextId++ });
+        this.entries.push(entry.id === nextId ? entry : { ...entry, id: nextId });
+        nextId++;
         this.seen.add(entry.cursor);
         previous = cursor;
       }
       // A tail marker is unresolved until recovery advances past the observed
       // tail. An older/duplicate page alone cannot prove that no output was lost.
-      if (trailingGap) this.entries.push({ ...trailingGap, id: this.nextId++ });
+      if (trailingGap) this.entries.push({ ...trailingGap, id: nextId++ });
+      this.nextId = Math.max(this.nextId, nextId);
       this.trim();
       return added;
     }
@@ -160,6 +176,7 @@ export class ConsoleBuffer {
   }
 
   clear() {
+    this.invalidatePrefix();
     this.entries.length = 0;
     this.seen.clear();
     this.dropped = 0;
@@ -173,6 +190,7 @@ export class ConsoleBuffer {
   private trim() {
     const excess = this.entries.length - this.limit;
     if (excess <= 0) return;
+    this.invalidatePrefix();
     for (const removed of this.entries.splice(0, excess)) {
       if (removed.kind === 'line') {
         this.seen.delete(removed.cursor);

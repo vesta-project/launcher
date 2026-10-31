@@ -3,18 +3,28 @@
 import { createSignal, type Accessor } from 'solid-js';
 import { parseLog } from '../instances/interaction-utils';
 import { LOG_LEVELS, type LogEntry, type LogLineEntry, type LogViewState } from '../../components/log-view/log-model';
-import type { ConsoleDisplayBoundary, ConsoleEntry } from './console-model';
+import { consoleEntriesEpoch, type ConsoleDisplayBoundary, type ConsoleEntry } from './console-model';
 import type { ConnectionId } from './native';
 
 export interface GapCopy { label: string; detail?: string }
+
+const conversions = new WeakMap<WeakMap<ConsoleEntry, LogEntry>, {
+  entries: readonly ConsoleEntry[]; epoch: number; rows: LogEntry[]; label: string; detail?: string;
+}>();
 
 /**
  * Maps buffer entries to viewer rows. Lines are parsed once per entry object (the
  * cache holds them while the buffer does), so a new line doesn't re-parse the rest.
  */
 export function toLogEntries(entries: readonly ConsoleEntry[], gap: GapCopy, cache: WeakMap<ConsoleEntry, LogEntry>): LogEntry[] {
-  const rows = new Array<LogEntry>(entries.length);
-  for (let index = 0; index < entries.length; index++) {
+  const epoch = consoleEntriesEpoch(entries);
+  const previous = conversions.get(cache);
+  const appendOnly = epoch !== undefined && previous?.entries === entries && previous.epoch === epoch
+    && previous.label === gap.label && previous.detail === gap.detail;
+  if (appendOnly && previous.rows.length === entries.length) return previous.rows;
+  const start = appendOnly ? previous.rows.length : 0;
+  const rows = appendOnly ? previous.rows.slice() : new Array<LogEntry>(entries.length);
+  for (let index = start; index < entries.length; index++) {
     const entry = entries[index];
     if (entry.kind === 'gap') {
       rows[index] = { kind: 'gap', id: entry.id, label: gap.label, detail: gap.detail };
@@ -31,6 +41,7 @@ export function toLogEntries(entries: readonly ConsoleEntry[], gap: GapCopy, cac
     }
     rows[index] = row;
   }
+  if (epoch !== undefined) conversions.set(cache, { entries, epoch, rows, label: gap.label, detail: gap.detail });
   return rows;
 }
 
