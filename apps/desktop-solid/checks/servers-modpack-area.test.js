@@ -66,7 +66,7 @@ describe('first run', () => {
   test('linking the server takes a provider or a file (install gate); a custom client pack starts from a file or scratch', () => {
     expect(firstRunChoices('server', { edit: true, installOnServer: true }).map((choice) => [choice.id, choice.enabled])).toEqual([['provider', true], ['upload', true]]);
     expect(firstRunChoices('server', { edit: true, installOnServer: false }).every((choice) => !choice.enabled)).toBe(true);
-    expect(firstRunChoices('client', { edit: true, installOnServer: false }).map((choice) => [choice.id, choice.enabled])).toEqual([['upload', true], ['scratch', true]]);
+    expect(firstRunChoices('client', { edit: true, installOnServer: false }).map((choice) => [choice.id, choice.enabled])).toEqual([['link', true], ['upload', true], ['scratch', true]]);
     expect(firstRunChoices('client', { edit: false, installOnServer: true }).every((choice) => !choice.enabled)).toBe(true);
   });
 

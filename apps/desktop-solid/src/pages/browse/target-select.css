@@ -81,6 +81,16 @@
     color: var(--vesta-color-accent-text);
   }
 
+  /* A server's client pack sits under it, indented by the art column. */
+  :where([data-vesta='browse-target-row'][data-nested]) {
+    padding-inline-start: calc(var(--vesta-space-2) + 28px + var(--vesta-space-2));
+  }
+
+  :where([data-vesta='browse-target-row'][data-nested] [data-vesta='browse-target-art']) {
+    inline-size: 20px;
+    block-size: 20px;
+  }
+
   :where([data-vesta='browse-target-art']) {
     display: inline-grid;
     flex: none;

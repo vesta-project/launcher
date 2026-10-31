@@ -28,15 +28,15 @@ server-pack-unpublished-count = { $count ->
 server-pack-review-publish = Review & publish
 
 # First run
-server-pack-first-title = Build a custom client pack
-server-pack-first-description = A pack Vesta hosts for players, separate from the server software. Start from a file or from scratch; nothing reaches players until you publish.
-server-pack-first-upload-title = Upload a modpack file
-server-pack-first-upload-description = Use a .mrpack, a CurseForge export or a zip with mods and configs. Vesta checks it before anything changes.
+server-pack-first-title = Set up the client pack
+server-pack-first-link-title = Use a modpack
+server-pack-first-link-hint = From Modrinth or CurseForge
+server-pack-first-file-title = Upload a file
+server-pack-first-file-hint = .mrpack or .zip, or drop it here
 server-pack-first-upload-hint = Or drop the file here.
 server-pack-first-upload-action = Choose a file
 server-pack-first-scratch-title = Start from scratch
-server-pack-first-scratch-description = Build a custom pack, starting with the client mods this server's own content needs.
-server-pack-first-scratch-action = Start a custom pack
+server-pack-first-scratch-hint = Begins with the mods the server needs
 server-pack-upload-bad-file = Choose a .mrpack or .zip modpack file.
 server-pack-uploading = Uploading { $name }…
 server-pack-inspecting = Checking the archive

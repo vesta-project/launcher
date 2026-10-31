@@ -254,7 +254,7 @@ export function modpackGates(view: CapabilityView | undefined, role: string | nu
 
 /* ---- First run ---- */
 
-export type FirstRunChoice = 'provider' | 'upload' | 'scratch';
+export type FirstRunChoice = 'provider' | 'link' | 'upload' | 'scratch';
 
 /**
  * Starting points. Linking the server takes a modpack from a provider or a file and needs the
@@ -263,7 +263,7 @@ export type FirstRunChoice = 'provider' | 'upload' | 'scratch';
  */
 export function firstRunChoices(section: ModpackSection, gates: Pick<ModpackGates, 'edit' | 'installOnServer'>): { id: FirstRunChoice; enabled: boolean }[] {
   if (section === 'server') return (['provider', 'upload'] as const).map((id) => ({ id, enabled: gates.installOnServer }));
-  return (['upload', 'scratch'] as const).map((id) => ({ id, enabled: gates.edit }));
+  return (['link', 'upload', 'scratch'] as const).map((id) => ({ id, enabled: gates.edit }));
 }
 
 export const ARCHIVE_EXTENSIONS = ['.mrpack', '.zip'];

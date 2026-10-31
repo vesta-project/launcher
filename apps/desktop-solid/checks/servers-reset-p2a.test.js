@@ -54,9 +54,9 @@ describe('[lifecycle] AMP model: Sleep / Wake / Stop / Start', () => {
     expect(statusDot(waking)).toBe('starting');
   });
 
-  test('a run still coming up offers Stop, never Sleep or Restart', () => {
-    expect(lifecycleControls(snapshot({ lifecycle: 'waking', readiness: 'starting' }))).toMatchObject({ primary: 'stop', progress: 'waking', restart: false, stop: false });
-    expect(lifecycleControls(snapshot({ readiness: 'starting' }))).toMatchObject({ primary: 'stop', progress: 'starting', restart: false });
+  test('a run still coming up arms Force kill on the progress button, never Stop, Sleep or Restart', () => {
+    expect(lifecycleControls(snapshot({ lifecycle: 'waking', readiness: 'starting' }))).toMatchObject({ primary: 'kill', progress: 'waking', restart: false, stop: false });
+    expect(lifecycleControls(snapshot({ readiness: 'starting' }))).toMatchObject({ primary: 'kill', progress: 'starting', restart: false });
   });
 
   test('stopping keeps Force kill; permissions still gate every action', () => {

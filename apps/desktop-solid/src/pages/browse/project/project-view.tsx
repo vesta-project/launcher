@@ -17,7 +17,7 @@ import {
   type SourceId,
 } from '../../../features/browse/browse-model';
 import { loadPeerProjectId } from '../../../features/browse/browse-projects';
-import { sameState, serverTarget, target, targetName as installTargetName } from '../../../features/browse/browse-store';
+import { modpackTargetName, sameState, serverTarget, target, targetName as installTargetName } from '../../../features/browse/browse-store';
 import { formatNumber, t } from '../../../localization';
 import { InstallButton } from '../install-button';
 import { runInstall } from '../install-actions';
@@ -168,7 +168,7 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
     equals: sameState,
   });
   // Modpacks make a new instance unless a server is chosen, so only a server is a hint for them.
-  const targetName = () => (props.project.resource_type === 'modpack' ? serverTarget()?.name : installTargetName());
+  const targetName = () => (props.project.resource_type === 'modpack' ? modpackTargetName() : installTargetName());
   const versionCount = () => props.data.versions()?.length;
 
   return (

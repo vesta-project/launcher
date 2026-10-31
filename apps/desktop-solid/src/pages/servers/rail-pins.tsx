@@ -1,12 +1,13 @@
 import { Metadata } from '../../components/metadata';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
 import { lifecycleControls, minecraftFact, quickAction, statusDot } from '../../features/servers/model';
 import { pinnedServers, serverIcon, updateServer } from '../../features/servers/store';
+import { KillDialog } from './kill';
 import { actionLabels, useLifecycle } from './lifecycle';
 import './servers.css';
 
@@ -20,11 +21,13 @@ export function RailServerPins() {
           {(snapshot) => {
             const href = () => `/servers/${snapshot().connection.id}`;
             const lifecycle = useLifecycle(snapshot);
+            const [killing, setKilling] = createSignal(false, { name: 'rail-pin:killing' });
             const quick = () => quickAction(snapshot());
             const busy = () => !!lifecycle.busy() || lifecycleControls(snapshot()).progress !== null;
             const label = () => `${snapshot().connection.name}
 ${t(minecraftFact(snapshot().status).message)}`;
             return (
+              <>
               <ContextMenu
                 trigger={(contextProps) => (
                   <Tooltip
@@ -59,9 +62,14 @@ ${t(minecraftFact(snapshot().status).message)}`;
                 <Show when={lifecycleControls(snapshot()).stop}>
                   <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
                 </Show>
+                <Show when={lifecycleControls(snapshot()).primary === 'kill'}>
+                  <ContextMenuItem onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
+                </Show>
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => void updateServer(snapshot().connection.id, { pinned: false })}>{t('common.unpin')}</ContextMenuItem>
               </ContextMenu>
+              <KillDialog snapshot={snapshot()} open={killing()} onOpenChange={setKilling} />
+              </>
             );
           }}
         </For>

@@ -297,5 +297,7 @@ browse-target-reason-modpack-unavailable = Couldn't check this server's client m
 # Browse target dropdown
 browse-target-new-instance = New instance
 browse-target-new-instance-help = Modpacks make their own instance.
+browse-target-client-pack = Use as client pack
+browse-target-client-pack-of = { $name } client pack
 browse-target-any-help = Install asks where each time.
 browse-target-empty = Nothing matches.

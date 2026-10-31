@@ -210,6 +210,89 @@
     color: var(--vesta-color-accent-text);
   }
 
+  /* ---- Client pack starting points: three compact tiles, each one action ---- */
+  :where([data-vesta="modpack-first"][data-section="client"]) {
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    max-inline-size: none;
+    margin-inline: 0;
+  }
+
+  :where([data-vesta="modpack-first"][data-section="client"]) :where([data-vesta="modpack-first-head"] h2) {
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta="modpack-starts"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="modpack-start"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition:
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  /* The file tile is also where a pack can be dropped. */
+  :where([data-vesta="modpack-start"][data-choice="upload"]) { border-style: dashed; }
+
+  :where([data-vesta="modpack-start"]:not(:disabled)):hover,
+  :where([data-vesta="modpack-start"][data-drop-target="active"]) {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-fill-hover) 60%, var(--modpack-panel-bg));
+  }
+
+  :where([data-vesta="modpack-start"]:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta="modpack-start"]:disabled) { opacity: var(--vesta-opacity-disabled); }
+
+  :where([data-vesta="modpack-start-icon"]) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="modpack-start-text"]) {
+    display: grid;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-start-text"] strong) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-start-text"] span) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* ---- Cards (upload result, scratch, sync review) ---- */
   :where([data-vesta="modpack-card"]) {
     display: grid;

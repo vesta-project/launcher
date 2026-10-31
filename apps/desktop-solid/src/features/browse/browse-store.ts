@@ -474,6 +474,23 @@ export function chooseTarget(ref: BrowseTargetRef | undefined) {
   navigate(targetPath(ref), { replace: true });
 }
 
+/**
+ * A server row picked for modpacks: `modpack` uses the pick as that server's client pack (the
+ * same provider link the client pack's own "Use a modpack" makes), otherwise as its modpack.
+ */
+export function chooseServerDestination(id: string, destination: 'server' | 'modpack' | undefined, inPlace = false) {
+  syncServerTarget(id);
+  setServerDestinationHint(destination);
+  if (!inPlace) navigate(targetPath({ kind: 'server', id }), { replace: true });
+}
+
+/** Where a modpack Install goes, for its hint: the server, or that server's client pack. */
+export const modpackTargetName = () => {
+  const server = serverTarget();
+  if (!server) return undefined;
+  return serverDestinationHint() === 'modpack' ? t('browse.target-client-pack-of', { name: server.name }) : server.name;
+};
+
 /** A project page's choice: the page stays put, only the store follows. */
 export function chooseTargetInPlace(ref: BrowseTargetRef | undefined) {
   if (ref?.kind === 'server') return syncServerTarget(ref.id);

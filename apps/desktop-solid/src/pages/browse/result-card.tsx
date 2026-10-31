@@ -23,6 +23,7 @@ import {
   loader,
   sameState,
   source,
+  modpackTargetName,
   serverTarget,
   setLoader,
   target,
@@ -195,7 +196,7 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
         <span data-vesta="browse-card-action">
           <InstallButton
             state={state}
-            targetName={() => (project().resource_type === 'modpack' ? serverTarget()?.name : targetName())}
+            targetName={() => (project().resource_type === 'modpack' ? modpackTargetName() : targetName())}
             onRun={() => void runInstall(project(), project().resource_type, target())}
           />
         </span>
