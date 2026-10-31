@@ -255,7 +255,17 @@ pub(super) fn wire(value: Value) -> Value {
         other => other,
     }
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EulaState { pub accepted: bool }
 impl Client {
+    pub async fn eula(&self) -> Result<EulaState> {
+        from_wire(self.get("eula", true, "config.view").await?)
+    }
+    pub async fn set_eula(&self, accepted: bool, intent: &str) -> Result<EulaState> {
+        let key = self.intent_key(intent)?;
+        from_wire(self.request(Method::POST, "/api/v3/manage/eula", Some(json!({"accepted":accepted})), Some(&key), true, "config.edit").await?)
+    }
+
     pub async fn custom_jar_plan(
         &self,
         path: Option<String>,

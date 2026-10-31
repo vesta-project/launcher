@@ -1,3 +1,4 @@
+import { ServerEulaDialog } from '../features/servers/eula-dialog';
 import { useNavigationPreloading } from "./navigation-preload";
 import { NativeImportDialog } from '../features/instances/native-import-dialog';
 import { InstanceDeleteDialog } from '../features/instances/delete-dialog';
@@ -58,6 +59,7 @@ export function Shell() {
       <ToastRegion />
       <LinkPreview />
       <ExternalLinkDialog />
+      <ServerEulaDialog />
       <DropTargetDialog />
       <FileDragHint enabled={route().page !== 'create'} onLibrary={route().page === 'library' && !route().section} />
       <NativeImportDialog />

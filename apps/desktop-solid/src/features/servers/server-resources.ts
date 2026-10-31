@@ -99,3 +99,5 @@ export const sftpKeysResource = serverResource('sftp-keys', (id) => serverComman
  */
 export const metricsHistoryResource = serverResource('metrics-history', (id, range: GraphRange) =>
   serverCommand((client) => client.metricsHistory(id, historyRequest(range, Date.now()))));
+
+export const eulaResource = serverResource('eula', (id) => serverCommand(client => client.eula(id)));

@@ -169,7 +169,10 @@ export interface SftpTarget { host: string; port: number; username: string; host
 
 // ------------------------------------------------------------------ commands
 
+export interface EulaState { accepted: boolean }
 export const serversHostingNative = {
+  eula: (connectionId: ConnectionId) => call<EulaState>('server_eula', { connectionId }),
+  eulaUpdate: (connectionId: ConnectionId, accepted: boolean, intentId: string) => call<EulaState>('server_eula_update', { connectionId, accepted, intentId }),
   /** GET world. */
   world: (connectionId: ConnectionId) => call<ServerWorld>('server_world', { connectionId }),
   worldDatapackOffline: (connectionId: ConnectionId, packId: string, enabled: boolean, expectedRevision: string, intentId: string) =>

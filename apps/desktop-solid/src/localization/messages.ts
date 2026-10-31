@@ -1,5 +1,12 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "servers.eula.title",
+  "servers.eula.description",
+  "servers.eula.read",
+  "servers.eula.accept-start",
+  "servers.eula.setting-description",
+  "server-pack.create-no-pack",
+  "server-pack.create-failed",
   "install.version-from-manifest",
   "server-pack.warning-legacy-archive-bytes",
   "server-pack.warning-legacy-archive-entries",

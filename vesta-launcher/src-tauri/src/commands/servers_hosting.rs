@@ -325,3 +325,11 @@ pub async fn server_world_datapack_toggle(
         )
         .await
 }
+
+read_command!(server_eula, EulaState, eula);
+#[tauri::command]
+pub async fn server_eula_update(app: AppHandle, manager: Manager<'_>, connection_id: String, accepted: bool, intent_id: String) -> Result<EulaState> {
+    let journal = intent_id.clone();
+    manager.management_write(&app, &connection_id, &journal, "eula", json!({"accepted": accepted}), false,
+        |client| async move { client.set_eula(accepted, &intent_id).await }).await
+}
