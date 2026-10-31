@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Badge, Button, IconButton, Menu, MenuItem, Progress, Skeleton, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -148,7 +149,7 @@ function RuntimeRow(props: { row: JavaRow; stopped: boolean; locked: boolean; ac
         <span>
           <Badge size="sm" tone={props.row.source === 'managed' ? 'accent' : undefined}>{t(javaSourceMessage[props.row.source])}</Badge>
           <Show when={props.row.selected}><Badge size="sm" tone="success">{t('server-java.in-use')}</Badge></Show>
-          <small>{[runtime().vendor, runtime().version, runtime().arch].filter(Boolean).join(' · ')}</small>
+          <small><Metadata parts={[runtime().vendor, runtime().version, runtime().arch]} /></small>
         </span>
         <code title={runtime().path}>{runtime().path}</code>
       </div>

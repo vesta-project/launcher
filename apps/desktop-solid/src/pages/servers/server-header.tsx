@@ -54,7 +54,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
             <span data-vesta="server-header-state" data-tone={minecraft().tone}>
               <StatusDot dot={statusDot(props.snapshot)} />
               {t(minecraft().message, minecraft().args)}
-              <Show when={minecraft().seen}>{(seen) => <> · {t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</>}</Show>
+              <Show when={minecraft().seen}>{(seen) => <span>{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</span>}</Show>
             </span>
             <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
             <Show when={players() !== null}>

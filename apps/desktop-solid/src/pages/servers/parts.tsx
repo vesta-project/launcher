@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import './servers.css';
 import { Badge, Button, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -21,7 +22,7 @@ export function FactBadge(props: { fact: Fact; now?: number }) {
   const text = () => {
     const main = t(props.fact.message, props.fact.args);
     const seen = props.fact.seen;
-    return seen ? `${main} · ${t('servers.seen', { time: t(seen.message, { count: seen.count }) })}` : main;
+    return seen ? <Metadata parts={[main, t('servers.seen', { time: t(seen.message, { count: seen.count }) })]} /> : main;
   };
   return <Badge tone={props.fact.tone} variant="soft">{text()}</Badge>;
 }

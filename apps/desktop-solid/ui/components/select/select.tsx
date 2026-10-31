@@ -15,7 +15,7 @@ export interface SelectOption {
   value: string;
   label: string;
   /** Secondary line under the label in the list. */
-  description?: string;
+  description?: JSX.Element;
   /**
    * Shown in the list and, for the selected option, in the trigger. Pass a function for
    * markup such as an `<img>`: a single node can only sit in one place, so a plain element

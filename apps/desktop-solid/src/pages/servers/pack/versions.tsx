@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { Badge, Button, Checkbox, SegmentedControl, Switch, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { EmptyState } from '../../../components/empty-state';
@@ -246,7 +247,7 @@ function ProviderVersions() {
                     <div data-vesta="modpack-version-copy">
                       <strong>{version().version_number}</strong>
                       <span data-vesta="server-muted">
-                        {version().game_versions.slice(0, 3).join(', ')} · {version().loaders.join(', ')}{version().published_at ? ` · ${formatDate(version().published_at!)}` : ''}
+                        <Metadata parts={[version().game_versions.slice(0, 3).join(', '), version().loaders.join(', '), version().published_at ? formatDate(version().published_at!) : null]} />
                       </span>
                     </div>
                     <Show when={version().release_type !== 'release'}><Badge size="sm" variant="outline" tone="warning">{version().release_type}</Badge></Show>
@@ -290,11 +291,11 @@ function PublishedHistory() {
           <div data-vesta="modpack-version-copy">
             <strong>{t('server-pack.published-revision')} {row.revision}</strong>
             <span data-vesta="server-muted">
-              {[
+              <Metadata parts={[
                 formatDate(new Date(row.publishedAt).toISOString()), row.publishedBy,
                 row.entryCount != null ? t('server-pack.history-entries', { count: row.entryCount }) : null,
                 row.overrideCount != null ? t('server-pack.history-overrides', { count: row.overrideCount }) : null,
-              ].filter(Boolean).join(' · ')}
+              ]} />
             </span>
           </div>
           <Show when={row.providerVersion}><Badge size="sm" variant="outline">{row.providerVersion}</Badge></Show>

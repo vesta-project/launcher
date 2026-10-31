@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import { Popover, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, Show, untrack } from 'solid-js';
@@ -34,7 +35,7 @@ const connectionLabels: Record<ServerOption['connection'], MessageId> = {
 /** "1.21.4 · Paper"; unreachable servers leave out software nobody could read. */
 function serverMeta(option: ServerOption) {
   const software = option.software === undefined && option.unreachable ? undefined : softwareText(option.software);
-  return [option.minecraftVersion, software].filter(Boolean).join(' · ');
+  return <Metadata parts={[option.minecraftVersion, software]} />;
 }
 
 /**
@@ -171,7 +172,7 @@ export function TargetSelect(props: {
     value: string;
     image: () => JSX.Element;
     name: string;
-    meta?: string;
+    meta?: JSX.Element;
     aside?: JSX.Element;
     offline?: boolean;
   }) => (
@@ -204,7 +205,7 @@ export function TargetSelect(props: {
     <Row
       value={row.option.value}
       name={row.option.name}
-      meta={`${row.option.minecraftVersion} · ${row.option.modloader}`}
+      meta={<Metadata parts={[row.option.minecraftVersion, row.option.modloader]} />}
       image={() => <img data-vesta="browse-target-icon" src={row.option.image} alt="" loading="lazy" decoding="async" />}
     />
   );

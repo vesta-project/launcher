@@ -171,7 +171,7 @@ export function ModpackFiles() {
     <div data-vesta="server-files" data-modpack-files="">
       <header data-vesta="pane-toolbar">
         <SegmentedControl size="sm" aria-label={t('server-pack.root-label')} value={root()} onChange={(value) => go(value as PackOverrideRoot)}
-          options={packFileRoots.map((entry) => ({ value: entry.id, label: `${t(entry.label)}${counts()[entry.id] ? ` · ${counts()[entry.id]}` : ''}` }))} />
+          options={packFileRoots.map((entry) => ({ value: entry.id, label: t(entry.label), suffix: counts()[entry.id] ? <span>{counts()[entry.id]}</span> : undefined }))} />
         <Breadcrumbs aria-label={t('server-pack.files-location')} class="server-files-crumbs">
           <BreadcrumbItem href={!opened() && !crumbs().length ? undefined : href('')}>
             <span data-vesta="server-files-root"><Icon name="icons/content/folder" size={14} />{t('server-pack.root-folder', { name: rootLabel(root()).id })}</span>

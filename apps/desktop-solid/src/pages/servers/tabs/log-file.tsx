@@ -101,7 +101,7 @@ export function LogFile(props: {
         onSourceChange={props.onSwitch}
         ariaLabel={() => t('console.log-output', { name: baseName(props.path) })}
         emptyText={() => (loading() ? t('server-files.loading') : binary() ? t('server-files.binary') : t('server-files.log-empty'))}
-        footerDetail={() => [size() ? formatBytes(size()!) : null, decompress() ? t('server-files.decompressed') : null].filter(Boolean).join(' · ') || undefined}
+        footerDetail={() => [size() ? formatBytes(size()!) : null, decompress() ? t('server-files.decompressed') : null]}
         toolbarExtras={
           <>
             <IconButton size="sm" variant="ghost" icon={<Icon name="icons/content/history" />} label={t('server-files.load-earlier')}

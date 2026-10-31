@@ -173,6 +173,9 @@
   }
 
   :where([data-vesta="overview-facts"] dd) {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
     margin: 0;
     font-variant-numeric: tabular-nums;
   }

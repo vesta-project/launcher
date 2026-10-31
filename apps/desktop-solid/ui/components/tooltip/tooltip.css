@@ -21,5 +21,6 @@
     font-size: var(--vesta-text-sm);
     line-height: var(--vesta-leading-tight);
     pointer-events: none;
+    white-space: pre-line;
   }
 }

@@ -47,10 +47,6 @@
   }
 
 
-  :where([data-vesta="server-content-provider"]) + :where([data-vesta="resource-file"])::before {
-    content: "·";
-    margin-inline-end: var(--vesta-space-1-5);
-  }
 
   /* Header summary: staged changes and the restart that applies them. */
   :where([data-vesta="server-content-summary"]) {

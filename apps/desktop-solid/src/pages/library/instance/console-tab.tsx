@@ -1,3 +1,4 @@
+import { Metadata } from '../../../components/metadata';
 import { MenuItem, MenuSeparator } from "@vesta/ui";
 import { Show, untrack, onSettled } from "solid-js";
 import { navigate } from "../../../app/router";
@@ -39,7 +40,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
               ? props.entry.state.kind === "running"
                 ? t("console.source-live-game")
                 : t("console.source-stopped")
-              : `${item.modified} · ${item.size}`,
+              : <Metadata parts={[item.modified, item.size]} />,
         }))
       }
       onSourceChange={(id) => void session.choose(id)}
@@ -47,11 +48,13 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       emptyText={() => t("console.no-output")}
       footerDetail={() =>
         source().kind === "file"
-          ? `${source().path} · ${source().modified}`
+          ? [source().path, source().modified]
           : undefined
       }
       footerTitle={() =>
-        `${source().path ?? t("console.current-capture")} · ${source().modified} ${source().size}`
+        `${source().path ?? t("console.current-capture")}
+${source().modified}
+${source().size}`
       }
       extraMenuItems={
         <>

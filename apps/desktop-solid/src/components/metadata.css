@@ -1,0 +1,9 @@
+@layer launcher {
+  :where([data-vesta="metadata"]) {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+}

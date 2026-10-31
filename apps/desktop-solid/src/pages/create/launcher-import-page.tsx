@@ -1,3 +1,4 @@
+import { Metadata } from '../../components/metadata';
 import { goBack } from "../../app/transition";
 import { Button, IconButton, Select, TextField } from "@vesta/ui";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -370,9 +371,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
                             <span data-vesta="import-instance-row-copy">
                               <strong>{candidate.name}</strong>
                               <span>
-                                {[candidate.minecraftVersion, candidate.modloader]
-                                  .filter(Boolean)
-                                  .join(" · ")}
+                                <Metadata parts={[candidate.minecraftVersion, candidate.modloader]} />
                               </span>
                             </span>
                             <span data-vesta="import-instance-row-date">

@@ -21,7 +21,7 @@ function taskEvent(event: NativeActivity) {
     progress: progress != null && progress >= 0 ? progress / 100 : undefined,
     overallProgress: event.overall != null ? event.overall / 100 : overallProgress != null && overallProgress >= 0 ? overallProgress / 100 : undefined,
     currentStep: currentStep ?? undefined, totalSteps: totalSteps ?? undefined,
-    ...(record ? { icon: displayImage(record), subtitle: [record.minecraftVersion, record.modloader].filter(Boolean).join(' · ') } : {}),
+    ...(record ? { icon: displayImage(record), subtitle: t('activity.instance-subtitle', { version: record.minecraftVersion, loader: record.modloader ?? 'vanilla' }) } : {}),
     ...(context ? {
       target: raw.target ?? (!event.subject && context.kind === 'instance' && context.id ? { instanceId: context.id } : undefined),
       ...(context.iconUrl ? { icon: context.iconUrl } : {}), iconFallback: context.label?.slice(0, 2),

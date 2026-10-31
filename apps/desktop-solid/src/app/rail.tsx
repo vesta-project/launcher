@@ -1,3 +1,4 @@
+import { Metadata } from '../components/metadata';
 import { requestCreateAction } from '../pages/create/install-navigation';
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip, mergeElementProps } from '@vesta/ui';
 import { For, Show } from 'solid-js';
@@ -118,7 +119,7 @@ export function Rail() {
                 <ContextMenu
                   trigger={(contextProps) => (
                     <Tooltip
-                      content={`${entry().instance.name} · ${pinStatus(entry().state.kind) ?? entry().instance.minecraftVersion}`}
+                      content={<Metadata parts={[entry().instance.name, pinStatus(entry().state.kind) ?? entry().instance.minecraftVersion]} />}
                       placement="right"
                       trigger={(triggerProps) => (
                         <a

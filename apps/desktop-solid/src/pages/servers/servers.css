@@ -380,7 +380,6 @@
   :where([data-vesta="server-activity-command"])::before { content: "/"; color: var(--vesta-color-text-subtle); }
   :where([data-vesta="server-activity-detail"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-style: italic; }
   :where([data-vesta="server-activity-meta"]) { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
-  :where([data-vesta="server-activity-meta"]) span + span::before { content: "·"; margin-inline-end: 12px; }
 
   :where(.servers-workspace [data-vesta="instance-settings-scroll"] > *, .servers-workspace [data-vesta="server-activity"] > [data-vesta="server-pane-body"] > *) {
     inline-size: 100%;
@@ -654,7 +653,6 @@
   :where([data-vesta="server-sleep-now"][data-kind="asleep"]) > [data-vesta="icon"],
   :where([data-vesta="server-sleep-now"][data-kind="counting"]) > [data-vesta="icon"] { color: var(--server-sleep-tone); }
   :where([data-vesta="server-sleep-now-label"]) { color: var(--vesta-color-text-muted); }
-  :where([data-vesta="server-sleep-now-label"])::after { content: " ·"; }
 }
 @layer launcher {
   /* Overview graphs (D9): one card per reported metric, one accent line each, recessive grid. */

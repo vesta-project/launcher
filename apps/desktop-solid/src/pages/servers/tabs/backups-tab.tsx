@@ -1,3 +1,4 @@
+import '../../../components/metadata.css';
 import { Badge, Button, Checkbox, Dialog, toast } from '@vesta/ui';
 import type { Tone } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
@@ -282,7 +283,7 @@ function BackupList(props: { snapshot: ServerSnapshot; profile: string; onRestor
                 <div data-vesta="setting-row">
                   <div data-vesta="setting-row-copy">
                     <span data-vesta="setting-row-label">{new Date(point.time).toLocaleString()}</span>
-                    <span data-vesta="setting-row-description"><code>{point.id.slice(0, 12)}</code>{point.safety ? ` · ${t('servers.backups.safety')}` : ''}</span>
+                    <span data-vesta="setting-row-description"><span data-vesta="metadata"><code>{point.id.slice(0, 12)}</code><Show when={point.safety}><span>{t('servers.backups.safety')}</span></Show></span></span>
                   </div>
                   <Show when={canRestore()}>
                     <div data-vesta="setting-row-control">

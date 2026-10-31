@@ -22,7 +22,7 @@ function startSimulation(scenario: ActivityFixture): () => void {
     return () => clearTimeout(timer);
   }
   const count = scenario === 'multiple' ? 5 : 1;
-  for (let i = 0; i < count; i++) receiveActivity({ id: `fixture-install-${i}`, kind: 'task', title: scenario === 'long-title' ? `${title} — ${'Minecraft modpack '.repeat(8)}` : `${title} ${i + 1}`, subtitle: 'Minecraft 1.21.1 · Fabric',
+  for (let i = 0; i < count; i++) receiveActivity({ id: `fixture-install-${i}`, kind: 'task', title: scenario === 'long-title' ? `${title} — ${'Minecraft modpack '.repeat(8)}` : `${title} ${i + 1}`, subtitle: 'Fabric for Minecraft 1.21.1',
     iconFallback: 'minecraft', state: scenario === 'success' ? 'done' : scenario === 'failure' ? 'failed' : 'running',
     progress: scenario === 'indeterminate' ? undefined : scenario === 'multiple' ? i / 6 : 0.42, weight: (i + 1) * 100, step: t('activity.fixture-step', { count: 47, max: 112 }),
     cancellable: true, startedAt: now, target: { instanceId: `fixture-${i}` }, action: 'play',
