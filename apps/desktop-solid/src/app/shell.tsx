@@ -28,6 +28,7 @@ import { Rail } from './rail';
 import { route } from './router';
 import { Titlebar } from './titlebar';
 import { detectPlatform } from './platform';
+import { watchFrameSplit } from './frame-split';
 import { goBack } from './transition';
 import './shell.css';
 import '../styles/reduced-motion.css';
@@ -54,13 +55,15 @@ export function Shell() {
   useServerSync();
   useInstanceShortcutRuntime();
   useMouseBack();
+  let shellElement!: HTMLDivElement;
+  onSettled(() => watchFrameSplit(shellElement));
   let dropElement: HTMLElement | undefined;
   // Catch-all: drops that miss every target still ask which instance should get them,
   // but it stays quiet so the whole window never lights up.
   useNativeDropZone({ element: () => dropElement, disabled: () => route().page === 'create', drop: reviewUntargetedDrop, quiet: true });
 
   return (
-    <div data-vesta="shell" data-platform={platform}>
+    <div ref={shellElement} data-vesta="shell" data-platform={platform}>
       <Titlebar />
       <AccountLoginDialog />
       <TooltipHints />

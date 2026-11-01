@@ -100,6 +100,9 @@
   }
 
   :where([data-vesta='shell-body']) {
+    /* The content sheet's inset in the frame (the board's gutter); the junction fillet follows it. */
+    --shell-sheet-inset: 16px;
+
     display: contents;
   }
 
@@ -126,6 +129,10 @@
   }
 
   @container app (max-width: 640px) {
+    :where([data-vesta='shell-body']) {
+      --shell-sheet-inset: 8px;
+    }
+
     :where([data-vesta='rail']) {
       --rail-width: 52px;
       --rail-button-size: 36px;
