@@ -8,6 +8,7 @@ import {
 import {
   invalidateServerResources, peekServerResource, readServerResource, resourceKey, seedServerResource, serverResource,
 } from '../src/features/servers/resources';
+import { noteServerContact, serverContactAt, withContact } from '../src/features/servers/contact';
 
 const status = (patch = {}) => ({
   state: 'running', lifecycle: 'online', generation: 'g'.repeat(32), playerCount: 2, playerCountKnown: true,
@@ -158,10 +159,37 @@ describe('[shell] one place for connectivity problems', () => {
     const crash = snapshot({ status: status({ lifecycle: 'crash_loop' }), restartRequired: true });
     expect(headerNotice(crash, 0)?.kind).toBe('crash-loop');
     expect(headerNotice({ ...offline('backoff'), restartRequired: true }, 0)).toMatchObject({ kind: 'connection', action: 'retry' });
-    expect(headerNotice(offline('connecting'), 0)).toMatchObject({ kind: 'connection', tone: 'neutral' });
+    // Connecting is said by the lifecycle button alone.
+    expect(headerNotice(offline('connecting'), 0)).toBeNull();
     expect(headerNotice(snapshot(), 0, { code: 'server_busy', untilMs: 100 })).toMatchObject({ kind: 'pressure', title: { message: 'servers.error.server-busy' } });
     expect(headerNotice(snapshot({ status: status({ readinessReason: 'probe_failed' }) }), 0)?.kind).toBe('degraded');
     expect(headerNotice(snapshot(), 0)).toBeNull();
+  });
+
+  test('a lost agent says when it was last seen, counting any later response', () => {
+    expect(headerNotice(offline(), 180_000)).toMatchObject({ kind: 'connection', seen: { message: 'servers.age.minutes', count: 3 } });
+    expect(headerNotice(offline(), 180_000, null, 170_000)).toMatchObject({ seen: { message: 'servers.age.seconds', count: 10 } });
+    expect(headerNotice({ ...offline(), statusObservedAtMs: null, status: null }, 0)).toMatchObject({ text: { message: 'servers.notice.no-state' } });
+    // A reachable agent with Minecraft stopped is a normal, current state.
+    expect(headerNotice(snapshot({ status: status({ state: 'stopped', lifecycle: 'offline', generation: null }) }), 600_000)).toBeNull();
+  });
+
+  test('a successful agent response notes contact; local commands and failures do not', async () => {
+    const api = { filesList: async () => [], update: async () => ({}), status: async () => { throw new Error('down'); } };
+    const wrapped = withContact(api, (id) => id === 'contact-1');
+    expect(serverContactAt('contact-1')).toBeNull();
+    await wrapped.update('contact-1');
+    expect(serverContactAt('contact-1')).toBeNull();
+    await wrapped.status('contact-1').catch(() => {});
+    expect(serverContactAt('contact-1')).toBeNull();
+    await wrapped.filesList('other');
+    expect(serverContactAt('other')).toBeNull();
+    const before = Date.now();
+    await wrapped.filesList('contact-1', '/');
+    await Promise.resolve();
+    expect(serverContactAt('contact-1')).toBeGreaterThanOrEqual(before);
+    noteServerContact('contact-1', before + 5_000);
+    expect(serverContactAt('contact-1')).toBe(before + 5_000);
   });
 
   test('a pending restart is a notice with Restart now, gone once Minecraft stops', () => {

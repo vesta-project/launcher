@@ -4,7 +4,8 @@ import { Icon } from '../../components/icon';
 import { HeaderIdentity } from '../library/instance/header-identity';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
-import { lifecycleControls, minecraftFactNow, statusDot, uptimeNow } from '../../features/servers/model';
+import { lifecycleControls, uptimeNow } from '../../features/servers/model';
+import { serverContactAt } from '../../features/servers/contact';
 import { gate } from '../../features/servers/capabilities';
 import { serverPressure, useServerResource } from '../../features/servers/resources';
 import { sleepPolicyResource } from '../../features/servers/server-resources';
@@ -14,12 +15,16 @@ import { serverIcon, serverRefreshing, updateServer, useServersClock } from '../
 import type { ServerSnapshot } from '../../features/servers/native';
 import { actionIcons, actionLabels, useLifecycle, type Lifecycle, type SubmittableAction } from './lifecycle';
 import { KillDialog, StartKillButton } from './kill';
-import { Sensitive, StatusDot } from './parts';
+import { Sensitive } from './parts';
 import { refreshServerWithFeedback } from './refresh-button';
 import { RemoveServerDialog } from './remove-dialog';
 
 
-/** The instance header's layout: art banner, icon tile, title and meta, then status and actions, then one notice strip. */
+/**
+ * The instance header's layout: art banner, icon tile, title and meta, then actions, then one
+ * notice strip. Minecraft's state is said by the lifecycle button; a lost agent turns that
+ * button into a disabled Offline/Reconnecting state.
+ */
 export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean; onOpenSettings: () => void }) {
   const now = useServersClock();
   const [removing, setRemoving] = createSignal(false, { name: 'server-header:removing' });
@@ -30,15 +35,11 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   const sleeping = () => props.snapshot.state.phase === 'online' && props.snapshot.status?.lifecycle === 'sleeping';
   // Whether a join wakes it lives in the sleep policy; read it only while asleep.
   const sleepPolicy = useServerResource(id, sleepPolicyResource, { enabled: () => sleeping() && gate(props.snapshot.capabilities, 'config.view') === 'allowed' });
-  const minecraft = () => {
-    const fact = minecraftFactNow(props.snapshot, now());
-    return sleeping() ? { ...fact, message: sleepingMessage(sleepPolicy.value()?.policy) } : fact;
-  };
-  const uptime = () => (minecraft().seen ? null : uptimeNow(props.snapshot, now()));
+  const uptime = () => uptimeNow(props.snapshot, now());
   const controls = () => lifecycleControls(props.snapshot);
   const players = () => knownPlayerCount(props.snapshot);
   const address = () => joinAddress(props.snapshot);
-  const notice = () => headerNotice(props.snapshot, now(), serverPressure(id()));
+  const notice = () => headerNotice(props.snapshot, now(), serverPressure(id()), serverContactAt(id()));
   const copyAddress = async () => {
     const value = address();
     if (!value) return;
@@ -65,16 +66,10 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
               </span>
             )}
           </Show>
+          <Show when={uptime()}>{(time) => <span data-vesta="server-header-uptime">{t('servers.uptime', { time: time() })}</span>}</Show>
+          <Show when={sleeping()}><span>{t(sleepingMessage(sleepPolicy.value()?.policy))}</span></Show>
         </HeaderIdentity>
         <div data-vesta="instance-header-actions">
-          <span data-vesta="instance-header-status" data-tone={minecraft().tone} role="status">
-            <StatusDot dot={statusDot(props.snapshot)} />
-            <span>
-              {t(minecraft().message, minecraft().args)}
-              <Show when={minecraft().seen}>{(seen) => <small>{' '}{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</small>}</Show>
-              <Show when={uptime()}>{(time) => <small>{' '}{t('servers.uptime', { time: time() })}</small>}</Show>
-            </span>
-          </span>
           <IconButton variant="ghost" label={t('servers.settings.title')} icon={<Icon name="icons/content/gear" />} onClick={props.onOpenSettings} />
           <Menu
             placement="bottom-end"
@@ -117,6 +112,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
             <p>
               <strong>{t(current().title.message, current().title.args)}</strong>
               <Show when={current().text}>{(text) => <span>{t(text().message, text().args)}</span>}</Show>
+              <Show when={current().seen}>{(seen) => <span>{t('servers.notice.last-seen', { time: t(seen().message, { count: seen().count }) })}</span>}</Show>
             </p>
             <Show when={current().action === 'restart'}>
               <Button size="sm" variant="outline" disabled={!!lifecycle.busy() || lifecycle.pending('restart')} onClick={() => void lifecycle.submit('restart')}>
@@ -136,6 +132,13 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   );
 }
 
+/** While the agent can't be reached, the lifecycle slot says so instead of offering controls. */
+const disconnectedLabel = (phase: ServerSnapshot['state']['phase']) =>
+  phase === 'online' ? null
+    : phase === 'connecting' ? 'servers.connection.connecting' as const
+      : phase === 'backoff' ? 'servers.lifecycle.reconnecting' as const
+        : 'servers.lifecycle.unreachable' as const;
+
 /** Start / Stop / Restart; Force kill replaces Stop while a stop hangs, and arms on the Starting button. */
 function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle }) {
   const [killOpen, setKillOpen] = createSignal(false, { name: 'server-lifecycle:kill-open' });
@@ -147,6 +150,14 @@ function LifecycleBar(props: { snapshot: ServerSnapshot; lifecycle: Lifecycle })
 
   return (
     <div data-vesta="server-lifecycle">
+      <Show when={disconnectedLabel(props.snapshot.state.phase)}>
+        {(label) => (
+          <Button variant="outline" disabled data-server-disconnected data-phase={props.snapshot.state.phase}
+            icon={<Icon name="icons/status/connection-lost" />}>
+            {t(label())}
+          </Button>
+        )}
+      </Show>
       {/* Offline and needs-attention are explained by the notice strip. */}
       <Show when={!controls().primary && controls().blocked !== 'servers.lifecycle.offline' && controls().blocked !== 'servers.lifecycle.needs-attention' ? controls().blocked : null}>
         {(blocked) => <span data-vesta="server-lifecycle-note">{t(blocked())}</span>}

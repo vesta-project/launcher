@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SOFTWARE_IDS } from '../src/features/servers/hosting-native';
-import { STATUS_INTERVAL_MS, freshnessVisible, minecraftFactNow } from '../src/features/servers/model';
+import { freshnessVisible, minecraftFactNow } from '../src/features/servers/model';
 import {
   changeBlocker, choiceState, initialChoice, keepMinecraft, latestVersionLabel, softwareIcon, softwareVersionKind, softwareVersionText,
 } from '../src/features/servers/software-flow';
@@ -13,28 +13,22 @@ import { keepBothName, planUploads, uploadConflict, uploadLabel } from '../src/f
 const status = { state: 'running', readiness: 'ready', lifecycle: 'running', playerCount: 0, playerCountKnown: true, playerCountObservedAtMs: null };
 const snapshot = (phase, observedAtMs) => ({ state: { phase }, status, statusObservedAtMs: observedAtMs });
 
-describe('[freshness] "Updated N ago" only while disrupted or stale', () => {
-  test('a live, current value shows no age', () => {
-    expect(freshnessVisible('online', 1_000, 1_000)).toBe(false);
-    expect(freshnessVisible('online', 0, 2 * STATUS_INTERVAL_MS)).toBe(false);
-  });
-
-  test('a connected value older than twice the expected interval is stale', () => {
-    expect(freshnessVisible('online', 0, 2 * STATUS_INTERVAL_MS + 1)).toBe(true);
-    expect(freshnessVisible('online', 0, 5_000, 2_000)).toBe(true);
+describe('[freshness] "Updated N ago" only while the agent is unreachable', () => {
+  test('a reachable agent is current, however old its last status event', () => {
+    expect(freshnessVisible('online', 1_000)).toBe(false);
+    expect(freshnessVisible('online', 0)).toBe(false);
   });
 
   test('any disruption shows when it was last seen, however recent', () => {
-    for (const phase of ['connecting', 'backoff', 'unreachable', 'disconnected']) expect(freshnessVisible(phase, 1_000, 1_000)).toBe(true);
+    for (const phase of ['connecting', 'backoff', 'unreachable', 'disconnected']) expect(freshnessVisible(phase, 1_000)).toBe(true);
   });
 
   test('nothing observed yet means nothing to date', () => {
-    expect(freshnessVisible('unreachable', null, 1_000)).toBe(false);
+    expect(freshnessVisible('unreachable', null)).toBe(false);
   });
 
-  test('the header keeps its tone while stale but connected, and drops it while disconnected', () => {
-    expect(minecraftFactNow(snapshot('online', 0), 5_000).seen).toBeUndefined();
-    expect(minecraftFactNow(snapshot('online', 0), 60_000)).toMatchObject({ tone: 'success', seen: { message: 'servers.age.minutes', count: 1 } });
+  test('the fact keeps its tone while connected, and drops it with an age while unreachable', () => {
+    expect(minecraftFactNow(snapshot('online', 0), 600_000)).toEqual({ tone: 'success', message: 'servers.minecraft.ready' });
     expect(minecraftFactNow(snapshot('backoff', 0), 5_000)).toMatchObject({ tone: 'neutral', seen: { message: 'servers.age.seconds', count: 5 } });
   });
 });

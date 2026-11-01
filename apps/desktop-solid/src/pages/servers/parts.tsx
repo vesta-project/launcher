@@ -48,11 +48,11 @@ export function FingerprintView(props: { value: string; highlight?: number[] }) 
 
 /**
  * Last-known value age, e.g. "Updated 3 min ago". Shown only while the connection is
- * disrupted or the value is stale (see `freshnessVisible`); a live value needs no age.
+ * unreachable (see `freshnessVisible`); a reachable agent's value is current.
  */
 export function Freshness(props: { atMs: number | null; now: number; phase: ConnectionPhase }) {
   return (
-    <Show when={freshnessVisible(props.phase, props.atMs, props.now) ? props.atMs : null}>
+    <Show when={freshnessVisible(props.phase, props.atMs) ? props.atMs : null}>
       {(at) => {
         const seen = () => age(at(), props.now);
         return <span data-vesta="server-freshness">{t('servers.updated', { time: t(seen().message, { count: seen().count }) })}</span>;

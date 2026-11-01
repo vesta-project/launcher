@@ -276,27 +276,29 @@ export class IntentMemo {
   }
 }
 
-/** How often native re-confirms status while connected (live stream, or the 10 s poll). */
-export const STATUS_INTERVAL_MS = 10_000;
-
 /**
- * Whether "Updated/seen N ago" is worth showing. While connected and current the age only
- * ticks between 0 and the poll interval, which is noise; it matters once the connection is
- * disrupted, or the last confirmation is older than twice the expected interval.
+ * Whether "Updated/seen N ago" is worth showing: only while the agent itself is unreachable.
+ * A reachable agent's state is current even when nothing changes (a stopped server emits no
+ * status events over the live socket), so its age is never staleness.
  */
-export function freshnessVisible(
-  phase: ServerSnapshot['state']['phase'], observedAtMs: number | null, nowMs: number, intervalMs = STATUS_INTERVAL_MS,
-): boolean {
-  if (observedAtMs === null) return false;
-  return phase !== 'online' || nowMs - observedAtMs > 2 * intervalMs;
+export function freshnessVisible(phase: ServerSnapshot['state']['phase'], observedAtMs: number | null): boolean {
+  return observedAtMs !== null && phase !== 'online';
 }
 
-/** The Minecraft fact while disconnected or stale: the last known value, with its age. */
-export function minecraftFactNow(snapshot: ServerSnapshot, nowMs: number): Fact {
-  const fact = minecraftFact(snapshot.status, snapshot.publicLifecycle);
+/** When the agent last answered: its last status confirmation or any later successful response. */
+export function lastSeenAt(snapshot: Pick<ServerSnapshot, 'statusObservedAtMs'>, contactAtMs: number | null = null): number | null {
   const observed = snapshot.statusObservedAtMs;
-  if ((!snapshot.status && !snapshot.publicLifecycle) || observed === null || !freshnessVisible(snapshot.state.phase, observed, nowMs)) return fact;
-  // Disconnected: the value is history, so it loses its success/warning tone. Stale but
-  // connected: keep the tone and just say how old it is.
-  return snapshot.state.phase === 'online' ? { ...fact, seen: age(observed, nowMs) } : { ...fact, tone: 'neutral', seen: age(observed, nowMs) };
+  if (observed === null) return contactAtMs;
+  return contactAtMs === null ? observed : Math.max(observed, contactAtMs);
+}
+
+/**
+ * The Minecraft fact. While the agent is reachable it is current, so a stopped server is just
+ * Stopped. While unreachable it is history: it loses its tone and says when the agent was last seen.
+ */
+export function minecraftFactNow(snapshot: ServerSnapshot, nowMs: number, contactAtMs: number | null = null): Fact {
+  const fact = minecraftFact(snapshot.status, snapshot.publicLifecycle);
+  const seen = lastSeenAt(snapshot, contactAtMs);
+  if ((!snapshot.status && !snapshot.publicLifecycle) || seen === null || !freshnessVisible(snapshot.state.phase, seen)) return fact;
+  return { ...fact, tone: 'neutral', seen: age(seen, nowMs) };
 }
