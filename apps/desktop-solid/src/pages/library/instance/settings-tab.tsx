@@ -26,7 +26,6 @@ import {
 import { navigate } from "../../../app/router";
 import { SettingRow } from "../../../components/setting-row";
 import { Icon } from "../../../components/icon";
-import { Notice } from "../../../components/notice";
 import {
   editInstance,
   removeInstance,
@@ -366,7 +365,9 @@ export function InstanceSettingsTab(props: {
               </div>
             </div>
             <Show when={iconError()}>
-              {(message) => <div data-vesta="settings-feedback"><Notice variant="inline">{message()}</Notice></div>}
+              <p data-vesta="settings-feedback" role="alert">
+                {iconError()}
+              </p>
             </Show>
             <SettingRow
               label={t("instance-settings.minecraft-options")}
