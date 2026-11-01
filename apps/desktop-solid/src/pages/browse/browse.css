@@ -289,21 +289,7 @@
   }
 
   :where([data-vesta='browse-error']) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-8);
-    color: var(--vesta-color-danger-text);
-    text-align: center;
-  }
-
-  :where([data-vesta='browse-error'] > p) {
-    max-inline-size: 60ch;
-    margin: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    overflow-wrap: anywhere;
+    padding: var(--vesta-space-3) 0;
   }
 
   /* Pagination centred, page size at the end; the size steps under it when narrow. */

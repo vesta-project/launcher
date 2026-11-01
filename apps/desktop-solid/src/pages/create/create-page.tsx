@@ -6,7 +6,12 @@ import {
   enrichLocalPack,
   packArtwork,
 } from "../../features/installation/pack-metadata";
-import { Button, Checkbox, Combobox, IconPicker, SegmentedControl, Switch, TextField } from "@vesta/ui";
+import { Button, Checkbox, Combobox, IconPicker, Switch, TextField } from "@vesta/ui";
+import { OptionCards } from "../../components/option-cards";
+import { SoftwareMark } from "../../components/software-mark";
+import { Notice } from "../../components/notice";
+import { softwareIcon } from "../../features/servers/software-flow";
+import type { MessageId } from "../../localization/messages";
 import { Show, createMemo, createSignal, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
 import { Icon } from "../../components/icon";
@@ -70,6 +75,13 @@ const loaderNames: Record<string, string> = {
   quilt: "Quilt",
 };
 
+const loaderCards = () => Object.entries(loaderNames).map(([value, label]) => ({
+  value,
+  label,
+  hint: t(`software.hint-${value}` as MessageId),
+  icon: <SoftwareMark software={value} icon={softwareIcon[value as keyof typeof softwareIcon]} />,
+}));
+
 export function CreatePage() {
   onSettled(() => { void preloadLaunchers().catch(() => {}); });
   const selected = () =>
@@ -125,6 +137,7 @@ function InstanceInstallForm() {
     const review = untrack(serverReview);
     if (review) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {});
   });
+  const loaderChoices = createMemo(loaderCards, { name: "installLoaderChoices" });
   const selectedMinecraft = () =>
     minecraft() || (nativeInstances ? metadata()?.latest.release : "1.21.4") || "";
   const availableVersions = createMemo(() => nativeInstances
@@ -470,14 +483,11 @@ function InstanceInstallForm() {
                       <>
                         <div data-vesta="install-field">
                           <label>{t("management.loader")}</label>
-                          <SegmentedControl
+                          <OptionCards
                             value={loader()}
                             onChange={chooseLoader}
                             aria-label={t("management.loader")}
-                            options={Object.entries(loaderNames).map(([value, label]) => ({
-                              value,
-                              label,
-                            }))}
+                            options={loaderChoices()}
                             disabled={locked()}
                           />
                         </div>
@@ -517,13 +527,12 @@ function InstanceInstallForm() {
                           </div>
                         </Show>
                         <Show when={nativeInstances && !metadata()}>
-                          <p role={metadataError() ? "alert" : "status"}>
-                            {metadataError() || t("management.metadata-loading")}
-                          </p>
-                          <Show when={metadataError()}>
-                            <Button variant="ghost" onClick={() => void loadMetadata()}>
-                              {t("common.retry")}
-                            </Button>
+                          <Show when={metadataError()} fallback={<p role="status">{t("management.metadata-loading")}</p>}>
+                            {(message) => (
+                              <Notice variant="inline" action={{ label: t("common.retry"), onClick: () => void loadMetadata() }}>
+                                {message()}
+                              </Notice>
+                            )}
                           </Show>
                         </Show>
                       </>
@@ -561,16 +570,14 @@ function InstanceInstallForm() {
                       <p>{t("install.version-from-manifest")}</p>
                     </Show>
                     <Show when={releaseError()}>
-                      <p role="alert">{releaseError()}</p>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          const current = source();
-                          if (current) void loadSource(current);
-                        }}
-                      >
-                        {t("common.retry")}
-                      </Button>
+                      {(message) => (
+                        <Notice
+                          variant="inline"
+                          action={{ label: t("common.retry"), onClick: () => { const current = source(); if (current) void loadSource(current); } }}
+                        >
+                          {message()}
+                        </Notice>
+                      )}
                     </Show>
                   </Show>
                 </section>
@@ -597,31 +604,24 @@ function InstanceInstallForm() {
           </Show>
           <Show when={serverWithoutPack()}><p>{t('server-pack.create-no-pack')}</p></Show>
           <Show when={error()}>
-            <div data-vesta="install-error" role="alert">
-              <p>{error()}</p>
-              <Show when={serverId && !serverWithoutPack() && !serverReview() && !createdId() && !serverUncertain()}><Button variant="outline" onClick={() => openServerInstall(serverId!)}>{t('common.retry')}</Button></Show>
-              <Show
-                when={createdId()}
-                fallback={
-                  <Show when={source() && !pack()}>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const current = source();
-                        if (current) void loadSource(current);
-                      }}
-                    >
-                      {t("common.retry")}
-                    </Button>
-                  </Show>
-                }
-              >
-                <p>{t("install.created-recovery")}</p>
-                <Button variant="outline" onClick={() => navigate("/library")}>
-                  {t("install.view-library")}
-                </Button>
-              </Show>
-            </div>
+            {(message) => (
+              <div data-vesta="install-error">
+                <Notice
+                  action={
+                    createdId()
+                      ? { label: t("install.view-library"), onClick: () => navigate("/library") }
+                      : serverId && !serverWithoutPack() && !serverReview() && !serverUncertain()
+                        ? { label: t("common.retry"), onClick: () => openServerInstall(serverId!) }
+                        : source() && !pack()
+                          ? { label: t("common.retry"), onClick: () => { const current = source(); if (current) void loadSource(current); } }
+                          : undefined
+                  }
+                >
+                  {message()}
+                  <Show when={createdId()}> {t("install.created-recovery")}</Show>
+                </Notice>
+              </div>
+            )}
           </Show>
         </div>
         <footer data-vesta="install-footer">

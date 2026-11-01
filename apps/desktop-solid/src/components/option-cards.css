@@ -1,0 +1,80 @@
+/*
+ * Option cards: one choice among a few kinds. Cards flow into as many equal columns as fit;
+ * the selected card takes the accent border and a faint accent fill (no size change).
+ *
+ * Hooks:  [data-vesta=option-cards] [data-vesta=option-card][data-selected][data-disabled]
+ *         -icon -text -label -hint
+ * Knobs:  --option-card-min (narrowest column)
+ */
+@layer launcher {
+  :where([data-vesta='option-cards']) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--option-card-min, 8.25rem), 100%), 1fr));
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='option-card']) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-3) var(--vesta-space-2) var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+    color: var(--vesta-color-text);
+    cursor: default;
+  }
+
+  :where([data-vesta='option-card']):hover:not([data-disabled], [data-selected]) {
+    border-color: var(--vesta-color-border-strong);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='option-card'][data-selected]) {
+    border-color: var(--vesta-color-accent-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) 10%, var(--vesta-color-surface));
+    box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-accent-border);
+  }
+
+  :where([data-vesta='option-card'][data-disabled]) { opacity: 0.55; }
+
+  :where([data-vesta='option-card']):has(input:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where([data-vesta='option-card'] input) {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: default;
+  }
+
+  :where([data-vesta='option-card-icon']) { display: inline-flex; flex: none; }
+
+  :where([data-vesta='option-card-text']) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='option-card-label']) {
+    overflow: hidden;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+    line-height: var(--vesta-leading-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='option-card-hint']) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    line-height: var(--vesta-leading-tight);
+  }
+}

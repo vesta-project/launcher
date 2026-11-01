@@ -32,6 +32,7 @@ import './shell.css';
 import '../styles/reduced-motion.css';
 import { useInstanceShortcutRuntime } from '../features/instances/shortcut-runtime';
 import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
+import { Notice } from '../components/notice';
 
 /** Window frame: titlebar across the top, then the rail beside the scene. */
 export function Shell() {
@@ -64,11 +65,14 @@ export function Shell() {
       <FileDragHint enabled={route().page !== 'create'} onLibrary={route().page === 'library' && !route().section} />
       <NativeImportDialog />
       <InstanceDeleteDialog />
-      <Show when={instanceError()}><div data-vesta="instance-service-error" role="alert">
-        <span>{instanceError()}</span>
-        <Button size="sm" variant="ghost" onClick={()=>{clearInstanceError();void refreshNativeInstances(true);}}>{t('common.retry')}</Button>
-        <Button size="sm" variant="ghost" onClick={clearInstanceError}>{t('nav.close')}</Button>
-      </div></Show>
+      <Show when={instanceError()}>{(message) => <div data-vesta="instance-service-error">
+        <Notice
+          action={{ label: t('common.retry'), onClick: () => { clearInstanceError(); void refreshNativeInstances(true); } }}
+          actions={<Button size="sm" variant="ghost" onClick={clearInstanceError}>{t('nav.close')}</Button>}
+        >
+          {message()}
+        </Notice>
+      </div>}</Show>
       <div data-vesta="shell-body">
         <Rail />
         <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>

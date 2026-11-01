@@ -616,33 +616,30 @@
     overflow-wrap: anywhere;
   }
 
-  :where([data-vesta='project-inline-state']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
+  :where([data-vesta='project-versions-error']) {
+    padding: var(--vesta-space-4) var(--project-gutter, var(--vesta-space-5));
   }
 
-  :where([data-vesta='project-inline-state'] > p),
   :where([data-vesta='project-muted']) {
     margin: 0;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
   }
 
-  /* ---- Description and version page: text beside a column of facts ---- */
+  /*
+   * Description and version page: text beside a column of facts. The text column is capped, not
+   * the grid, so at wide widths the facts stay beside the text (left-aligned with the header and
+   * tabs) instead of drifting into the middle of the free space.
+   */
   :where([data-vesta='project-overview']) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 18.5rem;
+    grid-template-columns: minmax(0, 52rem) 18.5rem;
     gap: var(--vesta-space-8);
     align-items: start;
-    max-inline-size: 76rem;
   }
 
   :where([data-vesta='project-article']) {
     min-inline-size: 0;
-    max-inline-size: 80ch;
   }
 
   :where([data-vesta='project-article-loading']) {

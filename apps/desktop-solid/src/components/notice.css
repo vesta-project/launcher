@@ -1,0 +1,90 @@
+/*
+ * Notice: message left, action at the far end of the same row. The action wraps to its own
+ * line (still at the end) only when the row can't fit both.
+ *
+ * Hooks:  [data-vesta=notice][data-tone=danger|warning|neutral][data-variant=section|inline]
+ *         -body -message -details -actions
+ * Knobs:  --notice-tone (icon and inline text colour), --notice-bg, --notice-border
+ */
+@layer launcher {
+  :where([data-vesta='notice']) {
+    --notice-tone: var(--vesta-color-danger-text);
+    --notice-bg: color-mix(in oklab, var(--vesta-color-danger) 10%, transparent);
+    --notice-border: var(--vesta-color-danger-border);
+
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--notice-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--notice-bg);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
+  }
+
+  :where([data-vesta='notice'][hidden]) { display: none; }
+
+  :where([data-vesta='notice'][data-tone='warning']) {
+    --notice-tone: var(--vesta-color-warning-text);
+    --notice-bg: color-mix(in oklab, var(--vesta-color-warning) 10%, transparent);
+    --notice-border: var(--vesta-color-warning-border);
+  }
+
+  :where([data-vesta='notice'][data-tone='neutral']) {
+    --notice-tone: var(--vesta-color-text-muted);
+    --notice-bg: var(--vesta-color-surface);
+    --notice-border: var(--vesta-color-border);
+  }
+
+  /* Inline: no band, so it sits in a form or list slot at the text's own size. */
+  :where([data-vesta='notice'][data-variant='inline']) {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--notice-tone);
+  }
+
+  :where([data-vesta='notice']) > :where([data-vesta='icon']) {
+    flex: none;
+    align-self: flex-start;
+    margin-block-start: calc((var(--vesta-text-sm) * var(--vesta-leading-normal) - 14px) / 2);
+    color: var(--notice-tone);
+  }
+
+  /* The action row is ~8px taller than a text line; centre the first line against it. */
+  :where([data-vesta='notice']:has([data-vesta='notice-actions'])) > :where([data-vesta='icon']) {
+    align-self: center;
+  }
+
+  :where([data-vesta='notice-body']) {
+    flex: 1 1 16rem;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='notice-message']) { overflow-wrap: anywhere; }
+
+  :where([data-vesta='notice-details']) {
+    margin-block-start: var(--vesta-space-1);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='notice-details'] summary) { cursor: default; }
+  :where([data-vesta='notice-details'] pre) { margin: var(--vesta-space-1) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  :where([data-vesta='notice-details'] code) { display: block; overflow-wrap: anywhere; }
+
+  :where([data-vesta='notice-actions']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-inline-start: auto;
+  }
+}

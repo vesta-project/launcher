@@ -4,12 +4,13 @@ import { t } from '../../../localization';
 import { rejectionMessage } from '../../../features/servers/hosting-model';
 import type { ServerCommandError } from '../../../features/servers/native';
 import { ServerErrorNote } from '../parts';
+import { Notice } from '../../../components/notice';
 
 /** The agent's specific reason when it gave one, otherwise the usual error note. */
 export function HostingError(props: { error: ServerCommandError | null | undefined; onRetry?: () => void }) {
   return (
     <Show when={rejectionMessage(props.error)} fallback={<ServerErrorNote error={props.error} onRetry={props.onRetry} />}>
-      {(message) => <div data-vesta="server-error" role="alert"><span>{t(message())}</span></div>}
+      {(message) => <Notice cause={message()}>{t(message())}</Notice>}
     </Show>
   );
 }

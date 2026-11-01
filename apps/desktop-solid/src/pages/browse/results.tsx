@@ -31,6 +31,7 @@ import {
 import { t } from '../../localization';
 import { NoticeBar } from './notice-bar';
 import { ResultCard } from './result-card';
+import { Notice } from '../../components/notice';
 
 const sizeOptions = pageSizes.map((size) => ({ value: String(size), label: String(size) }));
 const skeletons = Array.from({ length: 8 }, (_, index) => index);
@@ -165,13 +166,10 @@ export function Results() {
         <Switch>
           <Match when={failure()}>
             {(message) => (
-              <div data-vesta="browse-error" role="alert">
-                <Icon name="icons/status/error" size={20} />
-                <strong>{t('browse.error-title')}</strong>
-                <p>{message()}</p>
-                <Button size="sm" onClick={() => void retry()}>
-                  {t('browse.retry')}
-                </Button>
+              <div data-vesta="browse-error">
+                <Notice details={message()} action={{ label: t('browse.retry'), onClick: () => void retry() }}>
+                  {t('browse.error-title')}
+                </Notice>
               </div>
             )}
           </Match>

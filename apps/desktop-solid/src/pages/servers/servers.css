@@ -132,21 +132,8 @@
   :where([data-vesta="server-callout"][data-tone="success"]) { --tone: var(--vesta-color-success-text); }
   :where([data-vesta="server-callout"][data-tone="warning"]) { --tone: var(--vesta-color-warning-text); }
   :where([data-vesta="server-callout"][data-tone="danger"]) { --tone: var(--vesta-color-danger-text); }
-  :where([data-vesta="server-error"]) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-2) var(--vesta-space-3);
-    border-radius: var(--vesta-radius-md);
-    background: color-mix(in oklab, var(--vesta-color-danger) 12%, transparent);
-    color: var(--vesta-color-text);
-    font-size: var(--vesta-text-sm);
-  }
   :where([data-vesta="server-muted"], [data-vesta="server-freshness"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
-  :where([data-vesta="server-error-body"]) { min-width: 0; }
   :where([data-vesta="server-error-file"]) { display: block; margin-top: var(--vesta-space-1); overflow-wrap: anywhere; }
-  :where([data-vesta="server-error-details"]) { margin-top: var(--vesta-space-2); }
   :where([data-vesta="server-error-details"] summary) { color: var(--vesta-color-text-muted); cursor: default; }
   :where([data-vesta="server-error-details"] pre) { white-space: pre-wrap; overflow-wrap: anywhere; }
   :where([data-vesta="server-freshness"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }

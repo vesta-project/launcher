@@ -42,6 +42,7 @@ import {
 import { StripTarget } from './project-strip';
 import { openVersion } from './project-versions';
 import { RichTextView } from './rich-text-view';
+import { Notice } from '../../../components/notice';
 
 /** Minecraft versions shown before the rest fold behind "Show all". */
 const shownGames = 12;
@@ -309,12 +310,9 @@ function Changelog(props: {
       <h2 id="project-changelog-title">{t('browse.version-changelog')}</h2>
       <Switch>
         <Match when={props.error && !props.details}>
-          <div data-vesta="project-inline-state">
-            <p>{t('browse.changelog-failed')}</p>
-            <Button size="sm" variant="outline" onClick={() => props.onRetry()}>
-              {t('browse.retry')}
-            </Button>
-          </div>
+          <Notice variant="inline" action={{ label: t('browse.retry'), onClick: () => props.onRetry() }}>
+            {t('browse.changelog-failed')}
+          </Notice>
         </Match>
         <Match when={!props.details}>
           <div data-vesta="project-article-loading" aria-busy="true" aria-label={t('linking.changelog-loading')}>
@@ -328,12 +326,9 @@ function Changelog(props: {
           {(text) => <RichTextView source={text() as string} format={props.details!.changelog_format} />}
         </Match>
         <Match when={props.details?.changelog_status === 'unavailable'}>
-          <div data-vesta="project-inline-state">
-            <p>{t('browse.changelog-failed')}</p>
-            <Button size="sm" variant="outline" onClick={() => props.onRetry()}>
-              {t('browse.retry')}
-            </Button>
-          </div>
+          <Notice variant="inline" action={{ label: t('browse.retry'), onClick: () => props.onRetry() }}>
+            {t('browse.changelog-failed')}
+          </Notice>
         </Match>
         <Match when={true}>
           <p data-vesta="project-muted">{t('linking.changelog-empty')}</p>

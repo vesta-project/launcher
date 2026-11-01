@@ -2,6 +2,7 @@ import type { JSX } from '@solidjs/web';
 import { Button, Skeleton } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
+import { Metadata } from '../../components/metadata';
 import { formatCompact } from '../../features/browse/browse-model';
 import type { ImportCandidate } from '../../features/launcher-import';
 import { firstInstance, onboarding, type FeaturedPack } from '../../features/onboarding';
@@ -135,9 +136,7 @@ export function FirstInstanceStep() {
                           </span>
                           <span data-vesta="welcome-pack-name">{item().name}</span>
                           <span data-vesta="welcome-pack-meta">
-                            {[item().minecraft, item().downloads ? formatCompact(item().downloads!, locale()) : undefined]
-                              .filter(Boolean)
-                              .join(' · ')}
+                            <Metadata parts={[item().minecraft, item().downloads ? formatCompact(item().downloads!, locale()) : undefined]} />
                           </span>
                         </button>
                       )}

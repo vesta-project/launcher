@@ -119,18 +119,10 @@
 
 @layer launcher {
   :where([data-vesta='instance-service-error']) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
     padding: var(--vesta-space-2) var(--vesta-space-3);
-    color: var(--vesta-color-danger-text);
     background: var(--vesta-color-surface-raised);
-    font-size: var(--vesta-text-sm);
   }
-  :where([data-vesta='instance-service-error']) > span:not([data-vesta]) {
-    flex: 1;
-    min-inline-size: 0;
-    overflow-wrap: anywhere;
+  :where([data-vesta='instance-service-error'] [data-vesta='notice-message']) {
     max-block-size: 5lh;
     overflow-y: auto;
   }
