@@ -666,3 +666,12 @@ export function installCanProceedWithoutReview(plan: PackInstallPlan, now: numbe
   return plan.expiresAtMs > now && !installBlocker(plan, now) && !installConflicts(plan).length && !(plan.removed?.length)
     && !plan.warnings.length && plan.files.every(file => file.operation === 'added' || file.operation === 'unchanged');
 }
+
+/** Decisions retained with an install job, including on reconnect. */
+export function installDecision(decision: string, translate: (id: MessageId, args: Record<string, string>) => string): string {
+  const separator = decision.indexOf(':');
+  const kind = decision.slice(0, separator), path = decision.slice(separator + 1);
+  if (kind === 'keep') return translate('server-pack.install-kept-file', { path });
+  if (kind === 'preserved_or_skipped') return translate('server-pack.install-skipped-file', { path });
+  return decision;
+}

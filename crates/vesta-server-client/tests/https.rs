@@ -416,7 +416,7 @@ async fn pack_review_failure_preserves_file_identity_over_pinned_https() {
     let _owner = TEST_OWNER.lock().await;
     let agent = Agent::start().await;
     let client = agent.paired().await;
-    let input = PackInstallRequest {
+    let input = PackInstallRequest { analyze: false,
         source: PackInstallSource::Provider {
             provider: "curseforge".into(),
             project_id: "1714524".into(),

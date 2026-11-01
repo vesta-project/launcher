@@ -1,10 +1,10 @@
 //! Client-pack workspace IPC DTOs. Revisions and sizes remain decimal strings.
 use super::*;
 use serde::{Deserialize, Serialize};
-macro_rules! dto {($name:ident {$($field:ident:$ty:ty),*$(,)?})=>{
+macro_rules! dto {($name:ident {$($(#[$meta:meta])* $field:ident:$ty:ty),*$(,)?})=>{
     #[derive(Clone,Debug,Deserialize,Serialize)]
     #[serde(rename_all="camelCase",deny_unknown_fields)]
-    pub struct $name {$(pub $field:$ty),*}
+    pub struct $name {$($(#[$meta])* pub $field:$ty),*}
 };}
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -279,7 +279,10 @@ pub enum PackInstallSource {
         revision: String,
     },
 }
+fn is_false(value: &bool) -> bool { !*value }
 dto!(PackInstallRequest {
+    #[serde(default, skip_serializing_if="is_false")]
+    analyze: bool,
     source: PackInstallSource
 });
 dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>,operation:String});
@@ -289,7 +292,7 @@ dto!(InstallWarning {code:String,rule:String,item:String,detail:String});
 #[derive(Clone,Debug,Deserialize,Serialize)]
 #[serde(untagged)]
 pub enum PackInstallWarning { Structured(InstallWarning), Legacy(String) }
-dto!(PackInstallPlan {software_switch:Option<SoftwareSwitch>,plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<PackInstallWarning>,backup_recommended:bool,removed:Vec<(String,String)>});
+dto!(PackInstallPlan {#[serde(default)] deferred:bool,software_switch:Option<SoftwareSwitch>,plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<PackInstallWarning>,backup_recommended:bool,removed:Vec<(String,String)>});
 dto!(PackInstallChoice {
     path: String,
     choice: String
@@ -306,7 +309,7 @@ pub struct PackInstallApply {
     pub choices: Vec<PackInstallChoice>,
     pub set_as_modpack: bool,
 }
-dto!(PackInstallOutcome {software_job_id:Option<String>,state:String,pending_ids:Vec<String>,modpack_revision:Option<String>,server_modpack:Option<ServerModpackLink>});
+dto!(PackInstallOutcome {#[serde(default)] decisions:Vec<String>,software_job_id:Option<String>,state:String,pending_ids:Vec<String>,modpack_revision:Option<String>,server_modpack:Option<ServerModpackLink>});
 impl Client {
     pub async fn server_modpack_link(&self) -> Result<Option<ServerModpackLink>> {
         from_wire(self.get("pack/server-link", true, "pack.edit").await?)
@@ -599,7 +602,7 @@ mod install_wire_tests {
         assert_eq!(value["set_as_modpack"], true);
         let decoded: PackInstallApply = from_wire(value).unwrap();
         assert_eq!(decoded.choices[0].path, "config/My_Mod.json");
-        let source = PackInstallRequest {
+        let source = PackInstallRequest { analyze: false,
             source: PackInstallSource::Provider {
                 provider: "modrinth".into(),
                 project_id: "project".into(),

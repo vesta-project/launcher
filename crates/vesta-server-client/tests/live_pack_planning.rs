@@ -38,7 +38,7 @@ async fn provider_reviews_keep_real_agent_status_available() {
         ("modrinth", "cm9Ke4UE", "G2xrUEZf"),
         ("curseforge", "1714524", "9024763"),
     ] {
-        let request = PackInstallRequest {
+        let request = PackInstallRequest { analyze: false,
             source: PackInstallSource::Provider {
                 provider: provider.into(),
                 project_id: project.into(),

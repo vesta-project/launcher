@@ -63,7 +63,7 @@ export function reviewCounts(plan: ReviewPlan): ReviewCount[] {
 }
 
 /** True when nothing would change on the server (the selected version is already installed). */
-export const reviewEmpty = (plan: ReviewPlan) => reviewCounts(plan).every((group) => group.key === 'skipped') && installConflicts(plan).length === 0;
+export const reviewEmpty = (plan: ReviewPlan) => !plan.deferred && reviewCounts(plan).every((group) => group.key === 'skipped') && installConflicts(plan).length === 0;
 
 /** "Back up first" is offered when a profile can run now; on by default when backups are configured. */
 export function backupProfileFor(profiles: readonly { name: string; mode: 'online' | 'stopped' }[], running: boolean): string | null {
