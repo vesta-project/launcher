@@ -32,3 +32,19 @@ it('uses the specific download rule from a structured URL refusal', () => {
     expect(serverErrorPresentation({ code: 'invalid_input', reason: 'content_pack_source_unsafe', issue: { code: 'content_pack_source_unsafe', rule, item: 'https://example.com/pack.zip' } })).toEqual({ message, action: 'none' });
   }
 });
+
+it('presents every native client pack reason specifically, never as the generic conflict', () => {
+  // Regression: an oversized provider modpack surfaced `pack_download_unavailable` as
+  // "Something else changed this first" on every Play-on-this-server attempt.
+  const root = new URL('../../../', import.meta.url);
+  const sources = ['pack_sync.rs', 'pack_sync_apply.rs', 'pack_sync_check.rs', 'pack_sync_legacy.rs']
+    .map(name => readFileSync(new URL(`vesta-launcher/src-tauri/src/servers/${name}`, root), 'utf8'))
+    .concat(readFileSync(new URL('crates/vesta-server-client/src/pack_sync.rs', root), 'utf8'));
+  const reasons = [...new Set(sources.flatMap(source => [...source.matchAll(/(?:conflict|failure)\("(pack_[a-z_]+)"\)/g)].map(match => match[1])))];
+  expect(reasons).toContain('pack_download_unavailable');
+  expect(reasons.length).toBeGreaterThan(20);
+  for (const reason of reasons) {
+    expect(hasExplicitServerErrorPresentation(reason), reason).toBe(true);
+    expect(serverErrorPresentation({ code: 'conflict', reason }).message, reason).not.toBe('servers.error.conflict');
+  }
+});
