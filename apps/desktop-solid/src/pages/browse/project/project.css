@@ -629,7 +629,7 @@
   /*
    * Description and version page: text beside a column of facts. The grid spans the page so the
    * facts align with the header actions and Install-to control on the right edge; the article
-   * caps its own line length instead of leaving a dead band on the right.
+   * caps its own line length and, once capped, centres in the space left of the facts.
    */
   :where([data-vesta='project-overview']) {
     display: grid;
@@ -639,6 +639,9 @@
   }
 
   :where([data-vesta='project-article']) {
+    justify-self: center;
+    box-sizing: border-box;
+    inline-size: 100%;
     min-inline-size: 0;
     max-inline-size: 52rem;
   }
