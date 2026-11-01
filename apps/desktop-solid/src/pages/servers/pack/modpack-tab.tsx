@@ -178,11 +178,19 @@ function InstallJobStatus() {
   });
   const job = () => value()?.installJob;
   const progress = () => value()?.installProgress;
+  const stage = () => {
+    switch (progress()?.stage) {
+      case 'writing': return t('server-pack.install-writing');
+      case 'metadata': case 'review': return t('server-pack.install-metadata');
+      case 'archive': return t('server-pack.install-archive');
+      default: return t('server-pack.install-planning');
+    }
+  };
   const active = () => ['queued','staging','activating'].includes(job()?.state ?? '');
   return <Show when={job()}><div data-vesta="pack-install-job" role="status">
-    <Show when={active()} fallback={<span>{job()?.state === 'succeeded' ? t('server-pack.done') : job()?.error}</span>}>
+    <Show when={active()} fallback={<span>{job()?.state === 'succeeded' ? t('server-pack.done') : t('server-pack.download-failed')}</span>}>
       <Progress value={progress()?.total ? progress()!.completed / progress()!.total * 100 : undefined}
-        label={`${t('server-pack.install-planning')} ${progress()?.completed ?? 0}/${progress()?.total ?? 0}${progress()?.bytesCompleted ? ` ? ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
+        label={`${stage()} ${progress()?.completed ?? 0}/${progress()?.total ?? 0}${progress()?.bytesCompleted ? ` · ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
     </Show>
   </div></Show>;
 }

@@ -120,6 +120,9 @@ server-pack-get-uncertain = The result is unclear. Check your library before try
 
 # Install on server
 server-pack-install-planning = Downloading server files
+server-pack-install-writing = Writing server files
+server-pack-install-metadata = Reviewing pack metadata
+server-pack-install-archive = Reading pack archive
 server-pack-install-software = Software
 server-pack-install-minecraft = Minecraft
 server-pack-install-loader = Loader version
