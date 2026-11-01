@@ -293,8 +293,14 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
   );
 }
 
+/**
+ * Invite only to roles people can't reach on their own: never public, nor the roles anonymous
+ * and new users get automatically (known when this device can read the rules).
+ */
 function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; onClose: () => void }) {
-  const assignable = () => props.roles.filter((role) => role.rank < myRank(props.snapshot, props.roles) && !LOCAL_ONLY.has(role.id));
+  const sources = useServerResource(stableConnectionId(() => props.snapshot), accessSourcesResource, { enabled: () => gate(props.snapshot.capabilities, 'access-sources.manage') === 'allowed' });
+  const automatic = () => new Set(['public', sources.value()?.anonymous, sources.value()?.newUser]);
+  const assignable = () => props.roles.filter((role) => role.rank < myRank(props.snapshot, props.roles) && !LOCAL_ONLY.has(role.id) && !automatic().has(role.id));
   const [role, setRole] = createSignal('', { name: 'server-invite:role' });
   const [minutes, setMinutes] = createSignal('30', { name: 'server-invite:minutes' });
   const [issued, setIssued] = createSignal<IssuedInvitation | null>(null, { name: 'server-invite:issued' });
@@ -319,12 +325,12 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
       <Show
         when={issued()}
         fallback={
-          <>
+          <div data-vesta="server-invite-form">
             <Select aria-label={t('servers.access.role')} value={role() || assignable()[0]?.id} onChange={setRole} options={assignable().map((entry) => ({ value: entry.id, label: entry.name }))} />
             <Select aria-label={t('servers.access.expiry')} value={minutes()} onChange={setMinutes}
               options={['10', '30', '60'].map((value) => ({ value, label: t('servers.access.expires-in', { count: Number(value) }) }))} />
             <p data-vesta="server-muted">{t('servers.access.invite-role-help')}</p>
-          </>
+          </div>
         }
       >
         {(invite) => (

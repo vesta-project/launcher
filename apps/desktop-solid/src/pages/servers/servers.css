@@ -284,8 +284,6 @@
   :where([data-vesta="server-add-tile"]:hover) { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
   :where([data-vesta="server-add-tile"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: var(--vesta-focus-offset); }
 
-  /* Header: Minecraft state leads the meta row. */
-  :where([data-vesta="server-header-state"]) { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--vesta-weight-semibold); }
   :where([data-server-header]) [data-vesta="server-lifecycle"] { gap: var(--vesta-space-2); }
   :where([data-server-header]) [data-vesta="server-lifecycle-note"] { color: color-mix(in oklab, var(--vesta-color-media-text) 75%, transparent); }
   :where([data-vesta="server-lifecycle-spinner"]) {
@@ -451,6 +449,8 @@
   :where([data-vesta="server-backup-profile"][data-open]) { background: var(--vesta-color-fill-subtle, transparent); }
 
   /* Invitations */
+  :where([data-vesta="server-invite-form"]) { display: grid; gap: var(--vesta-space-3); }
+  :where([data-vesta="server-invite-form"]) > p { margin: 0; font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-invite-result"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
   :where([data-vesta="server-invite-result"]) p { margin: 0; color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-invite-value"]) {

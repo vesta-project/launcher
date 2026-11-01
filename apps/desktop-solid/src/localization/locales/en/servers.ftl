@@ -555,7 +555,7 @@ servers-access-expires-in = { $count ->
     [one] Expires in { $count } minute
    *[other] Expires in { $count } minutes
   }
-servers-access-invite-role-help = They get this role when they redeem the code. You can only invite to roles below your own.
+servers-access-invite-role-help = One person, one use. Roles below your own.
 servers-access-invite-once = Send this to the person you're inviting. It's shown only once and works once.
 servers-access-pairing-link = Pairing link
 servers-access-invitation-for = Invitation for { $name }
