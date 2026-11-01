@@ -91,6 +91,13 @@
     font-size: var(--vesta-text-sm);
   }
 
+  /* Every fact is one line box, so a trailing control (copy address) never moves the title. */
+  :where([data-vesta="instance-header-meta"]) > * {
+    display: inline-flex;
+    align-items: center;
+    block-size: 1lh;
+  }
+
   :where([data-vesta="instance-header-loader"]) {
     display: inline-flex;
     align-items: center;

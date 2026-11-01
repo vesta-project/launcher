@@ -13,6 +13,7 @@ import {
 } from "../../../features/instances/native-service";
 import { t } from "../../../localization";
 import "./instance-header.css";
+import { HeaderIdentity } from "./header-identity";
 import { InstanceActionItems } from "../../../features/instances/action-menu";
 
 const loaderLogos: Record<string, string> = {
@@ -142,29 +143,20 @@ export function InstanceHeader(props: {
       <div data-vesta="instance-header-art" aria-hidden="true" />
 
       <div data-vesta="instance-header-main">
-        <img
-          data-vesta="instance-header-icon"
-          src={instance().image}
-          alt=""
-          draggable="false"
-        />
-        <div data-vesta="instance-header-copy">
-          <h1 data-vesta="instance-header-title">{instance().name}</h1>
-          <p data-vesta="instance-header-meta">
-            <span>{instance().minecraftVersion}</span>
-            <span data-vesta="instance-header-loader">
-              <Show when={loaderLogo()}>
-                <Icon name={loaderLogo()} size={12} />
-              </Show>
-              {instance().modloader}
-            </span>
-            <span data-vesta="instance-header-playtime">
-              {t("instance.played-time", {
-                time: formatPlaytime(statsFor(instance().id).playtimeMinutes),
-              })}
-            </span>
-          </p>
-        </div>
+        <HeaderIdentity icon={instance().image} title={instance().name}>
+          <span>{instance().minecraftVersion}</span>
+          <span data-vesta="instance-header-loader">
+            <Show when={loaderLogo()}>
+              <Icon name={loaderLogo()} size={12} />
+            </Show>
+            {instance().modloader}
+          </span>
+          <span data-vesta="instance-header-playtime">
+            {t("instance.played-time", {
+              time: formatPlaytime(statsFor(instance().id).playtimeMinutes),
+            })}
+          </span>
+        </HeaderIdentity>
 
         <div data-vesta="instance-header-actions">
           <Show when={props.entry.state.kind === "running"}>

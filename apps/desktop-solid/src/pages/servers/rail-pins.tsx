@@ -37,6 +37,7 @@ ${t(minecraftFact(snapshot().status).message)}`;
                       <a
                         {...mergeElementProps<Record<string, unknown>>(triggerProps, contextProps)}
                         data-vesta="rail-pin"
+                        data-preload-server={snapshot().connection.id}
                         data-status={pinStatus(statusDot(snapshot()))}
                         href={`#${href()}`}
                         aria-label={label()}

@@ -210,6 +210,16 @@ export function formatUptime(seconds: string | null): string | null {
   return `${Math.max(minutes, 0)}m`;
 }
 
+/** Live uptime for the header chip: only while connected and running, advanced from the last observation. */
+export function uptimeNow(snapshot: ServerSnapshot, nowMs: number): string | null {
+  const status = snapshot.status;
+  const observed = snapshot.statusObservedAtMs;
+  if (snapshot.state.phase !== 'online' || status?.state !== 'running' || status.lifecycle === 'sleeping' || observed === null) return null;
+  const seconds = status.uptimeSeconds;
+  if (seconds === null || !/^\d+$/.test(seconds)) return null;
+  return formatUptime(String(Number(seconds) + Math.max(0, Math.floor((nowMs - observed) / 1000))));
+}
+
 /** A command line the server will accept: non-empty, ≤1,024 UTF-8 bytes, no control characters. */
 export function consoleLineProblem(line: string): MessageId | null {
   if (!line.trim()) return 'servers.console.empty';

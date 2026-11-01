@@ -59,6 +59,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
       {...triggerProps}
       data-vesta="instance-card"
       data-server-card
+      data-preload-server={id()}
       data-status={state().tag?.status ?? 'idle'}
       data-tone={state().tone}
       role="group"
