@@ -20,8 +20,8 @@ import { IntentMemo } from '../../../features/servers/model';
 
 type View = 'people' | 'invitations' | 'rules';
 
-/** Roles the local console grants; never assignable remotely. */
-const LOCAL_ONLY = new Set(['owner', 'administrator']);
+/** Owner remains a special grant, offered only for Microsoft-linked users below. */
+const LOCAL_ONLY = new Set(['owner']);
 /** Automatic sources may only hold public and pack roles. */
 const SAFE_SOURCE_ROLES = ['public', 'player'];
 
@@ -50,7 +50,7 @@ export function AccessTab(props: { snapshot: ServerSnapshot }) {
 }
 
 /** Rank of this device's role, used to offer only roles the server would accept. */
-const myRank = (snapshot: ServerSnapshot, roles: RoleSummary[]) => roles.find((role) => role.id === roleKey(snapshot.connection.role))?.rank ?? 0;
+const myRank = (snapshot: ServerSnapshot, roles: RoleSummary[]) => Math.max(0, ...roles.filter(role => (snapshot.capabilities.roles ?? [roleKey(snapshot.connection.role)]).includes(role.id)).map(role => role.rank));
 
 /** Roles from the shared cache; an unavailable list offers nothing rather than guessing. */
 function useRoles(snapshot: () => ServerSnapshot) {
@@ -161,6 +161,7 @@ function PersonRow(props: {
                 <div>
                   <span>
                     {device().current && device().name === 'Vesta Launcher' ? t('servers.access.this-device') : device().name}
+                    <small title={device().id}>{device().id.slice(0, 8)}</small>
                     <Show when={device().current && device().name !== 'Vesta Launcher'}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
                     <Show when={device().revoked}><Badge size="sm" variant="soft" tone="danger">{t('servers.access.revoked')}</Badge></Show>
                   </span>
@@ -215,7 +216,7 @@ function RenameDialog(props: { snapshot: ServerSnapshot; device: ServerDevice; o
 }
 
 function RoleDialog(props: { snapshot: ServerSnapshot; user: ServerUser; roles: RoleSummary[]; onClose: () => void; onSaved: (user: ServerUser) => void }) {
-  const assignable = () => props.roles.filter((role) => role.rank < myRank(props.snapshot, props.roles) && !LOCAL_ONLY.has(role.id));
+  const assignable = () => props.roles.filter((role) => (role.rank < myRank(props.snapshot, props.roles) && role.id !== 'owner') || ((props.snapshot.capabilities.roles ?? []).includes('owner') && props.user.minecraftAccounts.length > 0 && ['owner', 'administrator'].includes(role.id)));
   const current = () => props.user.roles.find((entry) => !LOCAL_ONLY.has(entry.role.id))?.role.id ?? '';
   const [choice, setChoice] = createSignal(untrack(current), { name: 'server-role:choice' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-role:error' });
@@ -298,17 +299,17 @@ function InvitationsView(props: { snapshot: ServerSnapshot }) {
  * and new users get automatically (known when this device can read the rules).
  */
 function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; onClose: () => void }) {
-  const sources = useServerResource(stableConnectionId(() => props.snapshot), accessSourcesResource, { enabled: () => gate(props.snapshot.capabilities, 'access-sources.manage') === 'allowed' });
-  const automatic = () => new Set(['public', sources.value()?.anonymous, sources.value()?.newUser]);
-  const assignable = () => props.roles.filter((role) => role.rank < myRank(props.snapshot, props.roles) && !LOCAL_ONLY.has(role.id) && !automatic().has(role.id));
-  const [role, setRole] = createSignal('', { name: 'server-invite:role' });
+  const assignable = () => props.roles.filter((role) => role.rank < myRank(props.snapshot, props.roles) && !['owner', 'administrator', 'public'].includes(role.id));
+  const [role, setRole] = createSignal('player', { name: 'server-invite:role' });
+  const [bulk, setBulk] = createSignal(false, { name: 'server-invite:bulk' });
+  const [maxUses, setMaxUses] = createSignal('', { name: 'server-invite:max-uses' });
   const [minutes, setMinutes] = createSignal('30', { name: 'server-invite:minutes' });
   const [issued, setIssued] = createSignal<IssuedInvitation | null>(null, { name: 'server-invite:issued' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-invite:error' });
   const [busy, setBusy] = createSignal(false, { name: 'server-invite:busy' });
   const create = async () => {
     setBusy(true); setError(null);
-    try { setIssued(await serverCommand((client) => client.createInvitation(props.snapshot.connection.id, role() || assignable()[0]!.id, Number(minutes()), newIntentId()))); }
+    try { setIssued(await serverCommand((client) => client.createInvitation(props.snapshot.connection.id, role() || assignable()[0]!.id, Number(minutes()), newIntentId(), bulk(), bulk() && maxUses() ? Number(maxUses()) : null))); }
     catch (reason) { setError(reason as ServerCommandError); }
     finally { setBusy(false); }
   };
@@ -318,7 +319,7 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
       footer={
         <Show when={!issued()} fallback={<Button tone="accent" onClick={props.onClose}>{t('servers.done')}</Button>}>
           <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
-          <Button tone="accent" disabled={busy() || assignable().length === 0} onClick={() => void create()}>{t('servers.access.create-invite')}</Button>
+          <Button tone="accent" disabled={busy() || assignable().length === 0 || (bulk() && !!maxUses() && (!Number.isSafeInteger(Number(maxUses())) || Number(maxUses()) < 1 || Number(maxUses()) > 4294967295))} onClick={() => void create()}>{t('servers.access.create-invite')}</Button>
         </Show>
       }
     >
@@ -326,6 +327,9 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
         when={issued()}
         fallback={
           <div data-vesta="server-invite-form">
+            <Toggle checked={bulk()} onChange={setBulk} aria-label={t('servers.access.bulk-invite')} />
+            <span>{t('servers.access.bulk-invite')}</span>
+            <Show when={bulk()}><TextField label={t('servers.access.max-uses')} value={maxUses()} onChange={setMaxUses} type="number" min="1" /></Show>
             <Select aria-label={t('servers.access.role')} value={role() || assignable()[0]?.id} onChange={setRole} options={assignable().map((entry) => ({ value: entry.id, label: entry.name }))} />
             <Select aria-label={t('servers.access.expiry')} value={minutes()} onChange={setMinutes}
               options={['10', '30', '60'].map((value) => ({ value, label: t('servers.access.expires-in', { count: Number(value) }) }))} />
@@ -335,7 +339,7 @@ function InviteDialog(props: { snapshot: ServerSnapshot; roles: RoleSummary[]; o
       >
         {(invite) => (
           <div data-vesta="server-invite-result">
-            <p>{t('servers.access.invite-once')}</p>
+            <p>{t(bulk() ? 'servers.access.invite-many' : 'servers.access.invite-once')}</p>
             <Show when={invite().pairingLink}>
               {(link) => (
                 <div data-vesta="server-invite-value">
@@ -387,6 +391,9 @@ function RulesView(props: { snapshot: ServerSnapshot }) {
           <div data-vesta="settings-panel-body">
             <SettingRow label={t('servers.access.rule-whitelist-sync')} description={t('servers.access.rule-whitelist-sync-help')}>
               <Toggle size="sm" aria-label={t('servers.access.rule-whitelist-sync')} disabled={busy()} checked={current().whitelistEnabled} onChange={(value: boolean) => void update({ whitelistEnabled: value })} />
+            </SettingRow>
+            <SettingRow label={t('servers.access.sync-whitelist')} description={t('servers.access.sync-whitelist-help')}>
+              <Toggle size="sm" aria-label={t('servers.access.sync-whitelist')} disabled={busy()} checked={current().syncWhitelist ?? false} onChange={(value: boolean) => void update({ syncWhitelist: value })} />
             </SettingRow>
             <For each={sourceRows}>
               {(row) => (

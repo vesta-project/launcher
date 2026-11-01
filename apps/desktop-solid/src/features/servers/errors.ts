@@ -38,6 +38,12 @@ export function toServerError(reason: unknown): ServerCommandError {
 }
 
 const packReasons: Record<string, { message: MessageId; action: RecoveryAction }> = {
+  pack_invalid_index: { message: 'server-pack.archive-invalid', action: 'none' },
+  pack_invalid_source: { message: 'server-pack.archive-invalid', action: 'none' },
+  pack_unsafe_archive: { message: 'server-pack.archive-invalid', action: 'none' },
+  pack_unsafe_path: { message: 'server-pack.path-invalid', action: 'none' },
+  pack_file_collision: { message: 'server-pack.path-invalid', action: 'none' },
+  pack_integrity_failure: { message: 'server-pack.hash-mismatch', action: 'retry' },
   modpack_requires_stopped: { message: 'server-pack.stop-to-install', action: 'none' },
   pack_limit_invalid: { message: 'server-pack.error-pack-limit-invalid', action: 'none' },
   pack_path_protected: { message: 'server-pack.error-pack-path-protected', action: 'none' },

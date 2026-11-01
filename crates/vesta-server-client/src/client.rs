@@ -6,12 +6,12 @@ pub mod backups_config;
 pub mod branding;
 #[path = "content.rs"]
 pub mod content;
-#[path = "pack.rs"]
-pub mod pack;
 #[path = "hosting.rs"]
 pub mod hosting;
 #[path = "management.rs"]
 pub mod management;
+#[path = "pack.rs"]
+pub mod pack;
 #[path = "presence.rs"]
 pub mod presence;
 use crate::role_defaults::role_defaults;
@@ -222,6 +222,21 @@ impl Client {
         auth::check_identity(server_id, &enrollment.server_id)?;
         Ok(enrollment)
     }
+    /// Redeem into the current authenticated principal, preserving its device identity.
+    pub fn device_signer(&self) -> Arc<dyn DeviceSigner> { self.signer.clone() }
+    pub async fn redeem_pairing(&self, code: &str, device_name: &str) -> Result<Enrollment> {
+        let value = self.request(Method::POST, "/api/v3/manage/pair",
+            Some(json!({"code":code,"device_name":device_name,"public_key":self.signer.public_key()})),
+            None, true, "").await.map_err(|e| match e.code {
+                ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::OutcomeUnknown | ErrorCode::Unsupported => Error::new(ErrorCode::PairOutcomeUnknown),
+                ErrorCode::CredentialsRejected => Error::new(ErrorCode::PairCodeInvalid),
+                _ => e,
+            })?;
+        let enrollment: Enrollment =
+            serde_json::from_value(value).map_err(|_| Error::new(ErrorCode::PairOutcomeUnknown))?;
+        auth::check_identity(&self.server_id, &enrollment.server_id)?;
+        Ok(enrollment)
+    }
     pub(crate) async fn token(&self, rejected: Option<&str>) -> Result<zeroize::Zeroizing<String>> {
         let mut state = self.session.lock().await;
         if let Some(s) = &state.session {
@@ -370,11 +385,33 @@ impl Client {
     }
     /// Public lifecycle is separate from privileged process/readiness details.
     pub async fn public_lifecycle(&self) -> Result<String> {
-        let value = self.transport.request(Method::GET, "/api/v3/status", None, None, None, false).await?;
-        auth::check_identity(&self.server_id, value["server_id"].as_str().ok_or_else(|| Error::new(ErrorCode::Unsupported))?)?;
-        value["state"].as_str().filter(|state| matches!(*state,
-            "offline" | "sleeping" | "waking" | "starting" | "online" | "stopping" | "crash_loop" | "recovery_required"))
-            .map(str::to_owned).ok_or_else(|| Error::new(ErrorCode::Unsupported))
+        let value = self
+            .transport
+            .request(Method::GET, "/api/v3/status", None, None, None, false)
+            .await?;
+        auth::check_identity(
+            &self.server_id,
+            value["server_id"]
+                .as_str()
+                .ok_or_else(|| Error::new(ErrorCode::Unsupported))?,
+        )?;
+        value["state"]
+            .as_str()
+            .filter(|state| {
+                matches!(
+                    *state,
+                    "offline"
+                        | "sleeping"
+                        | "waking"
+                        | "starting"
+                        | "online"
+                        | "stopping"
+                        | "crash_loop"
+                        | "recovery_required"
+                )
+            })
+            .map(str::to_owned)
+            .ok_or_else(|| Error::new(ErrorCode::Unsupported))
     }
     pub async fn capabilities(&self, role: Option<&str>) -> Result<CapabilityView> {
         match self.get("session", true, "").await {

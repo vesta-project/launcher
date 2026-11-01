@@ -110,6 +110,7 @@ export interface AccessSources {
   newUser: string;
   whitelist: string;
   whitelistEnabled: boolean;
+  syncWhitelist?: boolean;
   password: string;
   version: string;
 }
@@ -156,8 +157,8 @@ export const serversManageNative = {
   /** GET invitations (agents without the route return `unsupported`). */
   invitations: (connectionId: ConnectionId) => call<Invitation[]>('server_invitations', { connectionId }),
   /** POST invitations: the code is returned once and never stored by the launcher. */
-  createInvitation: (connectionId: ConnectionId, roleId: string, expiresMinutes: number, intentId: string) =>
-    call<IssuedInvitation>('server_invitation_create', { connectionId, roleId, expiresMinutes, intentId }),
+  createInvitation: (connectionId: ConnectionId, roleId: string, expiresMinutes: number, intentId: string, multiUse = false, maxUses: number | null = null) =>
+    call<IssuedInvitation>('server_invitation_create', { connectionId, roleId, expiresMinutes, intentId, multiUse, maxUses }),
   revokeInvitation: (connectionId: ConnectionId, invitationId: string, intentId: string) =>
     call<void>('server_invitation_revoke', { connectionId, invitationId, intentId }),
   accessSources: (connectionId: ConnectionId) => call<AccessSources>('server_access_sources', { connectionId }),

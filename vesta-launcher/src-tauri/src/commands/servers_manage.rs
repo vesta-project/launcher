@@ -335,9 +335,11 @@ pub async fn server_invitation_create(
     connection_id: String,
     role_id: String,
     expires_minutes: u16,
+    multi_use: Option<bool>,
+    max_uses: Option<u32>,
     intent_id: String,
 ) -> Result<IssuedInvitation> {
-    let payload = json!({"role":role_id,"expires_minutes":expires_minutes});
+    let payload = json!({"role":role_id,"expires_minutes":expires_minutes,"multi_use":multi_use,"max_uses":max_uses});
     let journal_intent = intent_id.clone();
     manager
         .inner()
@@ -350,7 +352,13 @@ pub async fn server_invitation_create(
             false,
             |client| async move {
                 client
-                    .invitation_create(&role_id, expires_minutes, &intent_id)
+                    .invitation_create_bulk(
+                        &role_id,
+                        expires_minutes,
+                        &intent_id,
+                        multi_use.unwrap_or(false),
+                        max_uses,
+                    )
                     .await
             },
         )

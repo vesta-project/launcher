@@ -913,6 +913,8 @@ async fn users_roles_devices_invitations_and_access_mutations_match_wire() {
         a.calls("/api/v3/manage/invitations")[0].body,
         json!({"role":"viewer","expires_minutes":15})
     );
+    a.client.invitation_create_bulk("player",30,"bulk-invite",true,Some(20)).await.unwrap();
+    assert_eq!(a.calls("/api/v3/manage/invitations").last().unwrap().body,json!({"role":"player","expires_minutes":30,"multi_use":true,"max_uses":20}));
     a.set(
         "DELETE",
         "/api/v3/manage/invitations/invite-1",
