@@ -34,6 +34,7 @@ import { InstallButton } from '../install-button';
 import { runInstall } from '../install-actions';
 import type { ProjectData } from './project-data';
 import { ChannelBadge, formatDay, LoaderMarks, sameAction, versionAction } from './project-shared';
+import { Notice } from '../../../components/notice';
 
 const sizeOptions = pageSizes.map((size) => ({ value: String(size), label: String(size) }));
 const skeletonRows = Array.from({ length: 8 }, (_, index) => index);
@@ -278,13 +279,10 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
       >
         <Switch>
           <Match when={props.data.versionsError() && !props.data.versions()}>
-            <div data-vesta="project-state" role="alert">
-              <Icon name="icons/status/error" size={20} />
-              <strong>{t('browse.versions-failed')}</strong>
-              <p>{props.data.versionsError()}</p>
-              <Button size="sm" onClick={() => props.data.retry()}>
-                {t('browse.retry')}
-              </Button>
+            <div data-vesta="project-versions-error">
+              <Notice details={props.data.versionsError()} action={{ label: t('browse.retry'), onClick: () => props.data.retry() }}>
+                {t('browse.versions-failed')}
+              </Notice>
             </div>
           </Match>
           <Match when={!props.data.versions()}>

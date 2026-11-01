@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { Show, createEffect, createSignal, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { Icon } from '../../../components/icon';
+import { Notice, noticeCause } from '../../../components/notice';
 import { nativeInstances } from '../../../features/instances/native-service';
 import { packUpdateTarget, useNativePack, versionStore } from '../../../features/instances/versions';
 import { errorMessage } from '../../../features/servers/errors';
@@ -51,7 +52,7 @@ export function LinkedPack(props: { instanceId: string }) {
               </Show>
             </div>
           </header>
-          <Show when={sync.error()}>{(reason) => <p role="alert" data-vesta="version-warning">{t(errorMessage(reason()))}</p>}</Show>
+          <Show when={sync.error()}>{(reason) => <div data-vesta="version-warning"><Notice variant="inline" cause={noticeCause(reason())}>{t(errorMessage(reason()))}</Notice></div>}</Show>
         </section>
       )}
     </Show>

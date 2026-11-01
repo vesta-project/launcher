@@ -1,9 +1,12 @@
 import { sameReviewedPlan } from '../../../features/servers/review-plan';
-import { Button, Checkbox, Combobox, Dialog, Progress, SegmentedControl, Skeleton, toast } from '@vesta/ui';
+import { Button, Checkbox, Combobox, Dialog, Progress, Skeleton, toast } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
+import { SoftwareMark as SharedMark } from '../../../components/software-mark';
+import { OptionCards } from '../../../components/option-cards';
 import { t } from '../../../localization';
+import type { MessageId } from '../../../localization/messages';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
   gameStopped, jobActive, jobPollDelay, jobStepMessage, launchSummary, reasonMessage, softwareName, softwareRestoreKind, warningCopy,
@@ -36,11 +39,7 @@ const launchText = (launch: SoftwareLaunch | null | undefined) => launch?.custom
 
 /** The software's mark on a tile tinted with its colour; a server glyph for the original setup. */
 function SoftwareMark(props: { software: SoftwareId | null | undefined; size?: 'sm' | 'lg' }) {
-  return (
-    <span data-vesta="server-software-mark" data-software={props.software ?? 'original'} data-size={props.size ?? 'sm'} aria-hidden="true">
-      <Icon name={props.software ? softwareIcon[props.software] : 'icons/content/server'} size={props.size === 'lg' ? 30 : 18} />
-    </span>
-  );
+  return <SharedMark software={props.software ?? 'original'} icon={props.software ? softwareIcon[props.software] : 'icons/content/server'} size={props.size} />;
 }
 
 /** Settings → Software: what runs the server, switching it inline, and quietly going back. */
@@ -245,6 +244,7 @@ export function ChangeFlow(props: {
   const softwareOptions = createMemo(() => props.state.catalog.filter(selectable).map((entry) => ({
     value: entry.software,
     label: softwareName(entry.software)!,
+    hint: t(`software.hint-${entry.software}` as MessageId),
     icon: <SoftwareMark software={entry.software} />,
   })), { name: 'server-software:options' });
   const minecraftOptions = createMemo(() => {
@@ -265,9 +265,8 @@ export function ChangeFlow(props: {
 
   const pick = (value: string) => { setSoftware(value as SoftwareId); setError(null); };
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
-  const warmOption = (target: EventTarget | null) => {
+  const warmOption = (name: string) => {
     clearTimeout(hoverTimer);
-    const name = target instanceof Element ? target.closest('[data-vesta="segmented-item"]')?.querySelector('[data-software]')?.getAttribute('data-software') : null;
     const entry = props.state.catalog.find(entry => entry.software === name && selectable(entry));
     if (!entry) return;
     hoverTimer = setTimeout(() => {
@@ -328,8 +327,8 @@ export function ChangeFlow(props: {
         <Show when={props.target}><p>{softwareName(software())} {minecraft()} {selectedRelease() === 'latest' ? '' : selectedRelease()}</p></Show>
         <Show when={!props.target}>
         <Field label={t('server-hosting.software-label')}>
-          <div onPointerOver={(event) => { if (event.pointerType !== 'touch') warmOption(event.target); }} onPointerLeave={() => clearTimeout(hoverTimer)} onFocusIn={(event) => warmOption(event.target)}>
-          <SegmentedControl aria-label={t('server-hosting.software-label')} fill value={software() ?? undefined}
+          <div onPointerLeave={() => clearTimeout(hoverTimer)}>
+          <OptionCards aria-label={t('server-hosting.software-label')} value={software() ?? undefined} onWarm={warmOption}
             options={softwareOptions()} onChange={pick} disabled={locked()} />
           </div>
           <Show when={caution()}><p data-vesta="server-hosting-hint">{t('server-hosting.warning-region-threading')}</p></Show>
@@ -354,8 +353,7 @@ export function ChangeFlow(props: {
           </Show>
         </div>
         <Show when={software() === 'bukkit' || software() === 'spigot'}><p data-vesta="server-hosting-hint">{t('server-hosting.warning-source-build')}</p></Show>
-        <HostingError error={releases.error()} onRetry={() => void releases.refresh()} />
-        <HostingError error={versions.error()} onRetry={() => void versions.refresh()} />
+        <HostingError error={versions.error() ?? releases.error()} onRetry={() => { void versions.refresh(); void releases.refresh(); }} />
         <Show when={versions.value() && !minecraftOptions().length}><p data-vesta="server-hosting-hint">{t('server-hosting.no-versions')}</p></Show>
 
         </Show>

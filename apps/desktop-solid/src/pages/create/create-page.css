@@ -100,9 +100,6 @@
     font-size: var(--vesta-text-sm);
     color: var(--vesta-color-text-muted);
   }
-  :where([data-vesta="install-field"]) [data-vesta="segmented-control"] {
-    flex-wrap: wrap;
-  }
   :where([data-vesta="install-version-row"]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
@@ -127,10 +124,11 @@
     background: var(--vesta-color-surface);
   }
   :where([data-vesta="install-error"]) {
-    max-inline-size: 760px;
-    margin: var(--vesta-space-4) auto 0;
-    color: var(--vesta-color-danger-text);
-    overflow-wrap: anywhere;
+    max-inline-size: var(--install-content-width);
+    margin: var(--vesta-space-5) auto 0;
+  }
+  :where([data-vesta="install-section"]) > :where([data-vesta="notice"]) {
+    margin-block-start: var(--vesta-space-4);
   }
   :where([data-vesta="install-pack-engine"]) {
     display: grid;

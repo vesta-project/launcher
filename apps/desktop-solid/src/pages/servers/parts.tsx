@@ -1,5 +1,6 @@
 import { editorWhen } from './edit-conflict';
 import { Metadata } from '../../components/metadata';
+import { Notice, createNoticeRegistry, type NoticeRegistry } from '../../components/notice';
 import './servers.css';
 import { Badge, Button, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -60,16 +61,25 @@ export function Freshness(props: { atMs: number | null; now: number; phase: Conn
   );
 }
 
+const shellNotices = new WeakMap<object, NoticeRegistry>();
+
 /**
  * A localized error with its recovery action, if the caller can perform it. Inside a server
- * workspace, connection and capacity errors the header strip already explains stay quiet.
+ * workspace, connection and capacity errors the header strip already explains stay quiet, and
+ * equal errors from several panels show once (see `Notice`).
  */
 export function ServerErrorNote(props: {
   error: ServerCommandError | null | undefined;
   onRetry?: () => void;
+  variant?: 'section' | 'inline';
 }) {
   const now = useServersClock();
   const shell = useServerShell();
+  let scope: NoticeRegistry | undefined;
+  if (shell) {
+    scope = shellNotices.get(shell);
+    if (!scope) shellNotices.set(shell, (scope = createNoticeRegistry()));
+  }
   const retryAt = createMemo(() => Date.now() + (props.error?.retryAfterMs ?? 0), { name: 'server-error:retry-at' });
   const explained = () => {
     const snapshot = shell?.snapshot();
@@ -80,34 +90,40 @@ export function ServerErrorNote(props: {
       {(error) => {
         const presentation = () => serverErrorPresentation(error());
         const seconds = () => Math.ceil(Math.max(0, Math.min(error().retryAfterMs ?? 0, retryAt() - now())) / 1000);
+        const retryable = () => !!props.onRetry && (presentation().action === 'retry' || presentation().action === 'refresh' || presentation().action === 'wait');
         return (
-          <div data-vesta="server-error" role="alert">
-            <div data-vesta="server-error-body">
-              {t(presentation().message)}
-              <Show when={seconds() > 0}> {t('servers.retry-after', { count: seconds() })}</Show>
-              <Show when={serverErrorFile(error())}>{(filename) => <code data-vesta="server-error-file">{filename()}</code>}</Show>
-              <Show when={error().issue}>{issue => <code data-vesta="server-error-file">{issue().code}: {issue().rule}: {issue().item}</code>}</Show>
-              <Show when={error().code === 'conflict' && error().current}>
-                <details open>
-                  <summary>{t('servers.conflict.review', { name: String((error().current as { editor?: { display_name?: string } })?.editor?.display_name ?? t('servers.conflict.unknown-editor')), when: editorWhen((error().current as { editor?: { at_ms?: number } })?.editor?.at_ms) })}</summary>
-                  <pre>{JSON.stringify(error().current, null, 2)}</pre>
+          <Notice
+            class="server-error"
+            variant={props.variant}
+            scope={scope}
+            cause={props.onRetry ? `${error().code}:${error().reason ?? ''}:${presentation().message}` : undefined}
+            action={retryable() ? { label: t('common.retry'), onClick: () => props.onRetry?.(), disabled: presentation().action === 'wait' && seconds() > 0 } : undefined}
+            details={
+              <>
+                <Show when={serverErrorFile(error())}>{(filename) => <code data-vesta="server-error-file">{filename()}</code>}</Show>
+                <Show when={error().issue}>{issue => <code data-vesta="server-error-file">{issue().code}: {issue().rule}: {issue().item}</code>}</Show>
+                <Show when={error().code === 'conflict' && error().current}>
+                  <details open>
+                    <summary>{t('servers.conflict.review', { name: String((error().current as { editor?: { display_name?: string } })?.editor?.display_name ?? t('servers.conflict.unknown-editor')), when: editorWhen((error().current as { editor?: { at_ms?: number } })?.editor?.at_ms) })}</summary>
+                    <pre>{JSON.stringify(error().current, null, 2)}</pre>
+                  </details>
+                </Show>
+                <details data-vesta="server-error-details">
+                  <summary>{t('server-pack.error-details')}</summary>
+                  <pre>{serverErrorDetails(error())}</pre>
+                  <Button size="sm" variant="ghost" onClick={() => {
+                    void copyText(serverErrorDetails(error())).then(
+                      () => toast.show({ title: t('servers.copied'), tone: 'neutral' }),
+                      () => toast.show({ title: t('server-pack.error-copy-failed'), tone: 'danger' }),
+                    );
+                  }}>{t('servers.copy')}</Button>
                 </details>
-              </Show>
-              <details data-vesta="server-error-details">
-                <summary>{t('server-pack.error-details')}</summary>
-                <pre>{serverErrorDetails(error())}</pre>
-                <Button size="sm" variant="ghost" onClick={() => {
-                  void copyText(serverErrorDetails(error())).then(
-                    () => toast.show({ title: t('servers.copied'), tone: 'neutral' }),
-                    () => toast.show({ title: t('server-pack.error-copy-failed'), tone: 'danger' }),
-                  );
-                }}>{t('servers.copy')}</Button>
-              </details>
-            </div>
-            <Show when={props.onRetry && (presentation().action === 'retry' || presentation().action === 'refresh' || presentation().action === 'wait')}>
-              <Button size="sm" variant="ghost" disabled={presentation().action === 'wait' && seconds() > 0} onClick={() => props.onRetry?.()}>{t('common.retry')}</Button>
-            </Show>
-          </div>
+              </>
+            }
+          >
+            {t(presentation().message)}
+            <Show when={seconds() > 0}> {t('servers.retry-after', { count: seconds() })}</Show>
+          </Notice>
         );
       }}
     </Show>

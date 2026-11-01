@@ -1,0 +1,37 @@
+/*
+ * Software and modloader identity: a tinted tile with the software's mark. The tints are
+ * identity illustration (like the logos), set on any [data-software] so related surfaces
+ * (hero art, picker cards) can pick up --software-tint.
+ *
+ * Hooks:  [data-vesta=software-mark][data-software=<id>|original][data-size=sm|lg]
+ */
+@layer launcher {
+  :where([data-software]) { --software-tint: var(--vesta-color-accent); }
+  :where([data-software="vanilla"]) { --software-tint: #5aa846; }
+  :where([data-software="paper"]) { --software-tint: #4b8fe8; }
+  :where([data-software="folia"]) { --software-tint: #2bb59a; }
+  :where([data-software="purpur"]) { --software-tint: #a86ae8; }
+  :where([data-software="fabric"]) { --software-tint: #c9a26b; }
+  :where([data-software="quilt"]) { --software-tint: #d466c9; }
+  :where([data-software="forge"]) { --software-tint: #d9873a; }
+  :where([data-software="neoforge"]) { --software-tint: #e7663a; }
+  :where([data-software="original"]) { --software-tint: var(--vesta-color-text-muted); }
+
+  :where([data-vesta="software-mark"]) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 26px;
+    block-size: 26px;
+    border-radius: var(--vesta-radius-md, 6px);
+    background: color-mix(in srgb, var(--software-tint) 18%, transparent);
+    color: var(--software-tint);
+  }
+  :where([data-vesta="software-mark"][data-size="lg"]) {
+    inline-size: 60px;
+    block-size: 60px;
+    border-radius: var(--vesta-radius-lg, 10px);
+    box-shadow: inset 0 0 0 var(--vesta-border-width) color-mix(in srgb, var(--software-tint) 35%, transparent);
+  }
+
+}

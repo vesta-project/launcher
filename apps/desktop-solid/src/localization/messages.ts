@@ -3612,6 +3612,16 @@ export const messageIds = [
   "browse.target-new-instance-help",
   "browse.target-any-help",
   "browse.target-empty",
+  "software.hint-vanilla",
+  "software.hint-fabric",
+  "software.hint-quilt",
+  "software.hint-forge",
+  "software.hint-neoforge",
+  "software.hint-paper",
+  "software.hint-folia",
+  "software.hint-purpur",
+  "software.hint-bukkit",
+  "software.hint-spigot",
 ] as const;
 
 export type MessageId = (typeof messageIds)[number];

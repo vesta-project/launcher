@@ -65,34 +65,6 @@
  * States: hero/mark: data-software=<id>|original; mark: data-size=sm|lg; side: data-to
  */
 @layer launcher {
-  :where([data-software]) { --software-tint: var(--vesta-color-accent); }
-  :where([data-software="vanilla"]) { --software-tint: #5aa846; }
-  :where([data-software="paper"]) { --software-tint: #4b8fe8; }
-  :where([data-software="folia"]) { --software-tint: #2bb59a; }
-  :where([data-software="purpur"]) { --software-tint: #a86ae8; }
-  :where([data-software="fabric"]) { --software-tint: #c9a26b; }
-  :where([data-software="quilt"]) { --software-tint: #d466c9; }
-  :where([data-software="forge"]) { --software-tint: #d9873a; }
-  :where([data-software="neoforge"]) { --software-tint: #e7663a; }
-  :where([data-software="original"]) { --software-tint: var(--vesta-color-text-muted); }
-
-  :where([data-vesta="server-software-mark"]) {
-    display: inline-grid;
-    flex: none;
-    place-items: center;
-    inline-size: 26px;
-    block-size: 26px;
-    border-radius: var(--vesta-radius-md, 6px);
-    background: color-mix(in srgb, var(--software-tint) 18%, transparent);
-    color: var(--software-tint);
-  }
-  :where([data-vesta="server-software-mark"][data-size="lg"]) {
-    inline-size: 60px;
-    block-size: 60px;
-    border-radius: var(--vesta-radius-lg, 10px);
-    box-shadow: inset 0 0 0 var(--vesta-border-width) color-mix(in srgb, var(--software-tint) 35%, transparent);
-  }
-
   /* ---- Hero: what runs now ---- */
   :where([data-vesta="server-software-hero"]) {
     display: flex;
@@ -178,10 +150,6 @@
     font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-medium);
   }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-field"] { --segmented-height: 68px; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-item"] { flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 60px; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-icon"] { inline-size: auto; block-size: auto; }
-  :where([data-vesta="server-software-field"]) [data-vesta="segmented-label"] { flex: none; max-inline-size: 100%; text-align: center; }
   :where([data-vesta="server-software-versions"]) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

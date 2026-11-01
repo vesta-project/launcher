@@ -18,7 +18,7 @@ const exceptions = {
     reason: 'Artwork fallback behind the media foreground/scrim pair.',
     values: ['oklch(0.34 0.07 var(--project-hue, 250))', 'oklch(0.24 0.05 calc(var(--project-hue, 250) + 50))'],
   },
-  'src/pages/servers/hosting/hosting.css': {
+  'src/components/software-mark.css': {
     reason: 'Software identity illustrations; launcher controls use semantic tokens.',
     values: ['#5aa846', '#4b8fe8', '#2bb59a', '#a86ae8', '#c9a26b', '#d466c9', '#d9873a', '#e7663a'],
   },
