@@ -102,6 +102,17 @@
     gap: var(--vesta-space-2) var(--vesta-space-3);
   }
   :where([data-vesta="server-settings-search"]) { position: relative; display: flex; flex: 1 1 220px; align-items: center; max-inline-size: 420px; }
+  /* The bar's trailing group: search grows, the action keeps its size at the end of the row. */
+  :where([data-vesta="server-settings-bar-end"]) {
+    display: flex;
+    flex: 1 1 320px;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="server-settings-bar-end"]) > :where([data-vesta="server-settings-search"]) { flex: 1 1 160px; min-inline-size: 0; }
+  :where([data-vesta="server-settings-bar-end"]) > :where([data-vesta="button"]) { flex: none; }
   :where([data-vesta="server-settings-search"]) > :where([data-vesta="field"]) { flex: 1; }
   :where([data-vesta="server-settings-search"]) > :where([data-vesta="icon-button"], [data-vesta="button"]) { position: absolute; inset-inline-end: 4px; }
   :where([data-vesta="server-settings-bar"]) > :where([data-vesta="switch"]) {
