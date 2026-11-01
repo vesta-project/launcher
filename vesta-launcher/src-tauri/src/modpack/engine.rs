@@ -455,7 +455,6 @@ fn resolve_merges(
 ) {
     let old_format = old_manifest.source;
     let old_zip_path = old_manifest.source_zip_path.as_deref();
-    let mut corrupted_paths = Vec::new();
     let mut merge_updates = Vec::new();
     let mut unsupported_paths = Vec::new();
 
@@ -466,16 +465,12 @@ fn resolve_merges(
         let current = std::fs::read_to_string(game_dir.join(path)).ok();
         let new = read_zip_override_text(new_zip_path, new_format, path).ok();
         let old = old_zip_path.and_then(|zip| read_zip_override_text(zip, old_format, path).ok());
-        if new.is_none() || old.is_none() {
-            unsupported_paths.push(path.clone());
-            continue;
-        }
 
         match merge_config(path, old.as_deref(), current.as_deref(), new.as_deref()) {
             MergeResult::Merged(content) => merge_updates.push((index, content)),
             MergeResult::Corrupted(reason) => {
                 log::warn!("[modpack-engine] Config {} is corrupted: {}", path, reason);
-                corrupted_paths.push(path.clone());
+                unsupported_paths.push(path.clone());
             }
             MergeResult::Unsupported => unsupported_paths.push(path.clone()),
         }
@@ -489,9 +484,6 @@ fn resolve_merges(
     actions.actions.retain(|action| {
         !matches!(action, SyncAction::Merge { path, .. } if unsupported_paths.contains(path))
     });
-    for path in corrupted_paths {
-        actions.add_corrupted_config(path);
-    }
 }
 
 fn resolve_missing_zip_overrides(
