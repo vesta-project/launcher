@@ -530,7 +530,7 @@ impl ServerManager {
                 .map_err(|_| conflict("pack_invalid_index"))?;
         if index.format_version != 1
             || index.revision != revision(&release.revision)?
-            || index.files.len() > 257
+            || index.files.len() > 4096
             || index.minecraft_version.is_empty()
         {
             return Err(conflict("pack_invalid_index"));

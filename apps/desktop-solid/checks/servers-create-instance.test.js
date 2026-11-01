@@ -10,3 +10,8 @@ test('trust, connectivity and missing-server errors never turn into an unrelated
   for (const error of [{ code: 'not_found' }, { code: 'unreachable' }, { code: 'trust_changed' }]) expect(serverInstanceFallback(error, snapshot)).toBeNull();
   expect(serverInstanceFallback({ code: 'not_found', reason: 'pack_not_published' }, undefined)).toBeNull();
 });
+
+test('invalid pack contents show the pack failure instead of a stale edit conflict', () => {
+ expect(errorMessage({code:'conflict',reason:'pack_invalid_index'})).toBe('server-pack.archive-invalid');
+ expect(errorMessage({code:'conflict',reason:'pack_integrity_failure'})).toBe('server-pack.hash-mismatch');
+});

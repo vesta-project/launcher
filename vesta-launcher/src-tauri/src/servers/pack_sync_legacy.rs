@@ -266,7 +266,7 @@ fn insert(
         return Err(conflict("pack_file_collision"));
     }
     *total += bytes.len() as u64;
-    if *total > TOTAL_LIMIT || bytes.len() as u64 > FILE_LIMIT || files.len() >= 256 {
+    if *total > TOTAL_LIMIT || bytes.len() as u64 > FILE_LIMIT || files.len() >= 4096 {
         return Err(conflict("pack_too_large"));
     }
     files.insert(path, bytes);
@@ -289,6 +289,16 @@ fn verify_hash(bytes: &[u8], hash: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn normalization_accepts_large_packs_and_still_bounds_entry_count() {
+        let mut files = BTreeMap::new();
+        let mut total = 0;
+        for n in 0..4096 {
+            insert(&mut files, &mut total, format!("mods/{n}.jar"), vec![]).unwrap();
+        }
+        assert_eq!(files.len(), 4096);
+        assert!(insert(&mut files, &mut total, "mods/overflow.jar".into(), vec![]).is_err());
+    }
     #[test]
     fn legacy_hashes_are_verified_before_ownership_is_derived() {
         use sha2::Digest;
