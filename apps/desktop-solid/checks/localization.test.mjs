@@ -15,6 +15,7 @@ const sources = await Promise.all(
 const english = createFluentBundle("en", sources);
 const args = {
   stage: "Downloading",
+  when: "just now",
   done: "12 MB",
   source: "Original",
   target: "Copy",
