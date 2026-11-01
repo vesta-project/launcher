@@ -223,6 +223,42 @@ export function effectiveHue(definition: ThemeDefinition, hue: number): number {
   return definition.hue ?? 0;
 }
 
+export interface MaterialOpacities {
+  /** Shell canvas: the single frame tint over an applied native effect (dark scheme). */
+  canvas: number;
+  /** Light Mica is brighter, so the light frame tint is a little denser. */
+  canvasLight: number;
+  chrome: number;
+  panel: number;
+  overlay: number;
+  /** Library card-field board alpha over the frame while an effect is revealed. */
+  library: number;
+  /** `library` as a share of `panel`, for a color-mix over the panel token. */
+  libraryScale: number;
+}
+
+/** Layer alphas (percent) from material and translucency. Pure; shared by tokens and checks. */
+export function materialOpacities(theme: Pick<ThemeValues, "material" | "translucency">): MaterialOpacities {
+  const flat = theme.material === "flat";
+  const frosted = theme.material === "frosted";
+  const t = clamp(Number.isFinite(theme.translucency) ? theme.translucency : 0, 0, 100);
+  // Structure: canvas (most transparent) < chrome < panels < overlays; dense surfaces are opaque in CSS.
+  const canvas = flat ? 100 : frosted ? 80 - 0.2 * t : 70 - 0.3 * t;
+  const chrome = flat ? 100 : frosted ? 94 - 0.15 * t : 90 - 0.3 * t;
+  const panel = flat ? 100 : frosted ? 97 - 0.1 * t : 96 - 0.15 * t;
+  const overlay = flat ? 100 : frosted ? 94 - 0.2 * t : 92 - 0.37 * t;
+  const canvasLight = Math.min(100, canvas + 8);
+  // The library card field lets the effect through (about 67% coverage at glass/60);
+  // every other board keeps its panel tint (about 94%).
+  const library = flat ? 100 : Math.max(0, panel - 57);
+  return { canvas, canvasLight, chrome, panel, overlay, library, libraryScale: (library / panel) * 100 };
+}
+
+/** Effective coverage (0..100) of translucent layers stacked over the native backdrop. */
+export function effectiveCoverage(...alphas: number[]): number {
+  return (1 - alphas.reduce((rest, alpha) => rest * (1 - clamp(alpha, 0, 100) / 100), 1)) * 100;
+}
+
 /** Pure application token resolver. No UI library, DOM, native API or persistence dependency. */
 export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
   const def = themeDefinition(theme.id);
@@ -230,13 +266,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
   const material = theme.material;
   const flat = material === "flat";
   const frosted = material === "frosted";
-  const t = clamp(Number.isFinite(theme.translucency) ? theme.translucency : 0, 0, 100);
-
-  // Structure: canvas (most transparent) < chrome < panels < overlays; dense surfaces are opaque in CSS.
-  const canvas = flat ? 100 : frosted ? 80 - 0.2 * t : 70 - 0.3 * t;
-  const chrome = flat ? 100 : frosted ? 94 - 0.15 * t : 90 - 0.3 * t;
-  const panel = flat ? 100 : frosted ? 97 - 0.1 * t : 96 - 0.15 * t;
-  const overlay = flat ? 100 : frosted ? 94 - 0.2 * t : 92 - 0.37 * t;
+  const { canvas, canvasLight, chrome, panel, overlay, libraryScale } = materialOpacities(theme);
 
   // Colours of the three background accents.
   const harmony = theme.gradientHarmony;
@@ -312,6 +342,8 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-radius-factor": String(def.radius),
     "--vesta-border-width": `${theme.borderWidth}px`,
     "--vesta-theme-canvas-opacity": pct(canvas),
+    "--vesta-theme-canvas-opacity-light": pct(canvasLight),
+    "--vesta-theme-library-board-scale": pct(libraryScale),
     "--vesta-theme-chrome-opacity": pct(chrome),
     "--vesta-theme-panel-opacity": pct(panel),
     "--vesta-theme-overlay-opacity": pct(overlay),

@@ -19,6 +19,21 @@
   :where(:root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat'])) {
     --vesta-canvas-alpha: var(--vesta-theme-canvas-opacity, 100%);
   }
+  /* Light Mica is bright: the light frame tint is a little denser so labels keep their contrast. */
+  :where(:root[data-vesta-scheme='light'][data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat'])) {
+    --vesta-canvas-alpha: var(--vesta-theme-canvas-opacity-light, var(--vesta-theme-canvas-opacity, 100%));
+  }
+  /*
+   * Effect reveal (applied effect, non-flat, built-in theme): background artwork is painted over the
+   * frame tint, so it is quieter there and the native material stays the visible backdrop.
+   * Author themes keep their own painting.
+   */
+  :where(:root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])) {
+    --vesta-bg-strength: 0.5;
+  }
+  :where(:root[data-vesta-scheme='light'][data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])) {
+    --vesta-bg-strength: 0.625;
+  }
 
   /* Glass: a thin bright edge at the top of surfaces. */
   :where(:root[data-vesta-material='glass']) {

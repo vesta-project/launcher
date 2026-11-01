@@ -25,6 +25,17 @@
     scrollbar-color: var(--vesta-color-border-strong) transparent;
   }
 
+  /*
+   * Showcase (library card field): with an applied effect and a built-in theme, the board keeps
+   * only a share of the panel tint (~30% alpha at glass/60, ~67% coverage over the frame), so the
+   * native material reads as the field's backdrop. Cards are opaque; loose text needs local backing.
+   * Normal boards keep the panel tint (~94% coverage). Author themes keep their own panel.
+   */
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])
+    :where([data-vesta='board'][data-showcase]) {
+    --board-bg: color-mix(in oklab, var(--vesta-color-panel) var(--vesta-theme-library-board-scale, 100%), transparent);
+  }
+
   /* The shell owns page grain; do not paint another texture over board content. */
 
   /* Less framing as the window narrows, like the demo. */

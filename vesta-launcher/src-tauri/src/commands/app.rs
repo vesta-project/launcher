@@ -980,8 +980,13 @@ fn notify_unsupported_window_effect(
     });
 }
 
+/// `dark` is the frontend theme scheme (optional: the old frontend omits it).
 #[tauri::command]
-pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result<(), String> {
+pub fn set_window_effect(
+    window: tauri::WebviewWindow,
+    effect: String,
+    dark: Option<bool>,
+) -> Result<(), String> {
     let app_handle = window.app_handle();
     let capabilities = crate::utils::window_effects::get_window_effect_capabilities();
     let (active_effect, was_coerced) =
@@ -1004,52 +1009,102 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         );
     }
 
+    // Only Windows system backdrops follow the scheme today.
+    #[cfg(not(target_os = "windows"))]
+    let _ = dark;
+
     #[cfg(target_os = "windows")]
     {
         use window_vibrancy::{
             apply_acrylic, apply_blur, apply_mica, clear_acrylic, clear_blur, clear_mica,
         };
         use windows_sys::Win32::{
-            Graphics::Dwm::DwmExtendFrameIntoClientArea, UI::Controls::MARGINS,
+            Graphics::Dwm::{
+                DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            },
+            UI::Controls::MARGINS,
         };
+
+        let hwnd = window.hwnd().map_err(|err| err.to_string())?.0;
+        let extend_frame = |margin: i32| {
+            let margins = MARGINS {
+                cxLeftWidth: margin,
+                cxRightWidth: margin,
+                cyTopHeight: margin,
+                cyBottomHeight: margin,
+            };
+            unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) }
+        };
+        let clear_effects = || {
+            if let Err(err) = clear_blur(&window) {
+                log::warn!("Failed to clear blur window effect: {}", err);
+            }
+            if let Err(err) = clear_acrylic(&window) {
+                log::warn!("Failed to clear acrylic window effect: {}", err);
+            }
+            if let Err(err) = clear_mica(&window) {
+                log::warn!("Failed to clear mica window effect: {}", err);
+            }
+        };
+        // A failed application must not leave a previous material under a frontend that now
+        // paints the solid fallback: clear every backdrop and the frame extension.
+        let restore_solid = || {
+            clear_effects();
+            let result = extend_frame(0);
+            if result < 0 {
+                log::warn!(
+                    "Failed to reset DWM frame after window effect failure: HRESULT {:#010x}",
+                    result as u32
+                );
+            }
+        };
+
+        clear_effects();
 
         // Acrylic's transient backdrop only paints through WebView2 when the DWM frame
         // covers the client area. Reset the margins for every other effect so switching
         // back to Mica restores its normal system-backdrop composition.
-        let frame_margin = if active_effect == "acrylic" { -1 } else { 0 };
-        let margins = MARGINS {
-            cxLeftWidth: frame_margin,
-            cxRightWidth: frame_margin,
-            cyTopHeight: frame_margin,
-            cyBottomHeight: frame_margin,
-        };
-        let hwnd = window.hwnd().map_err(|err| err.to_string())?.0;
-        let frame_result = unsafe { DwmExtendFrameIntoClientArea(hwnd, &margins) };
+        let frame_result = extend_frame(if active_effect == "acrylic" { -1 } else { 0 });
         if frame_result < 0 {
+            restore_solid();
             return Err(format!(
                 "Failed to configure DWM frame for window effect '{}': HRESULT {:#010x}",
                 active_effect, frame_result as u32
             ));
         }
 
-        if let Err(err) = clear_blur(&window) {
-            log::warn!("Failed to clear blur window effect: {}", err);
-        }
-        if let Err(err) = clear_acrylic(&window) {
-            log::warn!("Failed to clear acrylic window effect: {}", err);
-        }
-        if let Err(err) = clear_mica(&window) {
-            log::warn!("Failed to clear mica window effect: {}", err);
+        // System backdrops (Mica, Win11 transient acrylic) follow the immersive dark-mode
+        // attribute. Callers that pass the theme scheme get a matching backdrop; callers that
+        // omit it keep the legacy behaviour (dark Mica, attribute untouched otherwise).
+        if let Some(dark) = dark {
+            let value: i32 = dark.into();
+            let result = unsafe {
+                DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
+                    &value as *const i32 as *const core::ffi::c_void,
+                    std::mem::size_of::<i32>() as u32,
+                )
+            };
+            if result < 0 {
+                log::warn!(
+                    "Failed to set window dark mode ({}) for effect '{}': HRESULT {:#010x}",
+                    dark,
+                    active_effect,
+                    result as u32
+                );
+            }
         }
 
         let apply_result = match active_effect.as_str() {
             "blur" => apply_blur(&window, Some((18, 18, 18, 125))),
             "acrylic" => apply_acrylic(&window, Some((18, 18, 18, 125))),
-            "mica" => apply_mica(&window, Some(true)),
+            "mica" => apply_mica(&window, Some(dark.unwrap_or(true))),
             _ => Ok(()),
         };
 
         if let Err(err) = apply_result {
+            restore_solid();
             let message = format!(
                 "Failed to apply window effect '{}' (requested '{}'): {}",
                 active_effect, effect, err

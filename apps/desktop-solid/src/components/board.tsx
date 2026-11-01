@@ -10,10 +10,12 @@ export function Board(props: {
   class?: string;
   /** Children manage their own scrolling; the board itself does not scroll. */
   fixed?: boolean;
+  /** A card field (the library grid): a lighter tint, so an applied window effect shows through. */
+  showcase?: boolean;
 }) {
   return (
     <div data-vesta="board-frame">
-      <div data-vesta="board" data-fixed={props.fixed ? '' : undefined} class={props.class}>
+      <div data-vesta="board" data-fixed={props.fixed ? '' : undefined} data-showcase={props.showcase ? '' : undefined} class={props.class}>
         {props.children}
       </div>
     </div>

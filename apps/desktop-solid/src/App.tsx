@@ -21,7 +21,8 @@ export default function App() {
   // Appearance and settings are app-wide: the welcome flow previews theme changes live too.
   usePreferences();
   const themeReady = useThemeRuntime();
-  useWindowEffects();
+  // The window is presented once theme and first native material are in place (the latter bounded).
+  const effectReady = useWindowEffects();
   useConfigSync();
   useReducedMotion();
   // One-time start-up: its reads are snapshots, never dependencies.
@@ -30,7 +31,7 @@ export default function App() {
     () =>
       untrack(() => {
         initializeLocalization();
-        const stopDesktop = startDesktop(themeReady);
+        const stopDesktop = startDesktop(Promise.all([themeReady, effectReady]).then(() => undefined));
         const stopOnboarding = startOnboarding();
         return () => { stopOnboarding(); stopDesktop(); };
       }),

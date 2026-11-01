@@ -131,7 +131,7 @@ fn build_mini_window(
         .title_bar_style(tauri::TitleBarStyle::Overlay);
 
     let window = win_builder.build()?;
-    crate::commands::app::set_window_effect(window.clone(), "none".to_string()).unwrap_or(());
+    crate::commands::app::set_window_effect(window.clone(), "none".to_string(), None).unwrap_or(());
     Ok(window)
 }
 

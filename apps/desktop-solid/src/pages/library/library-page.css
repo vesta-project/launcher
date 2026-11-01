@@ -335,8 +335,13 @@
     }
   }
 
+  /* Sits on the see-through card field: carries its own solid backing. */
   :where([data-vesta='library-save-error']) {
+    inline-size: fit-content;
     margin: 0 var(--library-grid-padding, 40px) var(--vesta-space-4);
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface);
     color: var(--vesta-color-danger-text);
     font-size: var(--vesta-text-sm);
   }

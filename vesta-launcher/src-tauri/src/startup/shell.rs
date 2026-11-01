@@ -33,7 +33,7 @@ pub fn initialize(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>
     }
 
     let window = build_main_window(app, os, &config)?;
-    crate::commands::app::set_window_effect(window, "none".to_string()).unwrap_or(());
+    crate::commands::app::set_window_effect(window, "none".to_string(), None).unwrap_or(());
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
