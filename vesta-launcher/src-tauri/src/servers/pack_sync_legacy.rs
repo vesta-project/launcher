@@ -1,25 +1,72 @@
 //! Reuse the instance archive parser and provider resolver; normalize their
 //! verified files into a private Vesta index for the one diff/apply pipeline.
+//! Bytes go straight to an on-disk review stage: provider modpacks routinely
+//! exceed the in-memory archive bound (COBBLEVERSE ships a 215 MiB archive).
 use super::*;
 use piston_lib::game::{
     installer::core::modpack_installer::ModpackResolver,
     modpack::{parser::get_modpack_metadata, types::ModpackMod},
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 
-pub(super) async fn normalize(
-    app: &AppHandle,
-    release: &Release,
-    mut archive: Vec<u8>,
-) -> Result<Vec<u8>> {
+/// A normalized pack: its index (files already verified) and the stage holding them.
+pub(super) struct Normalized {
+    pub(super) index: Index,
+    pub(super) stage: tempfile::TempDir,
+    pub(super) files: BTreeMap<String, String>,
+}
+
+/// Verified staged files, keyed by their pack path, with the same alias and size
+/// rules as the Vesta index.
+struct Staged {
+    stage: tempfile::TempDir,
+    files: BTreeMap<String, (u64, String)>,
+    total: u64,
+    scratch: u64,
+}
+impl Staged {
+    fn new() -> Result<Self> {
+        Ok(Self { stage: tempfile::tempdir().map_err(io)?, files: BTreeMap::new(), total: 0, scratch: 0 })
+    }
+    /// A private scratch name outside every pack path (pack paths never start with '.').
+    fn scratch(&mut self) -> PathBuf {
+        self.scratch += 1;
+        self.stage.path().join(format!(".download-{}", self.scratch))
+    }
+    /// Admit `path` (replacing it when `replace`), then move `from` into place.
+    fn insert(&mut self, path: String, from: &Path, size: u64, sha256: String, replace: bool) -> Result<()> {
+        if replace {
+            if let Some((previous, _)) = self.files.remove(&path) {
+                self.total -= previous;
+            }
+        }
+        admit(&self.files, self.total, &path, size)?;
+        let target = self.stage.path().join(&path);
+        std::fs::create_dir_all(target.parent().unwrap()).map_err(io)?;
+        std::fs::rename(from, &target).map_err(io)?;
+        self.total += size;
+        self.files.insert(path, (size, sha256));
+        Ok(())
+    }
+    fn insert_bytes(&mut self, path: String, bytes: &[u8], replace: bool) -> Result<()> {
+        safe_path(&path)?;
+        let scratch = self.scratch();
+        std::fs::write(&scratch, bytes).map_err(io)?;
+        self.insert(path, &scratch, bytes.len() as u64, digest(bytes), replace)
+    }
+}
+
+pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<Normalized> {
     let resources = app.state::<ResourceManager>();
+    let mut staged = Staged::new()?;
+    let source = staged.scratch();
     if release.format == "catalogue" {
         let value: Value =
             serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
         if value["schemaVersion"] != 1 || value["content"]["mode"] != "platform" {
             return Err(conflict("pack_invalid_index"));
         }
-        let source = match value["content"]["platform"].as_str() {
+        let platform = match value["content"]["platform"].as_str() {
             Some("modrinth") => crate::models::SourcePlatform::Modrinth,
             Some("curseforge") => crate::models::SourcePlatform::CurseForge,
             _ => return Err(conflict("pack_invalid_source")),
@@ -30,26 +77,23 @@ pub(super) async fn normalize(
         let version = value["content"]["versionId"]
             .as_str()
             .ok_or_else(|| conflict("pack_invalid_source"))?;
-        let p = resources.get_project(source, project).await.map_err(io)?;
+        let p = resources.get_project(platform, project).await.map_err(io)?;
         if p.resource_type != crate::models::resource::ResourceType::Modpack {
             return Err(conflict("pack_invalid_source"));
         }
-        let v = resources
-            .get_version(source, project, version)
-            .await
-            .map_err(io)?;
-        archive = download_provider_limit(
-            &v.download_url,
-            vesta_server_client::pack_sync::MAX_ARCHIVE as u64,
-        )
-        .await?;
-        verify_hash(&archive, &v.hash)?;
+        let v = resources.get_version(platform, project, version).await.map_err(io)?;
+        download_provider_to(&v.download_url, PROVIDER_ARCHIVE_LIMIT, &source)
+            .await?
+            .verify(&v.hash)?;
+    } else {
+        std::fs::write(&source, &archive).map_err(io)?;
     }
-    let temp = tempfile::NamedTempFile::new().map_err(io)?;
-    std::fs::write(temp.path(), &archive).map_err(io)?;
-    let mut zip = zip::ZipArchive::new(Cursor::new(archive.as_slice()))
-        .map_err(|_| conflict("pack_unsafe_archive"))?;
-    if zip.len() > 4097 {
+    drop(archive);
+    let mut zip = zip::ZipArchive::new(std::io::BufReader::new(
+        std::fs::File::open(&source).map_err(io)?,
+    ))
+    .map_err(|_| conflict("pack_unsafe_archive"))?;
+    if zip.len() > 16384 {
         return Err(conflict("pack_too_large"));
     }
     let mut seen = HashSet::new();
@@ -74,7 +118,7 @@ pub(super) async fn normalize(
         }
     }
     // The shared parser determines Minecraft/loader identities and provider pins.
-    let metadata = get_modpack_metadata(temp.path()).map_err(|_| conflict("pack_invalid_index"))?;
+    let metadata = get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
     let mut unsupported = HashSet::new();
     if seen.contains("modrinth.index.json") {
         let index: Value =
@@ -91,10 +135,8 @@ pub(super) async fn normalize(
         }
     }
     let resolver = crate::tasks::installers::modpack::PistonModpackResolver::new(app.clone());
-    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    let mut total = 0u64;
     for entry in metadata.mods {
-        let (path, bytes) = match entry {
+        match entry {
             ModpackMod::Modrinth {
                 path, hashes, size, ..
             } => {
@@ -102,6 +144,7 @@ pub(super) async fn normalize(
                 if unsupported.contains(&path) {
                     continue;
                 }
+                admit(&staged.files, staged.total, &path, size)?;
                 let hash = hashes
                     .get("sha1")
                     .ok_or_else(|| conflict("pack_download_unavailable"))?;
@@ -109,20 +152,16 @@ pub(super) async fn normalize(
                     .get_by_hash(crate::models::SourcePlatform::Modrinth, hash)
                     .await
                     .map_err(io)?;
-                compatible(
-                    &version,
-                    &metadata.minecraft_version,
-                    &metadata.modloader_type,
-                    path.starts_with("mods/"),
-                )?;
+                compatible(&version, &metadata.modloader_type, path.starts_with("mods/"))?;
                 if project.environment.is_some_and(|e| {
                     e.client_requirement
                         == Some(crate::models::resource::SideRequirement::Unsupported)
                 }) {
                     return Err(conflict("pack_incompatible_runtime"));
                 }
-                let bytes = download_provider(&version.download_url).await?;
-                if bytes.len() as u64 != size {
+                let scratch = staged.scratch();
+                let got = download_provider_to(&version.download_url, FILE_LIMIT, &scratch).await?;
+                if got.size != size {
                     return Err(conflict("pack_integrity_failure"));
                 }
                 let hash = hashes
@@ -130,8 +169,8 @@ pub(super) async fn normalize(
                     .or_else(|| hashes.get("sha256"))
                     .or_else(|| hashes.get("sha1"))
                     .ok_or_else(|| conflict("pack_integrity_failure"))?;
-                verify_hash(&bytes, hash)?;
-                (path, bytes)
+                got.verify(hash)?;
+                staged.insert(path, &scratch, got.size, got.sha256, false)?;
             }
             ModpackMod::CurseForge {
                 project_id,
@@ -152,28 +191,21 @@ pub(super) async fn normalize(
                     )
                     .await
                     .map_err(io)?;
-                compatible(
-                    &version,
-                    &metadata.minecraft_version,
-                    &metadata.modloader_type,
-                    resolved.subfolder == "mods",
-                )?;
-                let bytes = download_provider(&resolved.url).await?;
-                verify_hash(
-                    &bytes,
-                    resolved
-                        .sha1
-                        .as_deref()
-                        .filter(|h| !h.is_empty())
-                        .ok_or_else(|| conflict("pack_download_unavailable"))?,
-                )?;
-                (
-                    format!("{}/{}", resolved.subfolder, resolved.filename),
-                    bytes,
-                )
+                compatible(&version, &metadata.modloader_type, resolved.subfolder == "mods")?;
+                let path = format!("{}/{}", resolved.subfolder, resolved.filename);
+                safe_path(&path)?;
+                admit(&staged.files, staged.total, &path, 0)?;
+                let sha1 = resolved
+                    .sha1
+                    .as_deref()
+                    .filter(|h| !h.is_empty())
+                    .ok_or_else(|| conflict("pack_download_unavailable"))?;
+                let scratch = staged.scratch();
+                let got = download_provider_to(&resolved.url, FILE_LIMIT, &scratch).await?;
+                got.verify(sha1)?;
+                staged.insert(path, &scratch, got.size, got.sha256, false)?;
             }
-        };
-        insert(&mut files, &mut total, path, bytes)?;
+        }
     }
     let override_folder = if seen.contains("manifest.json") {
         let manifest: Value =
@@ -206,58 +238,73 @@ pub(super) async fn normalize(
             .filter(|n| n.starts_with(&prefix))
             .collect();
         for name in names {
-            let path = name.strip_prefix(&prefix).unwrap();
-            safe_path(path)?;
-            let bytes = read_member(&mut zip, &name, FILE_LIMIT)?;
-            if let Some(previous) = files.remove(path) {
-                total -= previous.len() as u64;
-            }
-            insert(&mut files, &mut total, path.into(), bytes)?;
+            let path = name.strip_prefix(&prefix).unwrap().to_owned();
+            safe_path(&path)?;
+            let scratch = staged.scratch();
+            let (size, sha256) = copy_member(&mut zip, &name, &scratch)?;
+            staged.insert(path, &scratch, size, sha256, true)?;
         }
     }
-    let index_files:Vec<_>=files.iter().map(|(path,bytes)|json!({"path":path,"size":bytes.len(),"hashes":{"sha256":digest(bytes)},"env":{"client":"required"},"source":{"type":"embedded"}})).collect();
-    let index = json!({"formatVersion":1,"name":metadata.name,"revision":revision(&release.revision)?,"minecraftVersion":metadata.minecraft_version,"modloaderType":metadata.modloader_type,"modloaderVersion":metadata.modloader_version,"files":index_files});
-    let index = serde_json::to_vec(&index).map_err(io)?;
-    if index.len() > 1024 * 1024 {
-        return Err(conflict("pack_too_large"));
-    }
-    let mut output = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let options =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    output.start_file("vesta.index.json", options).map_err(io)?;
-    output.write_all(&index).map_err(io)?;
-    for (path, bytes) in files {
-        output
-            .start_file(format!("overrides/{path}"), options)
-            .map_err(io)?;
-        output.write_all(&bytes).map_err(io)?;
-    }
-    let bytes = output.finish().map_err(io)?.into_inner();
-    if bytes.len() > vesta_server_client::pack_sync::MAX_ARCHIVE {
-        return Err(conflict("pack_too_large"));
-    }
-    Ok(bytes)
+    drop(zip);
+    let _ = std::fs::remove_file(&source);
+    let files = staged.files.iter().map(|(path, (_, sha))| (path.clone(), sha.clone())).collect();
+    let index = Index {
+        format_version: 1,
+        name: metadata.name.into(),
+        revision: revision(&release.revision)?,
+        minecraft_version: metadata.minecraft_version,
+        modloader_type: Some(metadata.modloader_type),
+        modloader_version: metadata.modloader_version,
+        files: vec![],
+    };
+    Ok(Normalized { index, stage: staged.stage, files })
 }
-fn compatible(
-    version: &crate::models::resource::ResourceVersion,
-    mc: &str,
-    loader: &str,
-    is_mod: bool,
-) -> Result<()> {
-    if !version.game_versions.iter().any(|v| v == mc)
-        || is_mod && !crate::resources::manager::is_loader_compatible(&version.loaders, loader)
+/// Stream one archive member to disk, enforcing the per-file bound and hashing it.
+fn copy_member<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    name: &str,
+    target: &Path,
+) -> Result<(u64, String)> {
+    use sha2::Digest;
+    let mut member = zip.by_name(name).map_err(|_| conflict("pack_missing_file"))?;
+    if member.size() > FILE_LIMIT || member.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
+        return Err(conflict("pack_unsafe_archive"));
+    }
+    let mut out = std::fs::File::create(target).map_err(io)?;
+    let mut hasher = sha2::Sha256::new();
+    let mut buffer = vec![0u8; 64 * 1024];
+    let mut size = 0u64;
+    let mut limited = member.by_ref().take(FILE_LIMIT + 1);
+    loop {
+        let n = limited.read(&mut buffer).map_err(io)?;
+        if n == 0 {
+            break;
+        }
+        size += n as u64;
+        if size > FILE_LIMIT {
+            return Err(conflict("pack_too_large"));
+        }
+        hasher.update(&buffer[..n]);
+        out.write_all(&buffer[..n]).map_err(io)?;
+    }
+    Ok((size, hex::encode(hasher.finalize())))
+}
+/// A modpack pins exact provider files, so its own Minecraft version is authoritative:
+/// files tagged only for a sibling release (e.g. `1.21` in a `1.21.1` pack) are what the
+/// author shipped, and every ordinary provider install accepts them. Only reject mods
+/// whose provider metadata positively names other loaders.
+fn compatible(version: &crate::models::resource::ResourceVersion, loader: &str, is_mod: bool) -> Result<()> {
+    if is_mod
+        && !version.loaders.is_empty()
+        && !crate::resources::manager::is_loader_compatible(&version.loaders, loader)
     {
         return Err(conflict("pack_incompatible_runtime"));
     }
     Ok(())
 }
-fn insert(
-    files: &mut BTreeMap<String, Vec<u8>>,
-    total: &mut u64,
-    path: String,
-    bytes: Vec<u8>,
-) -> Result<()> {
-    safe_path(&path)?;
+/// Alias, traversal, tree-collision, size and count rules for one more staged file.
+fn admit(files: &BTreeMap<String, (u64, String)>, total: u64, path: &str, size: u64) -> Result<()> {
+    safe_path(path)?;
     let lower = path.to_lowercase();
     if files.keys().any(|p| {
         let p = p.to_lowercase();
@@ -265,23 +312,9 @@ fn insert(
     }) {
         return Err(conflict("pack_file_collision"));
     }
-    *total += bytes.len() as u64;
-    if *total > TOTAL_LIMIT || bytes.len() as u64 > FILE_LIMIT || files.len() >= 4096 {
+    let total = total.checked_add(size).ok_or_else(|| conflict("pack_too_large"))?;
+    if total > TOTAL_LIMIT || size > FILE_LIMIT || files.len() >= 4096 {
         return Err(conflict("pack_too_large"));
-    }
-    files.insert(path, bytes);
-    Ok(())
-}
-fn verify_hash(bytes: &[u8], hash: &str) -> Result<()> {
-    use sha2::Digest;
-    let actual = match hash.len() {
-        40 => hex::encode(sha1::Sha1::digest(bytes)),
-        64 => digest(bytes),
-        128 => hex::encode(sha2::Sha512::digest(bytes)),
-        _ => return Err(conflict("pack_integrity_failure")),
-    };
-    if !actual.eq_ignore_ascii_case(hash) {
-        return Err(conflict("pack_integrity_failure"));
     }
     Ok(())
 }
@@ -289,43 +322,90 @@ fn verify_hash(bytes: &[u8], hash: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn normalization_accepts_large_packs_and_still_bounds_entry_count() {
-        let mut files = BTreeMap::new();
-        let mut total = 0;
-        for n in 0..4096 {
-            insert(&mut files, &mut total, format!("mods/{n}.jar"), vec![]).unwrap();
-        }
-        assert_eq!(files.len(), 4096);
-        assert!(insert(&mut files, &mut total, "mods/overflow.jar".into(), vec![]).is_err());
+    fn version(loaders: &[&str], games: &[&str]) -> crate::models::resource::ResourceVersion {
+        serde_json::from_value(serde_json::json!({
+            "id": "v", "project_id": "p", "version_number": "1", "game_versions": games,
+            "loaders": loaders, "download_url": "https://cdn.modrinth.com/x.jar",
+            "file_name": "x.jar", "release_type": "release", "hash": "", "dependencies": []
+        }))
+        .unwrap()
     }
     #[test]
-    fn legacy_hashes_are_verified_before_ownership_is_derived() {
-        use sha2::Digest;
-        for hash in [
-            hex::encode(sha1::Sha1::digest(b"content")),
-            digest(b"content"),
-            hex::encode(sha2::Sha512::digest(b"content")),
-        ] {
-            verify_hash(b"content", &hash).unwrap();
-            assert!(verify_hash(b"changed", &hash).is_err());
+    fn normalization_accepts_large_packs_and_still_bounds_entry_count() {
+        let mut staged = Staged::new().unwrap();
+        for n in 0..4096 {
+            staged.insert_bytes(format!("mods/{n}.jar"), b"", false).unwrap();
         }
-        assert!(verify_hash(b"content", "short").is_err());
+        assert_eq!(staged.files.len(), 4096);
+        assert!(staged.insert_bytes("mods/overflow.jar".into(), b"", false).is_err());
+    }
+    #[test]
+    fn provider_scale_files_are_admitted() {
+        // COBBLEVERSE: a 130 MiB Cobblemon jar within 412 MiB of pinned mods.
+        let files = BTreeMap::new();
+        admit(&files, 412 * 1024 * 1024, "mods/Cobblemon-fabric-1.7.3+1.21.1.jar", 130 * 1024 * 1024).unwrap();
+        let error = admit(&files, 0, "mods/huge.jar", FILE_LIMIT + 1).unwrap_err();
+        assert_eq!(error.reason.as_deref(), Some("pack_too_large"));
+        assert!(PROVIDER_ARCHIVE_LIMIT >= 215 * 1024 * 1024);
+    }
+    #[test]
+    fn oversized_provider_content_is_too_large_not_unavailable() {
+        let error = over_limit(FILE_LIMIT + 1, FILE_LIMIT).unwrap_err();
+        assert_eq!(error.reason.as_deref(), Some("pack_too_large"));
+        over_limit(FILE_LIMIT, FILE_LIMIT).unwrap();
+    }
+    #[test]
+    fn pinned_modpack_files_follow_the_pack_runtime() {
+        // Pinned by the pack author for 1.21.1 although the provider only tags 1.21.
+        compatible(&version(&["fabric"], &["1.21"]), "fabric", true).unwrap();
+        compatible(&version(&[], &["1.20.1"]), "fabric", false).unwrap();
+        compatible(&version(&[], &[]), "fabric", true).unwrap();
+        assert!(compatible(&version(&["forge"], &["1.21.1"]), "fabric", true).is_err());
+    }
+    #[test]
+    fn downloaded_digests_verify_every_provider_hash_family() {
+        use sha2::Digest;
+        let got = Downloaded {
+            size: 7,
+            sha1: hex::encode(sha1::Sha1::digest(b"content")),
+            sha256: digest(b"content"),
+            sha512: hex::encode(sha2::Sha512::digest(b"content")),
+        };
+        for hash in [got.sha1.clone(), got.sha256.clone(), got.sha512.clone()] {
+            got.verify(&hash).unwrap();
+            got.verify(&hash.to_uppercase()).unwrap();
+        }
+        assert!(got.verify(&digest(b"changed")).is_err());
+        assert!(got.verify("short").is_err());
+    }
+    #[test]
+    fn staged_members_stream_to_disk_with_their_digest() {
+        let mut bytes = Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut bytes);
+            writer.start_file("overrides/config/a.toml", zip::write::SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"value = 1").unwrap();
+            writer.finish().unwrap();
+        }
+        let mut zip = zip::ZipArchive::new(Cursor::new(bytes.into_inner())).unwrap();
+        let mut staged = Staged::new().unwrap();
+        let scratch = staged.scratch();
+        let (size, sha) = copy_member(&mut zip, "overrides/config/a.toml", &scratch).unwrap();
+        assert_eq!((size, sha.as_str()), (9, digest(b"value = 1").as_str()));
+        staged.insert("config/a.toml".into(), &scratch, size, sha, true).unwrap();
+        assert_eq!(std::fs::read(staged.stage.path().join("config/a.toml")).unwrap(), b"value = 1");
+        // Client overrides replace shared overrides in place.
+        staged.insert_bytes("config/a.toml".into(), b"value = 2", true).unwrap();
+        assert_eq!(staged.total, 9);
+        assert_eq!(staged.files.len(), 1);
     }
     #[test]
     fn normalized_file_set_rejects_aliases_traversal_and_tree_collisions() {
-        let mut files = BTreeMap::new();
-        let mut total = 0;
-        insert(
-            &mut files,
-            &mut total,
-            "mods/one.jar".into(),
-            b"jar".to_vec(),
-        )
-        .unwrap();
+        let mut staged = Staged::new().unwrap();
+        staged.insert_bytes("mods/one.jar".into(), b"jar", false).unwrap();
         for path in ["mods/ONE.jar", "mods/one.jar/child", "mods/../escape"] {
-            assert!(insert(&mut files, &mut total, path.into(), vec![]).is_err());
+            assert!(staged.insert_bytes(path.into(), b"", false).is_err());
         }
-        assert_eq!(files.len(), 1);
+        assert_eq!(staged.files.len(), 1);
     }
 }
