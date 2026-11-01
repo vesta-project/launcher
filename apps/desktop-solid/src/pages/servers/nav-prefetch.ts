@@ -16,6 +16,7 @@ import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
 import { serverSnapshot } from '../../features/servers/store';
 import { needsPackWorkspace } from './pack/get-modpack';
+import { prefetchListing } from '../../features/servers/file-listing';
 
 type Prefetcher = (snapshot: ServerSnapshot) => void;
 const prefetchers = new Map<string, Prefetcher>();
@@ -27,7 +28,7 @@ export function registerServerPrefetch(target: string, prefetch: Prefetcher) {
 
 export function prefetchServerTarget(snapshot: ServerSnapshot, target: string) {
   const needs: Record<string, readonly string[]> = {
-    overview: ['tasks.view', 'pack.edit', 'metrics.view'], resources: ['files.list', 'pack.edit'], pack: ['pack.edit'], activity: ['tasks.view'],
+    overview: ['tasks.view', 'pack.edit', 'metrics.view'], files: ['files.list'], resources: ['files.list', 'pack.edit'], pack: ['pack.edit'], activity: ['tasks.view'],
     backups: ['backups.view'], general: ['config.view'], game: ['config.view'], world: ['config.view'],
     sftp: ['config.view'], software: ['content.install'], presence: ['config.view'], players: ['players.view'],
     access: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], automation: ['automation.view'],
@@ -44,6 +45,8 @@ registerServerPrefetch('overview', (snapshot) => {
   if (needsPackWorkspace(snapshot)) prefetchServerResource(id, packWorkspaceResource);
   if (can(snapshot, 'metrics.view')) prefetchServerResource(id, metricsHistoryResource, '1h');
 });
+// Files opens on the game root; the shared listing cache dedupes repeat hovers.
+registerServerPrefetch('files', (snapshot) => prefetchListing(snapshot.connection.id, ''));
 registerServerPrefetch('resources', (snapshot) => {
   if (can(snapshot, 'files.list')) prefetchServerResource(snapshot.connection.id, contentResource);
   if (can(snapshot, 'pack.edit')) prefetchServerResource(snapshot.connection.id, packWorkspaceResource);
