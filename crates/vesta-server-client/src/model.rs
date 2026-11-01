@@ -461,6 +461,8 @@ pub enum PlayersView {
         generation: String,
         #[serde(rename = "playerCount")]
         player_count: u32,
+        #[serde(default)]
+        revision: Option<String>,
         names: Vec<String>,
     },
     Unknown {
@@ -508,6 +510,8 @@ pub enum ServerEvent {
     Metrics { sample: MetricsSample },
     Operation { operation: ServerOperation },
     PlayerListsChanged,
+    ResourcesChanged { resources: serde_json::Value },
+    PlayersDelta { delta: serde_json::Value },
     Resync { topic: ServerTopic },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -729,5 +733,37 @@ mod wire_reason_tests {
         for value in [serde_json::json!(""), serde_json::json!("secret message"), serde_json::json!(42), serde_json::Value::Null] {
             assert_eq!(error.clone().with_wire_reason(&value).reason, error.reason);
         }
+    }
+}
+
+impl PlayersView {
+    /// A mismatching base is a gap, never permission to apply a partial roster.
+    pub fn apply_delta(&mut self, delta: &serde_json::Value) -> bool {
+        let Self::Known { generation, revision, names, player_count, .. } = self else { return false; };
+        if delta["generation"].as_str() != Some(generation.as_str()) || delta["base_revision"].as_str() != revision.as_deref() { return false; }
+        let Some(next) = delta["revision"].as_str() else { return false; };
+        let Some(changes) = delta["changes"].as_array() else { return false; };
+        if changes.iter().any(|c| c["name"].as_str().is_none_or(|n| n.is_empty() || n.len()>16 || !n.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_')) || !matches!(c["kind"].as_str(),Some("join"|"leave"))) { return false; }
+        for change in changes {
+            let name=change["name"].as_str().unwrap();
+            if change["kind"]=="join" { if !names.iter().any(|n|n==name) {names.push(name.into());} }
+            else { names.retain(|n|n!=name); }
+        }
+        *player_count=names.len() as u32;
+        *revision=Some(next.into());
+        true
+    }
+}
+#[cfg(test)]
+mod roster_delta_tests {
+    use super::*;
+    #[test]
+    fn deltas_require_matching_generation_and_revision_and_are_atomic() {
+        let mut roster=PlayersView::Known {known:true,generation:"g".into(),revision:Some("4".into()),player_count:1,names:vec!["Alex".into()]};
+        let delta=serde_json::json!({"generation":"g","base_revision":"4","revision":"6","changes":[{"kind":"join","name":"Sam"},{"kind":"leave","name":"Alex"}]});
+        assert!(roster.apply_delta(&delta));
+        assert!(!roster.apply_delta(&delta));
+        let PlayersView::Known {names,player_count,..}=roster else {panic!()};
+        assert_eq!(names,vec!["Sam"]); assert_eq!(player_count,1);
     }
 }

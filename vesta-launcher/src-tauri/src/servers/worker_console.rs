@@ -203,6 +203,7 @@ async fn drain(
                 let mut recovery = overflow.swap(false, Ordering::Relaxed);
                 for message in messages {
                     match message {
+                        StreamMessage::Update(_) => {}, // Only the metrics socket emits these.
                         StreamMessage::Console(value) => match value["type"].as_str() {
                             Some("console.line") => {
                                 if let Ok(line) = from_wire::<ConsoleLine>(value) {

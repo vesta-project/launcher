@@ -1,3 +1,4 @@
+import { EditConflictNotice, useEditRevision } from '../edit-conflict';
 import { Badge, Button, Dialog, NumberField, Select, Skeleton, Switch, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { EmptyLine } from '../../../components/empty-state';
@@ -50,6 +51,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const now = useServersClock();
   const file = useServerResource(id, propertiesResource);
+  const editRevision = useEditRevision(() => file.value()?.sha256);
   const [draft, setDraft] = createSignal<Record<string, PropertyValue>>({}, { name: 'server-properties:draft' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'server-properties:error' });
   const [stale, setStale] = createSignal(false, { name: 'server-properties:stale' });
@@ -64,7 +66,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
   const sha = () => file.value()?.sha256 ?? '';
   const typed = () => base()?.typed ?? {};
   const value = (def: PropertyDef): PropertyValue => (def.key in draft() ? draft()[def.key] : def.secret ? '' : effectiveValue(def, typed()));
-  const set = (key: string, next: PropertyValue) => setDraft((current) => ({ ...current, [key]: next }));
+  const set = (key: string, next: PropertyValue) => { editRevision.begin(); setDraft((current) => ({ ...current, [key]: next })); };
   const changes = createMemo(() => diffChanges(typed(), draft()), { name: 'server-properties:changes' });
   const changeCount = () => Object.keys(changes()).length;
   const problems = createMemo(() => Object.fromEntries(Object.entries(draft()).flatMap(([key, next]) => {
@@ -105,7 +107,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
         return;
       }
       setPending(null);
-      setStale(false);
+      setStale(false); editRevision.reset();
       putSnapshot({ ...props.snapshot, restartRequired: props.snapshot.restartRequired || result.restartNeeded });
       toast.show({ title: t('server-settings.saved'), tone: 'success' });
       await file.refresh();
@@ -114,6 +116,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
       const failure = reason as ServerCommandError;
       intents.settle(failure);
       if (failure.code === 'stale_target' || failure.code === 'conflict') {
+        setError(failure);
         // The file changed on the server: re-read it and keep this draft on top for review.
         setPending(null);
         setStale(true);
@@ -125,12 +128,13 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
     } finally { setSaving(false); }
   };
   const save = () => {
+    if (editRevision.conflict()) return;
     const submitted = changes();
     void submit(submitted, sha(), null, intents.idFor({ changes: submitted, sha: sha() }));
   };
   const confirm = () => {
     const current = pending();
-    if (current) void submit(current.changes, current.sha256, current.token, current.intentId);
+    if (current && !editRevision.conflict()) void submit(current.changes, current.sha256, current.token, current.intentId);
   };
 
   // ---- Rows ----
@@ -202,8 +206,8 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
   return (
     <SettingsPage
       saveBar={
-        <SaveBar show={changeCount() > 0} label={t('server-settings.unsaved', { count: changeCount() })} busy={saving()} disabled={invalid() || !canEdit()}
-          onDiscard={() => { setDraft({}); setStale(false); }} onSave={save} />
+        <SaveBar show={changeCount() > 0} label={t('server-settings.unsaved', { count: changeCount() })} busy={saving()} disabled={editRevision.conflict() || invalid() || !canEdit()}
+          onDiscard={() => { editRevision.reset(); setDraft({}); setStale(false); }} onSave={save} />
       }
     >
       <div data-vesta="server-settings-bar">
@@ -212,7 +216,8 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
       </div>
       <Show when={!canEdit()}><p data-vesta="server-callout" data-tone="neutral">{t('server-settings.view-only')}</p></Show>
       <Show when={stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('server-settings.stale')}</p></Show>
-      <ServerErrorNote error={error() ?? file.error()} onRetry={() => void file.refresh()} />
+      <EditConflictNotice id={id()} resource="properties" show={editRevision.conflict()} current={file.value()} onReview={() => { setPending(null); editRevision.review(); }} />
+        <ServerErrorNote error={error() ?? file.error()} onRetry={() => void file.refresh()} />
 
       <Show when={base()} fallback={<Show when={!file.error()}><For each={[0, 1, 2]}>{() => <Skeleton height={148} radius={10} />}</For></Show>}>
         <Show when={!searching() || matches(motdDef)}>

@@ -1,3 +1,4 @@
+import { applyRosterDelta } from './roster-delta';
 // Server-keyed reactive state for the server UI. Every server and topic has its own
 // signal, so an update to one server's snapshot, console, metrics or operations
 // reruns only the views reading that server and topic.
@@ -5,7 +6,7 @@ import { createEffect, createMemo, createSignal, onCleanup, untrack, type Access
 import { ConsoleBuffer } from './console-model';
 import { toServerError } from './errors';
 import { isTerminal, mergeOperations } from './operations-model';
-import { invalidateServerResources, releaseServerResources } from './resources';
+import { applyResourceChanges, invalidateServerResources, releaseServerResources } from './resources';
 import { serversApi, type ServersApi } from './service';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
@@ -259,6 +260,8 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
       switch (event.kind) {
         case 'snapshot': putSnapshot(event.snapshot); break;
         case 'players': putPlayers(connectionId, event.players); break;
+        case 'resourcesChanged': applyResourceChanges(connectionId, event.resources); break;
+        case 'playersDelta': players.update(connectionId, current => applyRosterDelta(current, event.delta) ?? { known: false }); break;
         case 'console': consoleBuffer(connectionId).append(event.lines); bumpConsole(connectionId); break;
         case 'consoleHistory': consoleBuffer(connectionId).merge(event.lines); bumpConsole(connectionId); break;
         case 'consoleGap': consoleBuffer(connectionId).gap(event.cursor); bumpConsole(connectionId); void recoverConsoleTail(connectionId); break;
@@ -266,6 +269,7 @@ export function useServerTopic(id: () => ConnectionId | undefined, topic: Server
         case 'operation': putOperations(connectionId, [event.operation]); break;
         case 'playerListsChanged': invalidateServerResources(connectionId, ['whitelist']); break;
         case 'resync':
+          if (event.topic === 'status') { invalidateServerResources(connectionId); }
           if (event.topic === 'status') void serverCommand((client) => client.snapshot(connectionId, true)).then(putSnapshot).catch(() => {});
           if (event.topic === 'operations') { invalidateServerResources(connectionId, ['whitelist']); void loadOperations(connectionId).catch(() => {}); }
           if (event.topic === 'console') { consoleBuffer(connectionId).gap(`resync:${Date.now()}`); bumpConsole(connectionId); void recoverConsoleTail(connectionId); }

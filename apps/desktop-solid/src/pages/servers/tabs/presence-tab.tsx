@@ -1,3 +1,5 @@
+import { refreshUnedited } from '../../../features/servers/edit-revision';
+import { EditConflictNotice, useEditRevision } from '../edit-conflict';
 import { Button, NumberField, Select, Skeleton, Switch as Toggle, TextField, toast } from '@vesta/ui';
 import { Show, createMemo, createSignal } from 'solid-js';
 import { SettingRow } from '../../../components/setting-row';
@@ -48,6 +50,8 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
   const canEdit = () => gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
   const sleep = useServerResource(id, sleepPolicyResource);
   const motd = useServerResource(id, motdPolicyResource);
+  const sleepRevision = useEditRevision(() => sleep.value()?.revision);
+  const motdRevision = useEditRevision(() => motd.value()?.revision);
   // A null draft means "as saved", so a fresh read shows through without syncing.
   const [sleepDraft, setSleepDraft] = createSignal<SleepPolicy | null>(null, { name: 'server-sleep:draft' });
   const [motdDraft, setMotdDraft] = createSignal<MotdDocument | null>(null, { name: 'server-motd:draft' });
@@ -57,25 +61,29 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
   const [motdError, setMotdError] = createSignal<ServerCommandError | null>(null, { name: 'server-motd:error' });
   const [busy, setBusy] = createSignal(false, { name: 'server-presence:busy' });
 
-  const policy = () => sleepDraft() ?? sleep.value()?.policy;
-  const document = () => motdDraft() ?? motd.value()?.document;
-  const sleepDirty = () => !!sleepDraft() && !!sleep.value() && !sameJson(sleepDraft(), sleep.value()!.policy);
-  const motdDirty = () => !!motdDraft() && !!motd.value() && !sameJson(motdDraft(), motd.value()!.document);
+  let sleepBase: SleepPolicy | undefined;
+  let motdBase: MotdDocument | undefined;
+  const policy = () => sleepDraft() && sleepBase && sleep.value() ? refreshUnedited(sleepBase, sleepDraft()!, sleep.value()!.policy) : sleep.value()?.policy;
+  const document = () => motdDraft() && motdBase && motd.value() ? refreshUnedited(motdBase, motdDraft()!, motd.value()!.document) : motd.value()?.document;
+  const sleepDirty = () => !!sleepDraft() && !!sleep.value() && !sameJson(policy(), sleep.value()!.policy);
+  const motdDirty = () => !!motdDraft() && !!motd.value() && !sameJson(document(), motd.value()!.document);
   const presentation = () => document()?.states[state()];
   const problems = createMemo(() => motdProblems(presentation()?.template ?? ''), { name: 'server-motd:problems' });
   const dirtyCount = () => Number(sleepDirty()) + Number(motdDirty());
 
-  const patchSleep = (next: Partial<SleepPolicy>) => { const current = policy(); if (current) setSleepDraft({ ...current, ...next }); };
-  const patchDocument = (next: Partial<MotdDocument>) => { const current = document(); if (current) { setChecked(null); setMotdDraft({ ...current, ...next }); } };
+  const patchSleep = (next: Partial<SleepPolicy>) => { const current = policy(); if (current) { if (!sleepDraft()) sleepBase = sleep.value()?.policy; sleepRevision.begin(); setSleepDraft({ ...(sleepDraft() ?? current), ...next }); } };
+  const patchDocument = (next: Partial<MotdDocument>) => { const current = document(); if (current) { if (!motdDraft()) motdBase = motd.value()?.document; motdRevision.begin(); setChecked(null); setMotdDraft({ ...(motdDraft() ?? current), ...next }); } };
   const patchState = (next: Partial<StatePresentation>) => {
     const current = document();
-    if (current) patchDocument({ states: { ...current.states, [state()]: { ...current.states[state()], ...next } } });
+    const source = motdDraft() ?? current;
+    if (source) patchDocument({ states: { ...source.states, [state()]: { ...source.states[state()], ...next } } });
   };
 
   const save = async () => {
+    if (sleepRevision.conflict() || motdRevision.conflict()) return;
     setBusy(true);
     let saved = 0;
-    const sleepPolicy = sleepDraft();
+    const sleepPolicy = policy();
     const sleepSaved = sleep.value();
     if (sleepDirty() && sleepPolicy && sleepSaved) {
       setSleepError(null);
@@ -84,32 +92,32 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
         seedServerResource(id(), sleepPolicyResource, next);
         // Sleep availability and the startup choice show in the header; re-read status now.
         void serverCommand((client) => client.snapshot(id(), true)).then(putSnapshot).catch(() => {});
-        setSleepDraft(null);
+        sleepRevision.reset(); setSleepDraft(null);
         saved++;
       } catch (reason) {
         setSleepError(reason as ServerCommandError);
-        if ((reason as ServerCommandError).code === 'stale_target') void sleep.refresh();
+        if ((reason as ServerCommandError).code === 'stale_target' || (reason as ServerCommandError).code === 'conflict') void sleep.refresh();
       }
     }
-    const motdDocument = motdDraft();
+    const motdDocument = document();
     const motdSaved = motd.value();
     if (motdDirty() && motdDocument && motdSaved) {
       setMotdError(null);
       try {
         const next = await serverCommand((client) => client.updateMotdPolicy(id(), motdDocument, motdSaved.revision, newIntentId()));
         seedServerResource(id(), motdPolicyResource, next);
-        setMotdDraft(null);
+        motdRevision.reset(); setMotdDraft(null);
         setChecked(null);
         saved++;
       } catch (reason) {
         setMotdError(reason as ServerCommandError);
-        if ((reason as ServerCommandError).code === 'stale_target') void motd.refresh();
+        if ((reason as ServerCommandError).code === 'stale_target' || (reason as ServerCommandError).code === 'conflict') void motd.refresh();
       }
     }
     setBusy(false);
     if (saved) toast.show({ title: t('servers.presence.saved'), tone: 'success' });
   };
-  const discard = () => { setSleepDraft(null); setMotdDraft(null); setChecked(null); };
+  const discard = () => { sleepRevision.reset(); motdRevision.reset(); setSleepDraft(null); setMotdDraft(null); setChecked(null); };
   const check = async () => {
     const current = document();
     if (!current) return;
@@ -138,9 +146,10 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
   return (
     <SettingsPage saveBar={
       <SaveBar show={dirtyCount() > 0} label={t('server-settings.unsaved', { count: dirtyCount() })} busy={busy()}
-        disabled={!canEdit() || (motdDirty() && problems().length > 0)} onDiscard={discard} onSave={() => void save()} />
+        disabled={sleepRevision.conflict() || motdRevision.conflict() || !canEdit() || (motdDirty() && problems().length > 0)} onDiscard={discard} onSave={() => void save()} />
     }>
       <SettingsPanel title={t('servers.presence.sleep')} name="sleep">
+        <EditConflictNotice id={id()} resource="sleep-policy" show={sleepRevision.conflict()} current={sleep.value()} onReview={sleepRevision.review} />
         <ServerErrorNote error={sleepError() ?? sleep.error()} onRetry={() => void sleep.refresh()} />
         <Show when={policy()} fallback={<Show when={!sleep.error()}><Skeleton height={160} radius={0} /></Show>}>
           {(current) => (
@@ -209,6 +218,7 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
             options={PRESENCE_STATES.map((entry) => ({ value: entry, label: t('servers.presence.when-state', { name: t(stateLabels[entry]) }) }))} />
         }
       >
+        <EditConflictNotice id={id()} resource="motd-policy" show={motdRevision.conflict()} current={motd.value()} onReview={motdRevision.review} />
         <ServerErrorNote error={motdError() ?? motd.error()} onRetry={() => void motd.refresh()} />
         <Show when={presentation()} fallback={<Show when={!motd.error()}><Skeleton height={220} radius={0} /></Show>}>
           {(current) => (
