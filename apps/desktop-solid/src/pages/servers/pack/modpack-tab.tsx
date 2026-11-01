@@ -8,7 +8,7 @@ import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import {
-  clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
+  installDecision, clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
 } from '../../../features/servers/modpack-area-model';
 import { modpackPick } from '../../../features/servers/modpack-handoff';
 import type { ServerSnapshot } from '../../../features/servers/native';
@@ -181,7 +181,9 @@ function InstallJobStatus() {
   const stage = () => {
     switch (progress()?.stage) {
       case 'writing': return t('server-pack.install-writing');
-      case 'metadata': case 'review': return t('server-pack.install-metadata');
+      case 'metadata': return t('server-pack.install-metadata');
+      case 'review': return t('server-pack.review-stage-review');
+      case 'extract_hash': return t('server-pack.install-extracting');
       case 'archive': return t('server-pack.install-archive');
       default: return t('server-pack.install-planning');
     }
@@ -190,7 +192,8 @@ function InstallJobStatus() {
   return <Show when={job()}><div data-vesta="pack-install-job" role="status">
     <Show when={active()} fallback={<span>{job()?.state === 'succeeded' ? t('server-pack.done') : t('server-pack.download-failed')}</span>}>
       <Progress value={progress()?.total ? progress()!.completed / progress()!.total * 100 : undefined}
-        label={`${stage()} ${progress()?.completed ?? 0}/${progress()?.total ?? 0}${progress()?.bytesCompleted ? ` · ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
+        label={`${stage()}${progress()?.total ? ` ${progress()!.completed}/${progress()!.total}` : ''}${progress()?.bytesCompleted ? ` · ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
     </Show>
+    <Show when={!active() && job()?.decisions?.length}><details><summary>{t('server-pack.show-changes')}</summary><ul><For each={job()?.decisions}>{decision => <li>{installDecision(decision, t)}</li>}</For></ul></details></Show>
   </div></Show>;
 }

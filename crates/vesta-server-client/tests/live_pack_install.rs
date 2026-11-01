@@ -199,7 +199,7 @@ async fn real_provider_packs_stage_through_launcher_apis_and_survive_reconnect()
             enrollment.device_id.clone(),
             signer.clone(),
         );
-        let input = PackInstallRequest {
+        let input = PackInstallRequest { analyze: false,
             source: PackInstallSource::Provider {
                 provider: provider.into(),
                 project_id: project.into(),

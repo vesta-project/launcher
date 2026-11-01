@@ -492,9 +492,9 @@ server-pack-review-backing-up = Backing up…
 server-pack-review-installing = Installing…
 server-pack-review-install = Install
 server-pack-review-update = Update
-server-pack-review-stage-archive = Reading the pack
+server-pack-review-stage-archive = Reading pack manifest
 server-pack-review-stage-metadata = Resolving files
-server-pack-review-stage-review = Checking the server
+server-pack-review-stage-review = Checking files and preserving user changes
 server-pack-play-title = Play on this server
 server-pack-play-version = Pack version { $version }
 server-pack-play-create = Create instance
@@ -555,3 +555,10 @@ server-pack-warning-software-checksum = The required server software uses upstre
 server-pack-stop-to-install = Stop the server to install
 server-pack-show-changes = Show changes
 server-pack-install-complete = Modpack installed
+
+server-pack-install-extracting = Extracting and hashing server files
+
+server-pack-install-deferred = Install downloads and checks the server pack. Your modified files are kept automatically. Show changes runs the full analysis now.
+
+server-pack-install-kept-file = Kept your file: { $path }
+server-pack-install-skipped-file = Skipped incoming file: { $path }
