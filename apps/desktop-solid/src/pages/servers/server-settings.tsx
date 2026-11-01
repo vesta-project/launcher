@@ -1,5 +1,5 @@
 import { Button, IconButton, Select } from '@vesta/ui';
-import { For, Show, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { Dynamic } from '@solidjs/web';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
@@ -50,6 +50,12 @@ export function ServerSettings(props: {
     .filter((group) => group.items.length > 0);
   const active = () => (sections().some((section) => section.id === props.section) ? props.section : sections()[0]?.id ?? 'connection');
   const current = () => sections().find((section) => section.id === active())!;
+  // Stable option identities: snapshot updates must not rebuild the open list and move its
+  // focus off the selected section. Icons are factories so trigger and item each get one.
+  const sectionOptions = createMemo(
+    () => sections().map((section) => ({ value: section.id, label: t(section.label), icon: () => <Icon name={section.icon} size={16} /> })),
+    { name: 'server-settings:section-options', equals: (a, b) => a.length === b.length && a.every((option, index) => option.value === b[index]!.value && option.label === b[index]!.label) },
+  );
 
   return (
     <div data-vesta="instance-settings" data-server-settings>
@@ -89,7 +95,7 @@ export function ServerSettings(props: {
             aria-label={t('servers.settings.sections')}
             value={active()}
             onChange={(value) => props.onSection(value as SettingsSectionId)}
-            options={sections().map((section) => ({ value: section.id, label: t(section.label) }))}
+            options={sectionOptions()}
           />
         </div>
         <Show when={active()} keyed>
