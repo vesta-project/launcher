@@ -9,6 +9,24 @@
   :where([data-server-settings-page]) { block-size: 100%; }
   :where([data-server-settings-page]) > :where([data-vesta="instance-settings-scroll"]) { padding-block-end: 76px; }
 
+  /* ---- Columns: controls stay one readable column; secondary panels sit beside them on
+   * wide panes. Narrow panes flatten both into the page's single column. ---- */
+  :where([data-vesta="settings-columns"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); min-inline-size: 0; }
+  :where([data-vesta="settings-columns-main"], [data-vesta="settings-columns-aside"]) { display: contents; }
+  :where([data-vesta="settings-columns"][data-aside-first]) > :where([data-vesta="settings-columns-aside"]) > * { order: -1; }
+  @container pane (min-width: 1180px) {
+    [data-vesta="settings-columns"] {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, var(--content-max-width)));
+      align-items: start;
+      max-inline-size: calc(var(--content-max-width) * 2 + var(--vesta-space-6));
+      column-gap: var(--vesta-space-6);
+    }
+    :where([data-vesta="settings-columns-main"], [data-vesta="settings-columns-aside"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); min-inline-size: 0; }
+    :where([data-vesta="settings-columns-aside"]:empty) { display: none; }
+    :where([data-vesta="settings-columns"][data-aside-first]) > :where([data-vesta="settings-columns-aside"]) > * { order: 0; }
+  }
+
   /* ---- Panel header: uppercase title, optional help, action on the right ---- */
   :where([data-vesta="server-panel-head"]) {
     display: flex;

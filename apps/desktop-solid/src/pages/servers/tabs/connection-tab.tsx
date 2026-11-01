@@ -11,6 +11,7 @@ import { RemoveServerDialog } from '../remove-dialog';
 import { ServerRefreshButton } from '../refresh-button';
 import '../../library/instance/settings-tab.css';
 import { Card as Panel } from '../../settings/parts';
+import { SettingsColumns } from '../settings-parts';
 
 /** Local connection settings: name, pin, how this device reaches and trusts the server, and removal. */
 export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
@@ -35,53 +36,58 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
 
   return (
     <div data-vesta="instance-settings-scroll" data-server-connection>
-      <Panel title={t('servers.connection.general')}>
-        <SettingRow label={t('servers.connection.name')} description={t('servers.connection.name-description')}>
-          <TextField size="sm" aria-label={t('servers.connection.name')} value={name()} onChange={setName} onBlur={saveName}
-            onKeyDown={(event: KeyboardEvent) => { if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur(); }} />
-        </SettingRow>
-        <SettingRow label={t('servers.pin')} description={t('servers.connection.pin-description')}>
-          <Toggle size="sm" aria-label={t('servers.pin')} checked={props.snapshot.connection.pinned} onChange={(pinned: boolean) => void updateServer(id(), { pinned })} />
-        </SettingRow>
-      </Panel>
+      {/* Identity and removal sit beside the editable settings on wide panes. */}
+      <SettingsColumns aside={
+        <>
+          <Panel title={t('servers.connection.identity')}>
+            <SettingRow label={t('servers.connection.sign-in')}>
+              <span data-vesta="server-setting-value">{signIn()}</span>
+            </SettingRow>
+            <SettingRow label={t('servers.connection.storage')}>
+              <span data-vesta="server-setting-value">
+                {props.snapshot.connection.memoryOnly ? t('servers.connection.memory-only') : t('servers.connection.secure-storage')}
+              </span>
+            </SettingRow>
+            <SettingRow label={t('servers.server-id')}>
+              <code data-vesta="server-setting-value"><Sensitive label={t('servers.server-id')}>{props.snapshot.connection.serverId}</Sensitive></code>
+            </SettingRow>
+            <div data-vesta="server-setting-block">
+              <div data-vesta="setting-row-copy">
+                <span data-vesta="setting-row-label">{t('servers.fingerprint')}</span>
+                <span data-vesta="setting-row-description">{t('servers.connection.fingerprint-help')}</span>
+              </div>
+              <FingerprintView value={props.snapshot.connection.fingerprint} />
+            </div>
+          </Panel>
 
-      <Panel title={t('servers.connection.network')}>
-        <SettingRow label={t('servers.address.label')} description={t('servers.connection.address-description')}>
-          <span data-vesta="server-setting-value"><Sensitive>{props.snapshot.connection.endpoint}</Sensitive></span>
-          <IconButton size="sm" variant="ghost" label={copied() ? t('servers.copied') : t('servers.copy-address')} icon={<Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} />} onClick={() => void copyAddress()} />
-        </SettingRow>
-        <SettingRow label={t('servers.connection.status')}>
-          <span data-vesta="server-setting-value">{t(connectionFact(props.snapshot, now()).message, connectionFact(props.snapshot, now()).args)}</span>
-          <ServerRefreshButton id={id()} />
-        </SettingRow>
-      </Panel>
+          <Panel title={t('servers.connection.danger')} danger>
+            <SettingRow label={t('servers.remove')} description={t('servers.connection.remove-description')}>
+              <Button size="sm" tone="danger" variant="outline" onClick={() => setRemoving(true)}>{t('servers.remove')}</Button>
+            </SettingRow>
+          </Panel>
+        </>
+      }>
+        <Panel title={t('servers.connection.general')}>
+          <SettingRow label={t('servers.connection.name')} description={t('servers.connection.name-description')}>
+            <TextField size="sm" aria-label={t('servers.connection.name')} value={name()} onChange={setName} onBlur={saveName}
+              onKeyDown={(event: KeyboardEvent) => { if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur(); }} />
+          </SettingRow>
+          <SettingRow label={t('servers.pin')} description={t('servers.connection.pin-description')}>
+            <Toggle size="sm" aria-label={t('servers.pin')} checked={props.snapshot.connection.pinned} onChange={(pinned: boolean) => void updateServer(id(), { pinned })} />
+          </SettingRow>
+        </Panel>
 
-      <Panel title={t('servers.connection.identity')}>
-        <SettingRow label={t('servers.connection.sign-in')}>
-          <span data-vesta="server-setting-value">{signIn()}</span>
-        </SettingRow>
-        <SettingRow label={t('servers.connection.storage')}>
-          <span data-vesta="server-setting-value">
-            {props.snapshot.connection.memoryOnly ? t('servers.connection.memory-only') : t('servers.connection.secure-storage')}
-          </span>
-        </SettingRow>
-        <SettingRow label={t('servers.server-id')}>
-          <code data-vesta="server-setting-value"><Sensitive label={t('servers.server-id')}>{props.snapshot.connection.serverId}</Sensitive></code>
-        </SettingRow>
-        <div data-vesta="server-setting-block">
-          <div data-vesta="setting-row-copy">
-            <span data-vesta="setting-row-label">{t('servers.fingerprint')}</span>
-            <span data-vesta="setting-row-description">{t('servers.connection.fingerprint-help')}</span>
-          </div>
-          <FingerprintView value={props.snapshot.connection.fingerprint} />
-        </div>
-      </Panel>
-
-      <Panel title={t('servers.connection.danger')} danger>
-        <SettingRow label={t('servers.remove')} description={t('servers.connection.remove-description')}>
-          <Button size="sm" tone="danger" variant="outline" onClick={() => setRemoving(true)}>{t('servers.remove')}</Button>
-        </SettingRow>
-      </Panel>
+        <Panel title={t('servers.connection.network')}>
+          <SettingRow label={t('servers.address.label')} description={t('servers.connection.address-description')}>
+            <span data-vesta="server-setting-value"><Sensitive>{props.snapshot.connection.endpoint}</Sensitive></span>
+            <IconButton size="sm" variant="ghost" label={copied() ? t('servers.copied') : t('servers.copy-address')} icon={<Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} />} onClick={() => void copyAddress()} />
+          </SettingRow>
+          <SettingRow label={t('servers.connection.status')}>
+            <span data-vesta="server-setting-value">{t(connectionFact(props.snapshot, now()).message, connectionFact(props.snapshot, now()).args)}</span>
+            <ServerRefreshButton id={id()} />
+          </SettingRow>
+        </Panel>
+      </SettingsColumns>
       <Show when={removing()}>
         <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
       </Show>

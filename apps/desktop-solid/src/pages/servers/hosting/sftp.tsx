@@ -20,7 +20,7 @@ import { sftpKeysResource, sftpResource } from '../../../features/servers/server
 import { serverPath } from '../../../features/servers/shell-model';
 import { serverCommand } from '../../../features/servers/store';
 import { Sensitive } from '../parts';
-import { CopyValue, SettingsPage, SettingsPanel } from '../settings-parts';
+import { CopyValue, SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
 import './hosting.css';
 
@@ -128,15 +128,12 @@ export function SftpSection(props: { snapshot: ServerSnapshot }) {
       <HostingError error={status.error()} onRetry={() => void status.refresh()} />
       <Show when={status.value()} fallback={<Show when={!status.error()}><Skeleton height={160} radius={12} /><Skeleton height={120} radius={12} /></Show>}>
         {(current) => (
-          <>
+          <SettingsColumns aside={<Show when={mayManageKeys(props.snapshot)}><KeysPanel snapshot={props.snapshot} status={current()} /></Show>}>
             <ServicePanel snapshot={props.snapshot} status={current()} />
             <Show when={current().running}>
               <DetailsPanel snapshot={props.snapshot} status={current()} />
             </Show>
-            <Show when={mayManageKeys(props.snapshot)}>
-              <KeysPanel snapshot={props.snapshot} status={current()} />
-            </Show>
-          </>
+          </SettingsColumns>
         )}
       </Show>
     </SettingsPage>

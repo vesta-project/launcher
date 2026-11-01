@@ -14,7 +14,7 @@ import { serverCommand, useServersClock } from '../../../features/servers/store'
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { AccessSources, Invitation, IssuedInvitation, RoleSummary, ServerDevice, ServerUser } from '../../../features/servers/native-manage';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { SettingsGroup, SettingsPage, SettingsPanel } from '../settings-parts';
+import { SettingsColumns, SettingsGroup, SettingsPage, SettingsPanel } from '../settings-parts';
 import { activeDevices, deviceNameProblem, groupAccess, renamable, type AccessPerson } from '../../../features/servers/access-model';
 import { IntentMemo } from '../../../features/servers/model';
 
@@ -92,27 +92,30 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   );
   return (
     <>
-      <SettingsPanel title={t('servers.access.people')} name="access-people">
-        <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
-        <Show when={loaded()} fallback={<Show when={!users.error() && !devices.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
-          <div data-vesta="server-access-people">
-            <For each={groups().people} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-            <For each={groups().others} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-            <Show when={!groups().people.length && !groups().others.length}>
-              <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
-            </Show>
-          </div>
+      <SettingsColumns aside={
+        <Show when={groups().packUsers.length}>
+          <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
+            summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
+            <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
+            <div data-vesta="server-access-people">
+              <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+            </div>
+          </SettingsGroup>
         </Show>
-      </SettingsPanel>
-      <Show when={groups().packUsers.length}>
-        <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
-          summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
-          <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
-          <div data-vesta="server-access-people">
-            <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-          </div>
-        </SettingsGroup>
-      </Show>
+      }>
+        <SettingsPanel title={t('servers.access.people')} name="access-people">
+          <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
+          <Show when={loaded()} fallback={<Show when={!users.error() && !devices.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
+            <div data-vesta="server-access-people">
+              <For each={groups().people} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+              <For each={groups().others} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+              <Show when={!groups().people.length && !groups().others.length}>
+                <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
+              </Show>
+            </div>
+          </Show>
+        </SettingsPanel>
+      </SettingsColumns>
       <Show when={editing()} keyed>
         {(user) => <RoleDialog snapshot={props.snapshot} user={user} roles={roles()} onClose={() => setEditing(null)} onSaved={saved} />}
       </Show>

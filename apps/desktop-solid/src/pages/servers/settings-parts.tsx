@@ -24,6 +24,20 @@ export function SettingsPage(props: { children: JSX.Element; saveBar?: JSX.Eleme
   );
 }
 
+/**
+ * A section's controls with its secondary panels (previews, lists, reference facts) beside
+ * them once the pane is wide; narrower panes keep one column in the order given, the aside
+ * after the controls or, with `asideFirst`, before them.
+ */
+export function SettingsColumns(props: { aside?: JSX.Element; asideFirst?: boolean; children: JSX.Element }) {
+  return (
+    <div data-vesta="settings-columns" data-aside-first={props.asideFirst ? '' : undefined}>
+      <div data-vesta="settings-columns-main">{props.children}</div>
+      <div data-vesta="settings-columns-aside">{props.aside}</div>
+    </div>
+  );
+}
+
 /** Launcher settings card with the server panel marker retained. */
 export function SettingsPanel(props: {
   title: string;
