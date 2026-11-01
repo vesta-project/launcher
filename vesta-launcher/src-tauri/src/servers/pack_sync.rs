@@ -16,8 +16,15 @@ use vesta_server_client::{
 };
 
 pub(crate) const RECEIPT: &str = ".vesta-server-pack.json";
-const FILE_LIMIT: u64 = 16 * 1024 * 1024;
-const TOTAL_LIMIT: u64 = 64 * 1024 * 1024;
+// Real provider packs ship single jars above 100 MiB and several hundred MiB in total
+// (COBBLEVERSE: a 215 MiB archive, a 130 MiB Cobblemon jar, 412 MiB of pinned mods).
+// Provider bytes stream to the review stage on disk, so these bound disk use, not memory.
+const FILE_LIMIT: u64 = 1024 * 1024 * 1024;
+const TOTAL_LIMIT: u64 = 16 * 1024 * 1024 * 1024;
+/// A provider modpack archive referenced by a catalogue release (never held in memory).
+const PROVIDER_ARCHIVE_LIMIT: u64 = 4 * 1024 * 1024 * 1024;
+/// Embedded members are read into memory; they come from a server archive capped at MAX_ARCHIVE.
+const EMBEDDED_LIMIT: u64 = vesta_server_client::pack_sync::MAX_ARCHIVE as u64;
 fn io(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Internal)
 }
@@ -344,8 +351,8 @@ fn executable(path: &str) -> bool {
             .iter()
             .any(|ext| lower.ends_with(ext))
 }
-fn read_member(
-    zip: &mut zip::ZipArchive<Cursor<&[u8]>>,
+fn read_member<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
     name: &str,
     limit: u64,
 ) -> Result<Vec<u8>> {
@@ -506,28 +513,35 @@ impl ServerManager {
             let resource = app.state::<ResourceManager>().get_project(source, project).await.map_err(io)?;
             Some(ProviderPackIdentity { platform: platform.into(), project: project.into(), version: version.into(), icon_url: resource.icon_url })
         } else { None };
-        let archive = if release.format == "vestapack" {
-            archive
-        } else {
-            legacy::normalize(app, &release, archive).await?
-        };
-        let mut zip = zip::ZipArchive::new(Cursor::new(archive.as_slice()))
-            .map_err(|_| conflict("pack_unsafe_archive"))?;
-        if zip.len() > 4097 {
-            return Err(conflict("pack_too_large"));
-        }
-        let mut members = HashSet::new();
-        for n in 0..zip.len() {
-            let f = zip.by_index(n).map_err(io)?;
-            if !members.insert(f.name().to_lowercase())
-                || f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000)
-            {
-                return Err(conflict("pack_unsafe_archive"));
+        // Provider/legacy packs are normalized straight onto a disk stage; only a
+        // server-hosted vestapack (bounded by MAX_ARCHIVE) is read from memory.
+        let mut normalized = None;
+        let mut vestapack = None;
+        let index: Index = if release.format == "vestapack" {
+            let mut zip = zip::ZipArchive::new(Cursor::new(archive.as_slice()))
+                .map_err(|_| conflict("pack_unsafe_archive"))?;
+            if zip.len() > 4097 {
+                return Err(conflict("pack_too_large"));
             }
-        }
-        let index: Index =
-            serde_json::from_slice(&read_member(&mut zip, "vesta.index.json", 1024 * 1024)?)
-                .map_err(|_| conflict("pack_invalid_index"))?;
+            let mut members = HashSet::new();
+            for n in 0..zip.len() {
+                let f = zip.by_index(n).map_err(io)?;
+                if !members.insert(f.name().to_lowercase())
+                    || f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000)
+                {
+                    return Err(conflict("pack_unsafe_archive"));
+                }
+            }
+            let index =
+                serde_json::from_slice(&read_member(&mut zip, "vesta.index.json", 1024 * 1024)?)
+                    .map_err(|_| conflict("pack_invalid_index"))?;
+            vestapack = Some(zip);
+            index
+        } else {
+            let staged = legacy::normalize(app, &release, archive).await?;
+            normalized = Some((staged.stage, staged.files));
+            staged.index
+        };
         if index.format_version != 1
             || index.revision != revision(&release.revision)?
             || index.files.len() > 4096
@@ -561,99 +575,14 @@ impl ServerManager {
                 return Err(conflict("pack_incompatible_runtime"));
             }
         }
-        let stage = tempfile::tempdir().map_err(io)?;
-        let mut files = BTreeMap::new();
-        let mut names = HashSet::new();
-        let mut total = 0u64;
-        let resources = app.state::<ResourceManager>();
-        for file in index.files {
-            safe_path(&file.path)?;
-            let lower = file.path.to_lowercase();
-            if names.iter().any(|p: &String| {
-                p == &lower
-                    || p.starts_with(&format!("{lower}/"))
-                    || lower.starts_with(&format!("{p}/"))
-            }) {
-                return Err(conflict("pack_file_collision"));
+        let (stage, files) = match (normalized, vestapack) {
+            (Some(staged), _) => staged,
+            (None, Some(mut zip)) => {
+                stage_vestapack(&mut zip, index.files, instance.as_ref(), &target_runtime, app)
+                    .await?
             }
-            names.insert(lower);
-            if !matches!(
-                file.env.client.as_str(),
-                "required" | "optional" | "unsupported"
-            ) {
-                return Err(conflict("pack_invalid_index"));
-            }
-            if file.env.client == "unsupported" {
-                continue;
-            }
-            total = total
-                .checked_add(file.size)
-                .ok_or_else(|| conflict("pack_too_large"))?;
-            if file.size > FILE_LIMIT || total > TOTAL_LIMIT {
-                return Err(conflict("pack_too_large"));
-            }
-            if !matches!(
-                file.source.r#type.as_str(),
-                "embedded" | "override" | "platform" | "modrinth" | "curseforge"
-            ) {
-                return Err(conflict("pack_invalid_source"));
-            }
-            let cached = instance
-                .as_ref()
-                .map(|i| {
-                    read_matching_file(&game_dir(i)?, &file.path, file.size, &file.hashes.sha256)
-                })
-                .transpose()?
-                .flatten();
-            let bytes = if let Some(bytes) = cached {
-                bytes
-            } else {
-                match file.source.r#type.as_str() {
-                    "embedded" | "override" => {
-                        read_member(&mut zip, &format!("overrides/{}", file.path), FILE_LIMIT)?
-                    }
-                    "platform" | "modrinth" | "curseforge" => {
-                        let source = match file.source.platform.as_deref() {
-                            Some("modrinth") => crate::models::SourcePlatform::Modrinth,
-                            Some("curseforge") => crate::models::SourcePlatform::CurseForge,
-                            _ => return Err(conflict("pack_invalid_source")),
-                        };
-                        let project = file
-                            .source
-                            .project_id
-                            .as_deref()
-                            .ok_or_else(|| conflict("pack_invalid_source"))?;
-                        let version = file
-                            .source
-                            .version_id
-                            .as_deref()
-                            .ok_or_else(|| conflict("pack_invalid_source"))?;
-                        let v = resources
-                            .get_version(source, project, version)
-                            .await
-                            .map_err(io)?;
-                        if !v.game_versions.contains(&target_runtime.minecraft_version)
-                            || file.path.starts_with("mods/")
-                                && !crate::resources::manager::is_loader_compatible(
-                                    &v.loaders,
-                                    &target_runtime.loader,
-                                )
-                        {
-                            return Err(conflict("pack_incompatible_runtime"));
-                        }
-                        download_provider(&v.download_url).await?
-                    }
-                    _ => return Err(conflict("pack_invalid_source")),
-                }
-            };
-            if bytes.len() as u64 != file.size || digest(&bytes) != file.hashes.sha256 {
-                return Err(conflict("pack_integrity_failure"));
-            }
-            let target = stage.path().join(&file.path);
-            std::fs::create_dir_all(target.parent().unwrap()).map_err(io)?;
-            std::fs::write(target, bytes).map_err(io)?;
-            files.insert(file.path, file.hashes.sha256);
-        }
+            (None, None) => return Err(conflict("pack_format_unsupported")),
+        };
         let empty = tempfile::tempdir().map_err(io)?;
         let root = instance
             .as_ref()
@@ -705,10 +634,6 @@ impl ServerManager {
     }
 }
 
-async fn download_provider(raw: &str) -> Result<Vec<u8>> {
-    download_provider_limit(raw, FILE_LIMIT).await
-}
-
 fn read_matching_file(root: &Path, path: &str, size: u64, sha256: &str) -> Result<Option<Vec<u8>>> {
     let path = confined(root, path)?;
     let Ok(metadata) = std::fs::metadata(&path) else {
@@ -720,27 +645,147 @@ fn read_matching_file(root: &Path, path: &str, size: u64, sha256: &str) -> Resul
     let bytes = std::fs::read(&path).map_err(io)?;
     Ok((digest(&bytes) == sha256).then_some(bytes))
 }
-async fn download_provider_limit(raw: &str, limit: u64) -> Result<Vec<u8>> {
-    let mut url = url::Url::parse(raw).map_err(io)?;
+
+
+/// Stage a server-authored vestapack: embedded members come from the bounded archive,
+/// platform files stream from their provider straight to disk.
+async fn stage_vestapack(
+    zip: &mut zip::ZipArchive<Cursor<&[u8]>>,
+    entries: Vec<IndexFile>,
+    instance: Option<&Instance>,
+    target_runtime: &Runtime,
+    app: &AppHandle,
+) -> Result<(tempfile::TempDir, BTreeMap<String, String>)> {
+    let stage = tempfile::tempdir().map_err(io)?;
+    let mut files = BTreeMap::new();
+    let mut names = HashSet::new();
+    let mut total = 0u64;
+    let resources = app.state::<ResourceManager>();
+    for file in entries {
+        safe_path(&file.path)?;
+        let lower = file.path.to_lowercase();
+        if names.iter().any(|p: &String| {
+            p == &lower || p.starts_with(&format!("{lower}/")) || lower.starts_with(&format!("{p}/"))
+        }) {
+            return Err(conflict("pack_file_collision"));
+        }
+        names.insert(lower);
+        if !matches!(file.env.client.as_str(), "required" | "optional" | "unsupported") {
+            return Err(conflict("pack_invalid_index"));
+        }
+        if file.env.client == "unsupported" {
+            continue;
+        }
+        total = total
+            .checked_add(file.size)
+            .ok_or_else(|| conflict("pack_too_large"))?;
+        if file.size > FILE_LIMIT || total > TOTAL_LIMIT {
+            return Err(conflict("pack_too_large"));
+        }
+        let target = stage.path().join(&file.path);
+        let cached = instance
+            .map(|i| read_matching_file(&game_dir(i)?, &file.path, file.size, &file.hashes.sha256))
+            .transpose()?
+            .flatten();
+        let bytes = match (cached, file.source.r#type.as_str()) {
+            (Some(bytes), _) => bytes,
+            (None, "embedded" | "override") => {
+                read_member(zip, &format!("overrides/{}", file.path), EMBEDDED_LIMIT)?
+            }
+            (None, "platform" | "modrinth" | "curseforge") => {
+                let source = match file.source.platform.as_deref() {
+                    Some("modrinth") => crate::models::SourcePlatform::Modrinth,
+                    Some("curseforge") => crate::models::SourcePlatform::CurseForge,
+                    _ => return Err(conflict("pack_invalid_source")),
+                };
+                let project = file.source.project_id.as_deref().ok_or_else(|| conflict("pack_invalid_source"))?;
+                let version = file.source.version_id.as_deref().ok_or_else(|| conflict("pack_invalid_source"))?;
+                let v = resources.get_version(source, project, version).await.map_err(io)?;
+                if !v.game_versions.contains(&target_runtime.minecraft_version)
+                    || file.path.starts_with("mods/")
+                        && !crate::resources::manager::is_loader_compatible(&v.loaders, &target_runtime.loader)
+                {
+                    return Err(conflict("pack_incompatible_runtime"));
+                }
+                let got = download_provider_to(&v.download_url, file.size, &target).await?;
+                if got.size != file.size || got.sha256 != file.hashes.sha256 {
+                    return Err(conflict("pack_integrity_failure"));
+                }
+                files.insert(file.path, file.hashes.sha256);
+                continue;
+            }
+            _ => return Err(conflict("pack_invalid_source")),
+        };
+        if bytes.len() as u64 != file.size || digest(&bytes) != file.hashes.sha256 {
+            return Err(conflict("pack_integrity_failure"));
+        }
+        std::fs::create_dir_all(target.parent().unwrap()).map_err(io)?;
+        std::fs::write(target, bytes).map_err(io)?;
+        files.insert(file.path, file.hashes.sha256);
+    }
+    Ok((stage, files))
+}
+
+/// Size and digests of bytes streamed to disk, so provider hashes of any family verify.
+pub(crate) struct Downloaded {
+    pub size: u64,
+    sha1: String,
+    pub sha256: String,
+    sha512: String,
+}
+impl Downloaded {
+    pub(crate) fn verify(&self, hash: &str) -> Result<()> {
+        let actual = match hash.len() {
+            40 => &self.sha1,
+            64 => &self.sha256,
+            128 => &self.sha512,
+            _ => return Err(conflict("pack_integrity_failure")),
+        };
+        if !actual.eq_ignore_ascii_case(hash) {
+            return Err(conflict("pack_integrity_failure"));
+        }
+        Ok(())
+    }
+}
+/// Over-limit provider content is too large, not unavailable: the bytes exist and are
+/// reachable, and the two must stay distinguishable to the user.
+fn over_limit(size: u64, limit: u64) -> Result<()> {
+    if size > limit {
+        return Err(conflict("pack_too_large"));
+    }
+    Ok(())
+}
+fn provider_url_allowed(url: &url::Url) -> bool {
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && url.fragment().is_none()
+        && matches!(
+            url.host_str(),
+            Some("cdn.modrinth.com" | "edge.forgecdn.net" | "mediafilez.forgecdn.net")
+        )
+}
+/// Streams an allow-listed provider download to `target`, hashing as it goes. Never
+/// buffers the body: provider jars and modpack archives exceed hundreds of MiB.
+async fn download_provider_to(raw: &str, limit: u64, target: &Path) -> Result<Downloaded> {
+    use sha2::Digest;
+    use tokio::io::AsyncWriteExt;
+    let mut url = url::Url::parse(raw).map_err(|_| conflict("pack_download_unavailable"))?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(120))
+        .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(io)?;
+    let idle = std::time::Duration::from_secs(60);
     for _ in 0..6 {
-        if url.scheme() != "https"
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.port_or_known_default() != Some(443)
-            || url.fragment().is_some()
-            || !matches!(
-                url.host_str(),
-                Some("cdn.modrinth.com" | "edge.forgecdn.net" | "mediafilez.forgecdn.net")
-            )
-        {
+        if !provider_url_allowed(&url) {
             return Err(conflict("pack_download_unavailable"));
         }
-        let mut response = client.get(url.clone()).send().await.map_err(io)?;
+        let mut response = tokio::time::timeout(idle, client.get(url.clone()).send())
+            .await
+            .map_err(io)?
+            .map_err(io)?;
         if response.status().is_redirection() {
             url = url
                 .join(
@@ -750,20 +795,47 @@ async fn download_provider_limit(raw: &str, limit: u64) -> Result<Vec<u8>> {
                         .and_then(|v| v.to_str().ok())
                         .ok_or_else(|| conflict("pack_download_unavailable"))?,
                 )
-                .map_err(io)?;
+                .map_err(|_| conflict("pack_download_unavailable"))?;
             continue;
         }
-        if !response.status().is_success() || response.content_length().is_some_and(|n| n > limit) {
+        if !response.status().is_success() {
             return Err(conflict("pack_download_unavailable"));
         }
-        let mut bytes = vec![];
-        while let Some(chunk) = response.chunk().await.map_err(io)? {
-            if bytes.len() + chunk.len() > limit as usize {
-                return Err(conflict("pack_too_large"));
-            }
-            bytes.extend_from_slice(&chunk);
+        over_limit(response.content_length().unwrap_or(0), limit)?;
+        if let Some(parent) = target.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(io)?;
         }
-        return Ok(bytes);
+        let mut file = tokio::fs::File::create(target).await.map_err(io)?;
+        let (mut sha1, mut sha256, mut sha512) =
+            (sha1::Sha1::new(), sha2::Sha256::new(), sha2::Sha512::new());
+        let mut size = 0u64;
+        let result: Result<()> = async {
+            while let Some(chunk) = tokio::time::timeout(idle, response.chunk())
+                .await
+                .map_err(io)?
+                .map_err(io)?
+            {
+                size += chunk.len() as u64;
+                over_limit(size, limit)?;
+                sha1.update(&chunk);
+                sha256.update(&chunk);
+                sha512.update(&chunk);
+                file.write_all(&chunk).await.map_err(io)?;
+            }
+            file.flush().await.map_err(io)
+        }
+        .await;
+        if let Err(error) = result {
+            drop(file);
+            let _ = tokio::fs::remove_file(target).await;
+            return Err(error);
+        }
+        return Ok(Downloaded {
+            size,
+            sha1: hex::encode(sha1.finalize()),
+            sha256: hex::encode(sha256.finalize()),
+            sha512: hex::encode(sha512.finalize()),
+        });
     }
     Err(conflict("pack_download_unavailable"))
 }

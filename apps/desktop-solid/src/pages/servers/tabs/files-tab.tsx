@@ -2,7 +2,7 @@ import {
   BreadcrumbItem, Breadcrumbs, Button, ContextMenu, ContextMenuItem, ContextMenuSeparator, Dialog, IconButton, Menu, MenuItem,
   MenuSeparator, Progress, SegmentedControl, Skeleton, TextField, toast,
 } from '@vesta/ui';
-import { For, Show, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { route } from '../../../app/router';
@@ -18,7 +18,8 @@ import {
 import { IntentMemo, age, newIntentId } from '../../../features/servers/model';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { stableConnectionId } from '../../../features/servers/connection-id';
-import type { FileEntry, ServerCommandError, ServerSnapshot, TrashEntry, UploadCandidate } from '../../../features/servers/native';
+import type { FileEntry, Page, ServerCommandError, ServerSnapshot, TrashEntry, UploadCandidate } from '../../../features/servers/native';
+import { cachedListing, hoverIntent, invalidateListings, listingPlan, prefetchListing, readListing, reconcileEntries } from '../../../features/servers/file-listing';
 import { ServerErrorNote } from '../parts';
 import { FileEditor } from './file-editor';
 import { protectedSection } from '../../../features/servers/protected-edit';
@@ -67,24 +68,62 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   // Only the newest listing applies, so a slow reply can't replace a newer directory.
   const pendingTrash = new Set<string>();
   let sequence = 0;
-  const load = async (path: string, more = false) => {
+  /** The directory whose rows are on screen; only it may keep them while another loads. */
+  let shown: string | null = null;
+  let passive: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => clearTimeout(passive));
+  const visible = (path: string, items: readonly FileEntry[]) => items.filter(entry => !pendingTrash.has(path ? `${path}/${entry.name}` : entry.name));
+  const apply = (path: string, page: Page<FileEntry>) => {
+    setEntries((current) => reconcileEntries(shown === path ? current : [], visible(path, page.items)));
+    setCursor(page.nextCursor);
+    shown = path;
+  };
+  // Stage 2, after the listing is drawn: warm the parent so going back is instant.
+  // Folder rows warm their own listing on hover.
+  const warmAround = (path: string) => {
+    clearTimeout(passive);
+    if (path) passive = setTimeout(() => prefetchListing(id(), parentPath(path)), 400);
+  };
+  const load = async (path: string, more = false, force = false) => {
     const request = ++sequence;
-    setLoading(true);
+    clearTimeout(passive);
     setError(null);
+    if (more) {
+      setLoading(true);
+      try {
+        const page = await serverCommand((client) => client.filesList(id(), path, cursor()));
+        if (request !== sequence) return;
+        setEntries((current) => [...current, ...visible(path, page.items)]);
+        setCursor(page.nextCursor);
+      } catch (reason) { if (request === sequence) setError(reason as ServerCommandError); }
+      finally { if (request === sequence) setLoading(false); }
+      return;
+    }
+    // Stage 1: the current directory's first page, from cache when it is recent enough.
+    const cached = force ? null : cachedListing(id(), path);
+    const plan = listingPlan(cached, shown === path, force, Date.now());
+    if (plan.show === 'cached' && cached) apply(path, cached.page);
+    else if (plan.show === 'skeleton') { setEntries([]); setCursor(null); shown = null; }
+    if (!plan.fetch) { setLoading(false); warmAround(path); return; }
+    // Rows already on screen stay put and are swapped in place; only an empty view shows the skeleton.
+    setLoading(true);
     try {
-      const page = await serverCommand((client) => client.filesList(id(), path, more ? cursor() : null));
+      const page = await readListing(id(), path, force);
       if (request !== sequence) return;
-      setEntries((current) => (more ? [...current, ...page.items] : page.items).filter(entry => !pendingTrash.has(path ? `${path}/${entry.name}` : entry.name)));
-      setCursor(page.nextCursor);
+      apply(path, page);
+      warmAround(path);
     } catch (reason) {
-      if (request === sequence) { setError(reason as ServerCommandError); if (!more) setEntries([]); }
+      if (request === sequence) { setError(reason as ServerCommandError); setEntries([]); shown = null; }
     } finally {
       if (request === sequence) setLoading(false);
     }
   };
   // Fetch on navigation and explicit refresh only; no timers.
   createEffect(directory, (path) => { setOpened(null); setView('browse'); void load(path); }, { name: 'server-files:load' });
-  const refresh = () => void load(untrack(directory));
+  /** Explicit refresh and every mutation: drop this server's cached listings and re-read. */
+  const refresh = () => { invalidateListings(untrack(id)); void load(untrack(directory), false, true); };
+  const folderHover = hoverIntent((path) => prefetchListing(untrack(id), path));
+  onCleanup(folderHover.cancel);
 
   const go = (path: string) => transitionTo(`/servers/${id()}/files${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`);
   const href = (path: string) => `#/servers/${encodeURIComponent(id())}/files${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`;
@@ -215,7 +254,7 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
               toast.undo({ title: t('server-files.moved-to-trash', { name: entry.name }), undoLabel: 'Undo',
                 apply: () => { pendingTrash.add(path); setEntries(current => current.filter(item => item.name !== entry.name)); },
                 rollback: () => { pendingTrash.delete(path); if (directory() === parent) void load(parent); },
-                commit: async () => { await serverCommand(client => client.fileDelete(connection, path, null, newIntentId())); pendingTrash.delete(path); },
+                commit: async () => { await serverCommand(client => client.fileDelete(connection, path, null, newIntentId())); pendingTrash.delete(path); invalidateListings(connection); },
                 onError: reason => toast.show({ title: t(errorMessage(reason)), tone: 'danger' }) });
             }}>{t('server-files.move-to-trash')}</Item>
         </Show>
@@ -291,7 +330,9 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
                         <div {...contextProps} data-vesta="server-file-row" role="row" data-protected={access(entry) !== 'none' ? access(entry) : undefined}
                           data-drop-folder={entry.kind === 'directory' ? entry.name : undefined}
                           data-drop-over={entry.kind === 'directory' && dropFolder() === entry.name ? '' : undefined}>
-                          <button type="button" role="cell" data-vesta="server-file-open" onClick={() => open(entry)}>
+                          <button type="button" role="cell" data-vesta="server-file-open" onClick={() => open(entry)}
+                            onPointerEnter={(event) => { if (event.pointerType !== 'touch' && entry.kind === 'directory' && access(entry) !== 'redirect') folderHover.enter(pathOf(entry)); }}
+                            onPointerLeave={() => folderHover.leave()}>
                             <span data-vesta="server-file-icon" data-kind={fileKind(pathOf(entry), entry.kind)}>
                               <Icon name={fileIcon[fileKind(pathOf(entry), entry.kind)]} />
                             </span>
