@@ -58,6 +58,21 @@
     --rail-bg: var(--vesta-color-chrome);
   }
 
+  /*
+   * Effect reveal: the shell canvas is the single frame tint, so titlebar and rail add no fill of
+   * their own (chrome over canvas would stack to ~87% and hide the effect). Only for an applied
+   * effect with a built-in theme; author themes and the solid fallback keep the chrome layer.
+   */
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])
+    [data-vesta='titlebar'] {
+    background: transparent;
+  }
+
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])
+    [data-vesta='rail'] {
+    --rail-bg: transparent;
+  }
+
   :where([data-vesta='shell-body']) {
     display: flex;
     flex: 1;
