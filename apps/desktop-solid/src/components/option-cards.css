@@ -1,80 +1,65 @@
 /*
- * Option cards: one choice among a few kinds. Cards flow into as many equal columns as fit;
- * the selected card takes the accent border and a faint accent fill (no size change).
+ * Option cards: a tall segmented control for choosing a kind (server software, modloader).
+ * Each item stacks the kind's mark over its name; the raised thumb marks the choice, so
+ * themes that restyle the segmented control restyle this too.
  *
- * Hooks:  [data-vesta=option-cards] [data-vesta=option-card][data-selected][data-disabled]
- *         -icon -text -label -hint
- * Knobs:  --option-card-min (narrowest column)
+ * Items share one row when they fit, else split into two even rows, else wrap at
+ * --option-card-min. The wrapper sets --option-count and --option-row (half, rounded up).
+ *
+ * Hooks:  [data-vesta=option-cards] > [data-vesta=segmented-field] (segmented hooks inside)
+ * Knobs:  --option-card-min, --option-card-height
  */
 @layer launcher {
   :where([data-vesta='option-cards']) {
+    --option-card-min: 5.5rem;
+    --option-card-height: 64px;
+    --option-gap: var(--segmented-padding, 2px);
+    /* Width of one item with n per row. */
+    --option-one-row: calc((100% - (var(--option-count) - 1) * var(--option-gap)) / var(--option-count) - 0.1px);
+    --option-two-rows: calc((100% - (var(--option-row) - 1) * var(--option-gap)) / var(--option-row) - 0.1px);
+
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='option-cards']) > :where([data-vesta='segmented-field']) {
+    --segmented-height: auto;
+    --segmented-item-gap: 6px;
+  }
+
+  :where([data-vesta='option-cards']) :where([data-vesta='segmented-control']) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(var(--option-card-min, 8.25rem), 100%), 1fr));
-    gap: var(--vesta-space-2);
-    min-inline-size: 0;
+    /* One row if each item still gets --option-card-min; otherwise two even rows. The
+     * min() term is 0 or less when one row fits and huge when it doesn't. */
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(
+        max(
+          min(var(--option-card-min), 100%),
+          var(--option-one-row),
+          min(var(--option-two-rows), (var(--option-card-min) - var(--option-one-row)) * 1000)
+        ),
+        1fr
+      )
+    );
+    gap: var(--option-gap);
+    overflow: visible;
   }
 
-  :where([data-vesta='option-card']) {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    box-sizing: border-box;
-    min-inline-size: 0;
-    padding: var(--vesta-space-2) var(--vesta-space-3) var(--vesta-space-2) var(--vesta-space-2);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-surface);
-    color: var(--vesta-color-text);
-    cursor: default;
-  }
-
-  :where([data-vesta='option-card']):hover:not([data-disabled], [data-selected]) {
-    border-color: var(--vesta-color-border-strong);
-    background: var(--vesta-color-surface-raised);
-  }
-
-  :where([data-vesta='option-card'][data-selected]) {
-    border-color: var(--vesta-color-accent-border);
-    background: color-mix(in oklab, var(--vesta-color-accent) 10%, var(--vesta-color-surface));
-    box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-accent-border);
-  }
-
-  :where([data-vesta='option-card'][data-disabled]) { opacity: 0.55; }
-
-  :where([data-vesta='option-card']):has(input:focus-visible) {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: var(--vesta-focus-offset);
-  }
-
-  :where([data-vesta='option-card'] input) {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    opacity: 0;
-    cursor: default;
-  }
-
-  :where([data-vesta='option-card-icon']) { display: inline-flex; flex: none; }
-
-  :where([data-vesta='option-card-text']) {
-    display: flex;
+  :where([data-vesta='option-cards']) :where([data-vesta='segmented-item']) {
     flex-direction: column;
     min-inline-size: 0;
+    min-block-size: var(--option-card-height);
+    padding-block: var(--vesta-space-2);
   }
 
-  :where([data-vesta='option-card-label']) {
-    overflow: hidden;
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-medium);
-    line-height: var(--vesta-leading-tight);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  :where([data-vesta='option-cards']) :where([data-vesta='segmented-icon']) {
+    inline-size: auto;
+    block-size: auto;
   }
 
-  :where([data-vesta='option-card-hint']) {
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-    line-height: var(--vesta-leading-tight);
+  :where([data-vesta='option-cards']) :where([data-vesta='segmented-label']) {
+    flex: none;
+    max-inline-size: 100%;
+    text-align: center;
   }
 }

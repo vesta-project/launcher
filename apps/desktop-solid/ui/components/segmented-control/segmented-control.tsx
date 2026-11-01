@@ -12,6 +12,8 @@ export interface SegmentedControlOption {
   suffix?: JSX.Element;
   /** Icon before the label. With `iconOnly` it is the only visible content. */
   icon?: JSX.Element;
+  /** A few words shown on hover. Icon-only items show their label instead. */
+  tip?: string;
   disabled?: boolean;
 }
 
@@ -87,7 +89,7 @@ export function SegmentedControl(props: SegmentedControlProps) {
                 value={option.value}
                 disabled={option.disabled}
                 // Icon-only items still name themselves on hover.
-                data-tip={props.iconOnly ? option.label : undefined}
+                data-tip={props.iconOnly ? option.label : option.tip}
               >
                 <span data-vesta="segmented-thumb" aria-hidden="true" />
                 <KobalteSegmentedControl.ItemInput />
