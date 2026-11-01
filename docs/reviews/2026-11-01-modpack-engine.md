@@ -37,4 +37,6 @@ Live RLCraft metadata review was attempted using the existing application key wi
 
 Resumed commits: launcher 9d4e6632 (shared decision delegation), 534df2b0 (inline localized progress); agent c37384b (review deferral), e048f54 (durable unchanged-software jobs), 7d12d9a (upload allocation/regression), 01fbab6 (batch journal progress). Existing upload root-cause fixes are launcher 71c34d35 and agent 7517d31. All commits are unsigned with the requested co-author.
 
-Final HTTPS retry (--test-threads=2): 125 passed, 1 failed; the sole failure is the publication error-contract assertion described above. The retry completed normally. No test failure was suppressed or changed to an ignore.
+Final full HTTPS retry (--test-threads=2): **123 passed, 2 failed, 1 pre-existing ignored test**. It completed normally. The second failure was the aggregate body budget regression retaining its old maximum-per-request reservation assumption. The test was updated to exactly occupy the actual ordinary byte budget; its focused result is recorded below. The publication error-contract failure remains unresolved. No new ignore was added.
+
+The corrected aggregate byte-budget HTTPS regression passes (1 test), preserving empty reads and reserved control capacity under actual byte exhaustion. Agent follow-up commit records this admission test correction. Final worktrees are clean; no merge was performed. Full engine parity remains open as item 1 states.
