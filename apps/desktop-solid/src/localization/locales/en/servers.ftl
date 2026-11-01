@@ -21,6 +21,7 @@ servers-fingerprint = Certificate fingerprint
 servers-continue = Continue
 servers-got-it = Got it
 servers-seen = seen { $time } ago
+servers-uptime = up { $time }
 servers-updated = Updated { $time } ago
 servers-ago = { $time } ago
 servers-retry-after = Try again in { $count ->
@@ -188,9 +189,6 @@ servers-operation-checking = Checking whether the server received this…
 servers-activity-empty = No recent tasks.
 
 # Overview
-servers-overview-minecraft = Minecraft
-servers-overview-version = Version
-servers-overview-uptime = Uptime
 servers-overview-performance = Performance
 servers-overview-cpu = CPU
 servers-overview-memory = Memory

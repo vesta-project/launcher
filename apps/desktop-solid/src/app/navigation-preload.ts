@@ -2,6 +2,7 @@ import { onSettled } from 'solid-js';
 import { isSourceId } from '../features/browse/browse-model';
 import { prefetchBrowse } from '../features/browse/browse-store';
 import { prefetchProject } from '../features/browse/browse-projects';
+import { prefetchServerOpen } from '../pages/servers/nav-prefetch';
 
 /** Small intent-driven warmups share the normal caches; they never navigate or publish a query. */
 export function useNavigationPreloading() {
@@ -10,9 +11,14 @@ export function useNavigationPreloading() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hovered: Element | null = null;
     const target = (node: EventTarget | null) => node instanceof Element
-      ? node.closest('a[href^="#/browse"], [data-preload-browse]') : null;
+      ? node.closest('a[href^="#/browse"], [data-preload-browse], [data-preload-server]') : null;
     const warm = (element: Element | null) => {
       if (!element) return;
+      const server = element.getAttribute('data-preload-server');
+      if (server) {
+        prefetchServerOpen(server);
+        return;
+      }
       if (element.hasAttribute('data-preload-browse')) {
         prefetchBrowse(element.getAttribute('data-preload-browse') || undefined);
         return;

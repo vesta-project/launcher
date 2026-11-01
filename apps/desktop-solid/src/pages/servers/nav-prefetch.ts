@@ -9,11 +9,13 @@ import { gameStopped } from '../../features/servers/hosting-model';
 import {
   accessSourcesResource, backupStorageResource, contentResource, backupsResource, bansResource, brandingResource, devicesResource, invitationsResource,
   motdPolicyResource, operationsResource, operatorsResource, propertiesResource, rolesResource, sleepPolicyResource, softwareJobsResource, softwareResource, sftpResource,
-  usersResource, whitelistResource, worldResource, warmSoftwareMetadata, packWorkspaceResource,
+  usersResource, whitelistResource, worldResource, warmSoftwareMetadata, packWorkspaceResource, metricsHistoryResource,
 } from '../../features/servers/server-resources';
 import { workflowsResource } from './automation/resources';
 import { agentReachable } from '../../features/servers/shell-model';
 import type { ServerSnapshot } from '../../features/servers/native';
+import { serverSnapshot } from '../../features/servers/store';
+import { needsPackWorkspace } from './pack/get-modpack';
 
 type Prefetcher = (snapshot: ServerSnapshot) => void;
 const prefetchers = new Map<string, Prefetcher>();
@@ -25,7 +27,7 @@ export function registerServerPrefetch(target: string, prefetch: Prefetcher) {
 
 export function prefetchServerTarget(snapshot: ServerSnapshot, target: string) {
   const needs: Record<string, readonly string[]> = {
-    overview: ['tasks.view'], resources: ['files.list', 'pack.edit'], pack: ['pack.edit'], activity: ['tasks.view'],
+    overview: ['tasks.view', 'pack.edit', 'metrics.view'], resources: ['files.list', 'pack.edit'], pack: ['pack.edit'], activity: ['tasks.view'],
     backups: ['backups.view'], general: ['config.view'], game: ['config.view'], world: ['config.view'],
     sftp: ['config.view'], software: ['content.install'], presence: ['config.view'], players: ['players.view'],
     access: ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'], automation: ['automation.view'],
@@ -35,9 +37,12 @@ export function prefetchServerTarget(snapshot: ServerSnapshot, target: string) {
 
 const can = (snapshot: ServerSnapshot, capability: string) => anyVisible(snapshot.capabilities, [capability]);
 
+// The Overview waits for the client pack answer and draws Performance from history, so both warm too.
 registerServerPrefetch('overview', (snapshot) => {
   const id = snapshot.connection.id;
   if (can(snapshot, 'tasks.view')) prefetchServerResource(id, operationsResource);
+  if (needsPackWorkspace(snapshot)) prefetchServerResource(id, packWorkspaceResource);
+  if (can(snapshot, 'metrics.view')) prefetchServerResource(id, metricsHistoryResource, '1h');
 });
 registerServerPrefetch('resources', (snapshot) => {
   if (can(snapshot, 'files.list')) prefetchServerResource(snapshot.connection.id, contentResource);
@@ -85,6 +90,12 @@ registerServerPrefetch('access', (snapshot) => {
 registerServerPrefetch('automation', (snapshot) => {
   if (can(snapshot, 'automation.view')) prefetchServerResource(snapshot.connection.id, workflowsResource);
 });
+
+/** Server cards and rail pins (data-preload-server = connection id) warm the page they open on. */
+export function prefetchServerOpen(connectionId: string) {
+  const snapshot = serverSnapshot(connectionId);
+  if (snapshot) prefetchServerTarget(snapshot, 'overview');
+}
 
 const HOVER_DELAY_MS = 120;
 const ATTRIBUTE = 'data-server-prefetch';

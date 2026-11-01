@@ -4,7 +4,7 @@ import { Icon } from '../../components/icon';
 import { HeaderIdentity } from '../library/instance/header-identity';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
-import { lifecycleControls, minecraftFactNow, statusDot } from '../../features/servers/model';
+import { lifecycleControls, minecraftFactNow, statusDot, uptimeNow } from '../../features/servers/model';
 import { gate } from '../../features/servers/capabilities';
 import { serverPressure, useServerResource } from '../../features/servers/resources';
 import { sleepPolicyResource } from '../../features/servers/server-resources';
@@ -34,6 +34,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
     const fact = minecraftFactNow(props.snapshot, now());
     return sleeping() ? { ...fact, message: sleepingMessage(sleepPolicy.value()?.policy) } : fact;
   };
+  const uptime = () => (minecraft().seen ? null : uptimeNow(props.snapshot, now()));
   const controls = () => lifecycleControls(props.snapshot);
   const players = () => knownPlayerCount(props.snapshot);
   const address = () => joinAddress(props.snapshot);
@@ -71,6 +72,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
             <span>
               {t(minecraft().message, minecraft().args)}
               <Show when={minecraft().seen}>{(seen) => <small>{' '}{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</small>}</Show>
+              <Show when={uptime()}>{(time) => <small>{' '}{t('servers.uptime', { time: time() })}</small>}</Show>
             </span>
           </span>
           <IconButton variant="ghost" label={t('servers.settings.title')} icon={<Icon name="icons/content/gear" />} onClick={props.onOpenSettings} />

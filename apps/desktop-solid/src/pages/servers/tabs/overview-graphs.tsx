@@ -61,43 +61,52 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
   };
   const running = () => props.snapshot.status?.state === 'running';
   const waiting = () => history.loading() && !shown().length;
+  // Stopped (or unreachable) with nothing recorded: no section at all, and no skeleton while
+  // that is checked. Once shown it stays for this server, so changing the range never removes the control.
+  const live = () => running() && props.snapshot.state.phase === 'online';
+  const visible = createMemo<{ id: ConnectionId; shown: boolean }>(
+    (was) => ({ id: props.id, shown: (was?.id === props.id && was.shown) || live() || shown().length > 0 }),
+    { name: 'server-graphs:visible' },
+  );
 
   return (
-    <section data-vesta="server-graphs" aria-label={t('servers.overview.performance')}>
-      <header data-vesta="server-graphs-head">
-        <h2>{t('servers.overview.performance')}</h2>
-        <Freshness atMs={samples().at(-1)?.atMs ?? null} now={props.now} phase={props.snapshot.state.phase} />
-        <SegmentedControl
-          size="sm"
-          aria-label={t('servers.graphs.range')}
-          value={range()}
-          onChange={(value) => setRange(value as GraphRange)}
-          options={GRAPH_RANGES.map((entry) => ({ value: entry, label: t(rangeLabels[entry]) }))}
-        />
-      </header>
-      <Show
-        when={!waiting()}
-        fallback={<div data-vesta="server-graphs-grid"><Skeleton height={196} /><Skeleton height={196} /></div>}
-      >
-        <Show when={shown().length > 0} fallback={<p data-vesta="server-muted">{t('servers.graphs.empty')}</p>}>
-          <div data-vesta="server-graphs-grid">
-            <For each={shown()}>
-              {(metric) => (
-                <MetricGraph
-                  metric={metric}
-                  points={series()[metric]}
-                  range={range()}
-                  nowMs={props.now}
-                  bucketMillis={bucketMillis()}
-                  limit={metric === 'memory' ? memoryLimit() : metric === 'players' ? playerLimit() : null}
-                  idle={running() ? null : minecraftFact(props.snapshot.status).message}
-                />
-              )}
-            </For>
-          </div>
+    <Show when={visible().shown}>
+      <section data-vesta="server-graphs" aria-label={t('servers.overview.performance')}>
+        <header data-vesta="server-graphs-head">
+          <h2>{t('servers.overview.performance')}</h2>
+          <Freshness atMs={samples().at(-1)?.atMs ?? null} now={props.now} phase={props.snapshot.state.phase} />
+          <SegmentedControl
+            size="sm"
+            aria-label={t('servers.graphs.range')}
+            value={range()}
+            onChange={(value) => setRange(value as GraphRange)}
+            options={GRAPH_RANGES.map((entry) => ({ value: entry, label: t(rangeLabels[entry]) }))}
+          />
+        </header>
+        <Show
+          when={!waiting()}
+          fallback={<div data-vesta="server-graphs-grid"><Skeleton height={196} /><Skeleton height={196} /></div>}
+        >
+          <Show when={shown().length > 0} fallback={<p data-vesta="server-muted">{t('servers.graphs.empty')}</p>}>
+            <div data-vesta="server-graphs-grid">
+              <For each={shown()}>
+                {(metric) => (
+                  <MetricGraph
+                    metric={metric}
+                    points={series()[metric]}
+                    range={range()}
+                    nowMs={props.now}
+                    bucketMillis={bucketMillis()}
+                    limit={metric === 'memory' ? memoryLimit() : metric === 'players' ? playerLimit() : null}
+                    idle={running() ? null : minecraftFact(props.snapshot.status).message}
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
         </Show>
-      </Show>
-    </section>
+      </section>
+    </Show>
   );
 }
 

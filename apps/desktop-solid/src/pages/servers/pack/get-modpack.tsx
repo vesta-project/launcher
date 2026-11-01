@@ -8,7 +8,10 @@ import { refreshNativeInstances } from '../../../features/instances/native-servi
 import { modpackGates, syncApplyRequest, syncChangeSummary } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { PackSyncPreview } from '../../../features/servers/native-pack-sync';
-import { peekServerResource } from '../../../features/servers/resources';
+import type { PackWorkspace } from '../../../features/servers/native-pack';
+import { gate } from '../../../features/servers/capabilities';
+import { agentReachable } from '../../../features/servers/shell-model';
+import { peekServerResource, useServerResource } from '../../../features/servers/resources';
 import { packWorkspaceResource } from '../../../features/servers/server-resources';
 import { initials, serverArt } from '../../../features/servers/art';
 import { serverCommand, serverIcon } from '../../../features/servers/store';
@@ -25,9 +28,25 @@ export type GetModpackMode = 'new' | 'link';
  * or the server's own modpack offered to players.
  */
 export function offersClientPack(snapshot: ServerSnapshot): boolean {
-  if (snapshot.pack?.status === 'published' || (snapshot.pack?.hostedRevision ?? null) !== null) return true;
-  const workspace = peekServerResource(snapshot.connection.id, packWorkspaceResource);
-  return (workspace?.clientPack?.mode ?? 'none') !== 'none' || (workspace?.publishedRevision ?? '0') !== '0';
+  return snapshotOffers(snapshot) || workspaceOffers(peekServerResource(snapshot.connection.id, packWorkspaceResource));
+}
+
+const snapshotOffers = (snapshot: ServerSnapshot) => snapshot.pack?.status === 'published' || (snapshot.pack?.hostedRevision ?? null) !== null;
+const workspaceOffers = (workspace: PackWorkspace | undefined) => (workspace?.clientPack?.mode ?? 'none') !== 'none' || (workspace?.publishedRevision ?? '0') !== '0';
+/** Only editors can read the workspace, and only when the snapshot hasn't already answered. */
+export const needsPackWorkspace = (snapshot: ServerSnapshot) =>
+  !snapshotOffers(snapshot) && agentReachable(snapshot) && gate(snapshot.capabilities, 'pack.edit') === 'allowed';
+
+/**
+ * offersClientPack, reactively, with whether the answer is final yet. Views wait on `known`
+ * instead of drawing the no-pack layout first and swapping it.
+ */
+export function useClientPackOffer(snapshot: () => ServerSnapshot) {
+  const workspace = useServerResource(() => snapshot().connection.id, packWorkspaceResource, { enabled: () => needsPackWorkspace(snapshot()) });
+  return {
+    known: () => !needsPackWorkspace(snapshot()) || workspace.value() !== undefined || workspace.error() !== null,
+    offers: () => snapshotOffers(snapshot()) || workspaceOffers(workspace.value()),
+  };
 }
 
 export const canGetModpack = (snapshot: ServerSnapshot) => modpackGates(snapshot.capabilities, snapshot.connection.role).download;
