@@ -18,7 +18,7 @@ import { refreshServerWithFeedback } from './refresh-button';
 import { RemoveServerDialog } from './remove-dialog';
 
 
-/** The instance header's layout: art banner, icon tile, title and meta, then actions, then one notice strip. */
+/** The instance header's layout: art banner, icon tile, title and meta, then status and actions, then one notice strip. */
 export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean; onOpenSettings: () => void }) {
   const now = useServersClock();
   const [removing, setRemoving] = createSignal(false, { name: 'server-header:removing' });
@@ -53,11 +53,6 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
         <div data-vesta="instance-header-copy">
           <h1 data-vesta="instance-header-title">{props.snapshot.connection.name}</h1>
           <p data-vesta="instance-header-meta">
-            <span data-vesta="server-header-state" data-tone={minecraft().tone}>
-              <StatusDot dot={statusDot(props.snapshot)} />
-              {t(minecraft().message, minecraft().args)}
-              <Show when={minecraft().seen}>{(seen) => <span>{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</span>}</Show>
-            </span>
             <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
             <Show when={players() !== null}>
               <span>{t('servers.players.count', { count: players()! })}</span>
@@ -74,6 +69,13 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
           </p>
         </div>
         <div data-vesta="instance-header-actions">
+          <span data-vesta="instance-header-status" data-tone={minecraft().tone} role="status">
+            <StatusDot dot={statusDot(props.snapshot)} />
+            <span>
+              {t(minecraft().message, minecraft().args)}
+              <Show when={minecraft().seen}>{(seen) => <small>{' '}{t('servers.seen', { time: t(seen().message, { count: seen().count }) })}</small>}</Show>
+            </span>
+          </span>
           <IconButton variant="ghost" label={t('servers.settings.title')} icon={<Icon name="icons/content/gear" />} onClick={props.onOpenSettings} />
           <Menu
             placement="bottom-end"

@@ -1,8 +1,9 @@
 /*
  * Instance header: a compact art band with identity and actions in one row.
  * Hooks: [data-vesta=instance-header] -art -main -icon -copy -title -meta -loader -playtime -actions
+ *        -status -dot
  *        [data-vesta=instance-notice]
- * States: notice: data-tone (danger | warning)
+ * States: notice: data-tone (danger | warning); status: data-tone
  * Knobs: --header-height, --header-icon-size, --header-art-opacity
  *
  * Height follows the window: roomy when tall, tight when short. All inline spacing
@@ -102,6 +103,36 @@
     flex: none;
     align-items: center;
     gap: var(--vesta-space-2);
+  }
+
+  /* Live state beside the actions, in the same place in full and compact headers. */
+  :where([data-vesta="instance-header-status"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    block-size: var(--vesta-size-control-md);
+    padding-inline: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-media-text) 20%, transparent);
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 55%, transparent);
+    color: var(--vesta-color-media-text);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="instance-header-status"]) small {
+    margin-inline-start: var(--vesta-space-2);
+    color: color-mix(in oklab, var(--vesta-color-media-text) 75%, transparent);
+    font-size: inherit;
+    font-weight: var(--vesta-weight-regular, 400);
+  }
+
+  :where([data-vesta="instance-header-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-media-text);
   }
 
   /* Header controls sit on art, so ghost icon buttons get a legible light tint. */
@@ -204,6 +235,19 @@
   @container app (max-width: 720px) {
     :where([data-vesta="instance-header-playtime"]) {
       display: none;
+    }
+
+    /* The dot stays; the state's words remain for assistive technology. */
+    :where([data-vesta="instance-header-status"]) {
+      padding-inline: var(--vesta-space-2);
+    }
+
+    :where([data-vesta="instance-header-status"]) > span:last-child {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
   }
 

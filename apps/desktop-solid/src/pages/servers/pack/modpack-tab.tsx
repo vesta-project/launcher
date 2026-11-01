@@ -66,7 +66,7 @@ function PlayerView() {
     <div data-vesta="modpack-scroll">
       <Show when={area.gates().download} fallback={<EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.no-access')} />}>
         <Show when={offersClientPack(area.snapshot())} fallback={<EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.play-none')} />}>
-          <section data-vesta="server-cards"><PlayOnServerCard snapshot={area.snapshot()} /></section>
+          <PlayOnServerCard snapshot={area.snapshot()} />
         </Show>
       </Show>
     </div>

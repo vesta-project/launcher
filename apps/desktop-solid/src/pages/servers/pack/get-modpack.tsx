@@ -10,7 +10,8 @@ import type { ServerCommandError, ServerSnapshot } from '../../../features/serve
 import type { PackSyncPreview } from '../../../features/servers/native-pack-sync';
 import { peekServerResource } from '../../../features/servers/resources';
 import { packWorkspaceResource } from '../../../features/servers/server-resources';
-import { serverCommand } from '../../../features/servers/store';
+import { initials, serverArt } from '../../../features/servers/art';
+import { serverCommand, serverIcon } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import './modpack.css';
@@ -31,16 +32,21 @@ export function offersClientPack(snapshot: ServerSnapshot): boolean {
 
 export const canGetModpack = (snapshot: ServerSnapshot) => modpackGates(snapshot.capabilities, snapshot.connection.role).download;
 
-/** Server Overview: play on this server with a new instance, or link one you have. */
+/** Server Overview: one row with the server's pack, a new instance first, or link one you have. */
 export function PlayOnServerCard(props: { snapshot: ServerSnapshot }) {
   const [mode, setMode] = createSignal<GetModpackMode | null>(null, { name: 'play-card:mode' });
+  const id = () => props.snapshot.connection.id;
+  const icon = () => serverIcon(id()) ?? serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name));
   return (
-    <article data-vesta="server-stat" data-server-panel="play">
-      <h2>{t('server-pack.play-title')}</h2>
-      <Show when={props.snapshot.pack?.hostedRevision}>{(revision) => <p data-vesta="server-muted">{t('server-pack.play-version', { version: revision() })}</p>}</Show>
-      <div data-vesta="server-stat-actions">
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => openServerInstall(props.snapshot.connection.id)}>{t('server-pack.play-create')}</Button>
-        <Button size="sm" variant="outline" icon={<Icon name="icons/content/link" />} onClick={() => setMode('link')}>{t('server-pack.play-link')}</Button>
+    <article data-vesta="server-play" data-server-panel="play">
+      <img src={icon()} alt="" width={36} height={36} draggable="false" />
+      <div data-vesta="server-play-copy">
+        <h2>{t('server-pack.play-title')}</h2>
+        <Show when={props.snapshot.pack?.hostedRevision}>{(revision) => <p>{t('server-pack.play-version', { version: revision() })}</p>}</Show>
+      </div>
+      <div data-vesta="server-play-actions">
+        <Button size="sm" variant="ghost" icon={<Icon name="icons/content/link" />} onClick={() => setMode('link')}>{t('server-pack.play-link')}</Button>
+        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => openServerInstall(id())}>{t('server-pack.play-create')}</Button>
       </div>
       <Show when={mode()} keyed>{(value) => <GetModpackDialog snapshot={props.snapshot} mode={value} onClose={() => setMode(null)} />}</Show>
     </article>
