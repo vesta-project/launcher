@@ -166,9 +166,10 @@ pub struct ClientPackConfig {
 dto!(ServerModpackUnlink {
     remove_owned_files: bool
 });
-dto!(PackInstallProgress { stage: String, completed: usize, total: usize });
+dto!(PackInstallProgress { stage: String, completed: usize, total: usize, bytes_completed: Option<u64> });
 dto!(WorkspaceView {
     install_progress: Option<PackInstallProgress>,
+    install_job: Option<serde_json::Value>,
     server_modpack:Option<ServerModpackLink>,
     client_pack:ClientPackConfig,
     customizing_provider:bool,

@@ -51,6 +51,7 @@ const stageLabel: Record<PackInstallProgress['stage'], MessageId> = {
   metadata: 'server-pack.review-stage-metadata',
   download_verify: 'server-pack.install-planning',
   review: 'server-pack.review-stage-review',
+  writing: 'server-pack.install-planning',
 };
 
 type ReviewOutcome = PackInstallOutcome;
@@ -90,7 +91,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const stopped = () => area.snapshot().status?.state === 'stopped' && !['starting', 'waking'].includes(area.snapshot().status?.lifecycle ?? '');
 
   // While the agent downloads and verifies, show its stage and progress.
-  createEffect(planning, active => {
+  createEffect(() => planning() || stage() === 'install', active => {
     if (!active) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -253,7 +254,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
               <Show when={planning() && !error()}>
                 <Progress size="sm"
                   value={preparation()?.total ? Math.round(preparation()!.completed / preparation()!.total * 100) : undefined}
-                  label={t(preparation() ? stageLabel[preparation()!.stage] : 'server-pack.install-planning') + (preparation()?.total ? ` ${preparation()!.completed}/${preparation()!.total}` : '')} />
+                  label={t(preparation() ? stageLabel[preparation()!.stage] : 'server-pack.install-planning') + (preparation()?.total ? ` ${preparation()!.completed}/${preparation()!.total}` : '') + (preparation()?.bytesCompleted ? ` ? ${(preparation()!.bytesCompleted! / 1048576).toFixed(1)} MB` : '')} />
               </Show>
 <ServerErrorNote error={error()} onRetry={() => void planNow()} />
             </div>

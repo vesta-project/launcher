@@ -127,116 +127,25 @@ impl ThreeWayDiffer {
         new_hash: &Option<String>,
         current: Option<&FileHash>,
     ) {
-        let cur_hash = current.map(|c| &c.hash);
-
-        match (old_mod, new_mod) {
-            // File in both old and new
-            (Some(_old_m), Some(new_m)) => {
-                if let Some(ch) = cur_hash {
-                    if let Some(oh) = old_hash {
-                        if ch.to_lowercase() != oh.to_lowercase() {
-                            // User modified binary → protect
-                            tree.add_action(SyncAction::Skip {
-                                path: display_path.to_string(),
-                                reason: SkipReason::UserModifiedBinary,
-                            });
-                            tree.protected_count += 1;
-                            return;
-                        }
-                    }
-                }
-
-                // Check if update is needed
-                if cur_hash.map(|h| h.to_lowercase()) != new_hash.as_ref().map(|h| h.to_lowercase())
-                {
-                    tree.add_action(SyncAction::Update {
-                        path: display_path.to_string(),
-                        source: mod_source_to_file_source(new_m),
-                        old_hash: old_hash.clone(),
-                        new_hash: new_hash.clone(),
-                    });
-                } else {
-                    tree.add_action(SyncAction::Skip {
-                        path: display_path.to_string(),
-                        reason: SkipReason::AlreadyCurrent,
-                    });
-                }
+        use modpack_engine::Decision;
+        let has_mod = old_mod.is_some() || new_mod.is_some();
+        // Preserve the launcher's existing non-mod binary override handling.
+        if !has_mod && in_old_overrides && in_new_overrides { return; }
+        let old = old_mod.is_some() || (!has_mod && in_old_overrides);
+        let new = new_mod.is_some() || (!has_mod && in_new_overrides);
+        let source = || new_mod.map(mod_source_to_file_source).unwrap_or_else(|| FileSource::ZipOverride { relative_path: display_path.into() });
+        let action = match modpack_engine::decide(false, old, new, old_hash.as_deref(), current.map(|c| c.hash.as_str()), new_hash.as_deref()) {
+            Decision::Add => SyncAction::Add { path: display_path.into(), source: source(), expected_hash: if has_mod {new_hash.clone()} else {None} },
+            Decision::Update => SyncAction::Update { path: display_path.into(), source: source(), old_hash: old_hash.clone(), new_hash: new_hash.clone() },
+            Decision::Remove => SyncAction::Remove { path: display_path.into(), reason: RemoveReason::AuthorRemoved, last_hash: old_hash.clone() },
+            Decision::Current => SyncAction::Skip { path: display_path.into(), reason: SkipReason::AlreadyCurrent },
+            Decision::Protect => {
+                tree.protected_count+=1;
+                SyncAction::Skip { path: display_path.into(), reason: if new_mod.is_some() {SkipReason::UserModifiedBinary} else {SkipReason::UserModified} }
             }
-            // File only in new (add)
-            (None, Some(new_m)) => {
-                tree.add_action(SyncAction::Add {
-                    path: display_path.to_string(),
-                    source: mod_source_to_file_source(new_m),
-                    expected_hash: new_hash.clone(),
-                });
-            }
-            // File only in old (remove)
-            (Some(_old_m), None) => {
-                let should_remove = match cur_hash {
-                    Some(ch) => {
-                        // Only remove if user hasn't modified it
-                        old_hash
-                            .as_ref()
-                            .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase())
-                    }
-                    None => true, // File doesn't exist on disk, nothing to remove
-                };
-
-                if should_remove {
-                    tree.add_action(SyncAction::Remove {
-                        path: display_path.to_string(),
-                        reason: RemoveReason::AuthorRemoved,
-                        last_hash: old_hash.clone(),
-                    });
-                } else {
-                    tree.add_action(SyncAction::Skip {
-                        path: display_path.to_string(),
-                        reason: SkipReason::UserModified,
-                    });
-                    tree.protected_count += 1;
-                }
-            }
-            // File in neither (shouldn't reach here)
-            (None, None) => {}
-        }
-
-        // Mod entries take precedence — overrides are for non-mod paths only.
-        if old_mod.is_some() || new_mod.is_some() {
-            return;
-        }
-
-        // Handle overrides (configs, scripts, etc. that aren't mods)
-        if in_old_overrides && !in_new_overrides {
-            // Override removed — delete if user hasn't modified
-            let should_remove = match cur_hash {
-                Some(ch) => old_hash
-                    .as_ref()
-                    .is_none_or(|oh| ch.to_lowercase() == oh.to_lowercase()),
-                None => true,
-            };
-            if should_remove {
-                tree.add_action(SyncAction::Remove {
-                    path: display_path.to_string(),
-                    reason: RemoveReason::AuthorRemoved,
-                    last_hash: old_hash.clone(),
-                });
-            } else {
-                tree.add_action(SyncAction::Skip {
-                    path: display_path.to_string(),
-                    reason: SkipReason::UserModified,
-                });
-                tree.protected_count += 1;
-            }
-        } else if !in_old_overrides && in_new_overrides {
-            // New override added
-            tree.add_action(SyncAction::Add {
-                path: display_path.to_string(),
-                source: FileSource::ZipOverride {
-                    relative_path: display_path.to_string(),
-                },
-                expected_hash: None,
-            });
-        }
+            _ => return,
+        };
+        tree.add_action(action);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -252,59 +161,14 @@ impl ThreeWayDiffer {
         _new_hash: &Option<String>,
         current: Option<&FileHash>,
     ) {
-        // Text files are always overrides (configs), not mod entries
-        let in_old = in_old_overrides || old_mod.is_some();
-        let in_new = in_new_overrides || new_mod.is_some();
-
-        let cur_hash = current.map(|c| &c.hash);
-
-        match (in_old, in_new) {
-            // In both → try merge
-            (true, true) => {
-                if let Some(ch) = cur_hash {
-                    if let Some(oh) = old_hash {
-                        if ch.to_lowercase() == oh.to_lowercase() {
-                            // User didn't change → just update to new version
-                            tree.add_action(SyncAction::Add {
-                                path: display_path.to_string(),
-                                source: FileSource::ZipOverride {
-                                    relative_path: display_path.to_string(),
-                                },
-                                expected_hash: None,
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                // User may have changed — flag for merge
-                tree.add_action(SyncAction::Merge {
-                    path: display_path.to_string(),
-                    merged_content: String::new(), // Will be resolved in Phase 2
-                    old_hash: old_hash.clone(),
-                    new_hash: None,
-                });
-            }
-            // Only in new
-            (false, true) => {
-                tree.add_action(SyncAction::Add {
-                    path: display_path.to_string(),
-                    source: FileSource::ZipOverride {
-                        relative_path: display_path.to_string(),
-                    },
-                    expected_hash: None,
-                });
-            }
-            // Only in old — author dropped this config from the new pack; keep local copy
-            (true, false) => {
-                tree.add_action(SyncAction::Skip {
-                    path: display_path.to_string(),
-                    reason: SkipReason::NotInNewVersion,
-                });
-                tree.protected_count += 1;
-            }
-            (false, false) => {}
-        }
+        use modpack_engine::Decision;
+        let action = match modpack_engine::decide(true, in_old_overrides || old_mod.is_some(), in_new_overrides || new_mod.is_some(), old_hash.as_deref(), current.map(|c| c.hash.as_str()), None) {
+            Decision::Add => SyncAction::Add { path: display_path.into(), source: FileSource::ZipOverride { relative_path: display_path.into() }, expected_hash: None },
+            Decision::Merge => SyncAction::Merge { path: display_path.into(), merged_content: String::new(), old_hash: old_hash.clone(), new_hash: None },
+            Decision::Keep => { tree.protected_count+=1; SyncAction::Skip {path:display_path.into(), reason:SkipReason::NotInNewVersion} }
+            _ => return,
+        };
+        tree.add_action(action);
     }
 
     /// Detect world save collisions: if a world folder exists in the new manifest

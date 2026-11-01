@@ -97,6 +97,7 @@ fn metadata_from_modrinth(index: ModrinthIndex) -> ModpackMetadata {
     let mods = index
         .files
         .into_iter()
+        .filter(|f| modpack_engine::side_supported(f.env.as_ref().map(|env| env.client.as_str())))
         .map(|f| ModpackMod::Modrinth {
             path: f.path,
             urls: f.downloads,
