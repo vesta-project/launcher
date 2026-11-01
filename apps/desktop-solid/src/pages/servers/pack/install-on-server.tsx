@@ -79,6 +79,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const [backedUp, setBackedUp] = createSignal(false, { name: 'pack-review:backed-up' });
   const [backupFailed, setBackupFailed] = createSignal(false, { name: 'pack-review:backup-failed' });
   const [planning, setPlanning] = createSignal(false, { name: 'pack-review:planning' });
+  const [changesOpen, setChangesOpen] = createSignal(false, { name: 'pack-review:changes-open' });
   const [stage, setStage] = createSignal<'backup' | 'install' | null>(null, { name: 'pack-review:stage' });
   const [preparation, setPreparation] = createSignal<PackInstallProgress | null>(null, { name: 'pack-review:preparation' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'pack-review:error' });
@@ -122,7 +123,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     finally { if (!disposed && request === sequence) setPlanning(false); }
   };
   // Selecting a version reads runtime metadata; archive analysis waits for Install.
-  createEffect(() => sourceKey(source()), () => { setPlan(null); setAcknowledged(false); void planNow(); }, { name: 'pack-review:plan-source' });
+  createEffect(() => sourceKey(source()), () => { setPlan(null); setAcknowledged(false); setChangesOpen(false); void planNow(); }, { name: 'pack-review:plan-source' });
   let softwareRevision: string | undefined;
   createEffect(() => software.value()?.revision, revision => {
     const previous = softwareRevision; softwareRevision = revision;
@@ -277,7 +278,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                 </Show>
                 <Show when={!value().valid}><p data-vesta="server-callout" data-tone="danger" role="alert">{t('server-pack.install-invalid')}</p></Show>
                 <Show when={value().deferred}><p data-vesta="server-muted">{t('server-pack.install-deferred')}</p></Show>
-                <details data-vesta="pack-review-notes" onToggle={(event) => { if (event.currentTarget.open && value().deferred && !busy()) void planNow(true); }}><summary>{t('server-pack.show-changes')}</summary><ChangeSummary automatic={source().source === 'provider'} plan={value()} picks={picks()} disabled={busy()}
+                <details data-vesta="pack-review-notes" open={changesOpen()} onToggle={(event) => { const open = event.currentTarget.open; setChangesOpen(open); if (open && value().deferred && !busy()) void planNow(true); }}><summary>{t('server-pack.show-changes')}</summary><ChangeSummary automatic={source().source === 'provider'} plan={value()} picks={picks()} disabled={busy()}
                   onPick={(path, choice) => setPicks((currentPicks) => ({ ...currentPicks, [path]: choice }))} /></details>
                 <Show when={reviewWarnings(value()).length}>
                   <details data-vesta="pack-review-notes">
