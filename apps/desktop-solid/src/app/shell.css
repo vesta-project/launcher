@@ -15,8 +15,18 @@
     isolation: isolate;
 
     container: app / inline-size;
-    display: flex;
-    flex-direction: column;
+    /*
+     * Rail spine: the rail column runs the full height (its account cell shares the titlebar row)
+     * and the titlebar starts beside it. The rail sets the column width (64px, 52px narrow).
+     */
+    --shell-titlebar-height: 32px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'rail titlebar'
+      'rail notice'
+      'rail scene';
     block-size: 100dvh;
     background: var(--vesta-theme-background, none), var(--vesta-color-canvas-fill, var(--vesta-color-canvas));
   }
@@ -73,15 +83,45 @@
     --rail-bg: transparent;
   }
 
+  /* macOS: the native traffic lights own the top-left corner, so the titlebar keeps the full row. */
+  :where([data-vesta='shell'][data-platform='macos']) {
+    grid-template-areas:
+      'titlebar titlebar'
+      'notice notice'
+      'rail scene';
+  }
+
+  :where([data-vesta='shell']) > :where([data-vesta='titlebar']) {
+    grid-area: titlebar;
+  }
+
+  :where([data-vesta='shell']) > :where([data-vesta='instance-service-error']) {
+    grid-area: notice;
+  }
+
   :where([data-vesta='shell-body']) {
-    display: flex;
-    flex: 1;
-    min-block-size: 0;
+    /* The content sheet's inset in the frame (the board's gutter); the junction fillet follows it. */
+    --shell-sheet-inset: 16px;
+
+    display: contents;
+  }
+
+  :where([data-vesta='shell-body']) > :where([data-vesta='rail']) {
+    grid-area: rail;
+    /* The account cell sits in the titlebar row; it straddles the row's bottom edge, never resized. */
+    --rail-account-top: 6px;
+    /* Where the titlebar's bottom edge meets the rail (the fillet's top). */
+    --rail-junction-top: var(--shell-titlebar-height);
+  }
+
+  :where([data-vesta='shell'][data-platform='macos']) :where([data-vesta='rail']) {
+    --rail-account-top: 12px;
+    --rail-junction-top: 0px;
   }
 
   :where([data-vesta='scene']) {
+    grid-area: scene;
     position: relative;
-    flex: 1;
     min-inline-size: 0;
     min-block-size: 0;
     overflow: hidden;
@@ -89,6 +129,10 @@
   }
 
   @container app (max-width: 640px) {
+    :where([data-vesta='shell-body']) {
+      --shell-sheet-inset: 8px;
+    }
+
     :where([data-vesta='rail']) {
       --rail-width: 52px;
       --rail-button-size: 36px;
