@@ -1202,8 +1202,20 @@
  * States: pack-review-title: data-summary; pack-review-switch: data-acknowledged; pack-review-count: data-kind, aria-expanded
  */
 @layer launcher {
-  :where(.pack-review-dialog) {
+  /* Set on the title too: the inline install panel has no dialog class to carry it. */
+  :where(.pack-review-dialog, [data-vesta="pack-review-title"]) {
     --pack-review-art: 40px;
+  }
+
+  /* The panel head's small-caps label style is for section names, not the pack title. */
+  :where([data-vesta="modpack-panel-head"] h3:has(> [data-vesta="pack-review-title"])) {
+    flex: 1;
+    min-inline-size: 0;
+    padding-block: var(--vesta-space-3);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-md);
+    letter-spacing: normal;
+    text-transform: none;
   }
 
   /* Art on the left; name + source tag over the summary beside it. The close button keeps the
@@ -1218,6 +1230,7 @@
 
   :where([data-vesta="pack-review-title"]) > img {
     grid-row: span 2;
+    max-inline-size: none;
     inline-size: var(--pack-review-art);
     block-size: var(--pack-review-art);
     border-radius: var(--vesta-radius-md);
@@ -1455,3 +1468,55 @@
   }
 }
 
+
+/* ---- Play on this server: one row on Overview and Client pack ----
+ * Hooks: [data-vesta=server-play] -copy -actions
+ */
+@layer launcher {
+  :where([data-vesta="server-play"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta="server-play"]) > img {
+    flex: none;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-md);
+    object-fit: cover;
+  }
+
+  :where([data-vesta="server-play-copy"]) {
+    display: flex;
+    flex: 1 1 160px;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="server-play-copy"]) > h2 {
+    margin: 0;
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="server-play-copy"]) > p {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="server-play-actions"]) {
+    display: flex;
+    flex: none;
+    gap: var(--vesta-space-2);
+    margin-inline-start: auto;
+  }
+}

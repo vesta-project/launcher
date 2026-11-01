@@ -115,7 +115,7 @@ function notice(entry: InstanceEntry) {
 }
 
 /**
- * Compact instance header: art band, identity, facts and actions in one row.
+ * Compact instance header: art band, identity, facts, then status and actions in one row.
  * Navigation captures the whole header so its identity stays with the art.
  */
 export function InstanceHeader(props: {
@@ -167,6 +167,12 @@ export function InstanceHeader(props: {
         </div>
 
         <div data-vesta="instance-header-actions">
+          <Show when={props.entry.state.kind === "running"}>
+            <span data-vesta="instance-header-status" data-tone="success" role="status">
+              <span data-vesta="instance-header-dot" />
+              <span>{t("instance.running")}</span>
+            </span>
+          </Show>
           <IconButton
             variant="ghost"
             label={t("instance.settings")}

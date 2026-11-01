@@ -42,6 +42,10 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
         </div>
       </Show>
 
+      <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
+        <PlayOnServerCard snapshot={props.snapshot} />
+      </Show>
+
       <section data-vesta="server-cards">
         <article data-vesta="server-stat">
           <h2>{t('servers.overview.minecraft')}</h2>
@@ -54,10 +58,6 @@ export function OverviewTab(props: { snapshot: ServerSnapshot }) {
           </Show>
           <Freshness atMs={props.snapshot.statusObservedAtMs} now={now()} phase={props.snapshot.state.phase} />
         </article>
-
-        <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
-          <PlayOnServerCard snapshot={props.snapshot} />
-        </Show>
 
         <Show when={props.snapshot.pack && !offersClientPack(props.snapshot) ? props.snapshot.pack : null}>
           {(pack) => (
