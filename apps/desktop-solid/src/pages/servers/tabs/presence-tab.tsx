@@ -20,7 +20,7 @@ import { AGENT_START_CHOICES, agentStartAllowed, agentStartChoice, liveBlocker, 
 import { Icon } from '../../../components/icon';
 import { MotdEditor } from '../motd-editor';
 import { ServerErrorNote } from '../parts';
-import { SaveBar, SectionLink, SettingsPage, SettingsPanel } from '../settings-parts';
+import { SaveBar, SectionLink, SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
 
 const stateLabels: Record<PresenceState, MessageId> = {
   online: 'servers.presence.state-online', offline: 'servers.presence.state-offline', sleeping: 'servers.presence.state-sleeping',
@@ -143,130 +143,135 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
   };
   const agentStart = () => agentStartChoice(policy(), props.snapshot.status);
 
+  // The server list message sits beside Sleep on wide panes.
+  const statusPanel = () => (
+    <SettingsPanel
+      title={t('servers.presence.status')}
+
+      name="status"
+      action={
+        <Select size="sm" aria-label={t('servers.presence.when')} value={state()} onChange={(value) => { setState(value as PresenceState); setChecked(null); }}
+          options={PRESENCE_STATES.map((entry) => ({ value: entry, label: t('servers.presence.when-state', { name: t(stateLabels[entry]) }) }))} />
+      }
+    >
+      <EditConflictNotice id={id()} resource="motd-policy" show={motdRevision.conflict()} current={motd.value()} onReview={motdRevision.review} />
+      <ServerErrorNote error={motdError() ?? motd.error()} onRetry={() => void motd.refresh()} />
+      <Show when={presentation()} fallback={<Show when={!motd.error()}><Skeleton height={220} radius={0} /></Show>}>
+        {(current) => (
+          <>
+            <MotdEditor
+              id={id()}
+              name={props.snapshot.connection.name}
+              label={t('servers.presence.template')}
+              value={current().template}
+              onChange={(template) => patchState({ template })}
+              formatting
+              placeholders
+              readOnly={!canEdit()}
+              error={problems().length ? problems().map((problem) => t(problemMessages[problem])).join(' ') : undefined}
+              note={checked() ? t('servers.presence.checked') : t('servers.presence.live-motd-note')}
+              players={`0/${current().maximumPlayers ?? 20}`}
+              version={current().versionName}
+              iconPng={current().iconPng ?? document()?.normalIconPng}
+              segments={checked()?.segments}
+              samples={samples()}
+            />
+            <div data-vesta="settings-panel-body">
+              <SettingRow label={t('servers.presence.version-label')} description={t('servers.presence.version-help')}>
+                <TextField size="sm" aria-label={t('servers.presence.version-label')} placeholder={t('servers.presence.version-placeholder')} readOnly={!canEdit()}
+                  value={current().versionName ?? ''} onChange={(value: string) => patchState({ versionName: value || null })} />
+              </SettingRow>
+              <SettingRow label={t('servers.presence.max-players')} description={t('servers.presence.max-players-help')}>
+                <NumberField size="sm" aria-label={t('servers.presence.max-players')} readOnly={!canEdit()} value={current().maximumPlayers ?? 20} min={0} max={100_000}
+                  onChange={(value: number) => patchState({ maximumPlayers: Math.round(value) })} />
+              </SettingRow>
+              <Show when={state() === 'sleeping' || state() === 'waking'}>
+                <SettingRow label={t('servers.presence.login-message')} description={t('servers.presence.login-message-help')}>
+                  <TextField size="sm" aria-label={t('servers.presence.login-message')} readOnly={!canEdit()} value={document()!.loginMessage}
+                    onChange={(value: string) => patchDocument({ loginMessage: value })} />
+                </SettingRow>
+              </Show>
+            </div>
+            <div data-vesta="server-panel-foot">
+              <span>{t('servers.presence.running-note')}</span>
+              <span data-vesta="server-panel-actions">
+                <SectionLink section="game">{t('servers.presence.edit-motd')}</SectionLink>
+                <Button size="sm" variant="outline" disabled={problems().length > 0} onClick={() => void check()}>{t('servers.presence.check')}</Button>
+              </span>
+            </div>
+          </>
+        )}
+      </Show>
+    </SettingsPanel>
+  );
+
   return (
     <SettingsPage saveBar={
       <SaveBar show={dirtyCount() > 0} label={t('server-settings.unsaved', { count: dirtyCount() })} busy={busy()}
         disabled={sleepRevision.conflict() || motdRevision.conflict() || !canEdit() || (motdDirty() && problems().length > 0)} onDiscard={discard} onSave={() => void save()} />
     }>
-      <SettingsPanel title={t('servers.presence.sleep')} name="sleep">
-        <EditConflictNotice id={id()} resource="sleep-policy" show={sleepRevision.conflict()} current={sleep.value()} onReview={sleepRevision.review} />
-        <ServerErrorNote error={sleepError() ?? sleep.error()} onRetry={() => void sleep.refresh()} />
-        <Show when={policy()} fallback={<Show when={!sleep.error()}><Skeleton height={160} radius={0} /></Show>}>
-          {(current) => (
-            <div data-vesta="settings-panel-body">
-              <SettingRow label={t('servers.presence.sleep-enabled')} description={t('servers.presence.sleep-enabled-help')}>
-                <Toggle size="sm" aria-label={t('servers.presence.sleep-enabled')} disabled={!canEdit()} checked={current().enabled} onChange={(value: boolean) => patchSleep({ enabled: value })} />
-              </SettingRow>
-              <Show when={current().enabled}>
-                <div data-vesta="settings-reveal">
-                  <Show when={sleepNow()}>
-                    {(copy) => (
-                      <p data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
-                        <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
-                        <span>{t(copy().message, copy().args)}</span>
-                      </p>
-                    )}
-                  </Show>
-                  <SettingRow label={t('servers.presence.idle')} description={t('servers.presence.idle-help')}>
-                    <NumberField size="sm" aria-label={t('servers.presence.idle')} disabled={!canEdit()} value={minutes()} min={1} max={SLEEP_BOUNDS.idleSeconds[1] / 60}
-                      onChange={(value: number) => patchSleep({ idleSeconds: Math.round(value) * 60 })} />
-                  </SettingRow>
-                  <SettingRow label={t('servers.presence.warning')} description={t('servers.presence.warning-help')}>
-                    <NumberField size="sm" aria-label={t('servers.presence.warning')} disabled={!canEdit()} value={current().warningSeconds} min={SLEEP_BOUNDS.warningSeconds[0]} max={SLEEP_BOUNDS.warningSeconds[1]}
-                      onChange={(value: number) => patchSleep({ warningSeconds: Math.round(value) })} />
-                  </SettingRow>
-                </div>
-              </Show>
-              <SettingRow label={t('servers.presence.offline-status')} description={t('servers.presence.offline-status-help')}>
-                <Toggle size="sm" aria-label={t('servers.presence.offline-status')} disabled={!canEdit()} checked={current().offlineStatus}
-                  onChange={(value: boolean) => patchSleep({
-                    offlineStatus: value, wakeOnJoin: value && current().wakeOnJoin,
-                    // The agent refuses to sleep at startup without the responder.
-                    ...(value || agentStart() !== 'sleep' ? {} : { onAgentStart: 'stay_stopped' as const }),
-                  })} />
-              </SettingRow>
-              <SettingRow label={t('servers.presence.wake')} description={current().offlineStatus ? t('servers.presence.wake-help') : t('servers.presence.wake-needs')}>
-                <Toggle size="sm" aria-label={t('servers.presence.wake')} disabled={!canEdit() || !current().offlineStatus} checked={current().wakeOnJoin}
-                  onChange={(value: boolean) => patchSleep({ wakeOnJoin: value })} />
-              </SettingRow>
-              <Show when={current().wakeOnJoin}>
-                <div data-vesta="settings-reveal">
-                  <SettingRow label={t('servers.presence.cooldown')} description={t('servers.presence.cooldown-help')}>
-                    <NumberField size="sm" aria-label={t('servers.presence.cooldown')} disabled={!canEdit()} value={current().startCooldownSeconds}
-                      min={SLEEP_BOUNDS.startCooldownSeconds[0]} max={SLEEP_BOUNDS.startCooldownSeconds[1]}
-                      onChange={(value: number) => patchSleep({ startCooldownSeconds: Math.round(value) })} />
-                  </SettingRow>
-                </div>
-              </Show>
-              <SettingRow label={t('servers.presence.agent-start')}
-                description={current().offlineStatus ? t('servers.presence.agent-start-help') : `${t('servers.presence.agent-start-help')} ${t('servers.presence.agent-start-sleep-needs')}`}>
-                <Select size="sm" aria-label={t('servers.presence.agent-start')} disabled={!canEdit()} value={agentStart()}
-                  onChange={(value) => { if (value !== agentStart()) patchSleep({ onAgentStart: value as AgentStartChoice }); }}
-                  options={AGENT_START_CHOICES.map((choice) => ({ value: choice, label: t(agentStartLabels[choice]), disabled: !agentStartAllowed(choice, current()) }))} />
-              </SettingRow>
-            </div>
-          )}
-        </Show>
-      </SettingsPanel>
-
-      <SettingsPanel
-        title={t('servers.presence.status')}
-
-        name="status"
-        action={
-          <Select size="sm" aria-label={t('servers.presence.when')} value={state()} onChange={(value) => { setState(value as PresenceState); setChecked(null); }}
-            options={PRESENCE_STATES.map((entry) => ({ value: entry, label: t('servers.presence.when-state', { name: t(stateLabels[entry]) }) }))} />
-        }
-      >
-        <EditConflictNotice id={id()} resource="motd-policy" show={motdRevision.conflict()} current={motd.value()} onReview={motdRevision.review} />
-        <ServerErrorNote error={motdError() ?? motd.error()} onRetry={() => void motd.refresh()} />
-        <Show when={presentation()} fallback={<Show when={!motd.error()}><Skeleton height={220} radius={0} /></Show>}>
-          {(current) => (
-            <>
-              <MotdEditor
-                id={id()}
-                name={props.snapshot.connection.name}
-                label={t('servers.presence.template')}
-                value={current().template}
-                onChange={(template) => patchState({ template })}
-                formatting
-                placeholders
-                readOnly={!canEdit()}
-                error={problems().length ? problems().map((problem) => t(problemMessages[problem])).join(' ') : undefined}
-                note={checked() ? t('servers.presence.checked') : t('servers.presence.live-motd-note')}
-                players={`0/${current().maximumPlayers ?? 20}`}
-                version={current().versionName}
-                iconPng={current().iconPng ?? document()?.normalIconPng}
-                segments={checked()?.segments}
-                samples={samples()}
-              />
+      <SettingsColumns aside={statusPanel()}>
+        <SettingsPanel title={t('servers.presence.sleep')} name="sleep">
+          <EditConflictNotice id={id()} resource="sleep-policy" show={sleepRevision.conflict()} current={sleep.value()} onReview={sleepRevision.review} />
+          <ServerErrorNote error={sleepError() ?? sleep.error()} onRetry={() => void sleep.refresh()} />
+          <Show when={policy()} fallback={<Show when={!sleep.error()}><Skeleton height={160} radius={0} /></Show>}>
+            {(current) => (
               <div data-vesta="settings-panel-body">
-                <SettingRow label={t('servers.presence.version-label')} description={t('servers.presence.version-help')}>
-                  <TextField size="sm" aria-label={t('servers.presence.version-label')} placeholder={t('servers.presence.version-placeholder')} readOnly={!canEdit()}
-                    value={current().versionName ?? ''} onChange={(value: string) => patchState({ versionName: value || null })} />
+                <SettingRow label={t('servers.presence.sleep-enabled')} description={t('servers.presence.sleep-enabled-help')}>
+                  <Toggle size="sm" aria-label={t('servers.presence.sleep-enabled')} disabled={!canEdit()} checked={current().enabled} onChange={(value: boolean) => patchSleep({ enabled: value })} />
                 </SettingRow>
-                <SettingRow label={t('servers.presence.max-players')} description={t('servers.presence.max-players-help')}>
-                  <NumberField size="sm" aria-label={t('servers.presence.max-players')} readOnly={!canEdit()} value={current().maximumPlayers ?? 20} min={0} max={100_000}
-                    onChange={(value: number) => patchState({ maximumPlayers: Math.round(value) })} />
-                </SettingRow>
-                <Show when={state() === 'sleeping' || state() === 'waking'}>
-                  <SettingRow label={t('servers.presence.login-message')} description={t('servers.presence.login-message-help')}>
-                    <TextField size="sm" aria-label={t('servers.presence.login-message')} readOnly={!canEdit()} value={document()!.loginMessage}
-                      onChange={(value: string) => patchDocument({ loginMessage: value })} />
-                  </SettingRow>
+                <Show when={current().enabled}>
+                  <div data-vesta="settings-reveal">
+                    <Show when={sleepNow()}>
+                      {(copy) => (
+                        <p data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
+                          <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
+                          <span>{t(copy().message, copy().args)}</span>
+                        </p>
+                      )}
+                    </Show>
+                    <SettingRow label={t('servers.presence.idle')} description={t('servers.presence.idle-help')}>
+                      <NumberField size="sm" aria-label={t('servers.presence.idle')} disabled={!canEdit()} value={minutes()} min={1} max={SLEEP_BOUNDS.idleSeconds[1] / 60}
+                        onChange={(value: number) => patchSleep({ idleSeconds: Math.round(value) * 60 })} />
+                    </SettingRow>
+                    <SettingRow label={t('servers.presence.warning')} description={t('servers.presence.warning-help')}>
+                      <NumberField size="sm" aria-label={t('servers.presence.warning')} disabled={!canEdit()} value={current().warningSeconds} min={SLEEP_BOUNDS.warningSeconds[0]} max={SLEEP_BOUNDS.warningSeconds[1]}
+                        onChange={(value: number) => patchSleep({ warningSeconds: Math.round(value) })} />
+                    </SettingRow>
+                  </div>
                 </Show>
+                <SettingRow label={t('servers.presence.offline-status')} description={t('servers.presence.offline-status-help')}>
+                  <Toggle size="sm" aria-label={t('servers.presence.offline-status')} disabled={!canEdit()} checked={current().offlineStatus}
+                    onChange={(value: boolean) => patchSleep({
+                      offlineStatus: value, wakeOnJoin: value && current().wakeOnJoin,
+                      // The agent refuses to sleep at startup without the responder.
+                      ...(value || agentStart() !== 'sleep' ? {} : { onAgentStart: 'stay_stopped' as const }),
+                    })} />
+                </SettingRow>
+                <SettingRow label={t('servers.presence.wake')} description={current().offlineStatus ? t('servers.presence.wake-help') : t('servers.presence.wake-needs')}>
+                  <Toggle size="sm" aria-label={t('servers.presence.wake')} disabled={!canEdit() || !current().offlineStatus} checked={current().wakeOnJoin}
+                    onChange={(value: boolean) => patchSleep({ wakeOnJoin: value })} />
+                </SettingRow>
+                <Show when={current().wakeOnJoin}>
+                  <div data-vesta="settings-reveal">
+                    <SettingRow label={t('servers.presence.cooldown')} description={t('servers.presence.cooldown-help')}>
+                      <NumberField size="sm" aria-label={t('servers.presence.cooldown')} disabled={!canEdit()} value={current().startCooldownSeconds}
+                        min={SLEEP_BOUNDS.startCooldownSeconds[0]} max={SLEEP_BOUNDS.startCooldownSeconds[1]}
+                        onChange={(value: number) => patchSleep({ startCooldownSeconds: Math.round(value) })} />
+                    </SettingRow>
+                  </div>
+                </Show>
+                <SettingRow label={t('servers.presence.agent-start')}
+                  description={current().offlineStatus ? t('servers.presence.agent-start-help') : `${t('servers.presence.agent-start-help')} ${t('servers.presence.agent-start-sleep-needs')}`}>
+                  <Select size="sm" aria-label={t('servers.presence.agent-start')} disabled={!canEdit()} value={agentStart()}
+                    onChange={(value) => { if (value !== agentStart()) patchSleep({ onAgentStart: value as AgentStartChoice }); }}
+                    options={AGENT_START_CHOICES.map((choice) => ({ value: choice, label: t(agentStartLabels[choice]), disabled: !agentStartAllowed(choice, current()) }))} />
+                </SettingRow>
               </div>
-              <div data-vesta="server-panel-foot">
-                <span>{t('servers.presence.running-note')}</span>
-                <span data-vesta="server-panel-actions">
-                  <SectionLink section="game">{t('servers.presence.edit-motd')}</SectionLink>
-                  <Button size="sm" variant="outline" disabled={problems().length > 0} onClick={() => void check()}>{t('servers.presence.check')}</Button>
-                </span>
-              </div>
-            </>
-          )}
-        </Show>
-      </SettingsPanel>
+            )}
+          </Show>
+        </SettingsPanel>
+      </SettingsColumns>
     </SettingsPage>
   );
 }

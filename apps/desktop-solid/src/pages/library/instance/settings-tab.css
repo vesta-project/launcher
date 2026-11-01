@@ -95,6 +95,12 @@
     scrollbar-color: var(--vesta-color-border-strong) transparent;
   }
 
+  /* Settings read as one column of label/control rows, however wide the pane. */
+  :where([data-vesta="settings-content"]) > :where([data-vesta="instance-settings-scroll"]) > * {
+    inline-size: 100%;
+    max-inline-size: var(--content-max-width);
+  }
+
   :where([data-vesta="settings-content"]) {
     position: relative;
     display: flex;

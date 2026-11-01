@@ -19,7 +19,7 @@ import { putSnapshot, serverCommand, useServersClock } from '../../../features/s
 import type { PropertyValue, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { MotdEditor } from '../motd-editor';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { SaveBar, SettingsGroup, SettingsPage, SettingsPanel, SettingsSearch } from '../settings-parts';
+import { SaveBar, SettingsColumns, SettingsGroup, SettingsPage, SettingsPanel, SettingsSearch } from '../settings-parts';
 
 const optionLabels: Record<string, MessageId> = {
   peaceful: 'server-settings.option.peaceful', easy: 'server-settings.option.easy', normal: 'server-settings.option.normal', hard: 'server-settings.option.hard',
@@ -220,6 +220,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
         <ServerErrorNote error={error() ?? file.error()} onRetry={() => void file.refresh()} />
 
       <Show when={base()} fallback={<Show when={!file.error()}><For each={[0, 1, 2]}>{() => <Skeleton height={148} radius={10} />}</For></Show>}>
+       <SettingsColumns asideFirst aside={
         <Show when={!searching() || matches(motdDef)}>
           <SettingsPanel title={t('server-settings.motd-title')} name="motd">
             <MotdEditor
@@ -235,6 +236,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
             />
           </SettingsPanel>
         </Show>
+       }>
 
         <For each={propertyGroups}>
           {(group) => (
@@ -282,6 +284,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
             {t('server-settings.unreported', { name: unreportedKeys(base()!).map((key) => t(propertyDef(key)!.label)).join(', ') })}
           </p>
         </Show>
+       </SettingsColumns>
       </Show>
 
       <Dialog open={!!pending()} onOpenChange={(isOpen) => { if (!isOpen) setPending(null); }} closeLabel={t('nav.close')} size="sm"

@@ -24,7 +24,7 @@ import {
   type SoftwareChoice,
 } from '../../../features/servers/software-flow';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
-import { SettingsPage, SettingsPanel } from '../settings-parts';
+import { SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
 import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
 import { CustomJarPanel } from './custom-jar';
@@ -100,6 +100,9 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <Show when={state().recoveryRequired}>
               <p data-vesta="server-callout" data-tone="danger">{t(softwareRestoreKind(state()) === 'launch' ? 'server-hosting.recover-launch-banner' : 'server-hosting.recovery-banner')}</p>
             </Show>
+            <SettingsColumns aside={<Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
+              minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
+              onRefresh={() => void java.refresh()} /></Show>}>
             {/* A custom JAR has no managed family to preselect; it shows as itself until restored. */}
             <Show when={stopped() && launchKind(state()).kind !== 'custom'} fallback={
               <SettingsPanel title={t('server-hosting.software-label')} name="software">
@@ -119,9 +122,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
               <CustomJarPanel snapshot={props.snapshot} state={state()} java={java.value()} jobRunning={busy()} onAccepted={accepted} />
             </Show>
             <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
-            <Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
-              minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
-              onRefresh={() => void java.refresh()} /></Show>
+            </SettingsColumns>
           </>
         )}
       </Show>

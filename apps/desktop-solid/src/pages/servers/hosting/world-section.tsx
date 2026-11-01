@@ -18,7 +18,7 @@ import {
   retainDatapackIntent, settleDatapackIntent, toggleFeedback, toggleRejection, worldSize, type DatapackView, type PendingDatapack, type ToggleFeedback,
 } from '../../../features/servers/world-model';
 import { setting } from '../../../features/settings/config';
-import { copyText, SettingsPage, SettingsPanel } from '../settings-parts';
+import { copyText, SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
 import { HostingError } from './parts';
 import './hosting.css';
 import './world-section.css';
@@ -33,11 +33,10 @@ export function WorldSection(props: { snapshot: ServerSnapshot }) {
       <HostingError error={world.error()} onRetry={() => void world.refresh()} />
       <Show when={world.value()} fallback={<Show when={!world.error()}><Skeleton height={168} radius={12} /><Skeleton height={120} radius={12} /></Show>}>
         {(current) => (
-          <>
+          <SettingsColumns aside={<Datapacks snapshot={props.snapshot} world={current()} onChanged={() => void world.refresh()} />}>
             <WorldHero snapshot={props.snapshot} world={current()} />
             <Dimensions world={current()} />
-            <Datapacks snapshot={props.snapshot} world={current()} onChanged={() => void world.refresh()} />
-          </>
+          </SettingsColumns>
         )}
       </Show>
     </SettingsPage>
