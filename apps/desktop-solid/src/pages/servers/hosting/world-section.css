@@ -195,6 +195,14 @@
 
   /* ---- Datapacks ---- */
   :where([data-vesta="server-world-packs"]) { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+  /* Expanded, a long list scrolls inside the card rather than stretching the page. */
+  :where([data-vesta="server-world-packs"][data-expanded]) { max-block-size: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
+  :where([data-vesta="server-world-packs-more"]) {
+    display: flex;
+    justify-content: center;
+    padding: var(--vesta-space-1) var(--vesta-space-4) var(--vesta-space-2);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
   :where([data-vesta="server-world-pack"]) {
     display: flex;
     align-items: center;
