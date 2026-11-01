@@ -538,6 +538,8 @@ pub fn run(context: tauri::Context) {
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,
             commands::worlds::list_instance_worlds,
+            commands::destinations::list_instance_saved_servers,
+            commands::destinations::instance_direct_launch_support,
             commands::worlds::open_world_folder,
             commands::worlds::delete_world,
             commands::worlds::list_world_datapacks,

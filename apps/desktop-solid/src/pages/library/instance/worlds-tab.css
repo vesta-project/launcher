@@ -146,3 +146,12 @@
     block-size: auto;
   }
 }
+
+@layer launcher {
+  :where([data-vesta="saved-servers"]) { padding: var(--vesta-space-3) var(--instance-gutter); overflow-y: auto; flex-shrink: 0; max-block-size: 45%; }
+  :where([data-vesta="saved-servers"] h3) { font-size: var(--vesta-text-sm); margin: 0; }
+  :where([data-vesta="saved-servers"] p) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="saved-servers"] ul) { padding-inline: 0; }
+  :where([data-vesta="saved-server-copy"]) { display: flex; flex: 1; min-inline-size: 0; flex-direction: column; gap: var(--vesta-space-1); overflow-wrap: anywhere; }
+  :where([data-vesta="saved-server-copy"] > span) { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+}

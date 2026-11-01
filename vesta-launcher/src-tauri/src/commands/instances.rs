@@ -1569,12 +1569,14 @@ pub fn get_instance_by_slug(slug_val: String) -> Result<Instance, String> {
 pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
+    target: Option<piston_lib::game::launcher::LaunchTarget>,
 ) -> Result<(), String> {
     let task_manager = app_handle.state::<crate::tasks::manager::TaskManager>();
     let _play_guard = task_manager
-        .acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(
-            instance_data.id,
-        )])
+        .acquire_conflicts([
+            crate::tasks::manager::instance_play_conflict_key(instance_data.id),
+            crate::tasks::manager::saves_conflict_key(instance_data.id),
+        ])
         .await;
 
     // Reload under launch/update exclusion. Caller snapshots can lag behind an
@@ -1591,6 +1593,18 @@ pub async fn launch_instance(
         return Err(format!("Cannot launch while instance is busy ({})", op));
     }
 
+    let target = target.unwrap_or_default();
+    if target != piston_lib::game::launcher::LaunchTarget::None {
+        if !crate::commands::destinations::direct_launch_supported(&instance_data) {
+            return Err("Direct launch is unsupported for this instance".into());
+        }
+        if let piston_lib::game::launcher::LaunchTarget::World { folder } = &target {
+            crate::worlds::resolve_world_path(&crate::worlds::WorldRef {
+                instance_id: instance_data.id,
+                directory_name: folder.clone(),
+            })?;
+        }
+    }
     let notification_instance_id = instance_data.id;
     app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>()
         .pack_sync_enforce_launch(&app_handle, instance_data.id).await?;
@@ -1675,7 +1689,8 @@ pub async fn launch_instance(
     let prepared_instance_name = prepared.instance_name.clone();
     let launcher_action = prepared.launcher_action;
     let tray_visible = prepared.tray_visible;
-    let launch_spec = prepared.launch_spec;
+    let mut launch_spec = prepared.launch_spec;
+    launch_spec.target = target;
 
     // Log batching setup
     let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();

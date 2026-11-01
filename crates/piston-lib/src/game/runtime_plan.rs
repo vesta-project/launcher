@@ -369,6 +369,7 @@ mod tests {
 
     fn launch_spec(root: PathBuf) -> LaunchSpec {
         LaunchSpec {
+            target: Default::default(),
             instance_id: "test".to_string(),
             version_id: "1.20.1".to_string(),
             modloader: Some(ModloaderType::Fabric),

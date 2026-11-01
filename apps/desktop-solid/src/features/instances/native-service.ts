@@ -165,17 +165,23 @@ export const launchNativeInstance = (id: string) => performNative(id, async (rec
   if (await invoke<boolean>('is_instance_running', { instanceData: record })) return;
   await launchRecord(record);
 });
-async function launchRecord(record: NativeInstance) {
+export type LaunchTarget = { kind: 'world'; folder: string } | { kind: 'server'; host: string; port: number | null };
+export const launchNativeTarget = (id: string, target: LaunchTarget) => performNative(id, async (record) => {
+  if (await invoke<boolean>('is_instance_running', { instanceData: record })) return;
+  await launchRecord(record, target);
+});
+async function launchRecord(record: NativeInstance, target?: LaunchTarget) {
   const account = untrack(activeAccount);
   if (!account || ['guest', 'demo'].includes(account.account_type.toLowerCase())) throw new Error('Sign in with Microsoft to launch an instance.');
   const status = record.installationStatus;
   if (!status || status === 'pending' || status.startsWith('failed') || status === 'interrupted') {
+    if (target) throw new Error('Install or repair this instance before launching a destination.');
     await invoke('resume_instance_operation', { instanceId: record.id });
   } else {
     const slug = instanceSlug(record.name);
     runtimeRevision++;
     setRuntime((current) => ({ ...current, [slug]: 'warming' }));
-    try { await invoke('launch_instance', { instanceData: record }); }
+    try { await invoke('launch_instance', { instanceData: record, target: target ?? null }); }
     finally {
       runtimeRevision++;
       setRuntime((current) => { const next = { ...current }; delete next[slug]; return next; });

@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useNativeDropZone } from '../../../features/file-drop/zone';
 import { importNativePaths } from '../../../features/instances/native-import-dialog';
 import {
@@ -12,9 +13,9 @@ import {
   Select,
   TextField,
 } from "@vesta/ui";
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { worldRouteId, worldTransferNeedsAcknowledgement } from "../../../features/instances/native-details-model";
-import { nativeInstances, nativeRecord, instancePending } from "../../../features/instances/native-service";
+import { nativeInstances, nativeRecord, instancePending, launchNativeTarget, type LaunchTarget } from "../../../features/instances/native-service";
 import { importNativeWorld } from "../../../features/instances/native-import-dialog";
 import { openNativeWorld } from "../../../features/instances/native-details";
 import { navigate, route } from "../../../app/router";
@@ -40,6 +41,16 @@ import "./worlds-tab.css";
 export function WorldsTab(props: { entry: InstanceEntry }) {
   const busy = () => nativeInstances && (instancePending(props.entry.instance.id) || ["running", "warming", "installing"].includes(props.entry.state.kind));
   const id = () => props.entry.instance.id;
+  const [destinations, setDestinations] = createSignal<{ instanceId: string; supported: boolean; servers: { name: string; address: string; icon: string | null; target: LaunchTarget | null }[] }>({ instanceId: "", supported: false, servers: [] }, { name: "worlds.destinations" });
+  createEffect(() => [id(), props.entry.state.kind] as const, ([instanceId]) => {
+    if (!nativeInstances) return;
+    let stale = false;
+    onCleanup(() => { stale = true; });
+    void Promise.all([
+      invoke<boolean>('instance_direct_launch_support', { instanceId: Number(instanceId) }),
+      invoke<ReturnType<typeof destinations>['servers']>('list_instance_saved_servers', { instanceId: Number(instanceId) }),
+    ]).then(([supported, servers]) => { if (!stale) setDestinations({ instanceId, supported, servers }); }).catch(() => { if (!stale) setDestinations({ instanceId, supported: false, servers: [] }); });
+  }, { name: "worlds.loadDestinations" });
   let dropElement: HTMLDivElement | undefined;
   useNativeDropZone({ element: () => dropElement, disabled: busy, drop: (paths) => { void importNativePaths(id(), paths); } });
   const [query, setQuery] = createSignal("");
@@ -199,6 +210,9 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                             {world.lastPlayed}
                             <span>{world.sizeMb} MB</span>
                           </span>
+                          <Show when={(destinations().instanceId === id() && destinations().supported)}>
+                            <Button size="sm" variant="outline" disabled={busy() || world.running} aria-label={t("worlds.play-target", { name: world.name })} onClick={() => void launchNativeTarget(id(), { kind: 'world', folder: world.id })}>{t("worlds.play")}</Button>
+                          </Show>
                           <Menu
                             placement="bottom-end"
                             trigger={(menuProps) => (
@@ -223,6 +237,22 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 </For>
               </ul>
             </Show>
+            <section data-vesta="saved-servers">
+              <h3>{t("worlds.saved-servers")}</h3>
+              <Show when={(destinations().instanceId === id() && destinations().servers.length)} fallback={<p>{t("worlds.no-saved-servers")}</p>}>
+                <ul data-vesta="world-list">
+                  <For each={destinations().instanceId === id() ? destinations().servers : []}>{(server) => (
+                    <li data-vesta="world-row">
+                      <Show when={server.icon} fallback={<Icon name="icons/content/globe" />}><img data-vesta="world-thumb" src={server.icon ?? ''} alt="" loading="lazy" /></Show>
+                      <span data-vesta="saved-server-copy"><strong>{server.name}</strong><span>{server.address}</span></span>
+                      <Show when={(destinations().instanceId === id() && destinations().supported) && server.target}>
+                        <Button size="sm" variant="outline" disabled={busy()} aria-label={t("worlds.play-target", { name: server.name })} onClick={() => { const target = server.target; if (target) void launchNativeTarget(id(), target); }}>{t("worlds.play")}</Button>
+                      </Show>
+                    </li>
+                  )}</For>
+                </ul>
+              </Show>
+            </section>
           </>
         }
       >

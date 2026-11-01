@@ -1,6 +1,6 @@
 /// Argument builder for Minecraft launcher
 use crate::game::installer::types::OsType;
-use crate::game::launcher::types::LaunchSpec;
+use crate::game::launcher::types::{LaunchSpec, LaunchTarget};
 use crate::game::launcher::unified_manifest::UnifiedManifest;
 use crate::game::launcher::version_parser::{Argument, ArgumentValue};
 use dunce::canonicalize;
@@ -399,10 +399,20 @@ fn evaluate_rules(
                                 spec.window_width.is_some() && spec.window_height.is_some();
                             has_res == required
                         }
-                        _ => {
-                            // Unknown features: conservative, do not match
-                            false
+                        "has_quick_play_support" | "has_quick_plays_support" => {
+                            super::targets::supports_quick_play(&spec.version_id, spec.modloader)
+                                == required
                         }
+                        "is_quick_play_singleplayer" => {
+                            matches!(spec.target, LaunchTarget::World { .. }) == required
+                        }
+                        "is_quick_play_multiplayer" => {
+                            matches!(spec.target, LaunchTarget::Server { .. }) == required
+                        }
+                        "is_quick_play_realms" => {
+                            matches!(spec.target, LaunchTarget::Realm { .. }) == required
+                        }
+                        _ => !required,
                     };
 
                     if !satisfied {
@@ -556,6 +566,30 @@ fn build_jvm_variables(
 /// Build game variable map
 fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMap<String, String> {
     let mut vars = HashMap::new();
+    if super::targets::supports_quick_play(&spec.version_id, spec.modloader) {
+        vars.insert(
+            "quickPlayPath".into(),
+            spec.game_dir
+                .join(".vesta/quickplay.json")
+                .to_string_lossy()
+                .into_owned(),
+        );
+    }
+    match &spec.target {
+        LaunchTarget::World { folder } => {
+            vars.insert("quickPlaySingleplayer".into(), folder.clone());
+        }
+        LaunchTarget::Server { host, port } => {
+            vars.insert(
+                "quickPlayMultiplayer".into(),
+                super::targets::server_address(host, *port).unwrap_or_default(),
+            );
+        }
+        LaunchTarget::Realm { id } => {
+            vars.insert("quickPlayRealms".into(), id.clone());
+        }
+        LaunchTarget::None => {}
+    }
 
     // Player info (support multiple common placeholders for compatibility)
     vars.insert("auth_player_name".to_string(), spec.username.clone());
@@ -652,6 +686,7 @@ mod tests {
         game_dir: PathBuf,
     ) -> LaunchSpec {
         LaunchSpec {
+            target: Default::default(),
             instance_id: instance_id.to_string(),
             version_id: version_id.to_string(),
             modloader: None,
@@ -950,5 +985,140 @@ mod tests {
             evaluate_rules(&[windows_rule], OsType::WindowsArm64, &spec),
             "windows rule should match WindowsArm64"
         );
+    }
+    #[test]
+    fn unknown_false_and_last_matching_rule() {
+        use crate::game::launcher::version_parser::{Rule, RuleAction};
+        let spec = temp_launch_spec("i", "1.21");
+        let make = |feature: &str, required, action| Rule {
+            action,
+            os: None,
+            features: Some(HashMap::from([(feature.into(), Some(required))])),
+        };
+        assert!(evaluate_rules(
+            &[make("future_feature", false, RuleAction::Allow)],
+            OsType::current(),
+            &spec
+        ));
+        assert!(!evaluate_rules(
+            &[make("future_feature", true, RuleAction::Allow)],
+            OsType::current(),
+            &spec
+        ));
+        assert!(!evaluate_rules(
+            &[
+                make("future_feature", false, RuleAction::Allow),
+                make("future_feature", false, RuleAction::Disallow)
+            ],
+            OsType::current(),
+            &spec
+        ));
+    }
+
+    #[test]
+    fn quick_play_feature_values_and_exclusivity() {
+        use crate::game::launcher::version_parser::{Rule, RuleAction};
+        let mut spec = temp_launch_spec("i", "1.21");
+        for target in [
+            LaunchTarget::None,
+            LaunchTarget::World {
+                folder: "My World".into(),
+            },
+            LaunchTarget::Server {
+                host: "localhost".into(),
+                port: None,
+            },
+            LaunchTarget::Realm { id: "123".into() },
+        ] {
+            spec.target = target;
+            for (feature, actual) in [
+                ("has_quick_play_support", true),
+                ("has_quick_plays_support", true),
+                (
+                    "is_quick_play_singleplayer",
+                    matches!(spec.target, LaunchTarget::World { .. }),
+                ),
+                (
+                    "is_quick_play_multiplayer",
+                    matches!(spec.target, LaunchTarget::Server { .. }),
+                ),
+                (
+                    "is_quick_play_realms",
+                    matches!(spec.target, LaunchTarget::Realm { .. }),
+                ),
+            ] {
+                for required in [true, false] {
+                    let rule = Rule {
+                        action: RuleAction::Allow,
+                        os: None,
+                        features: Some(HashMap::from([(feature.into(), Some(required))])),
+                    };
+                    assert_eq!(
+                        evaluate_rules(&[rule], OsType::current(), &spec),
+                        actual == required,
+                        "{feature}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn quick_play_merged_manifests_and_conflicts() {
+        use super::super::targets::{parse_server_address, validate_target};
+        use crate::game::metadata::ModloaderType;
+        let vanilla: VersionManifest =
+            serde_json::from_str(include_str!("../../test_fixtures/quickplay-1.21.json")).unwrap();
+        let fabric: VersionManifest = serde_json::from_str(include_str!(
+            "../../test_fixtures/quickplay-fabric-1.21.json"
+        ))
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("saves/My World")).unwrap();
+        std::fs::write(dir.path().join("saves/My World/level.dat"), []).unwrap();
+        for loader in [None, Some(ModloaderType::Fabric)] {
+            let manifest = UnifiedManifest::merge(
+                vanilla.clone(),
+                loader.map(|_| fabric.clone()),
+                OsType::current(),
+            );
+            let mut spec = test_launch_spec("i", "1.21", dir.path().into(), dir.path().into());
+            spec.modloader = loader;
+            for target in [
+                LaunchTarget::None,
+                LaunchTarget::World {
+                    folder: "My World".into(),
+                },
+                parse_server_address("[::1]:25566").unwrap(),
+                LaunchTarget::Realm { id: "1234".into() },
+            ] {
+                spec.target = target;
+                validate_target(&spec, &manifest).unwrap();
+                let args = build_game_arguments(&spec, &manifest, OsType::current());
+                assert_eq!(
+                    args.iter()
+                        .filter(|a| a.as_str() == "--quickPlayPath")
+                        .count(),
+                    1
+                );
+                if matches!(spec.target, LaunchTarget::World { .. }) {
+                    assert!(args.contains(&"My World".into()));
+                }
+            }
+            spec.game_args = vec!["--server".into(), "wrong.example".into()];
+            assert!(validate_target(&spec, &manifest).is_err());
+            spec.game_args.clear();
+            spec.target = LaunchTarget::World {
+                folder: "../outside".into(),
+            };
+            assert!(validate_target(&spec, &manifest).is_err());
+            spec.target = LaunchTarget::World {
+                folder: "missing".into(),
+            };
+            assert!(validate_target(&spec, &manifest).is_err());
+            spec.target = parse_server_address("example.org").unwrap();
+            spec.game_args = vec!["--quickPlayMultiplayer".into(), "wrong.example".into()];
+            assert!(validate_target(&spec, &manifest).is_err());
+        }
     }
 }

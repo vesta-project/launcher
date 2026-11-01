@@ -35,3 +35,5 @@ pub mod author_themes;
 
 pub mod servers_pack;
 pub mod servers_pack_sync;
+
+pub mod destinations;
