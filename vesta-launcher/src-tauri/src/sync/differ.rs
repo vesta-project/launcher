@@ -129,8 +129,6 @@ impl ThreeWayDiffer {
     ) {
         use modpack_engine::Decision;
         let has_mod = old_mod.is_some() || new_mod.is_some();
-        // Preserve the launcher's existing non-mod binary override handling.
-        if !has_mod && in_old_overrides && in_new_overrides { return; }
         let old = old_mod.is_some() || (!has_mod && in_old_overrides);
         let new = new_mod.is_some() || (!has_mod && in_new_overrides);
         let source = || new_mod.map(mod_source_to_file_source).unwrap_or_else(|| FileSource::ZipOverride { relative_path: display_path.into() });
@@ -198,7 +196,7 @@ impl ThreeWayDiffer {
             let lower = n_path.to_lowercase();
             if let Some(Some(expected_old_hash)) = old_level_dats.get(&lower) {
                 if let Some(current_fh) = current_hashes.get(&lower) {
-                    if current_fh.hash.to_lowercase() != expected_old_hash.to_lowercase() {
+                    if modpack_engine::world::needs_rotation(Some(expected_old_hash), Some(&current_fh.hash)) {
                         let Some(world_folder) = world_folder_from_level_dat(n_path) else {
                             continue;
                         };
@@ -289,10 +287,7 @@ fn build_quarantine_path(world_folder: &str) -> String {
     let now = chrono::Utc::now();
     let timestamp = now.format("%Y%m%d_%H%M").to_string();
 
-    let parts: Vec<&str> = world_folder.split('/').collect();
-    let world_name = parts.last().copied().unwrap_or("world");
-
-    format!("saves/{}_{}", world_name, timestamp)
+    modpack_engine::world::quarantine_path(world_folder, &timestamp)
 }
 
 #[cfg(test)]

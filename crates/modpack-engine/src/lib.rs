@@ -44,3 +44,6 @@ mod tests {
         assert_eq!(override_roots(true),["overrides","server-overrides"]);
     }
 }
+
+pub mod merger;
+pub mod world;
