@@ -266,7 +266,7 @@ export interface ConsolePage extends Page<ConsoleLine> {
 
 export type PlayersView =
   | { known: false }
-  | { known: true; generation: string; playerCount: number; names: string[] };
+  | { known: true; generation: string; playerCount: number; revision?: string; names: string[] };
 
 export interface WhitelistEntry { name: string; uuid: string }
 export interface OperatorEntry { name: string; uuid: string; level: number; bypassesPlayerLimit: boolean }
@@ -308,6 +308,8 @@ export type ServerTopic = 'status' | 'console' | 'metrics' | 'operations';
 /** Batched delivery on a subscription channel. */
 export type ServerEvent =
   | { kind: 'playerListsChanged' }
+  | { kind: 'resourcesChanged'; resources: Record<string, import('./resources').ResourceEditor> }
+  | { kind: 'playersDelta'; delta: import('./roster-delta').RosterDelta }
   | { kind: 'snapshot'; snapshot: ServerSnapshot }
   | { kind: 'console'; lines: ConsoleLine[] }
   | { kind: 'consoleHistory'; lines: ConsoleLine[] }

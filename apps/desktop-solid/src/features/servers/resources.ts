@@ -172,6 +172,7 @@ export function invalidateServerResources(id: ConnectionId, names?: readonly str
 
 /** Called by the store for removed connections, including list reconciliation. */
 export function releaseServerResources(id: ConnectionId) {
+  editors.delete(id);
   for (const [key, entry] of knownKeys) if (entry.id === id) serverResourceCache.delete(key);
   versions.delete(id);
   pressures.delete(id);
@@ -294,4 +295,15 @@ export function useServerResource<T, A = undefined>(
     refreshing: () => !!snapshot()?.refreshing,
     refresh: () => run(untrack(key), true),
   };
+}
+
+export interface ResourceEditor { display_name: string; at_ms: number; revision: string }
+const editors = keyedSignal<Record<string, ResourceEditor>>('server-resources:editors', {});
+export const resourceEditor = (id: ConnectionId, name: string) => editors.get(id)[name];
+/** Replay/reconnect hints are compared per resource; no invalidation for duplicates. */
+export function applyResourceChanges(id: ConnectionId, changes: Record<string, ResourceEditor>) {
+  const previous = untrack(() => editors.get(id));
+  const names = Object.keys(changes).filter(name => changes[name].revision !== previous[name]?.revision);
+  editors.set(id, { ...previous, ...changes });
+  if (names.length) invalidateServerResources(id, names);
 }

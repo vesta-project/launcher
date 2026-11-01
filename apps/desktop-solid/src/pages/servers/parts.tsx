@@ -1,3 +1,4 @@
+import { editorWhen } from './edit-conflict';
 import { Metadata } from '../../components/metadata';
 import './servers.css';
 import { Badge, Button, toast } from '@vesta/ui';
@@ -88,7 +89,7 @@ export function ServerErrorNote(props: {
               <Show when={error().issue}>{issue => <code data-vesta="server-error-file">{issue().code}: {issue().rule}: {issue().item}</code>}</Show>
               <Show when={error().code === 'conflict' && error().current}>
                 <details open>
-                  <summary>{t('servers.conflict.review')}</summary>
+                  <summary>{t('servers.conflict.review', { name: String((error().current as { editor?: { display_name?: string } })?.editor?.display_name ?? t('servers.conflict.unknown-editor')), when: editorWhen((error().current as { editor?: { at_ms?: number } })?.editor?.at_ms) })}</summary>
                   <pre>{JSON.stringify(error().current, null, 2)}</pre>
                 </details>
               </Show>

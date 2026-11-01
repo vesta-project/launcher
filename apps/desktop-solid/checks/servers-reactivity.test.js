@@ -159,7 +159,7 @@ async function buildHarness() {
         export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
         export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations } from ${JSON.stringify(storePath)};
-        export { serverResource, readServerResource } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
+        export { serverResource, readServerResource, useServerResource, applyResourceChanges, resourceEditor } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
         import { counts } from ${JSON.stringify(servicePath)};
         export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};
         export { captureArtifact, expectNoDiagnostics };
@@ -350,4 +350,35 @@ test('read polling recovers from transient failure and honors cooldown without h
     }, { scenario: 'server-read-transient-recovery' });
     check.expectNoDiagnostics(artifact);
   } finally { globalThis.setTimeout = originalSet; globalThis.clearTimeout = originalClear; }
+});
+
+
+test('resource change hints refresh mounted reads once, preserving local drafts until explicit review', async () => {
+  const check = await harness();
+  const { EditRevision } = await import('../src/features/servers/edit-revision.ts');
+  const { artifact } = await check.captureArtifact(async () => {
+    let reads = 0;
+    let saved = { revision: '1', name: 'Old', description: 'Old description' };
+    const id = 'live-resource-changes';
+    const def = check.serverResource('branding', async () => { reads++; return saved; });
+    const owner = check.createRoot(dispose => ({ dispose, resource: check.useServerResource(() => id, def) }));
+    const settle = async () => { for (let i = 0; i < 10; i++) { await Promise.resolve(); check.flush(); } };
+    try {
+      check.flush(); await settle();
+      const guard = new EditRevision(); guard.begin('1');
+      const draft = { name: 'My draft' };
+      saved = { revision: '2', name: 'Other admin', description: 'New description' };
+      const changes = { branding: { revision: '7', display_name: 'Another admin', at_ms: 100 } };
+      check.applyResourceChanges(id, changes); check.flush(); await settle();
+      expect(reads).toBe(2);
+      const current = check.untrack(owner.resource.value);
+      expect({ ...current, ...draft }).toMatchObject({ name: 'My draft', description: 'New description' });
+      expect(guard.conflicts(current.revision)).toBe(true);
+      expect(check.untrack(() => check.resourceEditor(id, 'branding'))).toEqual(changes.branding);
+      check.applyResourceChanges(id, changes); check.flush(); await settle();
+      expect(reads).toBe(2);
+      guard.review(current.revision); expect(guard.conflicts(current.revision)).toBe(false);
+    } finally { owner.dispose(); await check.removeServer(id); }
+  }, { scenario: 'cross-admin-live-resource-refresh' });
+  check.expectNoDiagnostics(artifact);
 });

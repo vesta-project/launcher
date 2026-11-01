@@ -1,3 +1,4 @@
+import { EditConflictNotice, useEditRevision } from '../edit-conflict';
 import { Button, Switch, Skeleton, TextArea, TextField, toast } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import { SettingRow } from '../../../components/setting-row';
@@ -22,6 +23,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
   const eula = useServerResource(id, eulaResource);
   const branding = useServerResource(id, brandingResource);
+  const editRevision = useEditRevision(() => branding.value()?.revision);
   // Null drafts read through to the saved profile.
   const [nameDraft, setNameDraft] = createSignal<string | null>(null, { name: 'server-profile:name' });
   const [descriptionDraft, setDescriptionDraft] = createSignal<string | null>(null, { name: 'server-profile:description' });
@@ -35,7 +37,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
 
   const name = () => nameDraft() ?? branding.value()?.name ?? '';
   const description = () => descriptionDraft() ?? branding.value()?.description ?? '';
-  const discard = () => { setNameDraft(null); setDescriptionDraft(null); };
+  const discard = () => { editRevision.reset(); setError(null); setNameDraft(null); setDescriptionDraft(null); };
 
   const patch = () => {
     const current = branding.value();
@@ -52,7 +54,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   const save = async () => {
     const current = branding.value();
     const changes = patch();
-    if (!current || !Object.keys(changes).length) return;
+    if (!current || !Object.keys(changes).length || editRevision.conflict()) return;
     const intentId = textIntents.idFor({ changes, revision: current.revision });
     setBusy(true); setError(null);
     try {
@@ -113,7 +115,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
   return (
     <SettingsPage saveBar={
       <SaveBar show={changeCount() > 0} label={t('server-settings.unsaved', { count: changeCount() })} busy={busy()}
-        disabled={!canEdit() || !!nameProblem() || !!descriptionProblem()} onDiscard={discard} onSave={() => void save()} />
+        disabled={editRevision.conflict() || !canEdit() || !!nameProblem() || !!descriptionProblem()} onDiscard={discard} onSave={() => void save()} />
     }>
       <SettingsPanel title={t('servers.profile.title')} name="profile">
         <SettingRow label={t('servers.eula.title')} description={t('servers.eula.setting-description')}>
@@ -121,6 +123,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
         </SettingRow>
         <ServerErrorNote error={eula.error()} onRetry={() => void eula.refresh()} />
 
+        <EditConflictNotice id={id()} resource="branding" show={editRevision.conflict()} current={branding.value()} onReview={editRevision.review} />
         <ServerErrorNote error={error() ?? branding.error()} onRetry={() => void branding.refresh()} />
         <Show when={branding.value()} fallback={<Show when={!branding.error()}><Skeleton height={180} radius={0} /></Show>}>
           <div data-vesta="settings-panel-body" data-server-profile>
@@ -134,7 +137,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
               </Show>
             </SettingRow>
             <SettingRow label={t('servers.profile.name')} description={t('servers.profile.name-description')}>
-              <TextField size="sm" aria-label={t('servers.profile.name')} value={name()} disabled={!canEdit()} error={nameProblem()} onChange={setNameDraft} />
+              <TextField size="sm" aria-label={t('servers.profile.name')} value={name()} disabled={!canEdit()} error={nameProblem()} onChange={value => { editRevision.begin(); setNameDraft(value); }} />
             </SettingRow>
             <div data-vesta="server-setting-block">
               <div data-vesta="setting-row-copy">
@@ -142,7 +145,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
                 <span data-vesta="setting-row-description">{t('servers.profile.description-help')}</span>
               </div>
               <TextArea size="sm" aria-label={t('servers.profile.description')} value={description()} rows={3}
-                disabled={!canEdit()} error={descriptionProblem()} onChange={setDescriptionDraft} />
+                disabled={!canEdit()} error={descriptionProblem()} onChange={value => { editRevision.begin(); setDescriptionDraft(value); }} />
             </div>
           </div>
         </Show>

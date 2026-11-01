@@ -969,6 +969,7 @@ impl Client {
                 .as_u64()
                 .ok_or_else(|| Error::new(ErrorCode::Unsupported))?
                 as u32,
+            revision: v["revision"].as_str().map(str::to_owned),
             names: v["items"]
                 .as_array()
                 .ok_or_else(|| Error::new(ErrorCode::Unsupported))?

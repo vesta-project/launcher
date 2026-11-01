@@ -17,6 +17,7 @@ impl Drop for SocketTask {
 #[derive(Debug)]
 enum StreamMessage {
     Console(Value),
+    Update(Value),
     History {
         page: ConsolePage,
         discontinuity: bool,
@@ -93,7 +94,7 @@ impl ServerManager {
         };
         let _ = self.refresh(&app, &id, false).await;
         self.resume_operations(&app, &id).await;
-        let (send, mut recv) = mpsc::channel(8);
+        let (send, mut recv) = mpsc::channel(128);
         let (latest, mut metrics) = watch::channel::<Option<Value>>(None);
         let (latest_status, mut status_stream) = watch::channel::<Option<Value>>(None);
         let overflow = Arc::new(AtomicBool::new(false));
@@ -188,7 +189,26 @@ impl ServerManager {
                     overflow.clone(),
                 ));
             }
+            if overflow.swap(false, Ordering::Relaxed) {
+                players_revision=None; players_generation=None;
+                client.transport.invalidate_reads();
+                self.deliver(&id,ServerTopic::Status,ServerEvent::Resync{topic:ServerTopic::Status});
+            }
             while let Ok(message) = recv.try_recv() {
+                if let StreamMessage::Update(value)=&message {
+                    if value["type"]=="resources.changed" {
+                        client.transport.invalidate_reads();
+                        self.deliver(&id,ServerTopic::Status,ServerEvent::ResourcesChanged{resources:value["resources"].clone()});
+                    } else if value["type"]=="players.delta" {
+                        let delta=&value["data"];
+                        let applied=self.slot(&id).ok().is_some_and(|slot| slot.players.lock().ok().is_some_and(|mut cached| cached.as_mut().is_some_and(|r|r.apply_delta(delta))));
+                        if applied {
+                            players_revision=delta["revision"].as_str().map(str::to_owned);
+                            players_count=self.slot(&id).ok().and_then(|slot|slot.players.lock().ok().and_then(|c|match c.as_ref(){Some(PlayersView::Known{player_count,..})=>Some(*player_count),_=>None}));
+                            self.deliver(&id,ServerTopic::Status,ServerEvent::PlayersDelta{delta:delta.clone()});
+                        } else {players_generation=None;players_revision=None;players_retry=Instant::now();}
+                    }
+                }
                 if let StreamMessage::Ended(topic, error) = message {
                     let code = error.as_ref().map(|e| e.code);
                     if let Some(error) = error.as_ref() {
@@ -434,6 +454,10 @@ fn spawn_socket(
                                 if let Ok(value) = serde_json::from_str::<Value>(text) {
                                     if topic == ServerTopic::Console {
                                         if sender.try_send(StreamMessage::Console(value)).is_err() {
+                                            overflow.store(true, Ordering::Relaxed);
+                                        }
+                                    } else if matches!(value["type"].as_str(), Some("resources.changed" | "players.delta")) {
+                                        if sender.try_send(StreamMessage::Update(value)).is_err() {
                                             overflow.store(true, Ordering::Relaxed);
                                         }
                                     } else if matches!(

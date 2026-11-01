@@ -1,3 +1,5 @@
+import { refreshUnedited } from '../../../features/servers/edit-revision';
+import { EditConflictNotice, useEditRevision } from '../edit-conflict';
 import { Badge, Button, NumberField, SegmentedControl, Skeleton, TextArea, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
@@ -277,11 +279,41 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
   const connection = stableConnectionId(() => props.snapshot);
   const config = useServerResource(connection, backupConfigResource);
   const base = createMemo(() => { const value = config.value(); return value ? editDraft(value) : null; }, { name: 'server-backup-config:base' });
-  const [rows, setRows] = createSignal<Row[] | null>(null, { name: 'server-backup-config:rows' });
+  const [rows, rawSetRows] = createSignal<Row[] | null>(null, { name: 'server-backup-config:rows' });
+  const editRevision = useEditRevision(() => config.value()?.revision);
+  let originalRows: Row[] | null = null;
+  const setRows = (next: Row[] | null) => {
+    if (next) {
+      if (!originalRows) originalRows = [...untrack(baseRows)];
+      const shown = untrack(current), stored = untrack(rows);
+      next = next.map(row => {
+        const visible = shown.find(entry => entry.key === row.key);
+        const raw = stored?.find(entry => entry.key === row.key);
+        const saved = untrack(baseRows).find(entry => entry.key === row.key);
+        if (visible && saved && !originalRows!.some(entry => entry.key === row.key)) originalRows!.push(saved);
+        return visible && raw ? refreshUnedited(visible, row, raw) : row;
+      });
+      editRevision.begin();
+    }
+    else { originalRows = null; editRevision.reset(); }
+    rawSetRows(next);
+  };
   const [open, setOpen] = createSignal<number | null>(null, { name: 'server-backup-config:open' });
   const saver = useConfigSave(() => props.snapshot, () => config.value(), () => config.refresh());
   const baseRows = createMemo(() => base()?.profiles.map(toRow) ?? [], { name: 'server-backup-config:base-rows' });
-  const current = () => rows() ?? baseRows();
+  const current = () => {
+    const draft = rows();
+    if (!draft || !originalRows) return baseRows();
+    const latest = baseRows();
+    const merged = draft.flatMap(row => {
+      const original = originalRows!.find(entry => entry.key === row.key);
+      if (!original) return [row];
+      const saved = latest.find(entry => entry.profile.name === original.profile.name);
+      if (!saved) return JSON.stringify(row) === JSON.stringify(original) ? [] : [row];
+      return [{ ...refreshUnedited(original, row, saved), key: row.key }];
+    });
+    return [...merged, ...latest.filter(row => !originalRows!.some(entry => entry.profile.name === row.profile.name) && !merged.some(entry => entry.profile.name === row.profile.name))];
+  };
   const profiles = () => current().map(fromRow);
   const savedNames = () => new Set(base()?.profiles.map((profile) => profile.name) ?? []);
   const diff = createMemo(() => draftDiff(base()?.profiles ?? [], profiles()), { name: 'server-backup-config:diff' });
@@ -298,7 +330,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
   const discard = () => { setRows(null); setOpen(null); };
   const save = async () => {
     const value = base();
-    if (!value || !valid()) return;
+    if (!value || !valid() || editRevision.conflict()) return;
     if (await saver.save({ ...value, profiles: profiles() })) {
       toast.show({ title: t('servers.backup-setup.saved'), tone: 'success' });
       setRows(null); setOpen(null);
@@ -326,6 +358,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
       </header>
       <div data-vesta="settings-panel-body">
         <ServerErrorNote error={saver.error() ?? config.error()} onRetry={() => void config.refresh()} />
+        <EditConflictNotice id={connection()} resource="backup-config" show={editRevision.conflict()} current={config.value()} onReview={editRevision.review} />
         <Show when={saver.stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('servers.backup-setup.stale')}</p></Show>
         <Show when={saver.uncertain()}>
           <div data-vesta="server-callout" data-tone="warning" role="status">
@@ -383,7 +416,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
           <div data-vesta="backup-form-actions"><StorageNote configuration={config.value()!} /></div>
         </Show>
       </div>
-      <SaveBar show={count() > 0 || saver.uncertain()} label={t('servers.backup-setup.unsaved', { count: count() })} busy={saver.saving()} disabled={!valid()}
+      <SaveBar show={count() > 0 || saver.uncertain()} label={t('servers.backup-setup.unsaved', { count: count() })} busy={saver.saving()} disabled={editRevision.conflict() || !valid()}
         onDiscard={discard} onSave={() => void save()} />
     </section>
   );
