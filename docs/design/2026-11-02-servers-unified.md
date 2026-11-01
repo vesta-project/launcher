@@ -101,3 +101,14 @@ Never show "Vesta server" / "Modrinth server" / "Linked server" as kinds. Show t
 - Ping cost when many servers are listed: limit concurrency, refresh only what's visible, and cache.
 - Should importing `servers.dat` entries into Servers be automatic for servers joined two or more times? Proposal: suggest, don't auto-add.
 - Are there pack sources where the server and pack drift? Example: a Modrinth project version updated while the server lags. Proposal: the server's pinned version wins. For non-Vesta servers, the owner can't sign one, so the user confirms.
+
+## Decision (after Sol's review, 2026-11-02)
+
+We accept the review's changes (docs/design/2026-11-02-servers-unified-review.md):
+- **The instance is the launch context.** Worlds & servers lists that instance's destinations, using `servers.dat` read-only at first.
+- **The server record is an optional shared identity.** It carries separate endpoints, pack authority and management connections.
+- **Instance choice is explicit and remembered** per server and Minecraft account. It's never inferred from compatibility.
+- **Modrinth packs are advisory pins** set by the user. They don't follow the latest version.
+- **Migration keeps connection trust.** Connection IDs, keychain entries, fingerprints, roles and pack bindings carry over. Removal semantics are as defined in the review.
+- **Offline play:** the existing signed-pack launch gate stays in force, and a separate policy for local play comes later.
+- **Slice 1:** world/server launch targets in piston-lib; Saved servers shown read-only beside the existing Worlds; Play on each row. A recent list ships only once the Quick Play log's behaviour is verified. Everything is built on `list_instance_worlds`.
