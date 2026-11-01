@@ -1,5 +1,10 @@
 /** Keep this list in sync with the English Fluent catalogs. */
 export const messageIds = [
+  "servers.access.bulk-invite",
+  "servers.access.max-uses",
+  "servers.access.invite-many",
+  "servers.access.sync-whitelist",
+  "servers.access.sync-whitelist-help",
   "servers.people.previous-page",
   "servers.people.next-page",
   "servers.people.preview-limit",

@@ -610,7 +610,7 @@ impl Store {
             if before.server_id != after.server_id || before.fingerprint != after.fingerprint {
                 return Err(Error::new(ErrorCode::FingerprintMismatch));
             }
-            if !before.memory_only {
+            if !before.memory_only && old.key_reference != record.key_reference {
                 if self.pending_credential_deletions.len() >= 256 { return Err(Error::new(ErrorCode::ServerBusy)); }
                 self.pending_credential_deletions.push(old.key_reference.clone());
             }

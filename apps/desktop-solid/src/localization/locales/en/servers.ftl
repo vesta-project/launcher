@@ -555,7 +555,7 @@ servers-access-expires-in = { $count ->
     [one] Expires in { $count } minute
    *[other] Expires in { $count } minutes
   }
-servers-access-invite-role-help = One person, one use. Roles below your own.
+servers-access-invite-role-help = Choose a role below your own.
 servers-access-invite-once = Send this to the person you're inviting. It's shown only once and works once.
 servers-access-pairing-link = Pairing link
 servers-access-invitation-for = Invitation for { $name }
@@ -869,3 +869,10 @@ servers-cause-tls-unavailable = The server certificate could not be loaded; ask 
 servers-cause-build-settings = The pack build limits are invalid; ask the owner to repair them.
 servers-cause-build-input = The pack build inputs are invalid or inconsistent; check the pack files and try again.
 servers-cause-build-unavailable = The pack build could not finish; ask the owner to check its files and storage and try again.
+
+servers-access-bulk-invite = Bulk invite
+servers-access-max-uses = Maximum uses (optional)
+servers-access-invite-many = Share this invitation with multiple people until it expires or reaches its use limit.
+
+servers-access-sync-whitelist = Add Vesta players to the Minecraft whitelist
+servers-access-sync-whitelist-help = When the whitelist is enabled, add Microsoft accounts with play access and remove automatic entries when access is revoked. Banned players stay blocked.

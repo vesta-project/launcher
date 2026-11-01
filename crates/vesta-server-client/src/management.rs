@@ -79,6 +79,7 @@ dto!(AccessSources {
     new_user: String,
     whitelist: String,
     whitelist_enabled: bool,
+    sync_whitelist: Option<bool>,
     password: String,
     version: String
 });
@@ -93,6 +94,7 @@ pub struct AccessPatch {
     pub whitelist: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub whitelist_enabled: Option<bool>,
+    pub sync_whitelist: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
 }
@@ -108,6 +110,9 @@ impl AccessPatch {
             if let Some(text) = field {
                 value[key] = json!(text);
             }
+        }
+        if let Some(enabled) = self.sync_whitelist {
+            value["sync_whitelist"] = json!(enabled);
         }
         if let Some(enabled) = self.whitelist_enabled {
             value["whitelist_enabled"] = json!(enabled);
@@ -666,11 +671,27 @@ impl Client {
         expires_minutes: u16,
         intent: &str,
     ) -> Result<IssuedInvitation> {
+        self.invitation_create_bulk(role, expires_minutes, intent, false, None)
+            .await
+    }
+    pub async fn invitation_create_bulk(
+        &self,
+        role: &str,
+        expires_minutes: u16,
+        intent: &str,
+        multi_use: bool,
+        max_uses: Option<u32>,
+    ) -> Result<IssuedInvitation> {
+        let mut body = json!({"role":role,"expires_minutes":expires_minutes});
+        if multi_use {
+            body["multi_use"] = json!(true);
+            body["max_uses"] = json!(max_uses);
+        }
         let value = self
             .management_mutate(
                 Method::POST,
                 "invitations",
-                Some(json!({"role":role,"expires_minutes":expires_minutes})),
+                Some(body),
                 intent,
                 "invitations.create",
             )

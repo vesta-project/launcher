@@ -412,6 +412,13 @@ impl ServerManager {
                 return Err(Error::new(ErrorCode::ServerBusy));
             }
         }
+        if let Some(id) = &discovery.existing_connection_id {
+            let record = self.record(id).await?;
+            let reference = record.key_reference.clone();
+            let signer = self.client(id).await?.device_signer();
+            let memory = record.snapshot.connection.memory_only;
+            return Ok((discovery, transport, reference, signer, memory));
+        }
         let reference = new_id();
         let r = reference.clone();
         let credentials = self.credentials.clone();
@@ -539,8 +546,10 @@ impl ServerManager {
             .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
         let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
         let contact = self.contacts.lock().await.remove(discovery_id);
-        let e = match Client::pair_named(&t, &d.server_id, code, s.as_ref(), &local_device_name())
-            .await
+        let result = if let Some(id) = &d.existing_connection_id {
+            self.client(id).await?.redeem_pairing(code, &local_device_name()).await
+        } else { Client::pair_named(&t, &d.server_id, code, s.as_ref(), &local_device_name()).await };
+        let e = match result
         {
             Ok(e) => e,
             Err(e) => {
@@ -548,7 +557,7 @@ impl ServerManager {
                     e.code,
                     ErrorCode::PairOutcomeUnknown | ErrorCode::FingerprintMismatch
                 ) {
-                    self.discard_unredeemed(&r, m).await;
+                    if d.existing_connection_id.is_none() { self.discard_unredeemed(&r, m).await; }
                 }
                 if matches!(
                     e.code,
