@@ -1,0 +1,188 @@
+/*
+ * The splash logo and its first-load intro (driven by welcome-intro.ts).
+ *
+ * Hooks:  [data-vesta=welcome-logo] (data-layered while the intro's V layer exists), -logo-image,
+ *         -logo-mark (the V, drawn again on its own), -logo-ember (the warm point the V grows from);
+ *         [data-vesta=welcome-splash][data-intro=playing | settled]
+ * Knobs:  --welcome-logo-width; --welcome-intro-dx/-dy (set by script: logo centre to window centre)
+ *
+ * Sequence (1.7s, transform / opacity / clip-path / mask only, laid out in its final place):
+ *   0.00s  the room fades up; an ember glows where the V's two strokes meet
+ *   0.12s  the V opens out of that point, a widening wedge that follows the letter's own angle
+ *   0.42s  E S T A are drawn in left to right behind a soft edge, ending on the A (the V turned over)
+ *   0.88s  the logo, held large at the window's centre, glides up into its spot on the splash
+ *          and the tagline, actions, titlebar and telemetry rise in behind it from 1.18s
+ * Any key or click fast-forwards; reduced motion never starts it.
+ */
+@layer launcher {
+  [data-vesta='welcome-logo'] {
+    --welcome-logo-width: clamp(240px, 46vh, 380px);
+
+    position: relative;
+    isolation: isolate;
+    inline-size: min(var(--welcome-logo-width), 100%);
+    margin: 0;
+    line-height: 0;
+    animation: welcome-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  [data-vesta='welcome-logo'] img {
+    display: block;
+    inline-size: 100%;
+    block-size: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* The V sits left of 21.5%, the E starts after it; the split runs through empty space. */
+  [data-vesta='welcome-logo'][data-layered] > [data-vesta='welcome-logo-image'] {
+    clip-path: inset(0 0 0 21.5%);
+  }
+
+  [data-vesta='welcome-logo-mark'] {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    inline-size: 21.5%;
+    overflow: clip;
+  }
+
+  [data-vesta='welcome-logo'] [data-vesta='welcome-logo-mark'] img {
+    inline-size: calc(100% / 0.215);
+    max-inline-size: none;
+  }
+
+  [data-vesta='welcome-logo-ember'] {
+    position: absolute;
+    z-index: -1;
+    left: 10.4%;
+    top: 84%;
+    inline-size: 26%;
+    aspect-ratio: 1;
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in oklab, var(--vesta-color-warning) 70%, transparent),
+      color-mix(in oklab, var(--vesta-color-warning) 22%, transparent) 50%,
+      transparent
+    );
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ---- Playing ---- */
+
+  [data-intro='playing'] [data-vesta='welcome-logo'] {
+    animation: welcome-intro-settle 1.7s both;
+  }
+
+  [data-intro='playing'] [data-vesta='welcome-logo-ember'] {
+    animation: welcome-intro-ember 1s cubic-bezier(0.3, 0, 0.2, 1) both;
+  }
+
+  [data-intro='playing'] [data-vesta='welcome-logo-mark'] {
+    animation: welcome-intro-kindle 0.65s cubic-bezier(0.33, 0, 0.2, 1) 0.12s both;
+  }
+
+  [data-intro='playing'] [data-vesta='welcome-logo-image'] {
+    mask-image: linear-gradient(90deg, var(--vesta-color-text) 40%, transparent 60%);
+    mask-size: 300% 100%;
+    mask-repeat: no-repeat;
+    animation: welcome-intro-draw 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.42s both;
+  }
+
+  [data-intro='playing'] :is([data-vesta='welcome-tagline'], [data-vesta='welcome-splash-actions']) {
+    pointer-events: none;
+    animation: welcome-intro-content 0.45s cubic-bezier(0.22, 1, 0.36, 1) 1.18s both;
+  }
+
+  [data-intro='playing'] [data-vesta='welcome-splash-actions'] {
+    animation-delay: 1.24s;
+  }
+
+  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='playing'])
+    :is([data-vesta='welcome-bar'], [data-vesta='welcome-telemetry']) {
+    pointer-events: none;
+    animation: welcome-intro-content 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.3s both;
+  }
+
+  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='playing']) [data-vesta='welcome-atmosphere'] {
+    animation: welcome-intro-room 1.3s ease-out both;
+  }
+
+  /* The step's own slide-in would move the logo while it is being measured and settled. */
+  [data-vesta='welcome-step']:has([data-vesta='welcome-splash'][data-intro]),
+  /* Settled: hold the final state; swapping back to the usual entrances would replay them. */
+  [data-intro='settled'] :is([data-vesta='welcome-logo'], [data-vesta='welcome-tagline'], [data-vesta='welcome-splash-actions']),
+  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='settled']) [data-vesta='welcome-telemetry'] {
+    animation: none;
+  }
+
+  @keyframes welcome-intro-settle {
+    0% {
+      transform: translate(var(--welcome-intro-dx, 0px), var(--welcome-intro-dy, 0px)) scale(1.24);
+      animation-timing-function: linear;
+    }
+    52% {
+      transform: translate(var(--welcome-intro-dx, 0px), var(--welcome-intro-dy, 0px)) scale(1.2);
+      animation-timing-function: cubic-bezier(0.55, 0, 0.15, 1);
+    }
+    100% {
+      transform: translate(0px, 0px) scale(1);
+    }
+  }
+
+  @keyframes welcome-intro-ember {
+    0% {
+      opacity: 0;
+      transform: scale(0.35);
+    }
+    32% {
+      opacity: 0.9;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.8);
+    }
+  }
+
+  /* A wedge from the V's point (48% 88% of the V layer) opening up and out. */
+  @keyframes welcome-intro-kindle {
+    from {
+      clip-path: polygon(48% 88%, 48% 88%, 48% 88%);
+    }
+    to {
+      clip-path: polygon(48% 135%, -125% -45%, 225% -45%);
+    }
+  }
+
+  @keyframes welcome-intro-draw {
+    from {
+      mask-position: 100% 0;
+      transform: translateX(-1.5%);
+    }
+    to {
+      mask-position: 0% 0;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes welcome-intro-content {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes welcome-intro-room {
+    from {
+      opacity: 0;
+    }
+  }
+}

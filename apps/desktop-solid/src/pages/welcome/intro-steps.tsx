@@ -4,14 +4,22 @@ import { Icon } from '../../components/icon';
 import { openExternal } from '../../features/links/external-links';
 import { firstInstance, onboarding } from '../../features/onboarding';
 import { t } from '../../localization';
+import { createWelcomeIntro } from './welcome-intro';
+import { WelcomeLogo } from './welcome-logo';
 
 const PRIVACY_POLICY_URL = 'https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md';
 
-/** Step 1: the name, one line, and the way in. Guests can look around without signing in. */
-export function SplashStep() {
+/**
+ * Step 1: the name, one line, and the way in. Guests can look around without signing in.
+ * The first splash of a visit plays the logo intro (welcome-intro.ts); claimIntro hands it out once.
+ */
+export function SplashStep(props: { claimIntro: () => boolean }) {
+  // Claimed once per mount, untracked: coming back to the splash later never replays it.
+  const play = props.claimIntro();
+  const intro = createWelcomeIntro(play);
   return (
-    <div data-vesta="welcome-splash">
-      <h1 data-vesta="welcome-wordmark">Vesta</h1>
+    <div data-vesta="welcome-splash" data-intro={intro.phase()}>
+      <WelcomeLogo intro={play} ref={intro.ref} />
       <p data-vesta="welcome-tagline">{t('welcome.tagline')}</p>
       <div data-vesta="welcome-splash-actions">
         <Button

@@ -1,5 +1,5 @@
 import { Select, TooltipHints } from '@vesta/ui';
-import { For, Match, Show, Switch, createMemo } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, untrack } from 'solid-js';
 import { detectPlatform } from '../../app/platform';
 import { WindowControls } from '../../app/titlebar';
 import { ExternalLinkDialog } from '../../features/links/external-link-dialog';
@@ -18,7 +18,9 @@ import { AuthStep } from './auth-step';
 import { FirstInstanceStep } from './first-instance-step';
 import { CompleteStep, CreditsStep, SplashStep, TelemetryToggle } from './intro-steps';
 import { ThemeStep } from './theme-step';
+import { createIntroClaim, reducedMotion } from './welcome-intro';
 import './welcome.css';
+import './welcome-intro.css';
 
 const platform = detectPlatform();
 
@@ -43,6 +45,8 @@ const languages = () => [
 export function WelcomePage() {
   const position = createMemo(() => counted.indexOf(onboarding.step()), { name: 'welcomePosition' });
   // The intro keeps its full atmosphere; once a theme is chosen the backdrop calms down.
+  // Opening straight onto the splash plays the logo intro once; reduced motion skips it.
+  const claimIntro = createIntroClaim(untrack(() => onboarding.step() === 'splash' && !reducedMotion()));
   const calm = () => ['theme', 'first-instance', 'complete'].includes(onboarding.step());
 
   return (
@@ -93,7 +97,7 @@ export function WelcomePage() {
               <div data-vesta="welcome-step" data-direction={onboarding.direction() > 0 ? 'forward' : 'back'}>
                 <Switch>
                   <Match when={step === 'splash'}>
-                    <SplashStep />
+                    <SplashStep claimIntro={claimIntro} />
                   </Match>
                   <Match when={step === 'credits'}>
                     <CreditsStep />
