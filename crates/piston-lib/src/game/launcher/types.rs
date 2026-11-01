@@ -14,9 +14,27 @@ pub enum SandboxCommandPlacement {
     GameAndHooks,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum LaunchTarget {
+    #[default]
+    None,
+    World {
+        folder: String,
+    },
+    Server {
+        host: String,
+        port: Option<u16>,
+    },
+    Realm {
+        id: String,
+    },
+}
+
 /// Specification for launching a game instance
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LaunchSpec {
+    pub target: LaunchTarget,
     /// Unique identifier for this instance
     pub instance_id: String,
 
@@ -257,6 +275,7 @@ mod tests {
     #[test]
     fn launchspec_installed_id_vanilla() {
         let spec = LaunchSpec {
+            target: Default::default(),
             instance_id: "x".to_string(),
             version_id: "1.20.1".to_string(),
             modloader: None,
@@ -294,6 +313,7 @@ mod tests {
     #[test]
     fn launchspec_installed_id_modloader() {
         let spec = LaunchSpec {
+            target: Default::default(),
             instance_id: "x".to_string(),
             version_id: "1.20.1".to_string(),
             modloader: Some(crate::game::metadata::ModloaderType::Forge),

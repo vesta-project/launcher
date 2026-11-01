@@ -469,6 +469,7 @@ pub(crate) async fn prepare_instance_launch(
     }
 
     let launch_spec = piston_lib::game::launcher::LaunchSpec {
+        target: Default::default(),
         instance_id: instance_id.clone(),
         version_id: instance_data.minecraft_version.clone(),
         modloader: modloader_type,

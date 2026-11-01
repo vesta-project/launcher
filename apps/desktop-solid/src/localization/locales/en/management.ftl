@@ -97,3 +97,8 @@ software-hint-folia = Multithreaded Paper
 software-hint-purpur = Paper with extras
 software-hint-bukkit = Plugins, built locally
 software-hint-spigot = Plugins, built locally
+
+worlds-play = Play
+worlds-play-target = Play { $name }
+worlds-saved-servers = Saved servers
+worlds-no-saved-servers = No saved servers in this instance.

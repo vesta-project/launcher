@@ -22,9 +22,11 @@ pub use registry::{
     unregister_instance,
 };
 pub use types::{
-    GameInstance, InstanceState, LaunchResult, LaunchSpec, ProcessHandle, SandboxCommandPlacement,
+    GameInstance, InstanceState, LaunchResult, LaunchSpec, LaunchTarget, ProcessHandle, SandboxCommandPlacement,
 };
 pub use version_parser::{
     get_asset_index, get_main_class, parse_version_json, resolve_version_chain, Argument,
     Arguments, Library, VersionManifest,
 };
+
+pub mod targets;

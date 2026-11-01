@@ -67,3 +67,16 @@ test('direct-launch shortcuts start an idle instance but never stop an already r
   expect(await service.runInstance('1')).toBe(true);
   expect(service.calls.filter(call => call.command === 'kill_instance')).toHaveLength(1);
 });
+
+test('destination launch preserves the instance and target and never kills a running game', async () => {
+  const service = await nativeHarness();
+  const target = { kind: 'world', folder: 'My World' };
+  service.setRunning(false);
+  expect(await service.launchNativeTarget('1', target)).toBe(true);
+  const launch = service.calls.find(call => call.command === 'launch_instance');
+  expect(launch.args.instanceData.id).toBe(1);
+  expect(launch.args.target).toEqual(target);
+  service.setRunning(true);
+  await service.launchNativeTarget('1', { kind: 'server', host: '::1', port: 25566 });
+  expect(service.calls.some(call => ['launch_instance', 'kill_instance', 'resume_instance_operation'].includes(call.command))).toBe(false);
+});

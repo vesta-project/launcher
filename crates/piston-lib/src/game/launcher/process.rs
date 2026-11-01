@@ -200,6 +200,12 @@ pub async fn launch_prepared_game(
     );
 
     let manifest = plan.manifest;
+    super::targets::validate_target(&spec, &manifest)?;
+    if super::arguments::build_game_arguments(&spec, &manifest, os)
+        .iter().any(|arg| arg == "--quickPlayPath")
+    {
+        super::targets::prepare_quick_play_log(&spec)?;
+    }
 
     // 2. Verify Java installation. Sandboxed launches have already validated
     // Java during host launch preparation; executing `java -version` here would
