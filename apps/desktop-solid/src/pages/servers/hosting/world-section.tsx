@@ -18,7 +18,7 @@ import {
   retainDatapackIntent, settleDatapackIntent, toggleFeedback, toggleRejection, worldSize, type DatapackView, type PendingDatapack, type ToggleFeedback,
 } from '../../../features/servers/world-model';
 import { setting } from '../../../features/settings/config';
-import { copyText, SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
+import { copyText, SettingsPage, SettingsPanel } from '../settings-parts';
 import { HostingError } from './parts';
 import './hosting.css';
 import './world-section.css';
@@ -33,10 +33,12 @@ export function WorldSection(props: { snapshot: ServerSnapshot }) {
       <HostingError error={world.error()} onRetry={() => void world.refresh()} />
       <Show when={world.value()} fallback={<Show when={!world.error()}><Skeleton height={168} radius={12} /><Skeleton height={120} radius={12} /></Show>}>
         {(current) => (
-          <SettingsColumns aside={<Datapacks snapshot={props.snapshot} world={current()} onChanged={() => void world.refresh()} />}>
+          // One column: a datapack list can be long, so it lives inline with a bounded preview.
+          <>
             <WorldHero snapshot={props.snapshot} world={current()} />
+            <Datapacks snapshot={props.snapshot} world={current()} onChanged={() => void world.refresh()} />
             <Dimensions world={current()} />
-          </SettingsColumns>
+          </>
         )}
       </Show>
     </SettingsPage>
@@ -155,6 +157,9 @@ function Dimensions(props: { world: ServerWorld }) {
   );
 }
 
+/** Datapacks listed before "Show all"; the expanded list scrolls within a bounded height. */
+const DATAPACK_PREVIEW = 6;
+
 /**
  * The world's datapacks. Switching one sends Minecraft's own `datapack` command, so it only
  * works while the game runs; the list reads the world's last save and catches up after it.
@@ -248,17 +253,19 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
   };
 
   const openFolder = () => transitionTo(`/servers/${id()}/files/${encodeURIComponent(props.world.name)}/datapacks`);
+  const [expanded, setExpanded] = createSignal(false, { name: 'server-world:datapacks-expanded' });
+  const shownPacks = createMemo(() => (expanded() ? views() : views().slice(0, DATAPACK_PREVIEW)), { name: 'server-world:shown-datapacks' });
 
   return (
-    <SettingsPanel title={t('server-world.datapacks')} name="world-datapacks"
+    <SettingsPanel title={views().length ? t('server-world.datapacks-count', { count: views().length }) : t('server-world.datapacks')} name="world-datapacks"
       description={!stopped() && props.world.datapackStateSource === 'saved_level_dat' ? t('server-world.datapacks-saved-help') : undefined}
       action={<Button size="sm" variant="ghost" icon={<Icon name="icons/content/folder" />} onClick={openFolder}>{t('server-world.open-datapacks')}</Button>}>
       <Show when={views().length} fallback={
         <EmptyState variant="inline" icon="icons/content/layers" title={t('server-world.no-datapacks')} description={t('server-world.no-datapacks-help')} />
       }>
         <Show when={blocker()}>{(message) => <p data-vesta="server-world-note" data-server-world-blocker><Icon name="icons/status/info" size={13} />{t(message())}</p>}</Show>
-        <ul data-vesta="server-world-packs">
-          <For each={views()} keyed={(pack) => pack.id}>
+        <ul data-vesta="server-world-packs" data-expanded={expanded() ? '' : undefined}>
+          <For each={shownPacks()} keyed={(pack) => pack.id}>
             {(pack) => {
               const state = () => feedback(pack());
               return (
@@ -287,6 +294,14 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
             }}
           </For>
         </ul>
+        <Show when={views().length > DATAPACK_PREVIEW}>
+          <div data-vesta="server-world-packs-more">
+            <Button size="sm" variant="ghost" aria-expanded={expanded() ? 'true' : 'false'} onClick={() => setExpanded((value) => !value)}
+              iconEnd={<Icon name={expanded() ? 'icons/navigation/chevron-up' : 'icons/navigation/chevron-down'} size={14} />}>
+              {expanded() ? t('server-world.datapacks-show-fewer') : t('server-world.datapacks-show-all', { count: views().length })}
+            </Button>
+          </div>
+        </Show>
       </Show>
     </SettingsPanel>
   );

@@ -8,7 +8,7 @@ import {
   accessFact, age, connectionFact, consoleLineProblem, formatUptime, isPlayerName, lifecycleControls, minecraftFact, playersFact, statusDot,
 } from '../src/features/servers/model';
 import { busyIntent, isTerminal, mergeOperations, operationStateMessage } from '../src/features/servers/operations-model';
-import { IntentMemo, minecraftFactNow, outcomeUncertain } from '../src/features/servers/model';
+import { IntentMemo, lastSeenAt, minecraftFactNow, outcomeUncertain } from '../src/features/servers/model';
 
 const FP = 'a3f19c0d7be24e86c5d9017f3a6b28e4c90d5f17e2b8a4c6d3e0f9b7a1c5e823';
 const status = (patch = {}) => ({
@@ -311,5 +311,19 @@ describe('[state] last-known Minecraft state while disconnected', () => {
     const offline = snapshot({ state: { phase: 'backoff', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: 'unreachable' }, statusObservedAtMs: 0 });
     expect(minecraftFactNow(offline, 120_000)).toMatchObject({ message: 'servers.minecraft.ready', tone: 'neutral', seen: { message: 'servers.age.minutes', count: 2 } });
     expect(minecraftFactNow(snapshot({ statusObservedAtMs: 115_000 }), 120_000).seen).toBeUndefined();
+  });
+
+  test('a stopped server behind a reachable agent is Stopped, not stale', () => {
+    const stopped = snapshot({ status: { ...snapshot().status, state: 'stopped', lifecycle: 'offline', readiness: 'not_ready', generation: null }, statusObservedAtMs: 0 });
+    expect(minecraftFactNow(stopped, 3 * 60_000)).toEqual({ tone: 'neutral', message: 'servers.minecraft.stopped' });
+    expect(statusDot(stopped)).toBe('stopped');
+  });
+
+  test('any later agent response counts as seen', () => {
+    const offline = snapshot({ state: { phase: 'unreachable', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: 'unreachable' }, statusObservedAtMs: 0 });
+    expect(minecraftFactNow(offline, 200_000, 190_000).seen).toEqual({ message: 'servers.age.seconds', count: 10 });
+    expect(minecraftFactNow(offline, 200_000, null).seen).toEqual({ message: 'servers.age.minutes', count: 3 });
+    expect(lastSeenAt({ statusObservedAtMs: 50 }, 10)).toBe(50);
+    expect(lastSeenAt({ statusObservedAtMs: null }, 10)).toBe(10);
   });
 });

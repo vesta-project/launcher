@@ -8,6 +8,7 @@ import { toServerError } from './errors';
 import { isTerminal, mergeOperations } from './operations-model';
 import { applyResourceChanges, invalidateServerResources, releaseServerResources } from './resources';
 import { serversApi, type ServersApi } from './service';
+import { forgetServerContact, withContact } from './contact';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
 /** One lazily created signal per connection id. */
@@ -139,6 +140,7 @@ function forget(id: ConnectionId) {
   players.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
+  forgetServerContact(id);
 }
 
 export function putOperations(id: ConnectionId, incoming: readonly ServerOperation[]) {
@@ -157,7 +159,8 @@ export function putOperations(id: ConnectionId, incoming: readonly ServerOperati
 }
 
 let api: ServersApi | undefined;
-const ready = () => (api ? Promise.resolve(api) : serversApi().then((resolved) => (api = resolved)));
+const knownServer = (id: string) => untrack(order).includes(id);
+const ready = () => (api ? Promise.resolve(api) : serversApi().then((resolved) => (api = withContact(resolved, knownServer))));
 
 /** Run a command, normalizing rejections into the closed error model. */
 export async function serverCommand<T>(run: (api: ServersApi) => Promise<T>): Promise<T> {

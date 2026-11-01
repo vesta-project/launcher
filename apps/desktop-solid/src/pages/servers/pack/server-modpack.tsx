@@ -4,7 +4,8 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
 import { projectPath, sourceById } from '../../../features/browse/browse-model';
-import { loadProjects, loadVersions, peekProject, peekVersions } from '../../../features/browse/browse-projects';
+import { loadProjects, loadVersions, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { navigate } from '../../../app/router';
 import { gate } from '../../../features/servers/capabilities';
 import { baseName, contentName, isModpackOwned, providerLookups } from '../../../features/servers/content-model';
 import { IntentMemo, lifecycleControls } from '../../../features/servers/model';
@@ -195,7 +196,8 @@ const OWNED_TILES = 8;
 
 /**
  * The resources the link installed, as a two-column grid of icon and name; the rest is one
- * "+N more" tile. Resources lists them all under the modpack's group.
+ * "+N more" tile. Resources lists them all under the modpack's group. Each tile opens what
+ * its Resources row opens: the project page when the provider is known, else Resources.
  */
 function OwnedPanel() {
   const area = useModpackArea();
@@ -221,14 +223,32 @@ function OwnedPanel() {
             {(item) => {
               const project = () => (item.entry?.provider ? peekProject(item.entry!.provider!.provider, item.entry!.provider!.projectId) : undefined);
               const name = () => (item.entry ? contentName(item.entry!, project()) : baseName(item.path.split('/').at(-1)!));
+              const link = () => (item.entry?.provider ? projectPath(item.entry.provider.provider, item.entry.provider.projectId) : undefined);
+              const prefetch = () => { const provider = item.entry?.provider; if (provider) prefetchProject(provider.provider, provider.projectId); };
+              const art = () => (
+                <Show when={project()?.icon_url} fallback={
+                  <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item.kind]} size={14} /></span>
+                }>
+                  {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
+                </Show>
+              );
               return (
-                <li data-vesta="modpack-owned-item" title={item.path}>
-                  <Show when={project()?.icon_url} fallback={
-                    <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item.kind]} size={14} /></span>
+                <li title={item.path}>
+                  <Show when={link()} fallback={
+                    <button type="button" data-vesta="modpack-owned-item" onClick={openResources}>{art()}<span data-vesta="modpack-owned-name">{name()}</span></button>
                   }>
-                    {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
+                    {(path) => (
+                      <a data-vesta="modpack-owned-item" href={`#${path()}`} onPointerEnter={prefetch} onFocusIn={prefetch}
+                        onClick={(event) => {
+                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          event.preventDefault();
+                          navigate(path());
+                        }}>
+                        {art()}
+                        <span data-vesta="modpack-owned-name">{name()}</span>
+                      </a>
+                    )}
                   </Show>
-                  <span data-vesta="modpack-owned-name">{name()}</span>
                 </li>
               );
             }}

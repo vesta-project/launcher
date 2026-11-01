@@ -580,9 +580,11 @@
   :where([data-server-settings] [data-vesta="instance-settings-nav"]) > :where([data-vesta="button"]) { margin-block-end: 0; }
   :where([data-server-settings] [data-vesta="prefs-nav-item"][data-offline]:not([aria-current])) { opacity: 0.55; }
   :where([data-server-settings] [data-vesta="settings-content"]) > :where(.instance-pane) { flex: 1; }
-  :where([data-server-settings-narrow]) { display: none; }
+  /* The compact section switcher stands in for the section list, only once that list is hidden.
+     Not :where(): the shared pane-toolbar rule would otherwise win by source order. */
+  [data-server-settings] [data-server-settings-narrow] { display: none; }
   @container app (max-width: 959px) {
-    :where([data-server-settings-narrow]) { display: flex; }
+    [data-server-settings] [data-server-settings-narrow] { display: flex; }
   }
 
   /* One calm placeholder in a pane while the agent can't be reached. */

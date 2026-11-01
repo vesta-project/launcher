@@ -4,7 +4,7 @@
 import type { MessageId } from '../../localization/messages';
 import { backupsTabVisible } from './backup-setup-model';
 import { anyVisible, gate, roleKey } from './capabilities';
-import { connectionFact, lifecycleControls, readinessReasonMessage, supervisorWarnings } from './model';
+import { age, connectionFact, lastSeenAt, lifecycleControls, readinessReasonMessage, supervisorWarnings } from './model';
 import { modpackPath, modpackSection } from './modpack-area-model';
 import type { ServerErrorCode, ServerSnapshot } from './native';
 
@@ -194,6 +194,8 @@ export interface HeaderNotice {
   tone: 'danger' | 'warning' | 'neutral';
   title: { message: MessageId; args?: Record<string, string | number> };
   text?: { message: MessageId; args?: Record<string, string | number> };
+  /** When the agent was last seen, appended as "Last seen … ago". */
+  seen?: { message: MessageId; count: number };
   /** Inline action the strip offers. */
   action?: 'retry' | 'restart';
 }
@@ -201,9 +203,12 @@ export interface HeaderNotice {
 /**
  * The single most important thing to say under the header, in priority order:
  * Minecraft can't run, the agent can't be reached, the server asked us to slow down,
- * Minecraft is degraded, control is limited, then a pending restart.
+ * Minecraft is degraded, control is limited, then a pending restart. A first or quiet
+ * reconnect (`connecting`) is said by the lifecycle button alone.
  */
-export function headerNotice(snapshot: ServerSnapshot, nowMs: number, pressure: Pressure | null = null): HeaderNotice | null {
+export function headerNotice(
+  snapshot: ServerSnapshot, nowMs: number, pressure: Pressure | null = null, contactAtMs: number | null = null,
+): HeaderNotice | null {
   const status = snapshot.status;
   const online = snapshot.state.phase === 'online';
   if (online && (status?.lifecycle === 'crash_loop' || status?.supervisor?.crashLoop)) {
@@ -212,14 +217,17 @@ export function headerNotice(snapshot: ServerSnapshot, nowMs: number, pressure: 
   if (online && status?.lifecycle === 'recovery_required') {
     return { kind: 'recovery', tone: 'danger', title: { message: 'servers.minecraft.recovery-required' }, text: { message: 'servers.notice.recovery' } };
   }
+  if (snapshot.state.phase === 'connecting') return null;
   if (!online) {
     const fact = connectionFact(snapshot, nowMs);
+    const seenAt = lastSeenAt(snapshot, contactAtMs);
+    const known = !!status || !!snapshot.publicLifecycle;
     return {
       kind: 'connection',
-      tone: snapshot.state.phase === 'connecting' ? 'neutral' : 'warning',
+      tone: 'warning',
       title: { message: fact.message, args: fact.args },
-      text: { message: status ? 'servers.notice.last-known' : 'servers.notice.no-state' },
-      action: snapshot.state.phase === 'connecting' ? undefined : 'retry',
+      ...(seenAt !== null ? { seen: age(seenAt, nowMs) } : { text: { message: known ? 'servers.notice.last-known' : 'servers.notice.no-state' } }),
+      action: 'retry',
     };
   }
   const limitedUntil = Math.max(snapshot.state.rateLimitedUntilMs ?? 0, pressure?.untilMs ?? 0);

@@ -159,12 +159,15 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
           onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
           options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
         />
-        <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
-        <Show when={moderate() || operator()}>
-          <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
-            {t('servers.people.add')}
-          </Button>
-        </Show>
+        {/* Search and Add player travel together, so a wrap never strands the button on its own row. */}
+        <div data-vesta="server-settings-bar-end">
+          <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
+          <Show when={moderate() || operator()}>
+            <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
+              {t('servers.people.add')}
+            </Button>
+          </Show>
+        </div>
       </div>
       <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
