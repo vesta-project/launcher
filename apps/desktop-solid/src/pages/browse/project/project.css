@@ -627,19 +627,20 @@
   }
 
   /*
-   * Description and version page: text beside a column of facts. The text column is capped, not
-   * the grid, so at wide widths the facts stay beside the text (left-aligned with the header and
-   * tabs) instead of drifting into the middle of the free space.
+   * Description and version page: text beside a column of facts. The grid spans the page so the
+   * facts align with the header actions and Install-to control on the right edge; the article
+   * caps its own line length instead of leaving a dead band on the right.
    */
   :where([data-vesta='project-overview']) {
     display: grid;
-    grid-template-columns: minmax(0, 52rem) 18.5rem;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
     gap: var(--vesta-space-8);
     align-items: start;
   }
 
   :where([data-vesta='project-article']) {
     min-inline-size: 0;
+    max-inline-size: 52rem;
   }
 
   :where([data-vesta='project-article-loading']) {
