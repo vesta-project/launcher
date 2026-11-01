@@ -496,7 +496,7 @@
     font-size: var(--vesta-text-sm);
   }
 
-  :where(button[data-vesta="modpack-owned-item"]) {
+  :where(button[data-vesta="modpack-owned-item"], a[data-vesta="modpack-owned-item"]) {
     margin-inline: calc(var(--vesta-space-1) * -1);
     padding: 0 var(--vesta-space-1);
     border: 0;
@@ -509,8 +509,10 @@
     cursor: default;
   }
 
-  :where(button[data-vesta="modpack-owned-item"]):hover { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
-  :where(button[data-vesta="modpack-owned-item"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
+  /* Resource tiles read as content; only the "+N more" tile is muted. */
+  :where(button[data-vesta="modpack-owned-item"]:not([data-more]), a[data-vesta="modpack-owned-item"]) { color: var(--vesta-color-text); text-decoration: none; }
+  :where(button[data-vesta="modpack-owned-item"], a[data-vesta="modpack-owned-item"]):hover { background: var(--vesta-color-fill); color: var(--vesta-color-text); }
+  :where(button[data-vesta="modpack-owned-item"], a[data-vesta="modpack-owned-item"]):focus-visible { outline: 2px solid var(--vesta-color-accent); outline-offset: 1px; }
 
   :where([data-vesta="modpack-owned-item"] img),
   :where([data-vesta="modpack-owned-placeholder"]) {
