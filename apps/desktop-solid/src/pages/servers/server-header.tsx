@@ -1,6 +1,7 @@
 import { Button, IconButton, Menu, MenuItem, MenuSeparator } from '@vesta/ui';
 import { Show, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
+import { HeaderIdentity } from '../library/instance/header-identity';
 import { t } from '../../localization';
 import { initials, serverArt } from '../../features/servers/art';
 import { lifecycleControls, minecraftFactNow, statusDot } from '../../features/servers/model';
@@ -49,25 +50,21 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
     <header data-vesta="instance-header" data-server-header data-compact={props.compact ? '' : undefined} style={{ '--header-image': `url("${art()}")` } as never}>
       <div data-vesta="instance-header-art" aria-hidden="true" />
       <div data-vesta="instance-header-main">
-        <img data-vesta="instance-header-icon" src={serverIcon(id()) ?? serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name))} alt="" draggable="false" />
-        <div data-vesta="instance-header-copy">
-          <h1 data-vesta="instance-header-title">{props.snapshot.connection.name}</h1>
-          <p data-vesta="instance-header-meta">
-            <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
-            <Show when={players() !== null}>
-              <span>{t('servers.players.count', { count: players()! })}</span>
-            </Show>
-            <Show when={address()}>
-              {(value) => (
-                <span data-vesta="server-header-address">
-                  <Sensitive label={t('servers.join-address')}>{value()}</Sensitive>
-                  <IconButton size="sm" variant="ghost" label={copied() ? t('servers.copied') : t('servers.copy-join-address')}
-                    icon={<Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} />} onClick={() => void copyAddress()} />
-                </span>
-              )}
-            </Show>
-          </p>
-        </div>
+        <HeaderIdentity icon={serverIcon(id()) ?? serverArt(props.snapshot.connection.serverId || id(), initials(props.snapshot.connection.name))} title={props.snapshot.connection.name}>
+          <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
+          <Show when={players() !== null}>
+            <span>{t('servers.players.count', { count: players()! })}</span>
+          </Show>
+          <Show when={address()}>
+            {(value) => (
+              <span data-vesta="server-header-address">
+                <Sensitive label={t('servers.join-address')}>{value()}</Sensitive>
+                <IconButton size="sm" variant="ghost" label={copied() ? t('servers.copied') : t('servers.copy-join-address')}
+                  icon={<Icon name={copied() ? 'icons/controls/check' : 'icons/actions/copy'} />} onClick={() => void copyAddress()} />
+              </span>
+            )}
+          </Show>
+        </HeaderIdentity>
         <div data-vesta="instance-header-actions">
           <span data-vesta="instance-header-status" data-tone={minecraft().tone} role="status">
             <StatusDot dot={statusDot(props.snapshot)} />
