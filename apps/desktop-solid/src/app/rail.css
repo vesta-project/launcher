@@ -4,7 +4,8 @@
  *
  * Hooks: [data-vesta=rail] -top -account -nav -button -pinned -divider -pin -bottom
  * States: rail-button / rail-pin: aria-current=page
- * Knobs: --rail-width, --rail-button-size, --rail-button-radius, --rail-gap
+ * Knobs: --rail-width, --rail-button-size, --rail-button-radius, --rail-gap, --rail-account-top,
+ *        --rail-junction-top (set by the shell: the spine layout puts the account in the titlebar row)
  */
 @layer launcher {
   :where([data-vesta="rail"]) {
@@ -33,9 +34,43 @@
     justify-content: space-between;
     inline-size: var(--rail-width);
     min-block-size: 0;
-    padding: 12px 10px 13px;
-    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    position: relative;
+    padding: var(--rail-account-top, 12px) 10px 13px;
     background: var(--rail-bg);
+  }
+
+  /*
+   * Junction fillet: where the titlebar's bottom edge meets the rail, the rail flows out under the
+   * titlebar's corner with an inverse radius (the content sheet's radius). It copies the rail's own
+   * computed background, so a theme that paints the rail by selector still matches. It covers only
+   * frame gutter that nothing else paints over the canvas, so each pixel keeps one frame fill, and
+   * it is transparent whenever the rail is.
+   */
+  /* The mask only reads alpha; CanvasText is a system colour that is always opaque. */
+  :where([data-vesta="rail"])::after {
+    --rail-fillet: var(--vesta-radius-container);
+
+    content: "";
+    position: absolute;
+    inset-block-start: var(--rail-junction-top, 0px);
+    inset-inline-start: 100%;
+    inline-size: var(--rail-fillet);
+    block-size: var(--rail-fillet);
+    pointer-events: none;
+    background: inherit;
+    mask-image: radial-gradient(
+      circle at 100% 100%,
+      transparent calc(var(--rail-fillet) - 0.5px),
+      CanvasText calc(var(--rail-fillet) + 0.5px)
+    );
+  }
+
+  :where([dir="rtl"] [data-vesta="rail"])::after {
+    mask-image: radial-gradient(
+      circle at 0 100%,
+      transparent calc(var(--rail-fillet) - 0.5px),
+      CanvasText calc(var(--rail-fillet) + 0.5px)
+    );
   }
 
   :where([data-vesta="rail-top"]) {

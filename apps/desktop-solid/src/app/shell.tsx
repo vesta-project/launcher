@@ -27,6 +27,7 @@ import { useServerSync } from '../features/servers/store';
 import { Rail } from './rail';
 import { route } from './router';
 import { Titlebar } from './titlebar';
+import { detectPlatform } from './platform';
 import { goBack } from './transition';
 import './shell.css';
 import '../styles/reduced-motion.css';
@@ -34,7 +35,13 @@ import { useInstanceShortcutRuntime } from '../features/instances/shortcut-runti
 import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
 import { Notice } from '../components/notice';
 
-/** Window frame: titlebar across the top, then the rail beside the scene. */
+const platform = detectPlatform();
+
+/**
+ * Window frame: the rail is a full-height spine on the left with the account at its top, in the
+ * titlebar row, and the titlebar starts beside it. On macOS the titlebar keeps the whole top row
+ * for the native traffic lights and the rail starts below it (see shell.css).
+ */
 export function Shell() {
   onSettled(() => startNativeFileDrop());
   onSettled(() => watchFileDrag());
@@ -53,7 +60,7 @@ export function Shell() {
   useNativeDropZone({ element: () => dropElement, disabled: () => route().page === 'create', drop: reviewUntargetedDrop, quiet: true });
 
   return (
-    <div data-vesta="shell">
+    <div data-vesta="shell" data-platform={platform}>
       <Titlebar />
       <AccountLoginDialog />
       <TooltipHints />

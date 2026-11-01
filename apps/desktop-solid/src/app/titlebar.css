@@ -10,7 +10,7 @@
 @layer launcher {
   :where([data-vesta='titlebar']) {
     /* 32px puts the bar's centre on the native macOS traffic lights (about 16px down). */
-    --titlebar-height: 32px;
+    --titlebar-height: var(--shell-titlebar-height, 32px);
     --titlebar-inset-start: 10px;
     --titlebar-inset-end: 10px;
 
@@ -23,7 +23,7 @@
     block-size: var(--titlebar-height);
     /* Side padding lives in the start and end cells, so the middle column is centred on the window. */
     padding-inline: 0;
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    /* No border: titlebar and rail are one frame; the content sheet's edge is the separation. */
     background: color-mix(in oklab, var(--vesta-color-surface) 80%, transparent);
     user-select: none;
   }
