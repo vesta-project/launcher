@@ -17,6 +17,7 @@ import type { ServerSnapshot } from '../../features/servers/native';
 import { serverSnapshot } from '../../features/servers/store';
 import { needsPackWorkspace } from './pack/get-modpack';
 import { prefetchListing } from '../../features/servers/file-listing';
+import { warmContentMetadata } from '../../features/servers/content-metadata';
 
 type Prefetcher = (snapshot: ServerSnapshot) => void;
 const prefetchers = new Map<string, Prefetcher>();
@@ -48,7 +49,9 @@ registerServerPrefetch('overview', (snapshot) => {
 // Files opens on the game root; the shared listing cache dedupes repeat hovers.
 registerServerPrefetch('files', (snapshot) => prefetchListing(snapshot.connection.id, ''));
 registerServerPrefetch('resources', (snapshot) => {
-  if (can(snapshot, 'files.list')) prefetchServerResource(snapshot.connection.id, contentResource);
+  // The inventory, then its provider names/icons (local records, then providers), so the list
+  // opens with names instead of filenames that later re-sort.
+  if (can(snapshot, 'files.list')) void readServerResource(snapshot.connection.id, contentResource).then((inventory) => warmContentMetadata(inventory.items)).catch(() => {});
   if (can(snapshot, 'pack.edit')) prefetchServerResource(snapshot.connection.id, packWorkspaceResource);
 });
 registerServerPrefetch('pack', (snapshot) => {

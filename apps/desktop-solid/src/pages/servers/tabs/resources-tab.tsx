@@ -3,16 +3,17 @@ import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
+import { contentProject, warmContentMetadata } from '../../../features/servers/content-metadata';
 import { createSearchQuery } from '../../../components/search-query';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { projectPath, type ResourceVersion } from '../../../features/browse/browse-model';
-import { loadProject, loadProjects, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { loadProject, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
   contentErrorMessage, contentGates, contentKinds, contentModels, contentUpdate, groupContentRows, reuseContentModels, searchContentRows, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
-  pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
+  pendingSummary, primaryKind, rowActions, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
 import { lifecycleControls, newIntentId } from '../../../features/servers/model';
@@ -79,11 +80,9 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const kinds = createMemo(() => (inventory() ? contentKinds(inventory()!) : []), { name: 'server-content:kinds' });
   const activeFilter = (): ContentFilter => (filter() === 'all' || kinds().includes(filter() as never) ? filter() : 'all');
 
-  // Provider names, icons and version lists: cached and shared with Browse. Listing itself does no provider IO.
-  createEffect(inventory, (value) => {
-    if (!value) return;
-    for (const [provider, ids] of providerLookups(value.items)) void loadProjects(provider, ids).catch(() => {});
-  }, { name: 'server-content:providers' });
+  // Provider names and icons: local records first, then the providers (shared with Browse and the
+  // nav hover prefetch). Listing itself does no provider IO.
+  createEffect(inventory, (value) => { if (value) warmContentMetadata(value.items); }, { name: 'server-content:providers' });
   const checkUpdates = async () => {
     if (untrack(checking)) return;
     const serverId = id();
@@ -94,7 +93,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     if (!disposed && request === checkSequence && serverId === untrack(id)) { setChecking(false); setCheckFailed(result.failed > 0); }
   };
 
-  const projectOf = (entry: ServerContentEntry) => (entry.provider ? peekProject(entry.provider.provider, entry.provider.projectId) : undefined);
+  const projectOf = contentProject;
   const versionsOf = (entry: ServerContentEntry) => (entry.provider ? peekVersions(entry.provider.provider, entry.provider.projectId) : undefined);
   const updateOf = (entry: ServerContentEntry): ResourceVersion | undefined => {
     const value = inventory();

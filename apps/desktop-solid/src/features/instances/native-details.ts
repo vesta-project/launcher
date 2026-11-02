@@ -11,14 +11,22 @@ import { resourceFromNative, resourceScope, resourceSource, worldFromNative, typ
 interface DetailState {
   resources: InstalledResource[]; worlds: WorldInfo[]; screenshots: Screenshot[];
   rows: NativeResource[]; updates: Record<string, NativeVersion>;
+  /** The installed list has been read at least once (an empty list is then really empty). */
+  resourcesLoaded: boolean;
 }
 const [data, setData] = createSignal<Record<string, DetailState>>({}, { name: 'nativeInstanceDetails' });
-const empty = (): DetailState => ({ resources: [], worlds: [], screenshots: [], rows: [], updates: {} });
+const empty = (): DetailState => ({ resources: [], worlds: [], screenshots: [], rows: [], updates: {}, resourcesLoaded: false });
 export const nativeDetails = (id: string) => data()[id] ?? empty();
 // Separate data and update checks so rows appear before slower network work completes.
 // RequestCache shares in-flight IPC and retires invalidated responses. No polling or disk mirror.
 const policy = { maxEntries: 24, staleTimeMs: 30_000, retentionMs: 300_000 };
-interface ResourceSnapshot { rows: NativeResource[]; resources: InstalledResource[] }
+/** Stage 1 (local, no network): installed rows, cached icons, and the host's last update check. */
+interface NativeResourceOverview { resources: NativeResource[]; projectRecords: { id: string; source: string; icon_url?: string }[]; updateSnapshot?: { resourceUpdates: { resourceId: number; version: NativeVersion }[] } | null }
+function snapshotUpdates(rows: NativeResource[], snapshot: NativeResourceOverview['updateSnapshot']): Record<string, NativeVersion> {
+  const installed = new Set(rows.map(row => row.id));
+  return Object.fromEntries((snapshot?.resourceUpdates ?? []).filter(row => installed.has(row.resourceId)).map(row => [String(row.resourceId), row.version]));
+}
+interface ResourceSnapshot { rows: NativeResource[]; resources: InstalledResource[]; cachedUpdates: Record<string, NativeVersion> }
 const resourceCache = new RequestCache<ResourceSnapshot>(policy);
 const updateCache = new RequestCache<{ versionKey: string; updates: Record<string, NativeVersion> }>({ ...policy, staleTimeMs: 60_000 });
 const versionKeys = new WeakMap<ResourceSnapshot, string>();
@@ -66,12 +74,14 @@ async function resourceSnapshot(scope: string): Promise<ResourceSnapshot> {
         current_version: row.versionNumber ?? '', is_manual: !row.managed, is_enabled: row.enabled,
         file_size: row.sizeBytes, source_kind: '',
       })),
+      cachedUpdates: {},
     };
   }
-  const overview = await invoke<{ resources: NativeResource[]; projectRecords: { id: string; source: string; icon_url?: string }[] }>('get_instance_resource_overview', { instanceId: Number(instanceId) });
+  const overview = await invoke<NativeResourceOverview>('get_instance_resource_overview', { instanceId: Number(instanceId) });
   const icons = new Map(overview.projectRecords.map((project) => [JSON.stringify([project.source, project.id]), project.icon_url]));
   return { rows: overview.resources, resources: overview.resources.map((row) =>
-    resourceFromNative(row, icons.get(JSON.stringify([row.platform, row.remote_id])) || fallbackIcon)) };
+    resourceFromNative(row, icons.get(JSON.stringify([row.platform, row.remote_id])) || fallbackIcon)),
+    cachedUpdates: snapshotUpdates(overview.resources, overview.updateSnapshot) };
 }
 async function resourceUpdates(scope: string, force: boolean) {
   const { instanceId, world } = resourceScope(scope);
@@ -97,8 +107,10 @@ export async function loadNativeResources(scope: string, force = false) {
           && old?.platform === row.platform && old?.remote_id === row.remote_id && previous.updates[row.id]
           ? [[String(row.id), previous.updates[row.id]]] : [];
       }));
-      patch(scope, { rows: snapshot.rows, resources: withUpdates(snapshot.resources, retained), updates: retained });
-    }
+      // The host's persisted update check fills in at once; the live check below replaces it.
+      const known = { ...snapshot.cachedUpdates, ...retained };
+      patch(scope, { rows: snapshot.rows, resources: withUpdates(snapshot.resources, known), updates: known, resourcesLoaded: true });
+    } else if (!previous.resourcesLoaded) patch(scope, { resourcesLoaded: true });
     let versionKey = versionKeys.get(snapshot);
     if (versionKey === undefined) {
       versionKey = JSON.stringify(snapshot.rows.map((row) => [row.id, row.platform, row.remote_id, row.remote_version_id, row.current_version]));
