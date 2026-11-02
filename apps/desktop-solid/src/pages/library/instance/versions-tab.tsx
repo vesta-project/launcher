@@ -41,6 +41,7 @@ import { Icon } from "../../../components/icon";
 import { t } from "../../../localization";
 import "./versions-tab.css";
 import { PackIdentity, packVersionLabel } from "./pack-identity";
+import { ServerUnlinkDialog, serverUpdateTarget, useModrinthServer } from "./server-link";
 
 export function VersionsTab(props: { entry: InstanceEntry }) {
   onSettled(() => { void loadMetadata(); });
@@ -70,6 +71,11 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
   const [linking, setLinking] = createSignal(false);
   const [unlinking, setUnlinking] = createSignal<"keep" | "delete">();
   const pack = () => store.state().pack;
+  // A pack that follows a Modrinth server listing moves to the listing's version, nothing newer.
+  const listing = useModrinthServer(untrack(id));
+  const [unlinkingServer, setUnlinkingServer] = createSignal(false, { name: "versions:server-unlinking" });
+  const updateTarget = (linked: LinkedPack) =>
+    listing.identity() ? serverUpdateTarget(linked, listing.status()) : packUpdateTarget(linked);
   createEffect(
     () => previewing(),
     (release) => {
@@ -261,7 +267,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
             <section data-vesta="pack-view">
               {/* The pack as one line: what is installed, whether it is current, and its actions. */}
               <header data-vesta="pack-head">
-                <PackIdentity pack={linked()} meta={
+                <PackIdentity pack={linked()} listing={listing.identity()} meta={
                   <>
                     <span>{packVersionLabel(linked())}</span>
                     <span>Minecraft {store.state().engine.minecraft}</span>
@@ -281,7 +287,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     {(target) => (
                       <Button
                         size="sm"
-                        tone="accent"
+                        tone={listing.status()?.updateRequired ? "danger" : "accent"}
                         disabled={busy()}
                         icon={<Icon name="icons/actions/download" size={14} />}
                         onClick={() => setPreviewing(target())}
@@ -302,6 +308,15 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                       />
                     )}
                   >
+                    <Show when={listing.identity()}>
+                      <MenuItem
+                        icon={<Icon name="icons/content/server" size={14} />}
+                        disabled={busy()}
+                        onSelect={() => setUnlinkingServer(true)}
+                      >
+                        {t("instance-pack.unlink-server")}
+                      </MenuItem>
+                    </Show>
                     <MenuItem
                       icon={<Icon name="icons/content/link" size={14} />}
                       disabled={busy()}
@@ -504,6 +519,12 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
           </Dialog>
         )}
       </Show>
+      <ServerUnlinkDialog
+        instanceId={id()}
+        name={listing.identity()?.name ?? ""}
+        open={unlinkingServer()}
+        onClose={() => setUnlinkingServer(false)}
+      />
       <LinkDialog
         open={linking()}
         onClose={() => setLinking(false)}
@@ -550,7 +571,6 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
   );
 }
 
-const updateTarget = packUpdateTarget;
 /** Releases are ordered newest first, so a larger index than the installed one is older. */
 function changeKind(pack: LinkedPack | undefined, release: PackRelease): "update" | "downgrade" | "switch" {
   if (!pack) return "switch";

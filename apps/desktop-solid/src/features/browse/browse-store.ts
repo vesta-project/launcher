@@ -285,8 +285,8 @@ export function clearFilters(options: { keepText?: boolean } = {}) {
   if (untrack(targetId) || untrack(serverTargetId)) navigate('/browse', { replace: true });
 }
 
-/** Whether a target scopes the results: an instance (not for modpacks) or a server. */
-const scoped = () => (!!targetId() && type() !== 'modpack') || !!serverTargetId();
+/** Whether a target scopes the results: an instance (not for modpacks or server listings) or a server. */
+const scoped = () => (!!targetId() && type() !== 'modpack' && type() !== 'server') || !!serverTargetId();
 
 export const hasActiveFilters = () =>
   countFilters(query(), scoped()) > 0 || committedText() !== '' || text() !== '';
@@ -752,7 +752,7 @@ async function checkUpdates() {
   const rows = untrack(installed);
   const kind = untrack(type);
   const mine = ++updateSequence;
-  if (!set || !info || kind === 'datapack' || kind === 'modpack') {
+  if (!set || !info || kind === 'datapack' || kind === 'modpack' || kind === 'server') {
     setUpdatable(new Set<string>());
     return;
   }
@@ -796,7 +796,8 @@ export const sameState = (a: InstallState, b: InstallState) =>
 export function installState(project: ResourceProject): InstallState {
   // Old hits remain visible while a different resource type is loading.
   const kind = project.resource_type;
-  if (kind === 'modpack') return { kind: 'install' };
+  // Modpacks make their own instance; server listings are joined from their page.
+  if (kind === 'modpack' || kind === 'server') return { kind: 'install' };
   const info = target();
   if (!info) {
     const server = serverTarget();

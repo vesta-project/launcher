@@ -40,6 +40,7 @@ import {
   versionAction,
 } from './project-shared';
 import { StripTarget } from './project-strip';
+import { ServerActions } from './server-project';
 import { openVersion } from './project-versions';
 import { RichTextView } from './rich-text-view';
 import { Notice } from '../../../components/notice';
@@ -472,15 +473,23 @@ export function VersionView(props: { data: ProjectData; project: ResourceProject
             }
             actions={
               <>
-                <InstallButton
-                  size="md"
-                  primary
-                  state={() => action()?.state ?? { kind: 'install' }}
-                  disabled={action()?.waiting}
-                  hint={action()?.replaces && target() ? t('browse.install-replaces', { title: target()!.name }) : undefined}
-                  targetName={() => (props.project.resource_type === 'modpack' ? undefined : target()?.name)}
-                  onRun={() => void runInstall(props.project, props.project.resource_type, target(), current())}
-                />
+                <Show
+                  when={props.project.resource_type === 'server'}
+                  fallback={
+                    <InstallButton
+                      size="md"
+                      primary
+                      state={() => action()?.state ?? { kind: 'install' }}
+                      disabled={action()?.waiting}
+                      hint={action()?.replaces && target() ? t('browse.install-replaces', { title: target()!.name }) : undefined}
+                      targetName={() => (props.project.resource_type === 'modpack' ? undefined : target()?.name)}
+                      onRun={() => void runInstall(props.project, props.project.resource_type, target(), current())}
+                    />
+                  }
+                >
+                  {/* A listing plays the version its owner set; its page offers the listing's Play. */}
+                  <ServerActions project={props.project} />
+                </Show>
                 <WebMenu url={versionWebUrl(props.project, current().id)} source={props.project.source} />
               </>
             }
@@ -520,7 +529,9 @@ export function VersionView(props: { data: ProjectData; project: ResourceProject
                 onClick={() => step(older())}
               />
             </div>
-            <StripTarget kind={props.project.resource_type} />
+            <Show when={props.project.resource_type !== 'server'}>
+              <StripTarget kind={props.project.resource_type} />
+            </Show>
           </div>
           <div data-vesta="project-scroll" class="project-pane">
             <div data-vesta="project-overview" data-kind="version">

@@ -111,13 +111,16 @@ function VersionRow(props: { project: ResourceProject; version: ResourceVersion 
         </Show>
       </span>
       <span data-vesta="project-version-action">
-        <InstallButton
-          state={() => action().state}
-          disabled={action().waiting}
-          hint={action().replaces && target() ? t('browse.install-replaces', { title: target()!.name }) : undefined}
-          targetName={() => target()?.name}
-          onRun={() => void runInstall(props.project, props.project.resource_type, target(), props.version)}
-        />
+        {/* A listing's owner sets its pack version, so its rows only open the version. */}
+        <Show when={props.project.resource_type !== 'server'}>
+          <InstallButton
+            state={() => action().state}
+            disabled={action().waiting}
+            hint={action().replaces && target() ? t('browse.install-replaces', { title: target()!.name }) : undefined}
+            targetName={() => target()?.name}
+            onRun={() => void runInstall(props.project, props.project.resource_type, target(), props.version)}
+          />
+        </Show>
       </span>
     </div>
   );

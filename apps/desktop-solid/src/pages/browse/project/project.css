@@ -1458,4 +1458,51 @@
   :where([data-vesta='project-dependency'] > [data-vesta='badge']) {
     flex: none;
   }
+
+  /* ---- Server listings: address with Copy and live players in the header meta ---- */
+  :where([data-vesta='project-server-address']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='project-server-address'] > code) {
+    overflow: hidden;
+    color: var(--vesta-color-media-text);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='project-server-address']) :where([data-vesta='button']) {
+    --button-fg: var(--vesta-color-media-text);
+    --button-bg-hover: color-mix(in oklab, var(--vesta-color-media-text) 16%, transparent);
+    --button-bg-active: color-mix(in oklab, var(--vesta-color-media-text) 22%, transparent);
+  }
+
+  :where([data-vesta='project-stat'][data-freshness]) {
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='project-stat']) > [data-vesta='server-dot'] {
+    --server-dot-size: 8px;
+
+    box-shadow: none;
+  }
+
+  :where([data-vesta='project-server-notice']) {
+    padding: var(--vesta-space-3) var(--project-gutter) 0;
+  }
+
+  :where([data-vesta='project-server-address-fact'] > code) {
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta='project-dependency-group'][data-kind='server-content']) {
+    margin-block-end: var(--vesta-space-2);
+  }
 }

@@ -35,6 +35,7 @@ import { t } from '../../localization';
 import { loaderLabels } from './filter-panel';
 import { InstallButton } from './install-button';
 import { runInstall } from './install-actions';
+import { ServerContentLabel, ServerPlayers, ServerRegion } from './server-parts';
 
 /** A stable hue per project, so the fallback banner differs between cards but never flickers. */
 function hueOf(seed: string) {
@@ -159,47 +160,62 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
             {project().name}
           </a>
           {/* One line: author first; stats that do not fit wrap out of sight rather than squeeze. */}
-          <div data-vesta="browse-card-meta">
-            <Show when={author()}>
-              <Show
-                when={canFilterCreator()}
-                fallback={<span data-vesta="browse-card-author">{t('browse.by-author', { author: author() })}</span>}
-              >
-                <button
-                  type="button"
-                  data-vesta="browse-card-author"
-                  data-tip={t('browse.filter-by-author', { author: author() })}
-                  onClick={() => filterByCreator(project())}
+          <Show when={project().server}>
+            {(listing) => (
+              // A server listing: live players first, then where it is and what it plays.
+              <div data-vesta="browse-card-meta" data-kind="server">
+                <ServerPlayers ping={listing().ping} hook="browse-card-stat" />
+                <ServerRegion region={listing().region} hook="browse-card-stat" />
+                <ServerContentLabel listing={listing()} hook="browse-card-stat" />
+              </div>
+            )}
+          </Show>
+          <Show when={!project().server}>
+            <div data-vesta="browse-card-meta">
+              <Show when={author()}>
+                <Show
+                  when={canFilterCreator()}
+                  fallback={<span data-vesta="browse-card-author">{t('browse.by-author', { author: author() })}</span>}
                 >
-                  {t('browse.by-author', { author: author() })}
-                </button>
+                  <button
+                    type="button"
+                    data-vesta="browse-card-author"
+                    data-tip={t('browse.filter-by-author', { author: author() })}
+                    onClick={() => filterByCreator(project())}
+                  >
+                    {t('browse.by-author', { author: author() })}
+                  </button>
+                </Show>
               </Show>
-            </Show>
-            <span data-vesta="browse-card-stat" data-tip={t('browse.downloads-title', { count: project().download_count })}>
-              <Icon name="icons/actions/download" size={11} />
-              {formatCompact(project().download_count)}
-            </span>
-            <Show when={project().follower_count > 0}>
-              <span data-vesta="browse-card-stat" data-tip={t('browse.followers-title', { count: project().follower_count })}>
-                <Icon name="icons/content/heart" size={11} />
-                {formatCompact(project().follower_count)}
+              <span data-vesta="browse-card-stat" data-tip={t('browse.downloads-title', { count: project().download_count })}>
+                <Icon name="icons/actions/download" size={11} />
+                {formatCompact(project().download_count)}
               </span>
-            </Show>
-            <Show when={updated()}>
-              <span data-vesta="browse-card-stat">
-                <Icon name="icons/content/history" size={11} />
-                {updated()}
-              </span>
-            </Show>
-          </div>
+              <Show when={project().follower_count > 0}>
+                <span data-vesta="browse-card-stat" data-tip={t('browse.followers-title', { count: project().follower_count })}>
+                  <Icon name="icons/content/heart" size={11} />
+                  {formatCompact(project().follower_count)}
+                </span>
+              </Show>
+              <Show when={updated()}>
+                <span data-vesta="browse-card-stat">
+                  <Icon name="icons/content/history" size={11} />
+                  {updated()}
+                </span>
+              </Show>
+            </div>
+          </Show>
         </div>
-        <span data-vesta="browse-card-action">
-          <InstallButton
-            state={state}
-            targetName={() => (project().resource_type === 'modpack' ? modpackTargetName() : targetName())}
-            onRun={() => void runInstall(project(), project().resource_type, target())}
-          />
-        </span>
+        {/* Servers are joined from their page (Play needs an instance choice), not from the card. */}
+        <Show when={!project().server}>
+          <span data-vesta="browse-card-action">
+            <InstallButton
+              state={state}
+              targetName={() => (project().resource_type === 'modpack' ? modpackTargetName() : targetName())}
+              onRun={() => void runInstall(project(), project().resource_type, target())}
+            />
+          </span>
+        </Show>
         <Show when={project().summary}>
           <p data-vesta="browse-card-summary">{project().summary}</p>
         </Show>

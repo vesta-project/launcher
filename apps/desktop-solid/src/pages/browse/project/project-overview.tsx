@@ -23,6 +23,7 @@ import type { ProjectData } from './project-data';
 import { leaveForBrowse } from './project-strip';
 import { ChannelBadge, failed, formatDay, LoaderChips, loaded } from './project-shared';
 import { RichTextView } from './rich-text-view';
+import { ServerFacts } from './server-project';
 
 const linkIcon = (link: ProjectLink) => {
   const identity = `${link.kind} ${link.label} ${link.url}`.toLowerCase();
@@ -82,7 +83,8 @@ function TargetFit(props: { data: ProjectData; project: ResourceProject }) {
     () => {
       const info = target();
       const versions = props.data.versions();
-      if (!info || !versions || props.project.resource_type === 'modpack') return undefined;
+      const kind = props.project.resource_type;
+      if (!info || !versions || kind === 'modpack' || kind === 'server') return undefined;
       const row = installed().get(projectKey(props.project.source, props.project.id));
       return {
         name: info.name,
@@ -227,6 +229,9 @@ export function ProjectOverview(props: { data: ProjectData; project: ResourcePro
       </article>
 
       <aside data-vesta="project-facts" aria-label={t('browse.project-facts')}>
+        <Show when={props.project.server}>
+          {(listing) => <ServerFacts data={props.data} project={props.project} listing={listing()} />}
+        </Show>
         <TargetFit data={props.data} project={props.project} />
 
         <FactGroup title={t('browse.facts-details')}>

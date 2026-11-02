@@ -23,6 +23,7 @@ export const typeLabels: Record<ResourceType, MessageId> = {
   mod: 'browse.type-mod',
   plugin: 'browse.type-plugin',
   modpack: 'browse.type-modpack',
+  server: 'browse.type-server',
   resourcepack: 'browse.type-resourcepack',
   shader: 'browse.type-shader',
   datapack: 'browse.type-datapack',

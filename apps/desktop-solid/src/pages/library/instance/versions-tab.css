@@ -582,4 +582,17 @@
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
+
+  /* A Modrinth server listing's live players, in the pack meta line. */
+  :where([data-vesta='pack-players']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='pack-players']) > [data-vesta='server-dot'] {
+    --server-dot-size: 7px;
+
+    box-shadow: none;
+  }
 }

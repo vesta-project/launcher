@@ -23,6 +23,7 @@ export const kindLabels: Record<ResourceType, MessageId> = {
   mod: 'browse.kind-mod',
   plugin: 'browse.kind-plugin',
   modpack: 'browse.kind-modpack',
+  server: 'browse.kind-server',
   resourcepack: 'browse.kind-resourcepack',
   shader: 'browse.kind-shader',
   datapack: 'browse.kind-datapack',
@@ -128,7 +129,7 @@ export function projectInstallState(project: ResourceProject, versions: readonly
   const base = installState(project);
   const info = target();
   const kind = project.resource_type;
-  if (!info || !versions || kind === 'modpack') return base;
+  if (!info || !versions || kind === 'modpack' || kind === 'server') return base;
   const choice = selectInstallVersion(versions, info, kind, project.source);
   if (base.kind === 'installed' && kind !== 'datapack')
     return updateAvailable(installed().get(projectKey(project.source, project.id)), choice) ? { kind: 'update' } : base;
@@ -149,7 +150,7 @@ export function versionAction(project: ResourceProject, version: ResourceVersion
   const info = target();
   const kind = project.resource_type;
   const none = { replaces: false, waiting: false };
-  if (kind === 'modpack') return { state: installState(project), ...none };
+  if (kind === 'modpack' || kind === 'server') return { state: installState(project), ...none };
   if (!info) return { state: { kind: 'install' }, ...none };
   const busy = installingVersion(project);
   if (busy === version.id) return { state: { kind: 'installing' }, ...none };

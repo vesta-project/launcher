@@ -2,12 +2,12 @@ import type { MessageId } from '../../localization/messages';
 
 /** Pure browse helpers: types, source capabilities, query normalisation and version choice. */
 
-export type ResourceType = 'mod' | 'plugin' | 'modpack' | 'resourcepack' | 'shader' | 'datapack' | 'world';
+export type ResourceType = 'mod' | 'plugin' | 'modpack' | 'server' | 'resourcepack' | 'shader' | 'datapack' | 'world';
 export type SourceId = 'modrinth' | 'curseforge' | 'smithed';
 export type SortOrder = 'asc' | 'desc';
 export type ReleaseType = 'release' | 'beta' | 'alpha';
 
-export const resourceTypes: ResourceType[] = ['mod', 'plugin', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
+export const resourceTypes: ResourceType[] = ['mod', 'plugin', 'modpack', 'server', 'resourcepack', 'shader', 'datapack', 'world'];
 export const loaderIds = ['fabric', 'forge', 'neoforge', 'quilt'] as const;
 export const pluginLoaderIds = ['paper', 'spigot', 'bukkit', 'purpur', 'folia'] as const;
 export type SideRequirement = 'required' | 'optional' | 'unsupported';
@@ -60,7 +60,33 @@ export interface ResourceProject {
   links?: ProjectLink[];
   /** Where the project runs; absent when the provider does not say. */
   environment?: { client: boolean; server: boolean; client_requirement?: SideRequirement | null; server_requirement?: SideRequirement | null } | null;
+  /** Modrinth server listings (`resource_type: 'server'`): address, content and the latest ping. */
+  server?: ServerListing | null;
   [field: string]: unknown;
+}
+
+/** What a server listing plays: a vanilla game version range or one owner-set modpack version. */
+export type ServerContent =
+  | { kind: 'vanilla'; gameVersions: string[]; recommendedVersion: string | null }
+  | { kind: 'modpack'; projectId: string; versionId: string; projectName: string | null; projectIcon: string | null };
+
+/** The latest ping Modrinth recorded for a listing; `null` when it has none (offline or unchecked). */
+export interface ServerPing {
+  at: string;
+  online: number;
+  max: number;
+  versionName: string | null;
+  latencyMs: number | null;
+}
+
+/** Mirrors the host `ServerListing` (Modrinth v3 `minecraft_java_server` and `minecraft_server`). */
+export interface ServerListing {
+  address: string;
+  content: ServerContent;
+  ping: ServerPing | null;
+  region: string | null;
+  languages: string[];
+  plays2w: number | null;
 }
 
 export interface ProjectLink {
@@ -147,6 +173,8 @@ export interface SourceDescriptor {
 }
 
 const everything: ResourceType[] = ['mod', 'plugin', 'modpack', 'resourcepack', 'shader', 'datapack', 'world'];
+/** Modrinth has no world projects; its server listings sit next to modpacks (CurseForge has none). */
+const modrinthTypes: ResourceType[] = ['mod', 'plugin', 'modpack', 'server', 'resourcepack', 'shader', 'datapack'];
 
 /** Mirrors the old launcher's source catalogue (and the Rust `SourceCapabilities`). */
 export const sources: SourceDescriptor[] = [
@@ -154,8 +182,7 @@ export const sources: SourceDescriptor[] = [
     id: 'modrinth',
     label: 'Modrinth',
     icon: 'branding/sources/modrinth',
-    // Modrinth has no world projects.
-    types: everything.filter((type) => type !== 'world'),
+    types: modrinthTypes,
     defaultSort: 'relevance',
     sortOptions: [
       { value: 'relevance', label: 'browse.sort-relevance' },
@@ -208,8 +235,11 @@ export const sourcesForType = (type: ResourceType) => sources.filter((source) =>
 export const firstSourceForType = (type: ResourceType) => sourcesForType(type)[0] ?? sources[0];
 export const supportsEnvironment = (source: SourceId, type: ResourceType) =>
   sourceById(source).environmentTypes.includes(type);
-/** Mods and modpacks are the only types the host filters by loader. */
-export const typeUsesLoader = (type: ResourceType) => type === 'mod' || type === 'modpack' || type === 'plugin';
+/** The types the host filters by loader; servers by their modpack's loader. */
+export const typeUsesLoader = (type: ResourceType) =>
+  type === 'mod' || type === 'modpack' || type === 'plugin' || type === 'server';
+/** Server listings are joined, not installed: they take no install target. */
+export const isServerType = (type: ResourceType) => type === 'server';
 export const isResourceType = (value: unknown): value is ResourceType => resourceTypes.includes(value as ResourceType);
 export const isSourceId = (value: unknown): value is SourceId => sources.some((source) => source.id === value);
 
@@ -405,7 +435,7 @@ export function parseProjectUrl(input: string): ProjectUrl | undefined {
     const host = url.hostname.toLowerCase();
     const parts = url.pathname.split('/').filter(Boolean);
     if (host === 'modrinth.com' || host.endsWith('.modrinth.com')) {
-      const valid = ['mod', 'resourcepack', 'shader', 'datapack', 'modpack', 'plugin'];
+      const valid = ['mod', 'resourcepack', 'shader', 'datapack', 'modpack', 'plugin', 'server'];
       if (parts.length >= 2 && valid.includes(parts[0])) return { platform: 'modrinth', id: parts[1] };
     }
     if (host === 'www.curseforge.com' || host === 'curseforge.com') {
@@ -461,8 +491,12 @@ export interface CategoryGroup {
  */
 export function categoryDisplayName(name: string): string {
   if (/[A-Z]/.test(name)) return name;
-  return name.replace(/[-_]+/g, ' ').replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
+  return name
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\p{L}[\p{L}\p{N}]*/gu, (word) => acronyms[word] ?? word.charAt(0).toUpperCase() + word.slice(1));
 }
+/** Words Modrinth's server categories use that read as acronyms, not names. */
+const acronyms: Record<string, string> = { smp: 'SMP', pvp: 'PvP', pve: 'PvE', kitpvp: 'KitPvP', mmo: 'MMO', rpg: 'RPG', op: 'OP' };
 
 const byIndex = (a: CategoryItem, b: CategoryItem) => a.index - b.index || a.name.localeCompare(b.name);
 const asItem = (category: ResourceCategory): CategoryItem => ({
