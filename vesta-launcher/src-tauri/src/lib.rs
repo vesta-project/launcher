@@ -73,7 +73,9 @@ pub fn run(context: tauri::Context) {
         let message = format!(
             "Vesta Launcher closed unexpectedly: {} at {}",
             panic_report::payload_message(e.payload()),
-            e.location().map(|location| location.to_string()).unwrap_or_else(|| "unknown location".into())
+            e.location()
+                .map(|location| location.to_string())
+                .unwrap_or_else(|| "unknown location".into())
         );
         eprintln!("{message}");
         if telemetry_enabled {
@@ -495,6 +497,10 @@ pub fn run(context: tauri::Context) {
             commands::modpacks::get_hardware_info,
             commands::modpacks::install_modpack_from_zip,
             commands::modpacks::install_modpack_from_url,
+            commands::modrinth_servers::install_server_pack,
+            commands::modrinth_servers::link_instance_to_server,
+            commands::modrinth_servers::unlink_instance_server,
+            commands::modrinth_servers::instance_server_status,
             commands::modpacks::list_export_candidates,
             commands::modpacks::export_instance_to_modpack,
             commands::onboarding::get_required_java_versions,

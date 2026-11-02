@@ -811,6 +811,7 @@ impl SmithedSource {
             .unwrap_or_default();
 
         Some(ResourceProject {
+            server: None,
             id: raw_id.clone(),
             source: SourcePlatform::Smithed,
             resource_type,
@@ -1115,6 +1116,7 @@ impl SmithedSource {
         let links = Self::map_links(&pack.display);
 
         Ok(ResourceProject {
+            server: None,
             id: raw_id.clone(),
             source: SourcePlatform::Smithed,
             resource_type,

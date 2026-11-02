@@ -1593,7 +1593,24 @@ pub async fn launch_instance(
         return Err(format!("Cannot launch while instance is busy ({})", op));
     }
 
-    let target = target.unwrap_or_default();
+    let target = match target {
+        Some(target) => target,
+        None => match crate::commands::modrinth_servers::load_link(instance_data.id)? {
+            Some(link)
+                if crate::commands::destinations::direct_launch_supported(&instance_data) =>
+            {
+                // Resolve current destination; use persisted address if the listing is offline.
+                let address =
+                    crate::commands::modrinth_servers::listing(&app_handle, &link.project_id)
+                        .await
+                        .map(|(_, _, listing)| listing.address)
+                        .unwrap_or(link.address);
+                piston_lib::game::launcher::targets::parse_server_address(&address)
+                    .map_err(|e| e.to_string())?
+            }
+            _ => piston_lib::game::launcher::LaunchTarget::None,
+        },
+    };
     if target != piston_lib::game::launcher::LaunchTarget::None {
         if !crate::commands::destinations::direct_launch_supported(&instance_data) {
             return Err("Direct launch is unsupported for this instance".into());
@@ -1606,8 +1623,10 @@ pub async fn launch_instance(
         }
     }
     let notification_instance_id = instance_data.id;
-    app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>()
-        .pack_sync_enforce_launch(&app_handle, instance_data.id).await?;
+    app_handle
+        .state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .pack_sync_enforce_launch(&app_handle, instance_data.id)
+        .await?;
     crate::settings_sync::game_options::apply_under_play_guard(instance_data.id).await?;
     crate::settings_sync::keybinds::apply_under_play_guard(instance_data.id).await?;
     crate::settings_sync::servers::apply_under_play_guard(instance_data.id).await?;

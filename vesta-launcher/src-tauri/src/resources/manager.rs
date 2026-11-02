@@ -96,6 +96,7 @@ type CachedCategories = (Vec<ResourceCategory>, NaiveDateTime);
 #[derive(Clone)]
 pub struct ResourceManager {
     sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
+    server_cache: Arc<RwLock<HashMap<PlatformIdKey, (ResourceProject, std::time::Instant)>>>,
     project_cache: Arc<RwLock<HashMap<PlatformIdKey, ResourceProject>>>,
     version_cache: Arc<RwLock<HashMap<PlatformIdKey, Vec<ResourceVersion>>>>,
     version_details_cache: Arc<Mutex<VersionDetailsCache>>,
@@ -121,6 +122,7 @@ impl ResourceManager {
 
         Self {
             sources: Arc::new(RwLock::new(sources)),
+            server_cache: Arc::new(RwLock::new(HashMap::new())),
             project_cache: Arc::new(RwLock::new(HashMap::new())),
             version_cache: Arc::new(RwLock::new(HashMap::new())),
             version_details_cache: Arc::new(Mutex::new(VersionDetailsCache::default())),
@@ -141,6 +143,7 @@ impl ResourceManager {
 
         // 1. Clear in-memory caches
         self.project_cache.write().await.clear();
+        self.server_cache.write().await.clear();
         self.version_cache.write().await.clear();
         self.hash_cache.write().await.clear();
         self.search_cache.write().await.clear();
@@ -747,6 +750,7 @@ impl ResourceManager {
         platform: SourcePlatform,
         query: SearchQuery,
     ) -> Result<SearchResponse> {
+        let server_search = query.resource_type == ResourceType::Server;
         let cache_key = format!("{:?}_{:?}", platform, query);
 
         let stale_response = {
@@ -779,7 +783,8 @@ impl ResourceManager {
 
         {
             let mut cache = self.search_cache.write().await;
-            let expiry = chrono::Utc::now().naive_utc() + chrono::Duration::minutes(10);
+            let expiry = chrono::Utc::now().naive_utc()
+                + chrono::Duration::seconds(if server_search { 60 } else { 600 });
             cache.insert(cache_key, (response.clone(), expiry));
         }
 
@@ -797,7 +802,10 @@ impl ResourceManager {
         {
             let cache = self.project_cache.read().await;
             for id in ids {
-                if let Some(cached) = cache.get(&(platform, id.clone())) {
+                if let Some(cached) = cache
+                    .get(&(platform, id.clone()))
+                    .filter(|p| p.server.is_none())
+                {
                     results.push(cached.clone());
                 } else {
                     missing_ids.push(id.clone());
@@ -825,13 +833,23 @@ impl ResourceManager {
     }
 
     pub async fn get_project(&self, platform: SourcePlatform, id: &str) -> Result<ResourceProject> {
+        if let Some((project, at)) = self
+            .server_cache
+            .read()
+            .await
+            .get(&(platform, id.to_owned()))
+        {
+            if at.elapsed() < std::time::Duration::from_secs(60) {
+                return Ok(project.clone());
+            }
+        }
         {
             let cache = self.project_cache.read().await;
             if let Some(project) = cache.get(&(platform, id.to_string())) {
                 // Batch dependency lookups may cache summary-only projects. A
                 // details request must hydrate those instead of treating them as
                 // a complete project and leaving the details page unresolved.
-                if project.description.is_some() {
+                if project.description.is_some() && project.server.is_none() {
                     return Ok(project.clone());
                 }
             }
@@ -839,6 +857,17 @@ impl ResourceManager {
 
         let source = self.get_source(platform).await?;
         let project = source.get_project(id).await?;
+        if project.server.is_some() {
+            let mut cache = self.server_cache.write().await;
+            cache.insert(
+                (platform, id.to_owned()),
+                (project.clone(), std::time::Instant::now()),
+            );
+            cache.insert(
+                (platform, project.id.clone()),
+                (project.clone(), std::time::Instant::now()),
+            );
+        }
 
         {
             let mut cache = self.project_cache.write().await;

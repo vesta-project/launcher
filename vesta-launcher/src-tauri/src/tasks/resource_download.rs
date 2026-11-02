@@ -118,6 +118,7 @@ fn resource_type_name(resource_type: ResourceType) -> &'static str {
         ResourceType::DataPack => "datapack",
         ResourceType::Modpack => "modpack",
         ResourceType::World => "world",
+        ResourceType::Server => "server",
     }
 }
 
@@ -135,6 +136,7 @@ fn artifact_target_directory(
             .map(|world| world.join("datapacks"))
             .ok_or_else(|| "Datapack installation requires a world target".to_string()),
         ResourceType::World => Ok(instance_path.join("saves")),
+        ResourceType::Server => Err("Server listings use install_server_pack".into()),
         ResourceType::Modpack => Err("Modpack artifacts use the modpack workflow".to_string()),
     }
 }
