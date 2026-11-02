@@ -51,6 +51,7 @@
 
   :where([data-vesta='checkbox-control']) {
     display: grid;
+    position: relative;
     flex: none;
     place-items: center;
     inline-size: var(--checkbox-size);
@@ -65,10 +66,12 @@
   }
 
   :where([data-vesta='checkbox-indicator']) {
+    position: absolute;
+    inset: 10%;
     display: grid;
     place-items: center;
-    inline-size: 80%;
-    block-size: 80%;
+    min-inline-size: 0;
+    min-block-size: 0;
   }
 
   :where([data-vesta='checkbox-indicator']) > :where(svg) {
