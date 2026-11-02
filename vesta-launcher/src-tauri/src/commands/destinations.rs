@@ -167,6 +167,34 @@ mod tests {
         .unwrap();
         let mut manifest = UnifiedManifest::from(vanilla);
         assert!(manifest_supports_direct_launch("1.21", None, &manifest));
+        use piston_lib::game::metadata::ModloaderType;
+        for (loader, main) in [
+            (
+                ModloaderType::NeoForge,
+                "cpw.mods.bootstraplauncher.BootstrapLauncher",
+            ),
+            (
+                ModloaderType::Forge,
+                "net.minecraftforge.bootstrap.ForgeBootstrap",
+            ),
+            (
+                ModloaderType::Quilt,
+                "org.quiltmc.loader.impl.launch.knot.KnotClient",
+            ),
+        ] {
+            manifest.main_class = main.into();
+            assert!(manifest_supports_direct_launch(
+                "1.21.1",
+                Some(loader),
+                &manifest
+            ));
+            manifest.main_class = "unknown.CustomMain".into();
+            assert!(!manifest_supports_direct_launch(
+                "1.21.1",
+                Some(loader),
+                &manifest
+            ));
+        }
         manifest.game_arguments.clear();
         assert!(!manifest_supports_direct_launch("1.21", None, &manifest));
     }

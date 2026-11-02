@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use std::time::SystemTime;
 use tauri::{Emitter, Manager};
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub(crate) struct ExitStatusFile {
     instance_id: String,
     exit_code: i32,
@@ -72,13 +72,17 @@ pub(crate) async fn record_started_launch(
             let iid_for_registry = instance_id.clone();
             let run_state_for_wait = run_state.clone();
             tokio::spawn(async move {
-                if let Err(e) = child.wait().await {
-                    log::error!(
-                        "[instance::lifecycle] Failed to wait for game process for {}: {}",
-                        iid_for_registry,
-                        e
-                    );
-                }
+                let observed_status = match child.wait().await {
+                    Ok(status) => Some(status),
+                    Err(e) => {
+                        log::error!(
+                            "[instance::lifecycle] Failed to wait for game process for {}: {}",
+                            iid_for_registry,
+                            e
+                        );
+                        None
+                    }
+                };
 
                 // Sandbox/exit-handler wrappers can exit while the game JVM is
                 // still alive (Crash Assistant child trees, SIGPIPE on pipes, OOM
@@ -94,6 +98,13 @@ pub(crate) async fn record_started_launch(
                     // cleanup_paths remain on InstanceRunState for final reconcile
                     let _ = cleanup_paths;
                     return;
+                }
+
+                if let Some(status) = observed_status {
+                    if let Err(error) = preserve_supervisor_exit(&run_state_for_wait, status.code())
+                    {
+                        log::warn!("Failed to preserve supervisor exit status: {error}");
+                    }
                 }
 
                 piston_lib::game::launcher::cleanup_sandbox_paths(cleanup_paths);
@@ -412,6 +423,14 @@ pub(crate) async fn reconcile_finished_process(
 
                 if should_check_for_crash(exit_status.exit_code, stop_requested) {
                     crashed = detect_store_and_emit_crash(app_handle, &run_state).unwrap_or(false);
+                    if !crashed {
+                        crashed = store_and_emit_abnormal_exit(
+                            app_handle,
+                            &run_state,
+                            Some(exit_status.exit_code),
+                        )
+                        .unwrap_or(false);
+                    }
                 }
 
                 if !crashed {
@@ -489,7 +508,8 @@ pub(crate) async fn reconcile_finished_process(
             if !stop_requested {
                 crashed = detect_store_and_emit_crash(app_handle, &run_state).unwrap_or(false);
                 if !crashed {
-                    crashed = store_and_emit_abnormal_exit(app_handle, &run_state).unwrap_or(false);
+                    crashed =
+                        store_and_emit_abnormal_exit(app_handle, &run_state, None).unwrap_or(false);
                 }
             }
 
@@ -514,7 +534,8 @@ pub(crate) async fn reconcile_finished_process(
             );
             crashed = detect_store_and_emit_crash(app_handle, &run_state).unwrap_or(false);
             if !crashed {
-                crashed = store_and_emit_abnormal_exit(app_handle, &run_state).unwrap_or(false);
+                crashed =
+                    store_and_emit_abnormal_exit(app_handle, &run_state, None).unwrap_or(false);
             }
         }
     }
@@ -883,18 +904,19 @@ fn detect_store_and_emit_crash(
 fn store_and_emit_abnormal_exit(
     app_handle: &tauri::AppHandle,
     run_state: &InstanceRunState,
+    exit_code: Option<i32>,
 ) -> Result<bool, String> {
     let crash_info = crate::utils::crash_parser::CrashDetails {
         crash_id: uuid::Uuid::new_v4().to_string(),
         crash_type: "launch_other".to_string(),
         category: "abnormal_exit".to_string(),
         title: "Launch ended unexpectedly".to_string(),
-        message: "The game process exited before reporting a normal exit status. This often means the process was killed early (for example by an OS sandbox profile, a wrapper, or a native crash before logging)."
-            .to_string(),
-        evidence: Some(
-            "Missing exit_status.json from the exit handler after the process disappeared."
-                .to_string(),
-        ),
+        message: exit_code.map(|code| format!("Launch process exited with code {code}. See the instance log for the JVM or game error."))
+            .unwrap_or_else(|| "Launch process ended unexpectedly. See the instance log for details.".into()),
+        evidence: std::fs::read_to_string(&run_state.log_file).ok().map(|log| {
+            let lines: Vec<_> = log.lines().rev().take(40).collect();
+            lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+        }),
         suspected_resources: Vec::new(),
         suspects: Vec::new(),
         suggested_fixes: vec![
@@ -1146,6 +1168,33 @@ fn exit_status_belongs_to_launch(
     exited_at + chrono::Duration::seconds(2) >= started_at
 }
 
+// The OS status remains available even when the supervisor JVM fails before
+// main (invalid JAR, JVM initialization, etc.). Never replace the child's
+// authoritative result, and never call this while a descendant is alive.
+fn preserve_supervisor_exit(run: &InstanceRunState, code: Option<i32>) -> std::io::Result<()> {
+    use std::io::Write;
+    let Some(exit_code) = code else {
+        return Ok(());
+    };
+    let path = run.game_dir.join(".vesta/exit_status.json");
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(mut file) => file.write_all(
+            serde_json::to_string(&ExitStatusFile {
+                instance_id: run.instance_id.clone(),
+                exit_code,
+                exited_at: chrono::Utc::now().to_rfc3339(),
+            })?
+            .as_bytes(),
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 fn is_pid_running(pid: u32) -> bool {
     use sysinfo::System;
     let mut sys = System::new_all();
@@ -1267,6 +1316,32 @@ mod tests {
         };
 
         assert!(!exit_status_belongs_to_launch(&stale, &run_state));
+    }
+
+    #[test]
+    fn supervisor_startup_exit_is_preserved_without_overwriting_game_result() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".vesta")).unwrap();
+        let run = InstanceRunState {
+            instance_id: "probe".into(),
+            pid: 42,
+            process_group_id: None,
+            log_file: dir.path().join("launch.log"),
+            game_dir: dir.path().into(),
+            version_id: "1.21.1".into(),
+            modloader: Some("neoforge".into()),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            cleanup_paths: vec![],
+            console_from_log_file: true,
+        };
+        preserve_supervisor_exit(&run, Some(17)).unwrap();
+        preserve_supervisor_exit(&run, Some(0)).unwrap();
+        let status: ExitStatusFile = serde_json::from_slice(
+            &std::fs::read(dir.path().join(".vesta/exit_status.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(status.exit_code, 17);
+        assert!(exit_status_belongs_to_launch(&status, &run));
     }
 
     #[test]

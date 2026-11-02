@@ -1,0 +1,82 @@
+[
+    {
+        "id":  "GDELFL7Y",
+        "project_id":  "OgcNPs6n",
+        "author_id":  "fwJfxTga",
+        "featured":  false,
+        "name":  "Aero SMP",
+        "version_number":  "4.2",
+        "project_types":  [
+                              "modpack"
+                          ],
+        "games":  [
+                      "minecraft-java"
+                  ],
+        "changelog":  "",
+        "date_published":  "2026-09-10T20:12:53.374072Z",
+        "downloads":  9963,
+        "version_type":  "release",
+        "status":  "listed",
+        "requested_status":  null,
+        "files":  [
+                      {
+                          "id":  "ASkmcBI4",
+                          "hashes":  {
+                                         "sha1":  "5bdf766c99096cdfcd1ebe1f8e0e54125e1c618c",
+                                         "sha512":  "efbed6dab9f9fe3a925a48200e3f748c1f8901db625113dfcee4d889a4c44340294411139ac97f05db7123ea00b3bfb908bb0ae500c066aac3674d8d503c5480"
+                                     },
+                          "url":  "https://cdn.modrinth.com/data/OgcNPs6n/versions/GDELFL7Y/Aero%20SMP-4.2.mrpack",
+                          "filename":  "Aero SMP-4.2.mrpack",
+                          "primary":  true,
+                          "size":  10712797,
+                          "file_type":  null
+                      }
+                  ],
+        "dependencies":  [
+
+                         ],
+        "loaders":  [
+                        "mrpack"
+                    ],
+        "ordering":  null,
+        "minecraft_java_server":  null,
+        "mrpack_loaders":  [
+                               "neoforge"
+                           ],
+        "environment":  "client_and_server",
+        "game_versions":  [
+                              "1.21.1"
+                          ]
+    },
+    {
+        "id":  "vG4iGSZd",
+        "project_id":  "OgcNPs6n",
+        "author_id":  "fwJfxTga",
+        "featured":  false,
+        "name":  "__synthetic",
+        "version_number":  "",
+        "project_types":  [
+
+                          ],
+        "games":  [
+
+                  ],
+        "changelog":  "",
+        "date_published":  "2026-04-18T20:10:21.827401Z",
+        "downloads":  0,
+        "version_type":  "release",
+        "status":  "listed",
+        "requested_status":  null,
+        "files":  [
+
+                  ],
+        "dependencies":  [
+
+                         ],
+        "loaders":  [
+
+                    ],
+        "ordering":  null,
+        "minecraft_java_server":  null
+    }
+]

@@ -1,0 +1,15 @@
+{
+    "id":  "1.21.1-forge-52.1.20",
+    "mainClass":  "net.minecraftforge.bootstrap.ForgeBootstrap",
+    "inheritsFrom":  "1.21.1",
+    "arguments":  {
+                      "game":  [
+                                   "--launchTarget",
+                                   "forge_client"
+                               ],
+                      "jvm":  [
+                                  "-Djava.net.preferIPv6Addresses=system"
+                              ]
+                  },
+    "minecraftArguments":  null
+}

@@ -1,0 +1,11 @@
+{
+    "id":  "quilt-loader-0.30.2-${modrinth.gameVersion}",
+    "mainClass":  "org.quiltmc.loader.impl.launch.knot.KnotClient",
+    "inheritsFrom":  "${modrinth.gameVersion}",
+    "arguments":  {
+                      "game":  [
+
+                               ]
+                  },
+    "minecraftArguments":  null
+}
