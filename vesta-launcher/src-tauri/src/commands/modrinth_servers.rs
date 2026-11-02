@@ -81,12 +81,12 @@ fn validate_link(inst: &Instance, listing: &ServerListing) -> Result<(), String>
             }
         }
         ServerContent::Vanilla { game_versions, .. } => {
-            if inst.modpack_id.is_some()
-                || !matches!(inst.modloader.as_deref(), None | Some("vanilla"))
-                || !game_versions.contains(&inst.minecraft_version)
-            {
+            // Any loader can join a vanilla server (performance or client mods); a provider
+            // modpack instance would follow that pack's updates instead of the listing's.
+            if inst.modpack_id.is_some() || !game_versions.contains(&inst.minecraft_version) {
                 return Err(
-                    "Instance must be vanilla and use a supported Minecraft version".into(),
+                    "Instance must not follow a modpack and must use a supported Minecraft version"
+                        .into(),
                 );
             }
         }
@@ -308,7 +308,7 @@ mod tests {
         }
     }
     #[test]
-    fn vanilla_requires_supported_version_and_no_pack_or_loader() {
+    fn vanilla_requires_supported_version_and_no_pack() {
         let listing = ServerListing {
             content: ServerContent::Vanilla {
                 game_versions: vec!["1.21.1".into()],
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(update_state(&inst, &listing), (false, true));
         inst.minecraft_version = "1.21.1".into();
         inst.modloader = Some("fabric".into());
-        assert!(validate_link(&inst, &listing).is_err());
+        assert!(validate_link(&inst, &listing).is_ok());
         assert!(validate_link(&instance(), &listing).is_err());
     }
     #[test]

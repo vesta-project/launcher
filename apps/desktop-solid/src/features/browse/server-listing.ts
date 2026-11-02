@@ -100,6 +100,8 @@ export function joinFit(listing: ServerListing, instance: JoinCandidate): JoinFi
     return instance.pack?.platform.toLowerCase() === 'modrinth' && instance.pack.projectId === pack.projectId
       ? 'fits'
       : 'pack';
+  // Any loader joins a vanilla server, but a modpack instance follows its own pack.
+  if (instance.pack) return 'pack';
   return gameVersionMatches(serverGameVersions(listing), instance.minecraftVersion) ? 'fits' : 'game';
 }
 

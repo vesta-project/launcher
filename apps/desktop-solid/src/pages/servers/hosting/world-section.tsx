@@ -297,7 +297,7 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
         <Show when={views().length > DATAPACK_PREVIEW}>
           <div data-vesta="server-world-packs-more">
             <Button size="sm" variant="ghost" aria-expanded={expanded() ? 'true' : 'false'} onClick={() => setExpanded((value) => !value)}
-              iconEnd={<Icon name={expanded() ? 'icons/navigation/chevron-up' : 'icons/navigation/chevron-down'} size={14} />}>
+              iconEnd={<Icon name={expanded() ? 'icons/controls/chevron-up' : 'icons/controls/chevron-down'} size={14} />}>
               {expanded() ? t('server-world.datapacks-show-fewer') : t('server-world.datapacks-show-all', { count: views().length })}
             </Button>
           </div>
