@@ -3,6 +3,7 @@ import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, onSettled, Show } from 'solid-js';
 import { Icon } from '../../components/icon';
 import {
+  isServerType,
   supportsEnvironment,
   typeUsesLoader,
   type CategoryGroup,
@@ -169,12 +170,14 @@ export function FilterPanel(props: { section: () => Section | undefined }) {
   return (
     <div data-vesta="browse-panel" ref={(element: HTMLDivElement) => (root = element)}>
       <div data-vesta="browse-panel-body">
-        <PanelSection id="instance" title={t('browse.section-instance')}>
-          <TargetSelect />
-          <Show when={type() === 'modpack' && !serverTargetId()}>
-            <p data-vesta="browse-section-note">{t('browse.instance-modpack-note')}</p>
-          </Show>
-        </PanelSection>
+        <Show when={!isServerType(type())}>
+          <PanelSection id="instance" title={t('browse.section-instance')}>
+            <TargetSelect />
+            <Show when={type() === 'modpack' && !serverTargetId()}>
+              <p data-vesta="browse-section-note">{t('browse.instance-modpack-note')}</p>
+            </Show>
+          </PanelSection>
+        </Show>
 
         <PanelSection
           id="version"

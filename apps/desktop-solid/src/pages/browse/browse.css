@@ -1056,4 +1056,22 @@
     background: var(--vesta-color-fill);
   }
 
+  /* ---- Server listings: players behind a small status dot, region, what it plays ---- */
+  :where([data-vesta='browse-card-meta'][data-kind='server']) {
+    column-gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='browse-card-stat'][data-freshness]) {
+    gap: var(--vesta-space-1-5);
+  }
+
+  :where([data-vesta='browse-card-stat'][data-freshness='live']) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='browse-card-stat']) > [data-vesta='server-dot'] {
+    --server-dot-size: 7px;
+
+    box-shadow: none;
+  }
 }

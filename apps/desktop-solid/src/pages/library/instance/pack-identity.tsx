@@ -5,6 +5,7 @@ import { prefetchProject } from '../../../features/browse/browse-projects';
 import type { LinkedPack } from '../../../features/instances/versions';
 import { serverSnapshot } from '../../../features/servers/store';
 import { t } from '../../../localization';
+import type { ListingIdentity } from './server-link';
 
 /**
  * Where a linked pack lives: its provider project page, or for a server-sourced link the
@@ -27,11 +28,14 @@ export const packVersionLabel = (pack: LinkedPack) =>
 
 /**
  * A linked pack's identity: icon, name, source tag and a meta line. One component for provider
- * and server-sourced links, used on Overview and Versions, so both read the same.
+ * and server-sourced links, used on Overview and Versions, so both read the same. A pack that
+ * follows a Modrinth server listing reads like a server link: the listing's name and icon, the
+ * Server tag, and it opens the listing.
  */
-export function PackIdentity(props: { pack: LinkedPack; meta: JSX.Element }) {
-  const path = () => packLinkPath(props.pack);
+export function PackIdentity(props: { pack: LinkedPack; meta: JSX.Element; listing?: ListingIdentity }) {
+  const path = () => props.listing?.path ?? packLinkPath(props.pack);
   const warm = () => {
+    if (props.listing) return;
     if (props.pack.source !== 'Server' && props.pack.projectId) prefetchProject(props.pack.source === 'CurseForge' ? 'curseforge' : 'modrinth', props.pack.projectId);
   };
   return (
@@ -47,11 +51,13 @@ export function PackIdentity(props: { pack: LinkedPack; meta: JSX.Element }) {
         navigate(next);
       }}
     >
-      <img data-vesta="pack-icon" src={props.pack.icon} alt="" />
+      <img data-vesta="pack-icon" src={props.listing?.icon || props.pack.icon} alt="" />
       <div data-vesta="pack-title">
         <span data-vesta="pack-name">
-          <strong>{props.pack.name}</strong>
-          <span data-vesta="source-tag" data-source={props.pack.source.toLowerCase()}>{packSourceLabel(props.pack)}</span>
+          <strong>{props.listing?.name ?? props.pack.name}</strong>
+          <span data-vesta="source-tag" data-source={props.listing ? 'server' : props.pack.source.toLowerCase()}>
+            {props.listing ? t('instance-pack.source-server') : packSourceLabel(props.pack)}
+          </span>
         </span>
         <span data-vesta="pack-meta">{props.meta}</span>
       </div>

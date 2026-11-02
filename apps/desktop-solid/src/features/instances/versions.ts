@@ -87,9 +87,26 @@ function serverFixturePack(id: string): LinkedPack {
     ],
   };
 }
+/** Browser fixture: "Aero SMP" has the listing's own pack at 4.1; the listing pins 4.2. */
+function modrinthServerFixturePack(id: string): LinkedPack {
+  const engine = { minecraft: "1.21.1", loader: "neoforge", loaderVersion: "21.1.133" };
+  const release = (releaseId: string, label: string, publishedAt: string) =>
+    ({ ...engine, id: releaseId, label, channel: "release" as const, publishedAt, changes: "" });
+  return {
+    name: "Aero SMP", icon: findInstance(id)!.instance.image, source: "Modrinth", projectId: "OgcNPs6n",
+    installed: "BI8N9kpm", installedLabel: "4.1",
+    releases: [
+      release("GDELFL7Y", "4.2", "2026-09-10"),
+      release("BI8N9kpm", "4.1", "2026-07-28"),
+      release("tIXe5CrD", "4.0.1", "2026-07-19"),
+      release("vZN4AGHe", "4.0", "2026-07-19"),
+    ],
+  };
+}
 function initialPack(id: string): LinkedPack | undefined {
   if (nativeInstances) return undefined;
   if (id === "server") return serverFixturePack(id);
+  if (id === "aero-smp") return modrinthServerFixturePack(id);
   if (!["create", "atm"].includes(id)) return undefined;
   const entry = findInstance(id)!.instance;
   const engine = {

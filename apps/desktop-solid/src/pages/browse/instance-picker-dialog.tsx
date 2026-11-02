@@ -47,6 +47,9 @@ import {
   pickerVersion,
 } from './install-actions';
 import { installFromServerPicker } from './server-install-actions';
+import { joinableInstances } from '../../features/browse/server-links';
+import { recommendedGameVersion, serverPack } from '../../features/browse/server-listing';
+import { joinWithNewInstance, linkFromPicker } from './server-actions';
 import { DependencyStep, ServerRow, TargetStep } from './server-target-steps';
 
 /** Kinds a server or its client modpack can receive. */
@@ -67,16 +70,21 @@ type Step =
     };
 
 type Status =
-  | { kind: 'checking' | 'ready' | 'installed' | 'update' | 'replace' }
+  | { kind: 'checking' | 'ready' | 'installed' | 'update' | 'replace' | 'link' | 'linked' }
   | { kind: 'warning' | 'incompatible'; reason: MessageId };
 
-const statusLabels: Record<'checking' | 'ready' | 'installed' | 'update' | 'replace', MessageId> = {
+const statusLabels: Record<'checking' | 'ready' | 'installed' | 'update' | 'replace' | 'link' | 'linked', MessageId> = {
   checking: 'browse.status-checking',
   ready: 'browse.status-ready',
   installed: 'browse.status-installed',
   update: 'browse.status-update',
   replace: 'browse.status-replace',
+  link: 'browse.server-picker-link',
+  linked: 'browse.server-picker-linked',
 };
+/** Rows that can be chosen; a server listing's linked instance already plays it. */
+const choosable = ['ready', 'warning', 'update', 'replace', 'link'];
+const isServerListing = (project: ResourceProject | undefined) => project?.resource_type === 'server';
 
 const fitReasons = {
   vanilla: 'browse.reason-vanilla',
@@ -111,7 +119,8 @@ export function InstancePickerDialog() {
       setClientPacks({});
       depsRequest++;
       preselect = project ? untrack(serverTargetId) : undefined;
-      if (!project) return;
+      // A server listing's rows come from the library and links alone; nothing to fetch.
+      if (!project || isServerListing(project)) return;
       let cancelled = false;
       const entries = canTargetInstance(project) ? untrack(instances) : [];
       // Software decides whether mods or plugins can go on a server; read once per opening.
@@ -154,6 +163,11 @@ export function InstancePickerDialog() {
       const data = loaded();
       const needle = filter().trim().toLowerCase();
       if (!project || !canTargetInstance(project)) return [];
+      // Only instances that can join the listing are offered (same pack, or a supported version).
+      if (isServerListing(project))
+        return joinableInstances(project)
+          .filter(({ entry }) => !needle || entry.instance.name.toLowerCase().includes(needle))
+          .map(({ entry, linked }) => ({ instance: entry.instance, status: { kind: linked ? 'linked' : 'link' } as Status }));
       const rowFor = (rows: Loaded['rows'] | undefined, instanceId: string) =>
         rows?.[instanceId]?.find(
           (item) => projectKey(item.platform.toLowerCase(), item.remote_id) === projectKey(project.source, project.id),
@@ -350,6 +364,7 @@ export function InstancePickerDialog() {
     const project = pickerProject();
     if (current.kind === 'target') return t('browse.target-title', { title: chosen()?.target.name ?? '' });
     if (current.kind === 'deps') return t('browse.deps-title', { name: project?.name ?? '' });
+    if (isServerListing(project)) return t('browse.server-picker-title', { name: project!.name });
     return showServers() ? t('browse.picker-title-any') : t('browse.picker-title');
   };
   const description = () => {
@@ -357,6 +372,8 @@ export function InstancePickerDialog() {
     if (!project) return undefined;
     if (step().kind === 'target') return t('browse.target-description', { name: project.name });
     if (step().kind === 'deps') return undefined;
+    if (isServerListing(project))
+      return t(serverPack(project.server) ? 'browse.server-picker-pack' : 'browse.server-picker-vanilla');
     const pinned = pickerVersion();
     return pinned
       ? t('browse.picker-description-version', { name: project.name, version: pinned.version_number })
@@ -367,6 +384,21 @@ export function InstancePickerDialog() {
     const current = step();
     if (current.kind === 'pick') {
       if (!pickerProject() || !canTargetInstance(pickerProject()!)) return undefined;
+      const listing = pickerProject()!;
+      if (isServerListing(listing)) {
+        const version = listing.server ? recommendedGameVersion(listing.server) : undefined;
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<Icon name="icons/actions/add" size={14} />}
+            disabled={!listing.server}
+            onClick={() => void joinWithNewInstance(listing)}
+          >
+            {version ? t('browse.server-picker-new-vanilla', { version }) : t('browse.server-picker-new')}
+          </Button>
+        );
+      }
       return (
         <Button
           size="sm"
@@ -441,7 +473,7 @@ export function InstancePickerDialog() {
                 <For each={list()} keyed={(row) => row.instance.id}>
                   {(row) => {
                     const status = () => row().status;
-                    const disabled = () => !['ready', 'warning', 'update', 'replace'].includes(status().kind);
+                    const disabled = () => !choosable.includes(status().kind);
                     return (
                       <li data-vesta="browse-picker-row" data-status={status().kind}>
                         <button
@@ -450,7 +482,8 @@ export function InstancePickerDialog() {
                           disabled={disabled()}
                           onClick={() => {
                             const project = pickerProject();
-                            if (project) void installFromPicker(project, project.resource_type, { ...row().instance });
+                            if (isServerListing(project)) void linkFromPicker(project!, row().instance);
+                            else if (project) void installFromPicker(project, project.resource_type, { ...row().instance });
                           }}
                         >
                           <img
@@ -482,7 +515,7 @@ export function InstancePickerDialog() {
                 </For>
               </ul>
               <Show when={!list().length}>
-                <EmptyLine>{t('browse.picker-empty')}</EmptyLine>
+                <EmptyLine>{t(isServerListing(pickerProject()) ? 'browse.server-picker-empty' : 'browse.picker-empty')}</EmptyLine>
               </Show>
             </section></Show>
             <Show when={showServers()}>

@@ -5,6 +5,7 @@ import { Icon } from '../../components/icon';
 import {
   categoryLabel,
   filterCount,
+  isServerType,
   parseOperators,
   parseProjectUrl,
   projectPath,
@@ -205,9 +206,12 @@ export function SearchField() {
           if (event.target === event.currentTarget) searchInput.element?.focus();
         }}
       >
-        <span data-vesta="browse-scope">
-          <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
-        </span>
+        {/* Server listings are joined, not installed, so they have no install target. */}
+        <Show when={!isServerType(type())}>
+          <span data-vesta="browse-scope">
+            <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
+          </span>
+        </Show>
         <span data-vesta="browse-search-icon" aria-hidden="true">
           <Icon name="icons/content/search" size={14} />
         </span>

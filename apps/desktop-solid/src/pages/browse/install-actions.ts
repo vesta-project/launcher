@@ -44,6 +44,11 @@ export function closePicker(): void {
   setPickerProject(undefined);
   setPickerVersion(undefined);
 }
+/** The picker for a server listing: instances that can join it, plus a new one. */
+export function openServerPicker(project: ResourceProject): void {
+  setPickerVersion(undefined);
+  setPickerProject(project);
+}
 
 /** Opens a provider page in the system browser, after the shared "leaving the launcher" check. */
 export { openExternal };
@@ -132,6 +137,8 @@ export async function runInstall(
   target: ({ id: string; name: string } & InstallTarget) | undefined,
   pinned?: ResourceVersion,
 ) {
+  // A server listing's pack version is set by its owner: joining picks an instance instead.
+  if (kind === 'server') return openServerPicker(project);
   if (kind === 'modpack') {
     const server = untrack(serverTargetId);
     if (!server) return startPack(project, pinned);

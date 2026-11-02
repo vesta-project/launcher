@@ -94,6 +94,17 @@ const seed: { instance: InstanceCardData; state: InstanceCardState }[] = [
     },
   },
   {
+    // Follows the Aero SMP Modrinth server listing (browse fixtures), one pack version behind.
+    instance: {
+      id: "aero-smp",
+      name: "Aero SMP",
+      minecraftVersion: "1.21.1",
+      modloader: "neoforge",
+      image: art3,
+    },
+    state: { kind: "idle" },
+  },
+  {
     instance: {
       id: "builds",
       name: "Creative Builds",

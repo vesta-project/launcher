@@ -28,6 +28,8 @@ import { ProjectVersions } from './project-versions';
 import { formatDay, kindLabels, projectInstallState } from './project-shared';
 import type { ProjectData } from './project-data';
 import { StripTarget, leaveForBrowse } from './project-strip';
+import { ServerActionNotice, ServerActions, ServerMeta } from './server-project';
+import { serverPack } from '../../../features/browse/server-listing';
 
 /** Author (filters Browse by them) and the stats a card shows, on one line. */
 function ProjectMeta(props: { project: ResourceProject }) {
@@ -91,7 +93,10 @@ function SourceSwitch(props: { data: ProjectData; project: ResourceProject; tab:
   const [peer, setPeer] = createSignal<{ source: SourceId; id: string } | null>(null, { name: 'projectPeer' });
   createEffect(
     () =>
-      props.data.complete() && switchSources.some((source) => source === props.project.source)
+      // Server listings exist on Modrinth only.
+      props.data.complete() &&
+      props.project.resource_type !== 'server' &&
+      switchSources.some((source) => source === props.project.source)
         ? { project: props.project, asked: projectKey(props.data.source, props.data.id) }
         : undefined,
     (request) => {
@@ -159,7 +164,9 @@ function SourceSwitch(props: { data: ProjectData; project: ResourceProject; tab:
 export function ProjectView(props: { data: ProjectData; project: ResourceProject; tab: string | undefined }) {
   const gallery = () => props.project.gallery.length;
   const active = (): ProjectTab =>
-    isProjectTab(props.tab) && (props.tab !== 'gallery' || gallery() > 0) ? props.tab : 'description';
+    isProjectTab(props.tab) && (props.tab !== 'gallery' || gallery() > 0) && (props.tab !== 'versions' || showVersions())
+      ? props.tab
+      : 'description';
   const open = (value: string) => {
     if (isProjectTab(value)) navigate(projectPath(props.data.source, props.data.id, value), { replace: true });
   };
@@ -170,6 +177,10 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
   // Modpacks make a new instance unless a server is chosen, so only a server is a hint for them.
   const targetName = () => (props.project.resource_type === 'modpack' ? modpackTargetName() : installTargetName());
   const versionCount = () => props.data.versions()?.length;
+  const listing = () => props.project.server ?? undefined;
+  // A listing's Versions tab is its own modpack's releases; vanilla listings have none.
+  const showVersions = () =>
+    props.project.resource_type !== 'server' || serverPack(props.project.server)?.projectId === props.project.id;
 
   return (
     <div data-vesta="project-layout">
@@ -183,20 +194,32 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
           </>
         }
         summary={props.project.summary}
-        meta={<ProjectMeta project={props.project} />}
+        meta={
+          <Show when={listing()} fallback={<ProjectMeta project={props.project} />}>
+            {(current) => <ServerMeta listing={current()} />}
+          </Show>
+        }
         actions={
           <>
-            <InstallButton
-              size="md"
-              primary
-              state={state}
-              targetName={targetName}
-              onRun={() => void runInstall(props.project, props.project.resource_type, target())}
-            />
+            <Show
+              when={props.project.resource_type === 'server'}
+              fallback={
+                <InstallButton
+                  size="md"
+                  primary
+                  state={state}
+                  targetName={targetName}
+                  onRun={() => void runInstall(props.project, props.project.resource_type, target())}
+                />
+              }
+            >
+              <ServerActions project={props.project} />
+            </Show>
             <WebMenu url={props.project.web_url} source={props.project.source} />
           </>
         }
       />
+      <ServerActionNotice project={props.project} />
       <Tabs size="sm" value={active()} onChange={open} class="project-tabs">
         <div data-vesta="project-strip">
           <TabList aria-label={t('browse.project-sections')}>
@@ -212,19 +235,24 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
                 {t('browse.tab-gallery')}
               </Tab>
             </Show>
-            <Tab
-              value="versions"
-              icon={<Icon name="icons/content/layers" size={14} />}
-              badge={
-                versionCount() !== undefined ? (
-                  <span data-vesta="project-tab-count">{formatNumber(versionCount()!)}</span>
-                ) : undefined
-              }
-            >
-              {t('browse.tab-versions')}
-            </Tab>
+            <Show when={showVersions()}>
+              <Tab
+                value="versions"
+                icon={<Icon name="icons/content/layers" size={14} />}
+                badge={
+                  versionCount() !== undefined ? (
+                    <span data-vesta="project-tab-count">{formatNumber(versionCount()!)}</span>
+                  ) : undefined
+                }
+              >
+                {t('browse.tab-versions')}
+              </Tab>
+            </Show>
           </TabList>
-          <StripTarget kind={props.project.resource_type} />
+          {/* Listings are joined with an instance chosen by Play, not installed into a target. */}
+          <Show when={props.project.resource_type !== 'server'}>
+            <StripTarget kind={props.project.resource_type} />
+          </Show>
         </div>
         <TabPanel value="description" class="project-pane" forceMount
           style={{ display: active() === 'description' ? undefined : 'none' }}>
@@ -235,9 +263,11 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
             <ProjectGallery project={props.project} />
           </TabPanel>
         </Show>
-        <TabPanel value="versions" class="project-pane project-pane-flush">
-          <ProjectVersions data={props.data} project={props.project} />
-        </TabPanel>
+        <Show when={showVersions()}>
+          <TabPanel value="versions" class="project-pane project-pane-flush">
+            <ProjectVersions data={props.data} project={props.project} />
+          </TabPanel>
+        </Show>
       </Tabs>
     </div>
   );

@@ -120,3 +120,14 @@ instance-pack-source-server = Server
 instance-pack-revision = Revision { $revision }
 instance-pack-from-server = From the server
 instance-pack-from-provider = Linked modpack
+
+# A linked Modrinth server listing on Overview and Versions
+instance-pack-minecraft = Minecraft { $version }
+instance-pack-joins = Joins { $value }
+instance-pack-server-actions = Server link actions
+instance-pack-unlink-server = Unlink server
+instance-pack-unlink-server-title = Unlink from { $name }?
+instance-pack-unlink-server-description = The instance keeps all its content. Play stops joining the server, and the pack stops following the server's version.
+instance-pack-unlink-server-confirm = Keep content and unlink
+instance-pack-unlink-server-failed = Could not unlink the server.
+instance-pack-server-status-failed = Could not check the server's status.
