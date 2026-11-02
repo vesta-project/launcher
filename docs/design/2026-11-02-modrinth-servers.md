@@ -56,3 +56,8 @@ Rust (`vesta-launcher/src-tauri`, resources + instances):
 - Cache listings (ping included) for about 60 s. Never hammer v3 search per keystroke beyond what Browse already does.
 
 Frontend (`apps/desktop-solid`): extend `browse-model.ts` `ResourceType` with `'server'` and mirror the TS types above in `browse-model.ts`. In a plain browser, fixtures in `browse-fixtures.ts` (one vanilla, one modpack server) keep the UI explorable before the backend lands.
+
+## Backend deviations
+
+- The existing provider link is stored as flat `Instance.modpack*` columns, not a link object. The optional server extension is persisted in `instance_server_link` (one row per instance, cascade on delete) and exposed by `instance_server_status(instanceId) -> InstanceServerStatus | null`. This avoids changing every Instance constructor and keeps provider content intact on unlink. Status uses `{ server: { platform: 'modrinth', projectId, address }, listing: ServerListing, update_available: boolean, update_required: boolean }`. The four command names and arguments above are unchanged. Vanilla links have no provider modpack fields.
+- `install_server_pack` returns the created instance ID after scheduling the existing asynchronous install, just like `install_modpack_from_url`; it does not launch the game. Vanilla uses the existing `create_instance` path.
