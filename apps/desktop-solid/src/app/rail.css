@@ -66,6 +66,12 @@
     );
   }
 
+  /* Two frame colours: a curve in the rail colour reads as a stray tab against the titlebar, so the
+   * split frame meets the rail with a straight seam and the gutter fills that corner (board.css). */
+  :where([data-vesta="shell"][data-frame="split"] [data-vesta="rail"])::after {
+    content: none;
+  }
+
   :where([dir="rtl"] [data-vesta="rail"])::after {
     mask-image: radial-gradient(
       circle at 0 100%,

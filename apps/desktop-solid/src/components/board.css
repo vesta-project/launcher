@@ -40,8 +40,7 @@
    * Split frame (the theme's titlebar and rail colours differ, see app/frame-split.ts): the gutter
    * around the sheet continues the titlebar colour, so the frame has only two colours. ::after is a
    * ring whose inner edge is the sheet's rounded edge (outer radius = sheet radius + inset); ::before
-   * fills the ring's three outer corners that do not touch the rail. The fourth (top-start) corner
-   * is the rail's junction fillet. Nothing overlaps the sheet; neighbours share only the 1px
+   * fills the ring's four outer corners, so the rail meets the titlebar colour with a straight seam. Nothing overlaps the sheet; neighbours share only the 1px
    * anti-aliased arc (the corner fills reach under the ring there so no canvas seam shows).
    */
   :where([data-vesta='shell'][data-frame='split'] [data-vesta='board-frame'])::before,
@@ -65,14 +64,16 @@
     background:
       radial-gradient(circle at 0 100%, var(--board-gutter-corner)) right top / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
       radial-gradient(circle at 0 0, var(--board-gutter-corner)) right bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
-      radial-gradient(circle at 100% 0, var(--board-gutter-corner)) left bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat;
+      radial-gradient(circle at 100% 0, var(--board-gutter-corner)) left bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
+      radial-gradient(circle at 100% 100%, var(--board-gutter-corner)) left top / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat;
   }
 
   :where([dir='rtl'] [data-vesta='shell'][data-frame='split'] [data-vesta='board-frame'])::before {
     background:
       radial-gradient(circle at 100% 100%, var(--board-gutter-corner)) left top / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
       radial-gradient(circle at 100% 0, var(--board-gutter-corner)) left bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
-      radial-gradient(circle at 0 0, var(--board-gutter-corner)) right bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat;
+      radial-gradient(circle at 0 0, var(--board-gutter-corner)) right bottom / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat,
+      radial-gradient(circle at 0 100%, var(--board-gutter-corner)) right top / var(--board-gutter-radius) var(--board-gutter-radius) no-repeat;
   }
 
   /* The shell owns page grain; do not paint another texture over board content. */
