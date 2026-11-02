@@ -265,6 +265,7 @@ pub fn run(context: tauri::Context) {
             commands::servers_pack::server_pack_add,
             commands::servers_pack::server_pack_preview,
             commands::servers_pack_sync::server_pack_sync_preview,
+            commands::servers_pack_sync::server_pack_sync_details,
             commands::servers_pack_sync::server_pack_sync_apply,
             commands::servers_pack_sync::server_pack_sync_link,
             commands::servers_pack_sync::server_pack_sync_check,

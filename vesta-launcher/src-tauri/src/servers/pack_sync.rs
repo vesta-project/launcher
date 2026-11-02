@@ -477,6 +477,34 @@ impl ServerManager {
             },
         )
     }
+    /// Form metadata only. Never resolve or download the pack's individual resources.
+    pub async fn pack_sync_details(&self, app: &AppHandle, connection: &str) -> Result<Preview> {
+        let (release, _) = self.verified_release(connection, None).await?;
+        let cache = self.root.join("pack-sync").join("metadata").join(format!("{}.json", release.sha256));
+        if let Ok(Some(mut details)) = read_json::<Preview>(&cache) {
+            if details.server_id == release.server_id && details.fingerprint == release.fingerprint && details.artifact_sha256 == release.sha256 {
+                details.connection_id = connection.into();
+                details.revision = release.revision;
+                details.minimum_revision = release.minimum_revision;
+                return Ok(details);
+            }
+        }
+        let archive = self.client(connection).await?.pack_sync_download(&release).await?;
+        let (name, runtime) = if release.format == "vestapack" {
+            let mut zip = zip::ZipArchive::new(Cursor::new(&archive)).map_err(|_| conflict("pack_unsafe_archive"))?;
+            let index: Index = serde_json::from_slice(&read_member(&mut zip, "vesta.index.json", 1024 * 1024)?).map_err(|_| conflict("pack_invalid_index"))?;
+            (index.name.unwrap_or_else(|| "Server pack".into()), Runtime { minecraft_version: index.minecraft_version, loader: index.modloader_type.unwrap_or_else(|| "vanilla".into()), loader_version: index.modloader_version })
+        } else {
+            let metadata = legacy::details(app, &release, archive).await?;
+            (metadata.name, Runtime { minecraft_version: metadata.minecraft_version, loader: metadata.modloader_type, loader_version: metadata.modloader_version })
+        };
+        let details = Preview { review_id: String::new(), connection_id: connection.into(), instance_id: None,
+            server_id: release.server_id, fingerprint: release.fingerprint, revision: release.revision,
+            minimum_revision: release.minimum_revision, artifact_sha256: release.sha256, name, runtime,
+            changes: Vec::new(), executable_changes: Vec::new(), consent_required: true };
+        write_json(&cache, &details)?;
+        Ok(details)
+    }
     pub async fn pack_sync_preview(
         &self,
         app: &AppHandle,

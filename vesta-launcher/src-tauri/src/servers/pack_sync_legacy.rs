@@ -409,3 +409,22 @@ mod tests {
         assert_eq!(staged.files.len(), 1);
     }
 }
+
+pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<piston_lib::game::modpack::types::ModpackMetadata> {
+    let stage = tempfile::tempdir().map_err(io)?;
+    let source = stage.path().join("pack.zip");
+    if release.format == "catalogue" {
+        let value: Value = serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
+        if value["schemaVersion"] != 1 || value["content"]["mode"] != "platform" { return Err(conflict("pack_invalid_index")); }
+        let content = &value["content"];
+        let platform = match content["platform"].as_str() { Some("modrinth") => crate::models::SourcePlatform::Modrinth, Some("curseforge") => crate::models::SourcePlatform::CurseForge, _ => return Err(conflict("pack_invalid_source")) };
+        let project = content["projectId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+        let version = content["versionId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+        let resources = app.state::<ResourceManager>();
+        let version = resources.get_version(platform, project, version).await.map_err(io)?;
+        download_provider_to(&version.download_url, PROVIDER_ARCHIVE_LIMIT, &source).await?.verify(&version.hash)?;
+    } else if matches!(release.format.as_str(), "zip" | "mrpack") {
+        std::fs::write(&source, archive).map_err(io)?;
+    } else { return Err(conflict("pack_format_unsupported")); }
+    get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))
+}

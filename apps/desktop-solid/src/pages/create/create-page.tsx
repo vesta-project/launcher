@@ -141,7 +141,7 @@ function InstanceInstallForm() {
     disposed = true;
     request++;
     const review = untrack(serverReview);
-    if (review) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {});
+    if (review?.reviewId) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {});
   });
   const loaderChoices = createMemo(loaderCards, { name: "installLoaderChoices" });
   const selectedMinecraft = () =>
@@ -204,8 +204,8 @@ function InstanceInstallForm() {
     return options;
   });
   onSettled(() => {
-    if (serverId) void serverCommand(api => api.packSyncPreview(serverId, null)).then(review => {
-      if (disposed) { void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {}); return; }
+    if (serverId) void (usingFixtures ? serverCommand(api => api.packSyncPreview(serverId, null)) : invoke<PackSyncPreview>('server_pack_sync_details', { connectionId: serverId })).then(review => {
+      if (disposed) { if (review.reviewId) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {}); return; }
       setServerReview(review); setName(review.name); setMinecraft(review.runtime.minecraftVersion);
       setLoader(review.runtime.loader); setLoaderVersion(review.runtime.loaderVersion || '');
       setPack({ name: review.name, version: review.revision, author: null, description: null, iconUrl: null,
@@ -370,8 +370,15 @@ function InstanceInstallForm() {
     setError("");
     try {
       if (serverId && !serverWithoutPack()) {
-        const review = serverReview();
-        const apply = review && syncApplyRequest(review, serverConsent(), false);
+        const details = serverReview();
+        if (!details) return;
+        const review = details.reviewId ? details : await serverCommand(api => api.packSyncPreview(serverId, null));
+        if (review.artifactSha256 !== details.artifactSha256 || review.revision !== details.revision || review.serverId !== details.serverId || review.fingerprint !== details.fingerprint) {
+          await serverCommand(api => api.packSyncDiscard(review.reviewId));
+          setServerReview(undefined); setServerConsent(false);
+          throw { code: 'conflict', reason: 'pack_review_stale' };
+        }
+        const apply = syncApplyRequest(review, serverConsent(), false);
         if (!apply) return;
         setServerReview(undefined);
         const id = await serverCommand(api => api.packSyncApply({ ...apply, name: name().trim() }));
@@ -456,7 +463,7 @@ function InstanceInstallForm() {
         </header>
         <div data-vesta="install-scroll">
           <Show when={reading()}>
-            <p role="status">{t("install.reading-pack")}</p>
+            <div data-vesta="install-loading" role="status"><Icon name="icons/content/modpack" size={40} /><p>{t("install.reading-pack")}</p></div>
           </Show>
           <Show when={!reading() && (!source() || pack())}>
             <div data-vesta="install-columns" data-modpack={pack() ? "" : undefined}>
@@ -639,7 +646,7 @@ function InstanceInstallForm() {
         </div>
         <footer data-vesta="install-footer">
           <Show when={serverReview()?.consentRequired}><Checkbox label={t('server-pack.play-consent')} checked={serverConsent()} onChange={setServerConsent} /></Show>
-          <Button variant="ghost" onClick={() => navigate("/library")} disabled={locked()}>
+          <Button variant="ghost" onClick={() => navigate("/library")} disabled={busy()}>
             {t("common.cancel")}
           </Button>
           <Button
