@@ -2234,6 +2234,7 @@ pub async fn resume_instance_operation(
     );
 
     match op {
+        "server-pack-install" => app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().resume_pack_install(&app_handle, inst.clone()).await.map_err(|error| error.to_string()),
         "repair" => repair_instance(app_handle, task_manager, instance_id, None).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
         "external-import" => {

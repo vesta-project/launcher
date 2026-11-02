@@ -55,3 +55,7 @@ pub async fn server_pack_sync_details(app: AppHandle, manager: State<'_, Arc<Ser
     tokio::time::timeout(std::time::Duration::from_secs(120), manager.pack_sync_details(&app, &connection_id))
         .await.map_err(|_| vesta_server_client::Error::new(vesta_server_client::ErrorCode::Timeout))?
 }
+#[tauri::command]
+pub async fn server_pack_sync_install(app: AppHandle, manager: State<'_, Arc<ServerManager>>, connection_id: String, revision: String, sha256: String, consent: bool, instance_data: crate::models::instance::Instance) -> Result<i32> {
+    manager.start_pack_install(&app, &connection_id, &revision, &sha256, consent, instance_data).await
+}

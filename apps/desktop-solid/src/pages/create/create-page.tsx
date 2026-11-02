@@ -40,6 +40,7 @@ import {
 } from "../../features/instances/icon-catalog";
 import { calculateRecommendedMemory } from "../../features/installation/memory-policy";
 import {
+  installationRecord,
   installationDefaults,
   InstallationStartError,
   packReleases,
@@ -370,6 +371,16 @@ function InstanceInstallForm() {
     setError("");
     try {
       if (serverId && !serverWithoutPack()) {
+        if (!usingFixtures) {
+          const details = serverReview();
+          if (!details) return;
+          const instanceData = installationRecord({ name: name().trim(), icon: icon(), minecraft: selectedMinecraft(), loader: loader(), loaderVersion: selectedLoader(), memory: memory() }, pack());
+          const id = await invoke<number>('server_pack_sync_install', { connectionId: serverId, revision: details.revision, sha256: details.artifactSha256, consent: serverConsent(), instanceData });
+          setCreatedId(id);
+          await refreshNativeInstances(true);
+          if (!disposed) navigate('/library');
+          return;
+        }
         const details = serverReview();
         if (!details) return;
         const review = details.reviewId ? details : await serverCommand(api => api.packSyncPreview(serverId, null));

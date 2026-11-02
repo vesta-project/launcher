@@ -915,3 +915,116 @@ mod check;
 pub use check::Check;
 #[path = "pack_sync_legacy.rs"]
 mod legacy;
+
+#[derive(Clone)]
+struct ServerInstallTask {
+    instance: Instance,
+    details: PackDetails,
+}
+impl crate::tasks::manager::Task for ServerInstallTask {
+    fn name(&self) -> String { "Installing Modpack".into() }
+    fn id(&self) -> Option<String> { Some(format!("install_instance_{}_server_pack", self.instance.id)) }
+    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind { crate::tasks::activity::ActivityKind::ModpackInstall }
+    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
+        Some(crate::notifications::models::NotificationContext::instance(self.instance.id, Some(self.instance.name.clone())))
+    }
+    fn conflict_keys(&self) -> Vec<String> { vec![crate::tasks::manager::instance_play_conflict_key(self.instance.id)] }
+    fn cancellable(&self) -> bool { true }
+    fn show_completion_notification(&self) -> bool { true }
+    fn starting_description(&self) -> String { format!("Installing {}", self.instance.name) }
+    fn on_abandoned(&self, app: &AppHandle) -> futures::future::BoxFuture<'static, ()> {
+        let app = app.clone(); let instance = self.instance.clone();
+        Box::pin(async move { if let Ok(root) = game_dir(&instance) { crate::modpack::update::rollback_start(&app, instance.id, &root); mark_server_install_interrupted(&app, instance.id); } })
+    }
+    fn run(&self, ctx: crate::tasks::manager::TaskContext) -> futures::future::BoxFuture<'static, std::result::Result<(), String>> {
+        let instance = self.instance.clone(); let details = self.details.clone();
+        Box::pin(async move {
+            let root = game_dir(&instance).map_err(|e| e.to_string())?;
+            ctx.set_stage("downloading");
+            ctx.update_description("Downloading modpack files...".into());
+            let manager = ctx.app_handle.state::<Arc<ServerManager>>();
+            let mut cancel = ctx.cancel_rx.clone();
+            let result = tokio::select! {
+                result = manager.prepare_new_install(&ctx.app_handle, &instance, &details) => result.map_err(|e| e.to_string()),
+                _ = async { loop { if *cancel.borrow() { break; } if cancel.changed().await.is_err() { break; } } } => Err("Installation cancelled".into()),
+            };
+            let prepared = match result {
+                Ok(prepared) => prepared,
+                Err(error) => {
+                    crate::modpack::update::rollback_start(&ctx.app_handle, instance.id, &root);
+                    mark_server_install_interrupted(&ctx.app_handle, instance.id);
+                    return Err(error);
+                }
+            };
+            let request_path = root.join(".vesta/server-install.json");
+            let task = crate::tasks::update_modpack::UpdateModpackTask::from_server(instance.id, instance.name, root, prepared, false);
+            let app = ctx.app_handle.clone();
+            let id = instance.id;
+            let result = task.run(ctx).await;
+            if result.is_ok() { let _ = std::fs::remove_file(request_path); }
+            else { mark_server_install_interrupted(&app, id); }
+            result
+        })
+    }
+}
+impl ServerManager {
+    async fn prepare_new_install(&self, app: &AppHandle, instance: &Instance, details: &PackDetails) -> Result<Prepared> {
+        let preview = self.pack_sync_preview(app, &details.preview.connection_id, Some(instance.id)).await?;
+        let prepared = self.pack_previews.lock().await.remove(&preview.review_id).ok_or_else(|| conflict("pack_review_expired"))?;
+        if preview.revision != details.preview.revision || preview.artifact_sha256 != details.preview.artifact_sha256 || preview.server_id != details.preview.server_id || preview.fingerprint != details.preview.fingerprint {
+            return Err(conflict("pack_review_stale"));
+        }
+        Ok(prepared)
+    }
+    pub async fn start_pack_install(&self, app: &AppHandle, connection: &str, expected_revision: &str, expected_sha256: &str, consent: bool, mut instance: Instance) -> Result<i32> {
+        use crate::tasks::manager::TaskManager;
+        if !consent { return Err(conflict("pack_executable_consent_required")); }
+        let details = self.pack_sync_details(app, connection).await?;
+        if details.preview.revision != expected_revision || details.preview.artifact_sha256 != expected_sha256 { return Err(conflict("pack_review_stale")); }
+        let (release, _) = self.verified_release(connection, None).await?;
+        if release.revision != expected_revision || release.sha256 != expected_sha256 { return Err(conflict("pack_review_stale")); }
+        instance.minecraft_version = details.preview.runtime.minecraft_version.clone();
+        instance.modloader = Some(details.preview.runtime.loader.clone());
+        instance.modloader_version = details.preview.runtime.loader_version.clone();
+        instance.installation_status = Some("skip-initial-watch".into());
+        let id = crate::commands::instances::create_instance(app.clone(), instance, app.state::<crate::resources::watcher::ResourceWatcher>()).await.map_err(io)?;
+        let instance = crate::commands::instances::get_instance(id).map_err(io)?;
+        let root = game_dir(&instance)?;
+        self.remember_release(id, connection, &release)?;
+        write_json(&root.join(".vesta/server-install.json"), &details)?;
+        crate::modpack::update::begin(app, &instance, &root, &release.revision).map_err(io)?;
+        crate::commands::instances::update_instance_operation(app, id, "server-pack-install").map_err(io)?;
+        if let Err(error) = app.state::<TaskManager>().submit(Box::new(ServerInstallTask { instance, details })).await {
+            crate::modpack::update::rollback_start(app, id, &root);
+            mark_server_install_interrupted(app, id);
+            return Err(io(error));
+        }
+        Ok(id)
+    }
+}
+
+fn mark_server_install_interrupted(app: &AppHandle, id: i32) {
+    let _ = crate::commands::instances::update_instance_operation(app, id, "server-pack-install");
+    let _ = crate::commands::instances::update_installation_status(app, id, "interrupted");
+}
+impl ServerManager {
+    pub async fn resume_pack_install(&self, app: &AppHandle, instance: Instance) -> Result<()> {
+        let _guard = app.state::<crate::tasks::manager::TaskManager>().acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(instance.id)]).await;
+        let instance = crate::commands::instances::get_instance(instance.id).map_err(io)?;
+        if instance.installation_status.as_deref() == Some("installed") { return Ok(()); }
+        let root = game_dir(&instance)?;
+        let details: PackDetails = read_json(&root.join(".vesta/server-install.json"))?.ok_or_else(|| conflict("pack_review_expired"))?;
+        let (release, _) = self.verified_release(&details.preview.connection_id, Some(&instance)).await?;
+        if release.revision != details.preview.revision || release.sha256 != details.preview.artifact_sha256 { return Err(conflict("pack_review_stale")); }
+        if crate::modpack::update::has_pending_recovery(&root) { crate::modpack::update::recover_previous_instance(app, instance.id, &root).map_err(io)?; }
+        crate::modpack::update::begin(app, &instance, &root, &release.revision).map_err(io)?;
+        crate::commands::instances::update_instance_operation(app, instance.id, "server-pack-install").map_err(io)?;
+        let id = instance.id;
+        if let Err(error) = app.state::<crate::tasks::manager::TaskManager>().submit(Box::new(ServerInstallTask { instance, details })).await {
+            crate::modpack::update::rollback_start(app, id, &root);
+            mark_server_install_interrupted(app, id);
+            return Err(io(error));
+        }
+        Ok(())
+    }
+}

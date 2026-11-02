@@ -9,6 +9,7 @@ import type { MessageId } from '../../localization/messages';
 const active: Record<string, MessageId> = {
   install: 'instance.op.installing',
   installing: 'instance.op.installing',
+  'server-pack-install': 'instance.op.installing',
   update: 'instance.op.updating',
   updating: 'instance.op.updating',
   repair: 'instance.op.repairing',
@@ -21,6 +22,7 @@ const active: Record<string, MessageId> = {
 const noun: Record<string, MessageId> = {
   install: 'instance.op.install',
   installing: 'instance.op.install',
+  'server-pack-install': 'instance.op.install',
   update: 'instance.op.update',
   updating: 'instance.op.update',
   repair: 'instance.op.repair',
