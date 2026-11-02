@@ -239,7 +239,8 @@ public class ExitHandler {
                 logWriter.println(line);
                 // Best-effort console forward for the launcher; never abort the
                 // session if the parent closed our stdout/stderr pipe.
-                safePrintln(console, line);
+                // The launcher redirects supervisor stdio to this same log to
+                // retain JVM startup failures. Do not duplicate child output.
             }
         } catch (IOException e) {
             // Stream closed, game exited

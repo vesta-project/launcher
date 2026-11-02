@@ -1121,4 +1121,69 @@ mod tests {
             assert!(validate_target(&spec, &manifest).is_err());
         }
     }
+
+    #[test]
+    fn quick_play_loader_profiles_forward_manifest_arguments() {
+        use super::super::targets::validate_target_arguments;
+        use crate::game::metadata::ModloaderType;
+        let vanilla: VersionManifest =
+            serde_json::from_str(include_str!("../../test_fixtures/quickplay-1.21.json")).unwrap();
+        for (loader, fixture) in [
+            (
+                ModloaderType::NeoForge,
+                include_str!("../../test_fixtures/quickplay-neoforge-1.21.1.json"),
+            ),
+            (
+                ModloaderType::Forge,
+                include_str!("../../test_fixtures/quickplay-forge-1.21.1.json"),
+            ),
+            (
+                ModloaderType::Quilt,
+                include_str!("../../test_fixtures/quickplay-quilt-1.21.1.json"),
+            ),
+            (
+                ModloaderType::Forge,
+                include_str!("../../test_fixtures/quickplay-forge-1.20.1.json"),
+            ),
+            (
+                ModloaderType::NeoForge,
+                include_str!("../../test_fixtures/quickplay-neo-1.20.2.json"),
+            ),
+        ] {
+            let profile: VersionManifest =
+                serde_json::from_str(fixture.trim_start_matches('\u{feff}')).unwrap();
+            let version = profile
+                .inherits_from
+                .as_deref()
+                .filter(|v| !v.contains('$'))
+                .unwrap_or("1.21.1")
+                .to_owned();
+            let mut manifest =
+                UnifiedManifest::merge(vanilla.clone(), Some(profile), OsType::current());
+            let mut spec = test_launch_spec("probe", &version, "instance".into(), "data".into());
+            spec.modloader = Some(loader);
+            for target in [
+                LaunchTarget::None,
+                LaunchTarget::World {
+                    folder: "My World".into(),
+                },
+                LaunchTarget::Server {
+                    host: "example.org".into(),
+                    port: Some(25566),
+                },
+            ] {
+                spec.target = target;
+                validate_target_arguments(&spec, &manifest).unwrap();
+                let args = build_game_arguments(&spec, &manifest, OsType::current());
+                assert!(args.windows(2).any(|pair| pair[0] == "--quickPlayPath"
+                    && pair[1]
+                        == spec
+                            .game_dir
+                            .join(".vesta/quickplay.json")
+                            .to_string_lossy()));
+            }
+            manifest.main_class = "custom.UnverifiedMain".into();
+            assert!(validate_target_arguments(&spec, &manifest).is_err());
+        }
+    }
 }

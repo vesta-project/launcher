@@ -1,0 +1,40 @@
+﻿{
+    "id":  "neoforge-20.2.93",
+    "mainClass":  "cpw.mods.bootstraplauncher.BootstrapLauncher",
+    "inheritsFrom":  "1.20.2",
+    "arguments":  {
+                      "game":  [
+                                   "--fml.neoForgeVersion",
+                                   "20.2.93",
+                                   "--fml.fmlVersion",
+                                   "1.0.16",
+                                   "--fml.mcVersion",
+                                   "1.20.2",
+                                   "--fml.neoFormVersion",
+                                   "20231019.002635",
+                                   "--launchTarget",
+                                   "forgeclient"
+                               ],
+                      "jvm":  [
+                                  "-Djava.net.preferIPv6Addresses=system",
+                                  "-DignoreList=securejarhandler-2.1.24.jar,asm-9.5.jar,asm-commons-9.5.jar,asm-tree-9.5.jar,asm-util-9.5.jar,asm-analysis-9.5.jar,bootstraplauncher-1.1.2.jar,JarJarFileSystems-0.4.0.jar,events-1.0.16.jar,core-1.0.16.jar,language-java-1.0.16.jar,language-lowcode-1.0.16.jar,language-minecraft-1.0.16.jar,client-extra,neoforge-,${version_name}.jar",
+                                  "-DmergeModules=jna-5.10.0.jar,jna-platform-5.10.0.jar",
+                                  "-Dfml.pluginLayerLibraries=core-1.0.16.jar,language-java-1.0.16.jar,language-lowcode-1.0.16.jar,language-minecraft-1.0.16.jar",
+                                  "-Dfml.gameLayerLibraries=events-1.0.16.jar",
+                                  "-DlibraryDirectory=${library_directory}",
+                                  "-p",
+                                  "${library_directory}/cpw/mods/securejarhandler/2.1.24/securejarhandler-2.1.24.jar${classpath_separator}${library_directory}/org/ow2/asm/asm/9.5/asm-9.5.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-commons/9.5/asm-commons-9.5.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-tree/9.5/asm-tree-9.5.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-util/9.5/asm-util-9.5.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-analysis/9.5/asm-analysis-9.5.jar${classpath_separator}${library_directory}/cpw/mods/bootstraplauncher/1.1.2/bootstraplauncher-1.1.2.jar${classpath_separator}${library_directory}/net/neoforged/JarJarFileSystems/0.4.0/JarJarFileSystems-0.4.0.jar",
+                                  "--add-modules",
+                                  "ALL-MODULE-PATH",
+                                  "--add-opens",
+                                  "java.base/java.util.jar=cpw.mods.securejarhandler",
+                                  "--add-opens",
+                                  "java.base/java.lang.invoke=cpw.mods.securejarhandler",
+                                  "--add-exports",
+                                  "java.base/sun.security.util=cpw.mods.securejarhandler",
+                                  "--add-exports",
+                                  "jdk.naming.dns/com.sun.jndi.dns=java.naming"
+                              ]
+                  },
+    "minecraftArguments":  null
+}

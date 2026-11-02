@@ -6,8 +6,8 @@ use super::{
 use crate::game::{installer::types::OsType, metadata::ModloaderType};
 use anyhow::{bail, Result};
 
-/// Deliberately bounded to the release families reviewed for slice 1.
-/// Fabric's Knot client forwards argv to the vanilla client entry point.
+/// Release families whose client entry points forward Quick Play arguments.
+/// See test_fixtures/quickplay-loaders.md for manifest/source evidence.
 pub fn supports_quick_play(version: &str, loader: Option<ModloaderType>) -> bool {
     let parts: Vec<_> = version.split('.').collect();
     (parts.len() == 2 || parts.len() == 3)
@@ -16,10 +16,22 @@ pub fn supports_quick_play(version: &str, loader: Option<ModloaderType>) -> bool
             .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
         && parts[0] == "1"
         && matches!(parts[1], "20" | "21")
-        && matches!(
-            loader,
-            None | Some(ModloaderType::Vanilla | ModloaderType::Fabric)
-        )
+        && match loader {
+            Some(ModloaderType::NeoForge) => {
+                parts[1] == "21"
+                    || parts
+                        .get(2)
+                        .and_then(|patch| patch.parse::<u32>().ok())
+                        .is_some_and(|p| p >= 2)
+            }
+            None
+            | Some(
+                ModloaderType::Vanilla
+                | ModloaderType::Fabric
+                | ModloaderType::Forge
+                | ModloaderType::Quilt,
+            ) => true,
+        }
 }
 
 pub fn server_address(host: &str, port: Option<u16>) -> Result<String> {
@@ -109,6 +121,25 @@ pub fn validate_target(spec: &LaunchSpec, manifest: &UnifiedManifest) -> Result<
 /// Check the resolved argv, also used by the UI support query without accessing saves.
 pub fn validate_target_arguments(spec: &LaunchSpec, manifest: &UnifiedManifest) -> Result<()> {
     let supported = supports_quick_play(&spec.version_id, spec.modloader);
+    if spec.target != LaunchTarget::None {
+        let forwards = match spec.modloader {
+            Some(ModloaderType::NeoForge) => {
+                manifest.main_class == "cpw.mods.bootstraplauncher.BootstrapLauncher"
+            }
+            Some(ModloaderType::Forge) => matches!(
+                manifest.main_class.as_str(),
+                "cpw.mods.bootstraplauncher.BootstrapLauncher"
+                    | "net.minecraftforge.bootstrap.ForgeBootstrap"
+            ),
+            Some(ModloaderType::Quilt) => {
+                manifest.main_class == "org.quiltmc.loader.impl.launch.knot.KnotClient"
+            }
+            _ => true,
+        };
+        if !supported || !forwards {
+            bail!("Direct launch is unsupported by this loader entry point");
+        }
+    }
     let args = build_game_arguments(spec, manifest, OsType::current());
     let expected = match &spec.target {
         LaunchTarget::None => None,
@@ -217,7 +248,13 @@ mod tests {
             ModloaderType::NeoForge,
             ModloaderType::Quilt,
         ] {
-            assert!(!supports_quick_play("1.21", Some(loader)));
+            assert!(supports_quick_play("1.21", Some(loader)));
         }
+        assert!(!supports_quick_play(
+            "1.20.1",
+            Some(ModloaderType::NeoForge)
+        ));
+        assert!(supports_quick_play("1.20.2", Some(ModloaderType::NeoForge)));
+        assert!(supports_quick_play("1.20", Some(ModloaderType::Forge)));
     }
 }

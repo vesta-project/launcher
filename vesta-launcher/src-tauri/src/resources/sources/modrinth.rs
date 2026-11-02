@@ -144,8 +144,14 @@ struct ModrinthVersion {
     id: String,
     project_id: String,
     version_number: String,
+    #[serde(default)]
     game_versions: Vec<String>,
+    #[serde(default)]
     loaders: Vec<String>,
+    #[serde(default)]
+    mrpack_loaders: Vec<String>,
+    #[serde(default)]
+    project_loader_fields: HashMap<String, serde_json::Value>,
     files: Vec<ModrinthFile>,
     version_type: String,
     dependencies: Vec<ModrinthDependency>,
@@ -364,6 +370,32 @@ impl ModrinthSource {
         }
     }
 
+    fn map_versions(
+        versions: Vec<ModrinthVersion>,
+        game_version: Option<&str>,
+        loader: Option<&str>,
+    ) -> Result<Vec<ResourceVersion>> {
+        let versions: Vec<ResourceVersion> = versions
+            .into_iter()
+            // Server listings can include a synthetic version with no artifact.
+            // It is metadata, not an installable release.
+            .filter(|version| !version.files.is_empty())
+            .map(|version| Self::map_version(version, None))
+            .collect::<Result<_>>()?;
+        Ok(versions
+            .into_iter()
+            .filter(|version| {
+                loader.is_none_or(|loader| {
+                    version
+                        .loaders
+                        .iter()
+                        .any(|value| value.eq_ignore_ascii_case(loader))
+                }) && game_version
+                    .is_none_or(|game| version.game_versions.iter().any(|value| value == game))
+            })
+            .collect())
+    }
+
     async fn request_json<T: DeserializeOwned>(
         &self,
         request: RequestBuilder,
@@ -424,6 +456,27 @@ impl ModrinthSource {
     }
 
     fn map_version(v: ModrinthVersion, preferred_hash: Option<&str>) -> Result<ResourceVersion> {
+        let game_versions = if v.game_versions.is_empty() {
+            v.project_loader_fields
+                .get("game_versions")
+                .and_then(|value| serde_json::from_value(value.clone()).ok())
+                .unwrap_or_default()
+        } else {
+            v.game_versions
+        };
+        let mrpack_loaders: Vec<String> = if v.mrpack_loaders.is_empty() {
+            v.project_loader_fields
+                .get("mrpack_loaders")
+                .and_then(|value| serde_json::from_value(value.clone()).ok())
+                .unwrap_or_default()
+        } else {
+            v.mrpack_loaders
+        };
+        let loaders = if mrpack_loaders.is_empty() {
+            v.loaders
+        } else {
+            mrpack_loaders
+        };
         let selected_file = preferred_hash
             .and_then(|hash| v.files.iter().find(|file| file.hashes.sha1 == hash))
             .or_else(|| v.files.iter().find(|file| file.primary))
@@ -441,8 +494,8 @@ impl ModrinthSource {
             id: v.id,
             project_id: v.project_id,
             version_number: v.version_number,
-            game_versions: v.game_versions,
-            loaders: v.loaders,
+            game_versions,
+            loaders,
             download_url: selected_file.url.clone(),
             file_name: selected_file.filename.clone(),
             release_type: match v.version_type.as_str() {
@@ -1033,9 +1086,9 @@ impl ResourceSource for ModrinthSource {
                 serde_json::json!({ "game_versions": [gv] }).to_string(),
             ));
         }
-        if let Some(l) = loader {
-            params.push(("loaders", format!("[\"{}\"]", l.to_lowercase())));
-        }
+        // v3 modpacks use loaders=["mrpack"], with the runtime loader in
+        // mrpack_loaders. Filtering loaders=neoforge at the API drops those
+        // releases. Apply the requested loader after normalizing each version.
 
         let versions: Vec<ModrinthVersion> = self
             .request_json(
@@ -1044,10 +1097,7 @@ impl ResourceSource for ModrinthSource {
             )
             .await?;
 
-        versions
-            .into_iter()
-            .map(|version| Self::map_version(version, None))
-            .collect()
+        Self::map_versions(versions, game_version, loader)
     }
 
     async fn get_version(&self, _project_id: &str, version_id: &str) -> Result<ResourceVersion> {
@@ -1201,6 +1251,47 @@ impl ResourceSource for ModrinthSource {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn aero_versions_skip_synthetic_and_preserve_runtime_compatibility() {
+        for fixture in [
+            include_str!("fixtures/aero-versions-v2.json"),
+            include_str!("fixtures/aero-versions-v3.json"),
+        ] {
+            let versions: Vec<super::ModrinthVersion> =
+                serde_json::from_str(fixture.trim_start_matches('\u{feff}')).unwrap();
+            assert_eq!(versions.len(), 2);
+            let installable =
+                super::ModrinthSource::map_versions(versions, Some("1.21.1"), Some("NeoForge"))
+                    .unwrap();
+            assert_eq!(installable.len(), 1);
+            assert_eq!(installable[0].game_versions, ["1.21.1"]);
+            assert_eq!(installable[0].loaders, ["neoforge"]);
+            assert!(installable[0].file_name.ends_with(".mrpack"));
+        }
+    }
+
+    #[test]
+    fn v3_project_loader_fields_supply_missing_compatibility() {
+        let mut payload: serde_json::Value = serde_json::from_str(
+            include_str!("fixtures/aero-versions-v3.json").trim_start_matches('\u{feff}'),
+        )
+        .unwrap();
+        let version = payload[0].as_object_mut().unwrap();
+        let games = version.remove("game_versions").unwrap();
+        let loaders = version.remove("mrpack_loaders").unwrap();
+        version.remove("loaders");
+        version.insert(
+            "project_loader_fields".into(),
+            serde_json::json!({"game_versions":games,"mrpack_loaders":loaders}),
+        );
+        let version = super::ModrinthSource::map_version(
+            serde_json::from_value(payload[0].clone()).unwrap(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(version.game_versions, ["1.21.1"]);
+        assert_eq!(version.loaders, ["neoforge"]);
+    }
     use super::{
         map_authors, map_environment, map_links, matches_resource_type, project_type_filter,
         supports_loader_filter, ModrinthProjectLink, ModrinthSource, ModrinthTeamMember,

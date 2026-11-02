@@ -202,7 +202,8 @@ pub async fn launch_prepared_game(
     let manifest = plan.manifest;
     super::targets::validate_target(&spec, &manifest)?;
     if super::arguments::build_game_arguments(&spec, &manifest, os)
-        .iter().any(|arg| arg == "--quickPlayPath")
+        .iter()
+        .any(|arg| arg == "--quickPlayPath")
     {
         super::targets::prepare_quick_play_log(&spec)?;
     }
@@ -430,8 +431,9 @@ pub async fn launch_prepared_game(
         // Exit handler writes the session log itself. Leaving stdout/stderr piped
         // to the launcher caused SIGPIPE / sticky PrintStream errors that killed
         // console streaming (and sometimes the wrapper JVM) under sandbox.
-        command.stdout(Stdio::null());
-        command.stderr(Stdio::null());
+        // Preserve JVM/bootstrap errors before ExitHandler.main can open its
+        // own log or register its shutdown hook. File handles survive app exit.
+        preserve_supervisor_stdio(&mut command, &log_file)?;
     } else {
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
@@ -629,6 +631,16 @@ pub async fn launch_prepared_game(
         handle,
         console_from_log_file: use_exit_handler,
     })
+}
+
+fn preserve_supervisor_stdio(command: &mut tokio::process::Command, log_file: &Path) -> Result<()> {
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)?;
+    command.stdout(Stdio::from(log.try_clone()?));
+    command.stderr(Stdio::from(log));
+    Ok(())
 }
 
 fn validate_sandbox_command_graph(
@@ -840,6 +852,20 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn supervisor_failure_before_main_retains_diagnostics_and_os_exit_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("launch.log");
+        let mut command = tokio::process::Command::new("cmd.exe");
+        command.args(["/D", "/C", "echo JVM startup failure 1>&2 & exit /b 23"]);
+        super::preserve_supervisor_stdio(&mut command, &log).unwrap();
+        let status = command.status().await.unwrap();
+        assert_eq!(status.code(), Some(23));
+        assert!(std::fs::read_to_string(log)
+            .unwrap()
+            .contains("JVM startup failure"));
+    }
     use super::*;
 
     #[test]
