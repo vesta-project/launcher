@@ -427,16 +427,10 @@ pub(crate) async fn finish(
     updated.modloader_version = runtime_fields.modloader_version.clone();
     updated.modpack_version_id = Some(new_version_id.to_string());
     if let crate::tasks::update_modpack::UpdateSource::Server { review, .. } = source {
-        if let Some(provider) = &review.provider_pack {
-            updated.modpack_platform = Some(provider.platform.clone());
-            updated.modpack_id = Some(provider.project.clone());
-            updated.modpack_version_id = Some(provider.version.clone());
-            updated.modpack_icon_url = provider.icon_url.clone();
-            if review.preview.instance_id.is_none() || updated.icon_path.as_deref().is_some_and(|p| p.starts_with("builtin:placeholder")) { updated.icon_path = None; }
-        } else {
-            updated.modpack_platform = Some("server".into());
-            updated.modpack_id = Some(review.release.server_id.clone());
-        }
+        updated.modpack_platform = Some("server".into());
+        updated.modpack_id = Some(review.release.server_id.clone());
+        updated.modpack_version_id = Some(review.release.revision.clone());
+        if let Some(provider) = &review.provider_pack { updated.modpack_icon_url = provider.icon_url.clone(); }
     }
 
     if runtime_changed

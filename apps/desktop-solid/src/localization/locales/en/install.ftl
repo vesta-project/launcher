@@ -66,3 +66,4 @@ install-search-resources = Search resources
 install-custom-resource = Custom source
 install-custom-pack = Custom pack
 install-show-resources = Show more
+install-server-pack-for = Pack for { $name }

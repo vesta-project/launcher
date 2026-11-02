@@ -1,3 +1,5 @@
+import { InstallPackDetails } from '../../create/pack-details';
+import { serverPackMetadata, type PackSyncDetails } from '../../../features/servers/native-pack-sync';
 import { Button, Dialog, IconButton, ImageViewer } from "@vesta/ui";
 import { invoke } from '@tauri-apps/api/core';
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
@@ -71,6 +73,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
   return (
     <div data-vesta="overview">
       <LinkedPack instanceId={id()} />
+      <Show when={nativeInstances && ["installing", "interrupted"].includes(props.entry.state.kind)}><InstallingPackInventory instanceId={id()} /></Show>
       <Show
         when={latest()}
         fallback={
@@ -273,4 +276,14 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         footer={<><Button variant="ghost" disabled={deletingShot()} onClick={() => setDeleteShot(undefined)}>{t('common.cancel')}</Button><Button tone="danger" disabled={deletingShot()} onClick={() => void deleteScreenshot()}>{t('common.delete')}</Button></>} />
     </div>
   );
+}
+
+function InstallingPackInventory(props: { instanceId: string }) {
+  const [details, setDetails] = createSignal<PackSyncDetails>();
+  createEffect(() => props.instanceId, id => {
+    let stale = false;
+    onCleanup(() => { stale = true; });
+    void invoke<PackSyncDetails | null>('server_pack_sync_install_details', { instanceId: Number(id) }).then(value => { if (!stale) setDetails(value ?? undefined); }).catch(() => {});
+  }, { name: 'installingPack.inventory' });
+  return <Show when={details()}>{value => <InstallPackDetails info={serverPackMetadata(value())} serverDetails={value()} matching={false} resourcesOnly />}</Show>;
 }

@@ -1,3 +1,5 @@
+import { serverIcon } from '../../features/servers/store';
+import { initials, serverArt } from '../../features/servers/art';
 import { serverPackMetadata } from '../../features/servers/native-pack-sync';
 import { serverInstanceFallback } from '../../features/servers/create-instance-model';
 import { preloadLaunchers } from '../../features/launcher-import';
@@ -6,8 +8,7 @@ import {
   enrichLocalPack,
   packArtwork,
 } from "../../features/installation/pack-metadata";
-import { Button, Checkbox, Combobox, IconPicker, Switch, TextField, toast } from "@vesta/ui";
-import { linkInstanceToServer } from "../../features/browse/server-links";
+import { Button, Checkbox, Combobox, IconPicker, Switch, TextField } from "@vesta/ui";
 import { serverPack } from "../../features/browse/server-listing";
 import { OptionCards } from "../../components/option-cards";
 import { SoftwareMark } from "../../components/software-mark";
@@ -105,6 +106,9 @@ function InstanceInstallForm() {
   const sourceHandoff = takeInstallSource();
   // Install & play from a Modrinth server listing: the same form, then the instance follows the listing.
   const listing = sourceHandoff ? takeServerListing() : undefined;
+  const serverName = () => serverId ? serverSnapshot(serverId)?.connection.name : listing?.name;
+  const serverImage = () => serverId ? serverIcon(serverId) ?? serverArt(serverId, initials(serverName() ?? "")) : listing?.icon_url ?? undefined;
+  const serverLocked = () => (!!serverId && !serverWithoutPack()) || !!listing;
   const followsListing = (info: PackInfo | undefined) =>
     !!listing && info?.modpackId === serverPack(listing.server)?.projectId;
   const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
@@ -195,7 +199,7 @@ function InstanceInstallForm() {
         (loader() === "vanilla" || loaderOptions().includes(selectedLoader())));
   const iconOptions = createMemo(() => {
     const options = [...defaultInstanceIcons];
-    for (const src of [icon(), pack()?.iconUrl, ...uploadedInstanceIcons()])
+    for (const src of [icon(), serverImage(), pack()?.iconUrl, ...uploadedInstanceIcons()])
       if (src && !options.some((option) => option.value === src))
         options.push({
           value: src,
@@ -208,10 +212,10 @@ function InstanceInstallForm() {
     if (serverId) void (usingFixtures ? serverCommand(api => api.packSyncPreview(serverId, null)) : invoke<PackSyncDetails>('server_pack_sync_details', { connectionId: serverId })).then(review => {
       if (disposed) { if (review.reviewId) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {}); return; }
       const details = review as PackSyncDetails;
-      setServerReview(details); setName(review.name); setMinecraft(review.runtime.minecraftVersion);
+      setServerReview(details); setName(serverName() ?? review.name); setMinecraft(review.runtime.minecraftVersion);
       setLoader(review.runtime.loader); setLoaderVersion(review.runtime.loaderVersion || '');
       setPack(serverPackMetadata(details));
-      if (details.iconUrl) setIcon(details.iconUrl);
+      if (serverImage() || details.iconUrl) setIcon(serverImage() || details.iconUrl!);
     }).catch(reason => {
       if (disposed) return;
       const failure = reason as ServerCommandError;
@@ -301,7 +305,7 @@ function InstanceInstallForm() {
       setLoader(info.modloader || "vanilla");
       setLoaderVersion(info.modloaderVersion || "");
       if (!nameEdited) setName(followsListing(info) ? listing!.name : info.name);
-      if (!iconEdited) setIcon(packArtwork(info.iconUrl) || defaultInstanceIcons[0].value);
+      if (!iconEdited) setIcon((followsListing(info) ? serverImage() : undefined) || packArtwork(info.iconUrl) || defaultInstanceIcons[0].value);
       recommend();
       if (next.kind === "file") {
         setMatching(true);
@@ -421,9 +425,8 @@ function InstanceInstallForm() {
       const pending = untrack(pendingResource);
       if (pending) await startPendingResourceInstallation(pending, start);
       else if (listing && followsListing(initialPack)) {
-        const id = String(await start());
-        await linkInstanceToServer(id, listing).catch((reason: unknown) =>
-          toast.show({ title: t("browse.server-link-failed"), description: String(reason instanceof Error ? reason.message : reason), tone: "danger" }));
+        const id = String(await invoke<number>('install_server_pack', { projectId: listing.id, instanceData: installationRecord(initialDraft, initialPack) }));
+        await refreshNativeInstances(true);
         if (!disposed) navigate(`/library/${encodeURIComponent(id)}`);
         return;
       }
@@ -458,7 +461,8 @@ function InstanceInstallForm() {
       >
         <header data-vesta="install-header">
           <div>
-            <h1>{pack()?.name || t("management.create-title")}</h1>
+            <h1>{pack()?.name || serverName() || t("management.create-title")}</h1>
+            <Show when={serverLocked() && serverName()}><p>{t("install.server-pack-for", { name: serverName()! })}</p></Show>
             <Show when={pendingResource()}>
               {(pending) => <p role="status">{t(pending().kind === "datapack" ? "browse.pending-resource-world" : "browse.pending-resource", { name: pending().project.name })}</p>}
             </Show>
@@ -506,7 +510,7 @@ function InstanceInstallForm() {
                     />
                   </div>
                 </section>
-                <section data-vesta="install-section">
+                <Show when={!serverLocked()}><section data-vesta="install-section">
                   <h2>{pack() ? t("install.modpack-configuration") : t("install.game-options")}</h2>
                   <Show
                     when={pack()}
@@ -611,7 +615,8 @@ function InstanceInstallForm() {
                       )}
                     </Show>
                   </Show>
-                </section>
+                </section></Show>
+                <Show when={serverLocked() && pack()}>{info => <InstallPackDetails info={info()} matching={false} serverDetails={serverReview()} resourcesOnly />}</Show>
                 <InstallMemoryCard
                   value={memory()}
                   onChange={(value) => {
@@ -628,7 +633,7 @@ function InstanceInstallForm() {
               </div>
               <Show when={pack()}>
                 {(info) => (
-                  <InstallPackDetails info={info()} source={source()} matching={matching()} serverDetails={serverReview()} />
+                  <InstallPackDetails info={info()} source={source()} matching={matching()} serverDetails={serverReview()} lockedRuntime={serverLocked()} />
                 )}
               </Show>
             </div>

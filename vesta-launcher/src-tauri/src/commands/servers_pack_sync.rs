@@ -59,3 +59,8 @@ pub async fn server_pack_sync_details(app: AppHandle, manager: State<'_, Arc<Ser
 pub async fn server_pack_sync_install(app: AppHandle, manager: State<'_, Arc<ServerManager>>, connection_id: String, revision: String, sha256: String, consent: bool, instance_data: crate::models::instance::Instance) -> Result<i32> {
     manager.start_pack_install(&app, &connection_id, &revision, &sha256, consent, instance_data).await
 }
+
+#[tauri::command]
+pub fn server_pack_sync_install_details(manager: State<'_, Arc<ServerManager>>, instance_id: i32) -> Result<Option<crate::servers::pack_sync::PackDetails>> {
+    manager.pack_install_details(instance_id)
+}

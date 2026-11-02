@@ -66,3 +66,17 @@ export function serverPackMetadata(details: PackSyncDetails): import('../install
     format: details.format ?? 'server',
   };
 }
+
+export function archiveResourceDetails(metadata: unknown): PackResourceDetails[] {
+  const mods = (metadata as { mods?: { Modrinth?: { path: string; urls: string[] }; CurseForge?: { project_id?: number; file_id: number } }[] } | undefined)?.mods;
+  if (!Array.isArray(mods)) return [];
+  return mods.flatMap(entry => {
+    if (entry.Modrinth) {
+      const mod = entry.Modrinth;
+      const project = mod.urls?.map(url => { try { const parsed = new URL(url); return parsed.hostname === 'cdn.modrinth.com' ? parsed.pathname.match(/^\/data\/([^/]+)\//)?.[1] : undefined; } catch { return undefined; } }).find(Boolean);
+      return [{ path: mod.path, platform: project ? 'modrinth' : null, projectId: project ?? null }];
+    }
+    if (entry.CurseForge) return [{ path: `CurseForge file ${entry.CurseForge.file_id}`, platform: 'curseforge', projectId: entry.CurseForge.project_id?.toString() ?? null }];
+    return [];
+  });
+}

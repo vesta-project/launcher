@@ -2526,7 +2526,9 @@ pub async fn install_modpack_from_url(
     metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<i32, String> {
-    let client = piston_lib::client::shared_client();
+    install_modpack_from_url_linked(_app, url, instance_data, metadata, task_manager, None).await
+}
+pub(crate) async fn install_modpack_from_url_linked(_app: AppHandle, url: String, instance_data: Instance, metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>, task_manager: State<'_, TaskManager>, server_link: Option<(String, String)>) -> Result<i32, String> {    let client = piston_lib::client::shared_client();
 
     let (final_url, _) = resolve_modpack_resource(client, &url).await;
     log::info!(
@@ -2561,6 +2563,7 @@ pub async fn install_modpack_from_url(
         saved_instance.modpack_version_id
     );
 
+    if let Some((project, address)) = server_link { super::modrinth_servers::save_link(saved_instance.id, &project, &address)?; }
     // Emit created event so UI home page updates immediately
     use tauri::Emitter;
     let _ = _app.emit("core://instance-created", &saved_instance);

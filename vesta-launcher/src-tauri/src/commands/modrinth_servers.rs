@@ -45,7 +45,7 @@ pub fn load_link(instance_id: i32) -> Result<Option<InstanceServerLink>, String>
         address: r.address,
     }))
 }
-fn save_link(instance_id: i32, project_id: &str, address: &str) -> Result<(), String> {
+pub(crate) fn save_link(instance_id: i32, project_id: &str, address: &str) -> Result<(), String> {
     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
     diesel::sql_query("INSERT INTO instance_server_link(instance_id, project_id, address) VALUES (?, ?, ?) ON CONFLICT(instance_id) DO UPDATE SET project_id=excluded.project_id, address=excluded.address")
         .bind::<diesel::sql_types::Integer,_>(instance_id).bind::<diesel::sql_types::Text,_>(project_id).bind::<diesel::sql_types::Text,_>(address)
@@ -188,12 +188,10 @@ pub async fn unlink_instance_server(
 pub async fn install_server_pack(
     app_handle: tauri::AppHandle,
     project_id: String,
+    instance_data: Option<Instance>,
 ) -> Result<i32, String> {
     let (project_id, name, listing) = listing(&app_handle, &project_id).await?;
-    let mut inst = Instance {
-        name,
-        ..Default::default()
-    };
+    let mut inst = instance_data.unwrap_or_else(|| Instance { name, ..Default::default() });
     let instance_id = match &listing.content {
         ServerContent::Modpack {
             project_id: pack_id,
@@ -218,12 +216,13 @@ pub async fn install_server_pack(
             inst.modpack_id = Some(pack_id.clone());
             inst.modpack_version_id = Some(version_id.clone());
             inst.modpack_icon_url = project_icon.clone();
-            super::modpacks::install_modpack_from_url(
+            super::modpacks::install_modpack_from_url_linked(
                 app_handle.clone(),
                 version.download_url,
                 inst,
                 None,
                 app_handle.state(),
+                Some((project_id.clone(), listing.address.clone())),
             )
             .await?
         }

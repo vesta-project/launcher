@@ -1258,6 +1258,7 @@ export const messageIds = [
   "install.pack-memory",
   "install.memory-warning",
   "install.starting",
+  "install.server-pack-for",
   "install.custom-mod-warning",
   "install.search-resources",
   "install.custom-resource",

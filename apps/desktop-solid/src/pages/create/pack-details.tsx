@@ -1,9 +1,9 @@
-import { customModsWithoutProvider, type PackSyncDetails, type PackResourceDetails } from '../../features/servers/native-pack-sync';
+import { archiveResourceDetails, customModsWithoutProvider, type PackSyncDetails, type PackResourceDetails } from '../../features/servers/native-pack-sync';
 import { loadProjects, peekProject } from '../../features/browse/browse-projects';
 import { projectPath, type SourceId } from '../../features/browse/browse-model';
-import { Button, TextField } from '@vesta/ui';
+import { Button, TextField, Tooltip } from '@vesta/ui';
 import { knownPackVersion, packArtwork } from "../../features/installation/pack-metadata";
-import { For, Show, createSignal, createEffect } from "solid-js";
+import { For, Show, createSignal, createEffect, createMemo } from "solid-js";
 import { Icon } from "../../components/icon";
 import { formatNumber, t } from "../../localization";
 import { type PackInfo, type PackSource } from "../../features/installation/install-service";
@@ -15,10 +15,12 @@ export function InstallPackDetails(props: {
   source?: PackSource;
   matching: boolean;
   serverDetails?: PackSyncDetails;
+  resourcesOnly?: boolean;
+  lockedRuntime?: boolean;
 }) {
   const [query, setQuery] = createSignal('');
   const [limit, setLimit] = createSignal(12);
-  const resources = () => props.serverDetails?.resources ?? [];
+  const resources = createMemo(() => props.serverDetails?.resources ?? archiveResourceDetails(props.info.fullMetadata), { name: "installPack.inventory" });
   const unknownMods = () => customModsWithoutProvider(props.serverDetails ?? {});
   createEffect(resources, items => {
     for (const platform of ['modrinth', 'curseforge'] as const) {
@@ -46,7 +48,7 @@ export function InstallPackDetails(props: {
     props.source?.kind === "file" ? props.source.value.split(/[\\/]/).at(-1) : undefined;
   return (
     <aside data-vesta="install-pack-details" aria-label={t("install.pack-details")}>
-      <header data-vesta="install-pack-identity">
+      <Show when={!props.resourcesOnly}><header data-vesta="install-pack-identity">
         <div data-vesta="install-pack-art">
           <Show keyed when={artwork()} fallback={<Icon name="icons/content/cube" size={28} />}>
             {(url) => <img src={url} alt="" onError={() => setFailedImage(url)} />}
@@ -104,6 +106,9 @@ export function InstallPackDetails(props: {
           {t("install.matching-pack")}
         </p>
       </Show>
+      <Show when={props.lockedRuntime}><dl data-vesta="install-pack-facts"><div><dt>Minecraft</dt><dd>{props.info.minecraftVersion}</dd></div><div><dt>{t('management.loader')}</dt><dd>{props.info.modloader} {props.info.modloaderVersion}</dd></div></dl></Show>
+      </Show>
+      <Show when={props.resourcesOnly || !props.lockedRuntime}>
       <Show when={unknownMods().length}>
         <p data-vesta="install-source-warning" role="note"><Icon name="icons/controls/warning" size={16} /><span>{t('install.custom-mod-warning', { count: unknownMods().length })}</span></p>
       </Show>
@@ -116,13 +121,16 @@ export function InstallPackDetails(props: {
               <Show when={item.projectId && ['modrinth', 'curseforge'].includes(item.platform ?? '')} fallback={<span>{resourceName(item)}</span>}>
                 <a href={`#${projectPath(item.platform as SourceId, item.projectId!)}`}>{resourceName(item)}</a>
               </Show>
-              <small>{item.platform === 'curseforge' ? 'CurseForge' : item.platform === 'modrinth' ? 'Modrinth' : t('install.custom-resource')}</small>
+              <Show when={props.info.format === 'custom'}>
+                <Tooltip content={item.platform === 'curseforge' ? 'CurseForge' : item.platform === 'modrinth' ? 'Modrinth' : t('install.custom-resource')} trigger={triggerProps => <span {...triggerProps} tabindex="0" style={{ flex: "none", display: "inline-flex" }}><Icon name={item.platform === 'curseforge' ? 'branding/sources/curseforge' : item.platform === 'modrinth' ? 'branding/sources/modrinth' : 'icons/content/file'} size={14} /></span>} />
+              </Show>
             </li>
           )}</For></ul>
           <Show when={filtered().length > limit()}><Button size="sm" variant="ghost" onClick={() => setLimit(value => value + 24)}>{t('install.show-resources', { count: filtered().length })}</Button></Show>
         </section>
       </Show>
-      <Show when={filename()}>
+      </Show>
+      <Show when={!props.resourcesOnly && filename()}>
         <div data-vesta="install-pack-file" title={props.source?.value}>
           <Icon name="icons/content/file" size={15} />
           <span>{filename()}</span>

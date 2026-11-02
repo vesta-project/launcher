@@ -24,3 +24,15 @@ test('custom-pack warning targets only mods without a recognized provider', () =
   expect(customModsWithoutProvider({ format: 'custom', resources }).map(item => item.path)).toEqual(['mods/local.jar', 'mods/external.jar']);
   expect(customModsWithoutProvider({ format: 'modrinth', resources })).toEqual([]);
 });
+test('archive resource links retain provider identity without per-file downloads', async () => {
+  const { archiveResourceDetails } = await import('../src/features/servers/native-pack-sync');
+  expect(archiveResourceDetails({ mods: [
+    { Modrinth: { path: 'mods/a.jar', urls: ['https://cdn.modrinth.com/data/project-a/versions/v/a.jar'] } },
+    { CurseForge: { project_id: 42, file_id: 99 } },
+    { Modrinth: { path: 'mods/custom.jar', urls: ['https://example.com/custom.jar'] } },
+  ] })).toEqual([
+    { path: 'mods/a.jar', platform: 'modrinth', projectId: 'project-a' },
+    { path: 'CurseForge file 99', platform: 'curseforge', projectId: '42' },
+    { path: 'mods/custom.jar', platform: null, projectId: null },
+  ]);
+});

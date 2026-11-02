@@ -2337,6 +2337,7 @@ pub async fn update_instance_modpack_version(
     instance_id: i32,
     version_id: String,
 ) -> Result<(), String> {
+    if app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().pack_link(instance_id).await.map_err(|error| error.to_string())?.is_some() { return Err("This pack version is controlled by its server".into()); }
     use crate::schema::instance::dsl::*;
     use tauri::Emitter;
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;

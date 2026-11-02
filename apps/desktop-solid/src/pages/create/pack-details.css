@@ -129,3 +129,7 @@
   :where([data-vesta="install-resource-list"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
   :where([data-vesta="install-source-warning"]) { display: flex; align-items: start; gap: var(--vesta-space-2); border-inline-start: var(--vesta-border-width) solid var(--vesta-color-warning-border); padding-inline-start: var(--vesta-space-3); margin: var(--vesta-space-4); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
 }
+
+@layer launcher {
+  :where([data-vesta="install-resource-list"]) ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); column-gap: var(--vesta-space-4); }
+}

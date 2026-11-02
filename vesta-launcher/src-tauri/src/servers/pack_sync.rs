@@ -506,7 +506,7 @@ impl ServerManager {
     pub async fn pack_sync_details(&self, app: &AppHandle, connection: &str) -> Result<PackDetails> {
         let (release, _) = self.verified_release(connection, None).await?;
         // Version the cache schema: old summaries contained fabricated zero counts and revision labels.
-        let cache = self.root.join("pack-sync").join("metadata-v2").join(format!("{}.json", release.sha256));
+        let cache = self.root.join("pack-sync").join("metadata-v3").join(format!("{}.json", release.sha256));
         if let Ok(Some(mut details)) = read_json::<PackDetails>(&cache) {
             let preview = &mut details.preview;
             if preview.server_id == release.server_id && preview.fingerprint == release.fingerprint && preview.artifact_sha256 == release.sha256 {
@@ -534,13 +534,13 @@ impl ServerManager {
                 piston_lib::game::modpack::types::ModpackMod::CurseForge { project_id, file_id, .. } => PackResourceDetails { path: format!("CurseForge file {file_id}"), platform: Some("curseforge".into()), project_id: project_id.map(|id| id.to_string()) },
             }).collect();
             for path in overrides { if !resources.iter().any(|item| item.path == path) { resources.push(PackResourceDetails { path, platform: None, project_id: None }); } }
-            let format = match metadata.format { piston_lib::game::modpack::types::ModpackFormat::Modrinth => "modrinth", _ => "curseforge" }.to_owned();
+            let format = if release.format != "catalogue" { "custom".to_owned() } else { match metadata.format { piston_lib::game::modpack::types::ModpackFormat::Modrinth => "modrinth", _ => "curseforge" }.to_owned() };
             (metadata.name, Runtime { minecraft_version: metadata.minecraft_version, loader: metadata.modloader_type, loader_version: metadata.modloader_version }, Some(metadata.version), metadata.author, metadata.description, metadata.icon_url, format, resources)
         };
         let preview = Preview { review_id: String::new(), connection_id: connection.into(), instance_id: None,
             server_id: release.server_id, fingerprint: release.fingerprint, revision: release.revision,
             minimum_revision: release.minimum_revision, artifact_sha256: release.sha256, name, runtime,
-            changes: Vec::new(), executable_changes: Vec::new(), consent_required: true };
+            changes: Vec::new(), executable_changes: Vec::new(), consent_required: release.format != "catalogue" };
         let details = PackDetails { preview, version, author, description, icon_url, format, resources };
         write_json(&cache, &details)?;
         Ok(details)
@@ -677,7 +677,7 @@ impl ServerManager {
             name: index.name.unwrap_or_else(|| "Server pack".into()),
             runtime: target_runtime,
             changes,
-            consent_required: !executable_changes.is_empty(),
+            consent_required: !executable_changes.is_empty() && provider_pack.is_none(),
             executable_changes,
         };
         let mut previews = self.pack_previews.lock().await;
@@ -978,14 +978,17 @@ impl ServerManager {
     }
     pub async fn start_pack_install(&self, app: &AppHandle, connection: &str, expected_revision: &str, expected_sha256: &str, consent: bool, mut instance: Instance) -> Result<i32> {
         use crate::tasks::manager::TaskManager;
-        if !consent { return Err(conflict("pack_executable_consent_required")); }
         let details = self.pack_sync_details(app, connection).await?;
+        if details.preview.consent_required && !consent { return Err(conflict("pack_executable_consent_required")); }
         if details.preview.revision != expected_revision || details.preview.artifact_sha256 != expected_sha256 { return Err(conflict("pack_review_stale")); }
         let (release, _) = self.verified_release(connection, None).await?;
         if release.revision != expected_revision || release.sha256 != expected_sha256 { return Err(conflict("pack_review_stale")); }
         instance.minecraft_version = details.preview.runtime.minecraft_version.clone();
         instance.modloader = Some(details.preview.runtime.loader.clone());
         instance.modloader_version = details.preview.runtime.loader_version.clone();
+        instance.modpack_platform = Some("server".into());
+        instance.modpack_id = Some(details.preview.server_id.clone());
+        instance.modpack_version_id = Some(details.preview.revision.clone());
         instance.installation_status = Some("skip-initial-watch".into());
         let id = crate::commands::instances::create_instance(app.clone(), instance, app.state::<crate::resources::watcher::ResourceWatcher>()).await.map_err(io)?;
         let instance = crate::commands::instances::get_instance(id).map_err(io)?;
@@ -1026,5 +1029,11 @@ impl ServerManager {
             return Err(io(error));
         }
         Ok(())
+    }
+}
+impl ServerManager {
+    pub fn pack_install_details(&self, id: i32) -> Result<Option<PackDetails>> {
+        let instance = crate::commands::instances::get_instance(id).map_err(io)?;
+        read_json(&game_dir(&instance)?.join(".vesta/server-install.json"))
     }
 }

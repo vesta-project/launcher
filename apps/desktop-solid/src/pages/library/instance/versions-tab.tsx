@@ -336,7 +336,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 </div>
               </header>
 
-              <section data-vesta="pack-releases" aria-labelledby="pack-releases-title">
+              <Show when={linked().source !== "Server" && !listing.identity()}><section data-vesta="pack-releases" aria-labelledby="pack-releases-title">
                 <header data-vesta="pack-releases-head">
                   <h3 id="pack-releases-title">
                     {t("linking.versions-title")}
@@ -379,7 +379,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     )}
                   </For>
                 </ol>
-              </section>
+              </section></Show>
             </section>
           );
         }}
