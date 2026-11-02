@@ -11,7 +11,9 @@
   :where([data-vesta="rail"]) {
     --rail-width: 64px;
     --rail-button-size: 40px;
-    --rail-button-radius: var(--vesta-radius-container);
+    /* Tiles (profile, buttons, pins) follow the theme radius: the control radius scales with the
+     * radius setting and a theme can override --vesta-radius-control or this knob. */
+    --rail-button-radius: var(--vesta-radius-control);
     --rail-tile-border: 2px;
     --rail-gap: 4px;
     --rail-account-gap: var(--vesta-space-4);
@@ -35,7 +37,11 @@
     inline-size: var(--rail-width);
     min-block-size: 0;
     position: relative;
-    padding: var(--rail-account-top, 12px) 10px 13px;
+    /* Tiles sit centred, so their side inset is (rail - tile) / 2; the account keeps that inset from
+     * the top edge too, so the corner reads as one even margin. */
+    --rail-tile-inset: calc((var(--rail-width) - var(--rail-button-size)) / 2);
+
+    padding: var(--rail-account-top, var(--rail-tile-inset)) 10px 13px;
     background: var(--rail-bg);
   }
 

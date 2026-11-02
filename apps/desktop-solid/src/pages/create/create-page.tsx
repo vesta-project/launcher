@@ -6,7 +6,9 @@ import {
   enrichLocalPack,
   packArtwork,
 } from "../../features/installation/pack-metadata";
-import { Button, Checkbox, Combobox, IconPicker, Switch, TextField } from "@vesta/ui";
+import { Button, Checkbox, Combobox, IconPicker, Switch, TextField, toast } from "@vesta/ui";
+import { linkInstanceToServer } from "../../features/browse/server-links";
+import { serverPack } from "../../features/browse/server-listing";
 import { OptionCards } from "../../components/option-cards";
 import { SoftwareMark } from "../../components/software-mark";
 import { Notice } from "../../components/notice";
@@ -52,7 +54,7 @@ import { route } from "../../app/router";
 import { findLauncher } from "../../features/installation/launchers";
 import { LauncherImportPage } from "./launcher-import-page";
 import { startPendingResourceInstallation } from "../../features/browse/new-instance-install";
-import { createActionKey, takeCreateAction, takeResourceInstall, takeInstallSource, takeServerInstall, openServerInstall } from "./install-navigation";
+import { createActionKey, takeCreateAction, takeResourceInstall, takeInstallSource, takeServerListing, takeServerInstall, openServerInstall } from "./install-navigation";
 import { InstallMemoryCard } from "./memory-card";
 import { InstallPackDetails } from "./pack-details";
 import { ImportDialog } from "./import-dialog";
@@ -100,6 +102,10 @@ function InstanceInstallForm() {
   const [serverUncertain, setServerUncertain] = createSignal(false);
   const createAction = takeCreateAction();
   const sourceHandoff = takeInstallSource();
+  // Install & play from a Modrinth server listing: the same form, then the instance follows the listing.
+  const listing = sourceHandoff ? takeServerListing() : undefined;
+  const followsListing = (info: PackInfo | undefined) =>
+    !!listing && info?.modpackId === serverPack(listing.server)?.projectId;
   const [pendingResource, setPendingResource] = createSignal(takeResourceInstall(), { name: "installPendingResource" });
   const [name, setName] = createSignal("", { name: "installName" });
   const [icon, setIcon] = createSignal(defaultInstanceIcons[0].value, { name: "installIcon" });
@@ -293,7 +299,7 @@ function InstanceInstallForm() {
       setMinecraft(info.minecraftVersion);
       setLoader(info.modloader || "vanilla");
       setLoaderVersion(info.modloaderVersion || "");
-      if (!nameEdited) setName(info.name);
+      if (!nameEdited) setName(followsListing(info) ? listing!.name : info.name);
       if (!iconEdited) setIcon(packArtwork(info.iconUrl) || defaultInstanceIcons[0].value);
       recommend();
       if (next.kind === "file") {
@@ -396,6 +402,13 @@ function InstanceInstallForm() {
       const start = () => startInstallation(initialDraft, resolved, initialPack);
       const pending = untrack(pendingResource);
       if (pending) await startPendingResourceInstallation(pending, start);
+      else if (listing && followsListing(initialPack)) {
+        const id = String(await start());
+        await linkInstanceToServer(id, listing).catch((reason: unknown) =>
+          toast.show({ title: t("browse.server-link-failed"), description: String(reason instanceof Error ? reason.message : reason), tone: "danger" }));
+        if (!disposed) navigate(`/library/${encodeURIComponent(id)}`);
+        return;
+      }
       else await start();
       if (!disposed) navigate("/library");
     } catch (reason) {

@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { Badge, Button, IconButton, Skeleton } from '@vesta/ui';
+import { Badge, Button, IconButton, Skeleton, TextField } from '@vesta/ui';
 import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { canGoBack, navigate, previousPath } from '../../../app/router';
 import { goBack, transitionTo } from '../../../app/transition';
@@ -21,7 +21,7 @@ import {
   type ResourceVersion,
   type ResourceVersionDetails,
 } from '../../../features/browse/browse-model';
-import { loadProjects, loadVersionDetails, peekVersionDetails } from '../../../features/browse/browse-projects';
+import { loadProjects, loadVersionDetails, peekVersionDetails, prefetchProject } from '../../../features/browse/browse-projects';
 import { setNotice, target } from '../../../features/browse/browse-store';
 import { versionFilterFor } from '../../../features/browse/version-filter';
 import { formatNumber, t } from '../../../localization';
@@ -201,9 +201,10 @@ function Files(props: { version: ResourceVersion }) {
   );
 }
 
-/** Dependencies by kind; each opens its project (or the exact version it pins) here. */
-function Dependencies(props: { project: ResourceProject; version: ResourceVersion }) {
-  const list = () => props.version.dependencies ?? [];
+type DependencyProjects = () => Map<string, ResourceProject> | undefined;
+
+/** The projects a version's dependencies point at, loaded once for the sidebar and pack contents. */
+function useDependencyProjects(project: () => ResourceProject, list: () => readonly ResourceDependency[]): DependencyProjects {
   const ids = createMemo(() => [...new Set(list().map((item) => item.project_id).filter(Boolean))].join('\n'), {
     name: 'versionDependencyIds',
   });
@@ -217,7 +218,7 @@ function Dependencies(props: { project: ResourceProject; version: ResourceVersio
     }
     let live = true;
     setProjects(undefined);
-    loadProjects(props.project.source, joined.split('\n')).then(
+    loadProjects(project().source, joined.split('\n')).then(
       (found) => live && setProjects(found),
       () => live && setProjects(new Map()),
     );
@@ -225,6 +226,22 @@ function Dependencies(props: { project: ResourceProject; version: ResourceVersio
       live = false;
     };
   });
+  return projects;
+}
+
+/**
+ * A modpack release's embedded dependencies are the pack's own content, not requirements: they
+ * get the main column (PackContents) and the sidebar keeps only real dependencies. Modrinth only;
+ * CurseForge does not expose a pack's content, so its packs have no embedded entries.
+ */
+const isPackRelease = (project: ResourceProject, version: ResourceVersion) =>
+  (project.resource_type === 'modpack' || project.resource_type === 'server') &&
+  (version.dependencies ?? []).some((item) => item.dependency_type === 'embedded');
+
+/** Dependencies by kind; each opens its project (or the exact version it pins) here. */
+function Dependencies(props: { project: ResourceProject; version: ResourceVersion; projects: DependencyProjects; omit?: DependencyType }) {
+  const list = () => (props.version.dependencies ?? []).filter((item) => item.dependency_type !== props.omit);
+  const projects = () => props.projects();
 
   const Row = (row: { dependency: ResourceDependency }) => {
     const found = () => projects()?.get(row.dependency.project_id);
@@ -306,7 +323,15 @@ function Changelog(props: {
   error: string | undefined;
   onRetry: () => void;
 }) {
+  // No changelog is one quiet line, not a heading over an apology.
+  const empty = () =>
+    !!props.details && props.details.changelog_status !== 'unavailable' &&
+    !(props.details.changelog_status === 'available' && props.details.changelog?.trim());
   return (
+    <Show
+      when={!empty()}
+      fallback={<p data-vesta="project-changelog-empty">{t('linking.changelog-empty')}</p>}
+    >
     <section data-vesta="project-changelog" aria-labelledby="project-changelog-title">
       <h2 id="project-changelog-title">{t('browse.version-changelog')}</h2>
       <Switch>
@@ -331,10 +356,170 @@ function Changelog(props: {
             {t('browse.changelog-failed')}
           </Notice>
         </Match>
-        <Match when={true}>
-          <p data-vesta="project-muted">{t('linking.changelog-empty')}</p>
-        </Match>
       </Switch>
+    </section>
+    </Show>
+  );
+}
+
+/** Items shown before "Show all"; about four rows of the grid. */
+const PACK_PREVIEW = 24;
+const packGroups: { kind: string; label: MessageId }[] = [
+  { kind: 'mod', label: 'browse.type-mod' },
+  { kind: 'resourcepack', label: 'browse.type-resourcepack' },
+  { kind: 'shader', label: 'browse.type-shader' },
+  { kind: 'datapack', label: 'browse.type-datapack' },
+];
+const rankOf = (kind: string) => {
+  const index = packGroups.findIndex((group) => group.kind === kind);
+  return index < 0 ? packGroups.length : index;
+};
+
+/**
+ * What a modpack release ships: its embedded dependencies as a searchable grid, grouped by kind
+ * when the projects say what they are. Every entry is pinned to an exact version, so the header
+ * says so once instead of on each tile. The first chunk shows; "Show all" reveals the rest.
+ */
+function PackContents(props: { version: ResourceVersion; projects: DependencyProjects }) {
+  const [query, setQuery] = createSignal('', { name: 'packContentsQuery' });
+  const [expanded, setExpanded] = createSignal(false, { name: 'packContentsExpanded' });
+  const embedded = createMemo(
+    () => (props.version.dependencies ?? []).filter((item) => item.dependency_type === 'embedded'),
+    { name: 'packContentsEmbedded' },
+  );
+  const entries = createMemo(
+    () => {
+      const found = props.projects();
+      return embedded()
+        .map((dependency) => {
+          const project = found?.get(dependency.project_id);
+          const name = project?.name || dependency.file_name || dependency.project_id || t('browse.dependency-unknown');
+          return {
+            key: `${dependency.project_id}:${dependency.version_id ?? ''}:${dependency.file_name ?? ''}`,
+            project,
+            name,
+            kind: project?.resource_type ?? 'other',
+          };
+        })
+        // Grouped order (mods, resource packs, shaders, data packs, other), so the preview shows each kind.
+        .sort((a, b) => rankOf(a.kind) - rankOf(b.kind) || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    },
+    { name: 'packContentsEntries' },
+  );
+  const matching = createMemo(
+    () => {
+      const text = query().trim().toLowerCase();
+      if (!text) return entries();
+      return entries().filter(
+        (entry) => entry.name.toLowerCase().includes(text) || !!entry.project?.summary?.toLowerCase().includes(text),
+      );
+    },
+    { name: 'packContentsMatching' },
+  );
+  // Searching shows every match; otherwise the first chunk until "Show all".
+  const shown = createMemo(
+    () => (expanded() || query().trim() ? matching() : matching().slice(0, PACK_PREVIEW)),
+    { name: 'packContentsShown' },
+  );
+  const groups = createMemo(
+    () => {
+      const known = packGroups.map((group) => ({ ...group, items: shown().filter((entry) => entry.kind === group.kind) }));
+      const other = shown().filter((entry) => !packGroups.some((group) => group.kind === entry.kind));
+      const all: { kind: string; label?: MessageId; items: typeof other; total?: number }[] = [
+        ...known,
+        { kind: 'other', label: 'browse.pack-contents-other' as MessageId, items: other },
+      ]
+        .filter((group) => group.items.length)
+        .map((group) => ({ ...group, total: matching().filter((entry) => rankOf(entry.kind) === rankOf(group.kind)).length }));
+      // One kind needs no heading; a pack still resolving its projects is one plain list.
+      return all.length > 1 && props.projects() ? all : [{ kind: 'all', items: shown() }];
+    },
+    { name: 'packContentsGroups' },
+  );
+  return (
+    <section data-vesta="pack-contents" aria-labelledby="pack-contents-title">
+      <header data-vesta="pack-contents-head">
+        <div>
+          <h2 id="pack-contents-title">
+            {t('browse.pack-contents')}
+            <span data-vesta="project-tab-count">{formatNumber(embedded().length)}</span>
+          </h2>
+          <p data-vesta="project-muted">{t('browse.pack-contents-exact')}</p>
+        </div>
+        <TextField
+          size="sm"
+          class="pack-contents-search"
+          aria-label={t('browse.pack-contents-search')}
+          placeholder={t('browse.pack-contents-search')}
+          icon={<Icon name="icons/content/search" size={14} />}
+          value={query()}
+          onChange={setQuery}
+        />
+      </header>
+      <Show
+        when={matching().length}
+        fallback={<p data-vesta="project-muted">{t('browse.pack-contents-none', { value: query().trim() })}</p>}
+      >
+        <For each={groups()} keyed={(group) => group.kind}>
+          {(group) => (
+            <div data-vesta="pack-contents-group">
+              <Show when={group().label}>
+                {(label) => (
+                  <h3>
+                    {t(label())}
+                    <span data-vesta="project-tab-count">{formatNumber(group().total ?? group().items.length)}</span>
+                  </h3>
+                )}
+              </Show>
+              <ul data-vesta="pack-contents-grid">
+                <For each={group().items} keyed={(entry) => entry.key}>
+                  {(entry) => (
+                    <li>
+                      <Show
+                        when={entry().project}
+                        fallback={
+                          <div data-vesta="pack-contents-item" data-unresolved="">
+                            <Show when={props.projects()} fallback={<Skeleton width={32} height={32} radius={6} />}>
+                              <span data-vesta="project-dependency-icon" data-empty="">
+                                <Icon name="icons/content/cube" size={14} />
+                              </span>
+                            </Show>
+                            <span data-vesta="pack-contents-text">
+                              <strong>{entry().name}</strong>
+                            </span>
+                          </div>
+                        }
+                      >
+                        {(project) => (
+                          <a
+                            data-vesta="pack-contents-item"
+                            href={`#${projectPath(project().source, project().id)}`}
+                            onPointerEnter={() => prefetchProject(project().source, project().id)}
+                            onClick={(event) => openVersion(event, projectPath(project().source, project().id))}
+                          >
+                            <ProjectIcon project={project()} hook="project-dependency-icon" />
+                            <span data-vesta="pack-contents-text">
+                              <strong>{project().name}</strong>
+                              <Show when={project().summary}>
+                                <small>{project().summary}</small>
+                              </Show>
+                            </span>
+                          </a>
+                        )}
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </div>
+          )}
+        </For>
+        <Show when={!query().trim() && matching().length > PACK_PREVIEW}>
+          <Button size="sm" variant="outline" class="pack-contents-more" onClick={() => setExpanded((open) => !open)}>
+            {expanded() ? t('browse.show-fewer') : t('browse.show-all', { count: matching().length })}
+          </Button>
+        </Show>
+      </Show>
     </section>
   );
 }
@@ -397,6 +582,12 @@ export function VersionView(props: { data: ProjectData; project: ResourceProject
     if (to) navigate(versionPath(props.data.source, props.data.id, to.id), { replace: true });
   };
   const listPath = () => projectPath(props.data.source, props.data.id, 'versions');
+
+  const dependencyProjects = useDependencyProjects(() => props.project, () => version()?.dependencies ?? []);
+  const packRelease = () => {
+    const current = version();
+    return !!current && isPackRelease(props.project, current);
+  };
 
   const action = createMemo(
     () => {
@@ -537,11 +728,19 @@ export function VersionView(props: { data: ProjectData; project: ResourceProject
             <div data-vesta="project-overview" data-kind="version">
               <article data-vesta="project-article">
                 <Changelog details={details()} error={error()} onRetry={() => setAttempt((count) => count + 1)} />
+                <Show when={packRelease()}>
+                  <PackContents version={current()} projects={dependencyProjects} />
+                </Show>
               </article>
               <aside data-vesta="project-facts" aria-label={t('browse.version-facts')}>
                 <Compatibility project={props.project} version={current()} />
                 <Files version={current()} />
-                <Dependencies project={props.project} version={current()} />
+                <Dependencies
+                  project={props.project}
+                  version={current()}
+                  projects={dependencyProjects}
+                  omit={packRelease() ? 'embedded' : undefined}
+                />
               </aside>
             </div>
           </div>

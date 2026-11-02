@@ -22,10 +22,9 @@
     --shell-titlebar-height: 32px;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       'rail titlebar'
-      'rail notice'
       'rail scene';
     block-size: 100dvh;
     background: var(--vesta-theme-background, none), var(--vesta-color-canvas-fill, var(--vesta-color-canvas));
@@ -87,16 +86,11 @@
   :where([data-vesta='shell'][data-platform='macos']) {
     grid-template-areas:
       'titlebar titlebar'
-      'notice notice'
       'rail scene';
   }
 
   :where([data-vesta='shell']) > :where([data-vesta='titlebar']) {
     grid-area: titlebar;
-  }
-
-  :where([data-vesta='shell']) > :where([data-vesta='instance-service-error']) {
-    grid-area: notice;
   }
 
   :where([data-vesta='shell-body']) {
@@ -107,9 +101,10 @@
   }
 
   :where([data-vesta='shell-body']) > :where([data-vesta='rail']) {
+    /* The account cell sits in the titlebar row, inset from the window's top edge by the same
+     * distance as from its left edge (the rail's tile inset, see rail.css), so it straddles the
+     * row's bottom edge and is never resized. */
     grid-area: rail;
-    /* The account cell sits in the titlebar row; it straddles the row's bottom edge, never resized. */
-    --rail-account-top: 6px;
     /* Where the titlebar's bottom edge meets the rail (the fillet's top). */
     --rail-junction-top: var(--shell-titlebar-height);
   }
@@ -176,13 +171,45 @@
   }
 }
 
+/*
+ * Instance service error: a tray that slides up from the bottom edge of the window, over the
+ * content and outside the board frame, until it is retried or closed. Reduced motion (the OS
+ * setting or the app's, see reduced-motion.css) shows it in place.
+ * Knobs: --service-error-width, --service-error-offset
+ */
 @layer launcher {
   :where([data-vesta='instance-service-error']) {
-    padding: var(--vesta-space-2) var(--vesta-space-3);
+    --service-error-width: 720px;
+    --service-error-offset: var(--vesta-space-4);
+
+    position: fixed;
+    inset-inline: var(--service-error-offset);
+    inset-block-end: var(--service-error-offset);
+    z-index: var(--vesta-z-toast);
+    inline-size: min(var(--service-error-width), calc(100% - 2 * var(--service-error-offset)));
+    margin-inline: auto;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-surface-raised);
+    box-shadow: var(--vesta-shadow-lg);
+    animation: service-error-enter var(--vesta-duration-slow, 240ms) var(--vesta-ease-standard) both;
   }
+
   :where([data-vesta='instance-service-error'] [data-vesta='notice-message']) {
     max-block-size: 5lh;
     overflow-y: auto;
+  }
+
+  @keyframes service-error-enter {
+    from {
+      transform: translateY(calc(100% + var(--service-error-offset)));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='instance-service-error']) {
+      animation: none;
+    }
   }
 }

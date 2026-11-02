@@ -29,7 +29,7 @@
     inset-inline-end: -3px;
     inline-size: 6px;
     block-size: 6px;
-    border-radius: 50%;
+    border-radius: var(--vesta-radius-full);
     background: var(--vesta-color-accent);
     box-shadow: 0 0 0 2px var(--vesta-color-surface);
     animation: titlebar-dot-in 360ms cubic-bezier(0.32, 0.72, 0, 1);
