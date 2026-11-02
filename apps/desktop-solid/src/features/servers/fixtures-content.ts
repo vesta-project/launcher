@@ -1,4 +1,5 @@
 import type { ConnectionId, ServerCommandError } from './native';
+import { scaleFixtureRows } from '../../platform/fixture-scale';
 import type { ContentChange, ContentInstallRequest, ContentMutation, ContentProvider, ServerContentEntry, ServerContentInventory } from './native-content';
 
 const clone = <T,>(v: T): T => structuredClone(v);
@@ -13,11 +14,14 @@ export function seedContentInventory(software: string): ServerContentInventory {
   return {
     software, minecraftVersion: '1.21.4', truncated: false,
     capabilities: { list: true, install: true, update: true, remove: true, toggle: true, cancel: true, modsSupported: modded, pluginsSupported: plugins },
-    items: [
+    items: scaleFixtureRows<ServerContentEntry>([
       ...(modded ? [entry('mod', 'mods/lithium.jar', { provider: 'modrinth', projectId: 'lithium', versionId: 'lithium-1.0' }, { declared: { loader: 'fabric', side: '*', name: 'Lithium', version: '1.0', dependencies: ['minecraft', 'fabricloader'] } }), entry('mod', 'mods/unidentified.jar', null), entry('mod', 'mods/old-mod.jar.disabled', null, { pending: 'remove', pendingId: 'seed-remove' }), entry('mod', 'mods/fabric-api.jar', { provider: 'modrinth', projectId: 'fabric-api', versionId: 'fabric-api-2' }, { pending: 'install', pendingId: 'seed-install', enabled: null, sha256: null, size: '0' })] : []),
       ...(plugins ? [entry('plugin', 'plugins/LuckPerms.jar', { provider: 'modrinth', projectId: 'luckperms', versionId: 'lp-5' }, { declared: { loader: 'bukkit', side: 'server', name: 'LuckPerms', version: '5.4', dependencies: [] } }), entry('plugin', 'plugins/custom-plugin.jar', null, { pending: 'update', pendingId: 'seed-update' })] : []),
       entry('datapack', 'world/datapacks/terralith.zip', { provider: 'modrinth', projectId: 'terralith', versionId: 'terralith-2' }),
-    ],
+    ], (row, copy) => {
+      const path = row.path.replace(/(\.jar|\.zip)/, `-${copy}$1`);
+      return { ...clone(row), path, filename: path.split('/').at(-1)!, pending: null, pendingId: null, enabled: row.enabled ?? true, sha256: row.sha256 ?? hash, size: row.size === '0' ? '456789' : row.size };
+    }),
   };
 }
 interface Host {
