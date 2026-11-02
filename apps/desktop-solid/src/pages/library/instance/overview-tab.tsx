@@ -1,5 +1,6 @@
 import { Button, Dialog, IconButton, ImageViewer } from "@vesta/ui";
-import { For, Show, createSignal } from "solid-js";
+import { invoke } from '@tauri-apps/api/core';
+import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { navigate } from "../../../app/router";
 import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
@@ -14,7 +15,7 @@ import {
   playInstance,
   type InstanceEntry,
 } from "../../../features/instances/catalog";
-import { nativeInstances } from "../../../features/instances/native-service";
+import { nativeInstances, launchNativeTarget } from "../../../features/instances/native-service";
 import { mutateNativeScreenshot } from "../../../features/instances/native-details";
 import { copyScreenshot } from "../../../features/instances/screenshot-clipboard";
 import { t } from "../../../localization";
@@ -27,6 +28,15 @@ import { LinkedPack } from './linked-pack';
  */
 export function OverviewTab(props: { entry: InstanceEntry }) {
   const id = () => props.entry.instance.id;
+  const [directWorld, setDirectWorld] = createSignal(false);
+  createEffect(id, (instanceId) => {
+    setDirectWorld(false);
+    if (!nativeInstances) return;
+    let stale = false;
+    onCleanup(() => { stale = true; });
+    void invoke<boolean>('instance_direct_launch_support', { instanceId: Number(instanceId) })
+      .then(supported => { if (!stale) setDirectWorld(supported); }).catch(() => {});
+  }, { name: 'overview.directWorldSupport' });
   const worlds = () => worldsFor(id());
   const latest = () => worlds()[0];
   const others = () => worlds().slice(1, 5);
@@ -105,9 +115,9 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                 tone="accent"
                 disabled={!idle()}
                 icon={<Icon name="icons/actions/play" />}
-                onClick={() => playInstance(id())}
+                onClick={() => nativeInstances && directWorld() ? void launchNativeTarget(id(), { kind: 'world', folder: world().id }) : playInstance(id())}
               >
-                {t("overview.play-world")}
+                {t(nativeInstances && !directWorld() ? "worlds.play" : "overview.play-world")}
               </Button>
             </div>
           </section>

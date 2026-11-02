@@ -192,7 +192,7 @@ servers-activity-empty = No recent tasks.
 
 # Overview
 servers-overview-performance = Performance
-servers-overview-cpu = CPU
+servers-overview-cpu = CPU (100% per core)
 servers-overview-memory = Memory
 servers-overview-waiting-metrics = Waiting for the first sample…
 servers-overview-no-metrics = No live metrics while Minecraft is stopped.

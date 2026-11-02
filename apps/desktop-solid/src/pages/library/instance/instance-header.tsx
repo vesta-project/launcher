@@ -1,7 +1,8 @@
-import { Button, IconButton, Menu } from "@vesta/ui";
-import { Show } from "solid-js";
+import { Button, IconButton, Menu, MenuItem } from "@vesta/ui";
+import { invoke } from '@tauri-apps/api/core';
+import { Show, For, createSignal, createEffect, onCleanup } from "solid-js";
 import { Icon } from "../../../components/icon";
-import { formatPlaytime, statsFor } from "../../../features/instances/details";
+import { formatPlaytime, statsFor, worldsFor } from "../../../features/instances/details";
 import {
   playInstance,
   retryInstance,
@@ -9,7 +10,7 @@ import {
 } from "../../../features/instances/catalog";
 import { route } from "../../../app/router";
 import {
-  instancePending,
+  instancePending, nativeInstances, launchNativeTarget, type LaunchTarget,
 } from "../../../features/instances/native-service";
 import { t } from "../../../localization";
 import { activeOperationLabel, operationLabel } from "../../../features/instances/operation-label";
@@ -128,6 +129,17 @@ export function InstanceHeader(props: {
 }) {
   const instance = () => props.entry.instance;
   const action = () => primaryAction(props.entry);
+  const [destinations, setDestinations] = createSignal<{ supported: boolean; servers: { name: string; target: LaunchTarget | null }[] }>({ supported: false, servers: [] });
+  createEffect(() => [instance().id, props.entry.state.kind] as const, ([id]) => {
+    setDestinations({ supported: false, servers: [] });
+    if (!nativeInstances) return;
+    let stale = false;
+    onCleanup(() => { stale = true; });
+    void Promise.all([
+      invoke<boolean>('instance_direct_launch_support', { instanceId: Number(id) }),
+      invoke<{ name: string; target: LaunchTarget | null }[]>('list_instance_saved_servers', { instanceId: Number(id) }),
+    ]).then(([supported, servers]) => { if (!stale) setDestinations({ supported, servers }); }).catch(() => {});
+  }, { name: 'instanceHeader.destinations' });
   const problem = () =>
     route().detail === "crash" && props.entry.state.kind === "crashed"
       ? undefined
@@ -194,6 +206,12 @@ export function InstanceHeader(props: {
           >
             {action().label}
           </Button>
+          <Show when={props.entry.state.kind === 'idle' && destinations().supported && (worldsFor(instance().id).length || destinations().servers.some(server => server.target))}>
+            <Menu trigger={(triggerProps) => <IconButton {...triggerProps} label={t('overview.continue-playing')} icon={<Icon name="icons/controls/chevron-down" />} disabled={instancePending(instance().id)} />}>
+              <For each={worldsFor(instance().id)}>{world => <MenuItem icon={<Icon name="icons/content/globe" />} disabled={world.running} onSelect={() => void launchNativeTarget(instance().id, { kind: 'world', folder: world.id })}>{world.name}</MenuItem>}</For>
+              <For each={destinations().servers.filter(server => server.target)}>{server => <MenuItem icon={<Icon name="icons/content/globe" />} onSelect={() => { if (server.target) void launchNativeTarget(instance().id, server.target); }}>{server.name}</MenuItem>}</For>
+            </Menu>
+          </Show>
         </div>
       </div>
 

@@ -382,7 +382,8 @@ pub async fn launch_prepared_game(
         }
 
         command.arg("-jar");
-        command.arg(exit_handler_jar);
+        // Java cannot resolve JAR entries through Windows verbatim paths (\\?\).
+        command.arg(dunce::simplified(exit_handler_jar));
         command.arg("--instance-id");
         command.arg(&spec.instance_id);
         command.arg("--exit-file");
