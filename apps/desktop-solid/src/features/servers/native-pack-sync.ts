@@ -46,3 +46,23 @@ export function parsePackSyncLaunchBlock(error: unknown): PackSyncCheck | Server
   if (typeof error !== 'string' || !error.startsWith('pack_sync:')) return null;
   try { const value: unknown = JSON.parse(error.slice('pack_sync:'.length)); return typeof value === 'object' && value !== null && ('canLaunch' in value || 'code' in value) ? value as PackSyncCheck | ServerCommandError : null; } catch { return null; }
 }
+
+export interface PackResourceDetails { path: string; platform: string | null; projectId: string | null }
+export interface PackSyncDetails extends PackSyncPreview {
+  version?: string | null; author?: string | null; description?: string | null; iconUrl?: string | null;
+  format?: string; resources?: PackResourceDetails[];
+}
+export function customModsWithoutProvider(details: Pick<PackSyncDetails, 'format' | 'resources'>): PackResourceDetails[] {
+  return details.format === 'custom' ? (details.resources ?? []).filter(item => item.path.startsWith('mods/') && item.path.toLowerCase().endsWith('.jar') && !['modrinth', 'curseforge'].includes(item.platform ?? '')) : [];
+}
+
+export function serverPackMetadata(details: PackSyncDetails): import('../installation/install-service').PackInfo {
+  return {
+    name: details.name, version: details.version ?? '', author: details.author ?? null,
+    description: details.description ?? null, iconUrl: details.iconUrl ?? null,
+    minecraftVersion: details.runtime.minecraftVersion, modloader: details.runtime.loader,
+    modloaderVersion: details.runtime.loaderVersion,
+    modCount: details.resources?.length ?? details.changes.filter(item => /^(mods|resourcepacks|shaderpacks)\//.test(item.path)).length,
+    format: details.format ?? 'server',
+  };
+}

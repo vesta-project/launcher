@@ -413,3 +413,8 @@
     font-weight: 600;
   }
 }
+
+@layer launcher {
+  :where([data-vesta="install-footer"]) { align-items: center; flex-wrap: wrap; }
+  :where([data-vesta="install-consent"]) { margin-inline-end: auto; min-inline-size: 0; }
+}

@@ -51,7 +51,7 @@ pub async fn server_pack_sync_discard(
 }
 
 #[tauri::command]
-pub async fn server_pack_sync_details(app: AppHandle, manager: State<'_, Arc<ServerManager>>, connection_id: String) -> Result<Preview> {
+pub async fn server_pack_sync_details(app: AppHandle, manager: State<'_, Arc<ServerManager>>, connection_id: String) -> Result<crate::servers::pack_sync::PackDetails> {
     tokio::time::timeout(std::time::Duration::from_secs(120), manager.pack_sync_details(&app, &connection_id))
         .await.map_err(|_| vesta_server_client::Error::new(vesta_server_client::ErrorCode::Timeout))?
 }

@@ -120,3 +120,12 @@
     white-space: nowrap;
   }
 }
+
+@layer launcher {
+  :where([data-vesta="install-resource-list"]) { padding: var(--vesta-space-4); border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
+  :where([data-vesta="install-resource-list"]) ul { list-style: none; padding: 0; margin-block: var(--vesta-space-3); max-block-size: 24rem; overflow: auto; }
+  :where([data-vesta="install-resource-list"]) li { display: flex; align-items: center; gap: var(--vesta-space-2); padding-block: var(--vesta-space-2); }
+  :where([data-vesta="install-resource-list"]) li > :where(a, span) { min-inline-size: 0; overflow-wrap: anywhere; flex: 1; }
+  :where([data-vesta="install-resource-list"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="install-source-warning"]) { display: flex; align-items: start; gap: var(--vesta-space-2); border-inline-start: var(--vesta-border-width) solid var(--vesta-color-warning-border); padding-inline-start: var(--vesta-space-3); margin: var(--vesta-space-4); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+}

@@ -410,9 +410,10 @@ mod tests {
     }
 }
 
-pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<piston_lib::game::modpack::types::ModpackMetadata> {
+pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<(piston_lib::game::modpack::types::ModpackMetadata, Vec<String>)> {
     let stage = tempfile::tempdir().map_err(io)?;
     let source = stage.path().join("pack.zip");
+    let mut identity = None;
     if release.format == "catalogue" {
         let value: Value = serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
         if value["schemaVersion"] != 1 || value["content"]["mode"] != "platform" { return Err(conflict("pack_invalid_index")); }
@@ -421,10 +422,27 @@ pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>
         let project = content["projectId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
         let version = content["versionId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
         let resources = app.state::<ResourceManager>();
+        identity = resources.get_project(platform, project).await.ok();
         let version = resources.get_version(platform, project, version).await.map_err(io)?;
         download_provider_to(&version.download_url, PROVIDER_ARCHIVE_LIMIT, &source).await?.verify(&version.hash)?;
     } else if matches!(release.format.as_str(), "zip" | "mrpack") {
         std::fs::write(&source, archive).map_err(io)?;
     } else { return Err(conflict("pack_format_unsupported")); }
-    get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))
+    let mut metadata = get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
+    if let Some(project) = identity {
+        metadata.name = project.name;
+        metadata.author = (!project.author.is_empty()).then_some(project.author);
+        metadata.description = (!project.summary.is_empty()).then_some(project.summary);
+        metadata.icon_url = project.icon_url.or(metadata.icon_url);
+    }
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&source).map_err(io)?).map_err(io)?;
+    let mut overrides = std::collections::BTreeSet::new();
+    for index in 0..zip.len() {
+        let file = zip.by_index(index).map_err(io)?;
+        let name = file.name().strip_prefix(metadata.root_prefix.as_deref().unwrap_or("")).unwrap_or(file.name());
+        if let Some(path) = name.strip_prefix("overrides/").or_else(|| name.strip_prefix("client-overrides/")) {
+            if is_pack_resource(path) { overrides.insert(path.to_owned()); }
+        }
+    }
+    Ok((metadata, overrides.into_iter().collect()))
 }

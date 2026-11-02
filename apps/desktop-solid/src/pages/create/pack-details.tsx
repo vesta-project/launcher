@@ -1,5 +1,9 @@
+import { customModsWithoutProvider, type PackSyncDetails, type PackResourceDetails } from '../../features/servers/native-pack-sync';
+import { loadProjects, peekProject } from '../../features/browse/browse-projects';
+import { projectPath, type SourceId } from '../../features/browse/browse-model';
+import { Button, TextField } from '@vesta/ui';
 import { knownPackVersion, packArtwork } from "../../features/installation/pack-metadata";
-import { Show, createSignal } from "solid-js";
+import { For, Show, createSignal, createEffect } from "solid-js";
 import { Icon } from "../../components/icon";
 import { formatNumber, t } from "../../localization";
 import { type PackInfo, type PackSource } from "../../features/installation/install-service";
@@ -10,7 +14,22 @@ export function InstallPackDetails(props: {
   info: PackInfo;
   source?: PackSource;
   matching: boolean;
+  serverDetails?: PackSyncDetails;
 }) {
+  const [query, setQuery] = createSignal('');
+  const [limit, setLimit] = createSignal(12);
+  const resources = () => props.serverDetails?.resources ?? [];
+  const unknownMods = () => customModsWithoutProvider(props.serverDetails ?? {});
+  createEffect(resources, items => {
+    for (const platform of ['modrinth', 'curseforge'] as const) {
+      const ids = items.filter(item => item.platform === platform && item.projectId).map(item => item.projectId!);
+      if (ids.length) void loadProjects(platform, ids).catch(() => {});
+    }
+  }, { name: 'installPack.resourceNames' });
+  const project = (item: PackResourceDetails) => item.projectId && ['modrinth', 'curseforge'].includes(item.platform ?? '') ? peekProject(item.platform as SourceId, item.projectId) : undefined;
+  const resourceName = (item: ReturnType<typeof resources>[number]) => project(item)?.name ?? item.path.split('/').at(-1)!;
+  const filtered = () => resources().filter(item => resourceName(item).toLowerCase().includes(query().toLowerCase()));
+  const shown = () => filtered().slice(0, limit());
   const [failedImage, setFailedImage] = createSignal<string>();
   const artwork = () => {
     const url = packArtwork(props.info.iconUrl);
@@ -21,7 +40,7 @@ export function InstallPackDetails(props: {
     if (value.includes("modrinth")) return { label: "Modrinth", icon: "branding/sources/modrinth" };
     if (value.includes("curse"))
       return { label: "CurseForge", icon: "branding/sources/curseforge" };
-    return { label: props.info.format, icon: "icons/content/file" };
+    return { label: props.info.format === "custom" ? t("install.custom-pack") : props.info.format, icon: "icons/content/file" };
   };
   const filename = () =>
     props.source?.kind === "file" ? props.source.value.split(/[\\/]/).at(-1) : undefined;
@@ -84,6 +103,24 @@ export function InstallPackDetails(props: {
           <Icon name="icons/content/search" size={14} />
           {t("install.matching-pack")}
         </p>
+      </Show>
+      <Show when={unknownMods().length}>
+        <p data-vesta="install-source-warning" role="note"><Icon name="icons/controls/warning" size={16} /><span>{t('install.custom-mod-warning', { count: unknownMods().length })}</span></p>
+      </Show>
+      <Show when={resources().length}>
+        <section data-vesta="install-resource-list" aria-label={t('install.pack-resources')}>
+          <TextField value={query()} onChange={setQuery} placeholder={t('install.search-resources')} aria-label={t('install.search-resources')} />
+          <ul><For each={shown()}>{item => (
+            <li>
+              <Show when={project(item)?.icon_url}>{src => <img src={src()} alt="" loading="lazy" width={24} height={24} />}</Show>
+              <Show when={item.projectId && ['modrinth', 'curseforge'].includes(item.platform ?? '')} fallback={<span>{resourceName(item)}</span>}>
+                <a href={`#${projectPath(item.platform as SourceId, item.projectId!)}`}>{resourceName(item)}</a>
+              </Show>
+              <small>{item.platform === 'curseforge' ? 'CurseForge' : item.platform === 'modrinth' ? 'Modrinth' : t('install.custom-resource')}</small>
+            </li>
+          )}</For></ul>
+          <Show when={filtered().length > limit()}><Button size="sm" variant="ghost" onClick={() => setLimit(value => value + 24)}>{t('install.show-resources', { count: filtered().length })}</Button></Show>
+        </section>
       </Show>
       <Show when={filename()}>
         <div data-vesta="install-pack-file" title={props.source?.value}>

@@ -80,6 +80,31 @@ pub struct Preview {
     pub executable_changes: Vec<String>,
     pub consent_required: bool,
 }
+fn is_pack_resource(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    let lower = lower.strip_suffix(".disabled").unwrap_or(&lower);
+    let Some((folder, name)) = lower.rsplit_once('/') else { return false; };
+    folder == "mods" && name.ends_with(".jar") || matches!(folder, "resourcepacks" | "shaderpacks") && name.ends_with(".zip")
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackResourceDetails {
+    pub path: String,
+    pub platform: Option<String>,
+    pub project_id: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackDetails {
+    #[serde(flatten)]
+    pub preview: Preview,
+    pub version: Option<String>,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub format: String,
+    pub resources: Vec<PackResourceDetails>,
+}
 #[derive(Clone, Debug)]
 pub(crate) struct ProviderPackIdentity {
     pub platform: String, pub project: String, pub version: String, pub icon_url: Option<String>,
@@ -478,34 +503,48 @@ impl ServerManager {
         )
     }
     /// Form metadata only. Never resolve or download the pack's individual resources.
-    pub async fn pack_sync_details(&self, app: &AppHandle, connection: &str) -> Result<Preview> {
+    pub async fn pack_sync_details(&self, app: &AppHandle, connection: &str) -> Result<PackDetails> {
         let (release, _) = self.verified_release(connection, None).await?;
-        let cache = self.root.join("pack-sync").join("metadata").join(format!("{}.json", release.sha256));
-        if let Ok(Some(mut details)) = read_json::<Preview>(&cache) {
-            if details.server_id == release.server_id && details.fingerprint == release.fingerprint && details.artifact_sha256 == release.sha256 {
-                details.connection_id = connection.into();
-                details.revision = release.revision;
-                details.minimum_revision = release.minimum_revision;
+        // Version the cache schema: old summaries contained fabricated zero counts and revision labels.
+        let cache = self.root.join("pack-sync").join("metadata-v2").join(format!("{}.json", release.sha256));
+        if let Ok(Some(mut details)) = read_json::<PackDetails>(&cache) {
+            let preview = &mut details.preview;
+            if preview.server_id == release.server_id && preview.fingerprint == release.fingerprint && preview.artifact_sha256 == release.sha256 {
+                preview.connection_id = connection.into();
+                preview.revision = release.revision;
+                preview.minimum_revision = release.minimum_revision;
                 return Ok(details);
             }
         }
         let archive = self.client(connection).await?.pack_sync_download(&release).await?;
-        let (name, runtime) = if release.format == "vestapack" {
+        let (name, runtime, version, author, description, icon_url, format, resources) = if release.format == "vestapack" {
             let mut zip = zip::ZipArchive::new(Cursor::new(&archive)).map_err(|_| conflict("pack_unsafe_archive"))?;
-            let index: Index = serde_json::from_slice(&read_member(&mut zip, "vesta.index.json", 1024 * 1024)?).map_err(|_| conflict("pack_invalid_index"))?;
-            (index.name.unwrap_or_else(|| "Server pack".into()), Runtime { minecraft_version: index.minecraft_version, loader: index.modloader_type.unwrap_or_else(|| "vanilla".into()), loader_version: index.modloader_version })
+            let bytes = read_member(&mut zip, "vesta.index.json", 1024 * 1024)?;
+            let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| conflict("pack_invalid_index"))?;
+            let index: Index = serde_json::from_slice(&bytes).map_err(|_| conflict("pack_invalid_index"))?;
+            let resources = index.files.iter().filter(|file| file.env.client != "unsupported" && is_pack_resource(&file.path)).map(|file| {
+                let platform = file.source.platform.as_deref().filter(|platform| matches!(*platform, "modrinth" | "curseforge") && file.source.project_id.is_some() && file.source.version_id.is_some()).map(str::to_owned);
+                PackResourceDetails { path: file.path.clone(), platform, project_id: file.source.project_id.clone() }
+            }).collect();
+            (index.name.unwrap_or_else(|| "Server pack".into()), Runtime { minecraft_version: index.minecraft_version, loader: index.modloader_type.filter(|loader| loader != "none").unwrap_or_else(|| "vanilla".into()), loader_version: index.modloader_version }, value["version"].as_str().map(str::to_owned), value["author"].as_str().map(str::to_owned), value["description"].as_str().map(str::to_owned), None, "custom".to_owned(), resources)
         } else {
-            let metadata = legacy::details(app, &release, archive).await?;
-            (metadata.name, Runtime { minecraft_version: metadata.minecraft_version, loader: metadata.modloader_type, loader_version: metadata.modloader_version })
+            let (metadata, overrides) = legacy::details(app, &release, archive).await?;
+            let mut resources: Vec<_> = metadata.mods.iter().map(|entry| match entry {
+                piston_lib::game::modpack::types::ModpackMod::Modrinth { path, urls, .. } => PackResourceDetails { path: path.clone(), platform: urls.iter().any(|url| reqwest::Url::parse(url).ok().is_some_and(|url| url.host_str() == Some("cdn.modrinth.com"))).then(|| "modrinth".into()), project_id: None },
+                piston_lib::game::modpack::types::ModpackMod::CurseForge { project_id, file_id, .. } => PackResourceDetails { path: format!("CurseForge file {file_id}"), platform: Some("curseforge".into()), project_id: project_id.map(|id| id.to_string()) },
+            }).collect();
+            for path in overrides { if !resources.iter().any(|item| item.path == path) { resources.push(PackResourceDetails { path, platform: None, project_id: None }); } }
+            let format = match metadata.format { piston_lib::game::modpack::types::ModpackFormat::Modrinth => "modrinth", _ => "curseforge" }.to_owned();
+            (metadata.name, Runtime { minecraft_version: metadata.minecraft_version, loader: metadata.modloader_type, loader_version: metadata.modloader_version }, Some(metadata.version), metadata.author, metadata.description, metadata.icon_url, format, resources)
         };
-        let details = Preview { review_id: String::new(), connection_id: connection.into(), instance_id: None,
+        let preview = Preview { review_id: String::new(), connection_id: connection.into(), instance_id: None,
             server_id: release.server_id, fingerprint: release.fingerprint, revision: release.revision,
             minimum_revision: release.minimum_revision, artifact_sha256: release.sha256, name, runtime,
             changes: Vec::new(), executable_changes: Vec::new(), consent_required: true };
+        let details = PackDetails { preview, version, author, description, icon_url, format, resources };
         write_json(&cache, &details)?;
         Ok(details)
-    }
-    pub async fn pack_sync_preview(
+    }    pub async fn pack_sync_preview(
         &self,
         app: &AppHandle,
         connection: &str,

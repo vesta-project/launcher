@@ -1,5 +1,5 @@
+import { serverPackMetadata } from '../../features/servers/native-pack-sync';
 import { serverInstanceFallback } from '../../features/servers/create-instance-model';
-import { contentPathKind } from '../../features/servers/content-kind';
 import { preloadLaunchers } from '../../features/launcher-import';
 import { useNativeDropZone } from '../../features/file-drop/zone';
 import {
@@ -61,7 +61,7 @@ import { ImportDialog } from "./import-dialog";
 import "./create-page.css";
 import { serverCommand, serverSnapshot } from '../../features/servers/store';
 import { usingFixtures } from '../../features/servers/service';
-import type { PackSyncPreview } from '../../features/servers/native-pack-sync';
+import type { PackSyncPreview, PackSyncDetails } from '../../features/servers/native-pack-sync';
 import { errorMessage } from '../../features/servers/errors';
 import type { ServerCommandError } from '../../features/servers/native';
 import { syncApplyRequest } from '../../features/servers/modpack-area-model';
@@ -97,7 +97,7 @@ export function CreatePage() {
 
 function InstanceInstallForm() {
   const serverId = takeServerInstall();
-  const [serverReview, setServerReview] = createSignal<PackSyncPreview>();
+  const [serverReview, setServerReview] = createSignal<PackSyncDetails>();
   const [serverConsent, setServerConsent] = createSignal(false);
   const [serverUncertain, setServerUncertain] = createSignal(false);
   const createAction = takeCreateAction();
@@ -204,13 +204,13 @@ function InstanceInstallForm() {
     return options;
   });
   onSettled(() => {
-    if (serverId) void (usingFixtures ? serverCommand(api => api.packSyncPreview(serverId, null)) : invoke<PackSyncPreview>('server_pack_sync_details', { connectionId: serverId })).then(review => {
+    if (serverId) void (usingFixtures ? serverCommand(api => api.packSyncPreview(serverId, null)) : invoke<PackSyncDetails>('server_pack_sync_details', { connectionId: serverId })).then(review => {
       if (disposed) { if (review.reviewId) void serverCommand(api => api.packSyncDiscard(review.reviewId)).catch(() => {}); return; }
-      setServerReview(review); setName(review.name); setMinecraft(review.runtime.minecraftVersion);
+      const details = review as PackSyncDetails;
+      setServerReview(details); setName(review.name); setMinecraft(review.runtime.minecraftVersion);
       setLoader(review.runtime.loader); setLoaderVersion(review.runtime.loaderVersion || '');
-      setPack({ name: review.name, version: review.revision, author: null, description: null, iconUrl: null,
-        minecraftVersion: review.runtime.minecraftVersion, modloader: review.runtime.loader, modloaderVersion: review.runtime.loaderVersion,
-        modCount: review.changes.filter(change => contentPathKind(change.path) === 'mod').length, format: 'server' });
+      setPack(serverPackMetadata(details));
+      if (details.iconUrl) setIcon(details.iconUrl);
     }).catch(reason => {
       if (disposed) return;
       const failure = reason as ServerCommandError;
@@ -617,7 +617,7 @@ function InstanceInstallForm() {
               </div>
               <Show when={pack()}>
                 {(info) => (
-                  <InstallPackDetails info={info()} source={source()} matching={matching()} />
+                  <InstallPackDetails info={info()} source={source()} matching={matching()} serverDetails={serverReview()} />
                 )}
               </Show>
             </div>
@@ -645,7 +645,7 @@ function InstanceInstallForm() {
           </Show>
         </div>
         <footer data-vesta="install-footer">
-          <Show when={serverReview()?.consentRequired}><Checkbox label={t('server-pack.play-consent')} checked={serverConsent()} onChange={setServerConsent} /></Show>
+          <Show when={serverReview()?.consentRequired}><div data-vesta="install-consent"><Checkbox label={t('server-pack.play-consent')} checked={serverConsent()} onChange={setServerConsent} /></div></Show>
           <Button variant="ghost" onClick={() => navigate("/library")} disabled={busy()}>
             {t("common.cancel")}
           </Button>

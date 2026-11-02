@@ -58,3 +58,11 @@ create-menu-file = Import file…
 create-menu-packs = Browse modpacks
 create-menu-launcher = Other launcher…
 install-version-from-manifest = Version from pack manifest
+install-custom-mod-warning = { $count ->
+    [one] One mod is not linked to Modrinth or CurseForge. Only install it if you trust this server.
+   *[other] { $count } mods are not linked to Modrinth or CurseForge. Only install them if you trust this server.
+}
+install-search-resources = Search resources
+install-custom-resource = Custom source
+install-custom-pack = Custom pack
+install-show-resources = Show more
