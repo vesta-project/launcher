@@ -1,23 +1,19 @@
 import { combineProps } from '@solid-primitives/props';
-import { merge, omit } from 'solid-js';
+import { omit, untrack } from 'solid-js';
 
 type Props = Record<string, unknown>;
 
-/**
- * Merge two prop sets for one element (e.g. a control that is both a tooltip
- * and a menu trigger): event handlers chain, class/style merge, refs combine.
- * combineProps only chains function refs, but Kobalte passes Solid 2 ref
- * arrays, so refs are joined as an array instead.
- *
- * The ref goes in as a later merge source, not a Proxy override: Solid's spread
- * reads a merged object's sources directly, so a Proxy's `ref` trap was skipped
- * and Kobalte never saw the trigger (tooltips anchored to the window's corner).
- */
+/** Chain overlay and user handlers, merge styles/classes, and retain Solid 2 ref arrays. */
 export function mergeElementProps<T>(a: Props, b: Props): T {
-  const merged = combineProps(omit(a, 'ref') as Props, omit(b, 'ref') as Props);
-  return merge(merged, {
-    get ref() {
-      return [a.ref, b.ref];
-    },
-  }) as T;
+  const combined = untrack(() => combineProps(omit(a, 'ref') as Props, omit(b, 'ref') as Props));
+  // Do not pass the combineProps proxy to merge/spread: it exposes the underlying
+  // Solid merge record, so Solid's optimized prop walk bypasses its handler traps.
+  // A plain getter facade keeps the combined handlers through every component layer.
+  const result: Props = {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key === 'ref') continue;
+    Object.defineProperty(result, key, { enumerable: true, get: () => combined[key] });
+  }
+  Object.defineProperty(result, 'ref', { enumerable: true, get: () => [a.ref, b.ref] });
+  return result as T;
 }

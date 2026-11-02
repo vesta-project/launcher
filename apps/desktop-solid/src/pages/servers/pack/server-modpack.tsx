@@ -219,21 +219,21 @@ function OwnedPanel() {
           </Button>
         </header>
         <ul data-vesta="modpack-owned">
-          <For each={shown()}>
+          <For each={shown()} keyed={(item) => item.path}>
             {(item) => {
-              const project = () => (item.entry?.provider ? peekProject(item.entry!.provider!.provider, item.entry!.provider!.projectId) : undefined);
-              const name = () => (item.entry ? contentName(item.entry!, project()) : baseName(item.path.split('/').at(-1)!));
-              const link = () => (item.entry?.provider ? projectPath(item.entry.provider.provider, item.entry.provider.projectId) : undefined);
-              const prefetch = () => { const provider = item.entry?.provider; if (provider) prefetchProject(provider.provider, provider.projectId); };
+              const project = () => (item().entry?.provider ? peekProject(item().entry!.provider!.provider, item().entry!.provider!.projectId) : undefined);
+              const name = () => (item().entry ? contentName(item().entry!, project()) : baseName(item().path.split('/').at(-1)!));
+              const link = () => { const provider = item().entry?.provider; return provider ? projectPath(provider.provider, provider.projectId) : undefined; };
+              const prefetch = () => { const provider = item().entry?.provider; if (provider) prefetchProject(provider.provider, provider.projectId); };
               const art = () => (
                 <Show when={project()?.icon_url} fallback={
-                  <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item.kind]} size={14} /></span>
+                  <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item().kind]} size={14} /></span>
                 }>
                   {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
                 </Show>
               );
               return (
-                <li title={item.path}>
+                <li title={item().path}>
                   <Show when={link()} fallback={
                     <button type="button" data-vesta="modpack-owned-item" onClick={openResources}>{art()}<span data-vesta="modpack-owned-name">{name()}</span></button>
                   }>
