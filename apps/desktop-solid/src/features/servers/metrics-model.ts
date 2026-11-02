@@ -41,7 +41,7 @@ const decimal = (value: string | null | undefined) => (value && /^\d+$/.test(val
 export function sampleValue(sample: MetricsSample, metric: GraphMetric): number | null {
   switch (metric) {
     case 'tps': return sample.tps;
-    case 'cpu': return sample.cpuPercent;
+    case 'cpu': return sample.cpuPercent === null ? null : Math.min(100, Math.max(0, sample.cpuPercent));
     case 'memory': return decimal(sample.memoryUsedBytes);
     case 'players': return sample.playersOnline;
   }
@@ -53,11 +53,12 @@ export function historyPoints(history: MetricsHistory, metric: GraphMetric): Gra
   if (!column) return null;
   return history.timestamps.map((atMs, index) => {
     const gap = history.gaps[index] ?? false;
+    const bounded = (value: number | null | undefined) => value == null ? null : metric === 'cpu' ? Math.min(100, Math.max(0, value)) : value;
     return {
       atMs,
-      value: gap ? null : column.avg[index] ?? null,
-      min: gap ? null : column.min[index] ?? null,
-      max: gap ? null : column.max[index] ?? null,
+      value: gap ? null : bounded(column.avg[index]),
+      min: gap ? null : bounded(column.min[index]),
+      max: gap ? null : bounded(column.max[index]),
     };
   });
 }
@@ -162,7 +163,7 @@ export function graphDomain(metric: GraphMetric, points: readonly GraphPoint[], 
   const peak = Math.max(0, ...points.map((point) => point.max ?? point.value ?? 0));
   switch (metric) {
     case 'tps': return [0, 20];
-    case 'cpu': return [0, Math.max(100, niceCeil(peak))];
+    case 'cpu': return [0, 100];
     case 'memory': return [0, limit && limit >= peak ? limit : niceCeil(peak * 1.15)];
     case 'players': return [0, Math.max(4, niceCeil(peak * 1.25))];
   }

@@ -181,7 +181,7 @@ describe('[graphs] series from history plus live samples', () => {
     const p = (value) => ({ atMs: 0, value, min: value, max: value });
     expect(graphDomain('tps', [p(19.5)])).toEqual([0, 20]);
     expect(graphDomain('cpu', [p(40)])).toEqual([0, 100]);
-    expect(graphDomain('cpu', [p(180)])).toEqual([0, 200]);
+    expect(graphDomain('cpu', [p(180)])).toEqual([0, 100]);
     expect(graphDomain('memory', [p(2e9)], 6e9)).toEqual([0, 6e9]);
     expect(graphDomain('memory', [p(2e9)], null)[1]).toBeGreaterThan(2e9);
     expect(graphDomain('players', [p(0)])).toEqual([0, 4]);
