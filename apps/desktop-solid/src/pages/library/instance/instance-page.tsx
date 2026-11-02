@@ -1,3 +1,5 @@
+import { useNativePack, versionStore } from '../../../features/instances/versions';
+import { serverLinkOf } from '../../../features/browse/server-links';
 import { Badge, Button, Tab, TabList, TabPanel, Tabs } from "@vesta/ui";
 import {
   For,
@@ -128,9 +130,11 @@ function InstanceContent(props: { id: string }) {
   useNativeDetails(untrack(() => props.id));
   const sideNav = useSideNav();
   const entry = () => findInstance(props.id)!;
+  useNativePack(untrack(() => props.id));
+  const linkedToServer = () => versionStore(props.id).state().pack?.source === "Server" || !!serverLinkOf(props.id);
   const [previousTab, setPreviousTab] = createSignal("overview");
   const tabs = () =>
-    entry().state.kind === "crashed" ? [...baseTabs, crashTab] : baseTabs;
+    (entry().state.kind === "crashed" ? [...baseTabs, crashTab] : baseTabs).filter(tab => tab.id !== "versions" || !linkedToServer());
   const active = () =>
     tabs().some((tab) => tab.id === route().detail)
       ? route().detail!

@@ -1,14 +1,14 @@
-import { Badge, Button, IconButton, Menu, MenuItem } from '@vesta/ui';
+import { Badge, Button, Checkbox, Dialog, IconButton, Menu, MenuItem } from '@vesta/ui';
 import { listen } from '@tauri-apps/api/event';
 import { Show, createEffect, createSignal, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { Icon } from '../../../components/icon';
 import { Notice, noticeCause } from '../../../components/notice';
 import { findInstance } from '../../../features/instances/catalog';
-import { nativeInstances } from '../../../features/instances/native-service';
-import { packUpdateTarget, useNativePack, versionStore, type LinkedPack as Pack } from '../../../features/instances/versions';
+import { nativeInstances, refreshNativeInstances, reportInstanceError } from '../../../features/instances/native-service';
+import { applyEngineVersion, packUpdateTarget, useNativePack, versionStore, type LinkedPack as Pack } from '../../../features/instances/versions';
 import { errorMessage } from '../../../features/servers/errors';
-import { PACK_SYNC_CHANGED_EVENT, PACK_SYNC_STATUS_EVENT, type PackSyncCheck } from '../../../features/servers/native-pack-sync';
+import { PACK_SYNC_CHANGED_EVENT, PACK_SYNC_STATUS_EVENT, type PackSyncCheck, type PackSyncPreview } from '../../../features/servers/native-pack-sync';
 import { serverCommand } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerPlayers } from '../../browse/server-parts';
@@ -25,7 +25,6 @@ import './versions-tab.css';
  */
 export function LinkedPack(props: { instanceId: string }) {
   const id = untrack(() => props.instanceId);
-  useNativePack(id);
   const store = untrack(() => versionStore(id));
   const pack = () => store.state().pack;
   const listing = useModrinthServer(id);
@@ -48,7 +47,30 @@ export function LinkedPack(props: { instanceId: string }) {
       ? { name: identity.name, icon: findInstance(id)?.instance.image ?? '', source: 'Modrinth', installed: '', releases: [] }
       : undefined;
   };
-  const fromServer = () => pack()?.source === 'Server' || !!listing.identity();
+  const [review, setReview] = createSignal<PackSyncPreview>();
+  const [consent, setConsent] = createSignal(false);
+  const [updating, setUpdating] = createSignal(false);
+  const apply = async (value: PackSyncPreview, trusted: boolean) => {
+    setUpdating(true);
+    try { await serverCommand(api => api.packSyncApply({ reviewId: value.reviewId, consentRevision: trusted ? value.revision : null })); setReview(undefined); await refreshNativeInstances(true); }
+    catch (error) { reportInstanceError(error); }
+    finally { setUpdating(false); }
+  };
+  const update = async () => {
+    const value = pack(), next = target();
+    if (!fromServer()) { navigate(`/library/${id}/versions`, { replace: true }); return; }
+    if (!value || updating()) return;
+    if (value.source !== 'Server') { if (next) await applyEngineVersion(id, next, next.id); return; }
+    if (!value.serverId) return;
+    setUpdating(true);
+    try {
+      const result = await serverCommand(api => api.packSyncPreview(value.serverId!, Number(id)));
+      if (next && result.revision !== next.id) { await serverCommand(api => api.packSyncDiscard(result.reviewId)); throw new Error('The server pack changed. Check for updates again.'); }
+      if (result.consentRequired) { setConsent(false); setReview(result); }
+      else await apply(result, false);
+    } catch (error) { reportInstanceError(error); }
+    finally { setUpdating(false); }
+  };  const fromServer = () => pack()?.source === 'Server' || !!listing.identity();
   return (
     <Show when={shown()}>
       {(linked) => (
@@ -75,7 +97,7 @@ export function LinkedPack(props: { instanceId: string }) {
                 <span data-vesta="pack-current"><Icon name="icons/controls/check" size={12} />{t('versions.up-to-date')}</span>
               }>
                 <Button size="sm" tone={required() ? 'danger' : 'accent'} icon={<Icon name="icons/actions/download" size={14} />}
-                  onClick={() => navigate(`/library/${id}/versions`, { replace: true })}>
+                  disabled={updating()} onClick={() => void update()}>
                   {target() ? t('versions.update-to', { version: target()!.label }) : t(required() ? 'server-pack.update-required' : 'server-pack.update-available')}
                 </Button>
               </Show>
@@ -110,7 +132,7 @@ export function LinkedPack(props: { instanceId: string }) {
               </div>
             )}
           </Show>
-          <ServerUnlinkDialog instanceId={id} name={listing.identity()?.name ?? ''} open={unlinking()} onClose={() => setUnlinking(false)} />
+          <Show when={review()}>{value => <Dialog open title={t('instance-pack.title')} closeLabel={t('nav.close')} onOpenChange={open => { if (!open && !updating()) { void serverCommand(api => api.packSyncDiscard(value().reviewId)); setReview(undefined); } }} footer={<Button disabled={updating() || !consent()} onClick={() => void apply(value(), consent())}>{t('versions.apply-change')}</Button>}><Checkbox label={t('server-pack.play-consent')} checked={consent()} onChange={setConsent} /></Dialog>}</Show>          <ServerUnlinkDialog instanceId={id} name={listing.identity()?.name ?? ''} open={unlinking()} onClose={() => setUnlinking(false)} />
         </section>
       )}
     </Show>

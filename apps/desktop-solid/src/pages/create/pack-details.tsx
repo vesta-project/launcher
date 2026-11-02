@@ -1,3 +1,5 @@
+import { PackContentsList } from '../browse/project/version-view';
+import '../browse/project/project.css';
 import { archiveResourceDetails, customModsWithoutProvider, type PackSyncDetails, type PackResourceDetails } from '../../features/servers/native-pack-sync';
 import { loadProjects, peekProject } from '../../features/browse/browse-projects';
 import { projectPath, type SourceId } from '../../features/browse/browse-model';
@@ -18,11 +20,9 @@ export function InstallPackDetails(props: {
   resourcesOnly?: boolean;
   lockedRuntime?: boolean;
 }) {
-  const [query, setQuery] = createSignal('');
-  const [limit, setLimit] = createSignal(12);
   const resources = createMemo(() => props.serverDetails?.resources ?? archiveResourceDetails(props.info.fullMetadata), { name: "installPack.inventory" });
   const unknownMods = () => customModsWithoutProvider(props.serverDetails ?? {});
-  createEffect(resources, items => {
+  createEffect(() => props.resourcesOnly || !props.lockedRuntime ? resources() : [], items => {
     for (const platform of ['modrinth', 'curseforge'] as const) {
       const ids = items.filter(item => item.platform === platform && item.projectId).map(item => item.projectId!);
       if (ids.length) void loadProjects(platform, ids).catch(() => {});
@@ -30,8 +30,6 @@ export function InstallPackDetails(props: {
   }, { name: 'installPack.resourceNames' });
   const project = (item: PackResourceDetails) => item.projectId && ['modrinth', 'curseforge'].includes(item.platform ?? '') ? peekProject(item.platform as SourceId, item.projectId) : undefined;
   const resourceName = (item: ReturnType<typeof resources>[number]) => project(item)?.name ?? item.path.split('/').at(-1)!;
-  const filtered = () => resources().filter(item => resourceName(item).toLowerCase().includes(query().toLowerCase()));
-  const shown = () => filtered().slice(0, limit());
   const [failedImage, setFailedImage] = createSignal<string>();
   const artwork = () => {
     const url = packArtwork(props.info.iconUrl);
@@ -47,7 +45,7 @@ export function InstallPackDetails(props: {
   const filename = () =>
     props.source?.kind === "file" ? props.source.value.split(/[\\/]/).at(-1) : undefined;
   return (
-    <aside data-vesta="install-pack-details" aria-label={t("install.pack-details")}>
+    <aside data-vesta="install-pack-details" data-resources-only={props.resourcesOnly ? "" : undefined} aria-label={t("install.pack-details")}>
       <Show when={!props.resourcesOnly}><header data-vesta="install-pack-identity">
         <div data-vesta="install-pack-art">
           <Show keyed when={artwork()} fallback={<Icon name="icons/content/cube" size={28} />}>
@@ -113,21 +111,7 @@ export function InstallPackDetails(props: {
         <p data-vesta="install-source-warning" role="note"><Icon name="icons/controls/warning" size={16} /><span>{t('install.custom-mod-warning', { count: unknownMods().length })}</span></p>
       </Show>
       <Show when={resources().length}>
-        <section data-vesta="install-resource-list" aria-label={t('install.pack-resources')}>
-          <TextField value={query()} onChange={setQuery} placeholder={t('install.search-resources')} aria-label={t('install.search-resources')} />
-          <ul><For each={shown()}>{item => (
-            <li>
-              <Show when={project(item)?.icon_url}>{src => <img src={src()} alt="" loading="lazy" width={24} height={24} />}</Show>
-              <Show when={item.projectId && ['modrinth', 'curseforge'].includes(item.platform ?? '')} fallback={<span>{resourceName(item)}</span>}>
-                <a href={`#${projectPath(item.platform as SourceId, item.projectId!)}`}>{resourceName(item)}</a>
-              </Show>
-              <Show when={props.info.format === 'custom'}>
-                <Tooltip content={item.platform === 'curseforge' ? 'CurseForge' : item.platform === 'modrinth' ? 'Modrinth' : t('install.custom-resource')} trigger={triggerProps => <span {...triggerProps} tabindex="0" style={{ flex: "none", display: "inline-flex" }}><Icon name={item.platform === 'curseforge' ? 'branding/sources/curseforge' : item.platform === 'modrinth' ? 'branding/sources/modrinth' : 'icons/content/file'} size={14} /></span>} />
-              </Show>
-            </li>
-          )}</For></ul>
-          <Show when={filtered().length > limit()}><Button size="sm" variant="ghost" onClick={() => setLimit(value => value + 24)}>{t('install.show-resources', { count: filtered().length })}</Button></Show>
-        </section>
+        <PackContentsList ready={true} entries={resources().map(item => ({ key: item.path, name: resourceName(item), kind: project(item)?.resource_type ?? (item.path.startsWith('mods/') ? 'mod' : item.path.startsWith('resourcepacks/') ? 'resourcepack' : item.path.startsWith('shaderpacks/') ? 'shader' : 'other'), project: project(item), extra: props.info.format === 'custom' ? <Tooltip content={item.platform === 'curseforge' ? 'CurseForge' : item.platform === 'modrinth' ? 'Modrinth' : t('install.custom-resource')} trigger={triggerProps => <span {...triggerProps} tabindex="0" style={{ flex: 'none' }}><Icon name={item.platform === 'curseforge' ? 'branding/sources/curseforge' : item.platform === 'modrinth' ? 'branding/sources/modrinth' : 'icons/content/file'} size={14} /></span>} /> : undefined }))} />
       </Show>
       </Show>
       <Show when={!props.resourcesOnly && filename()}>

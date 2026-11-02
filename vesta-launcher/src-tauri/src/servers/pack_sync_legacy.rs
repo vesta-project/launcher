@@ -428,6 +428,7 @@ pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>
     } else if matches!(release.format.as_str(), "zip" | "mrpack") {
         std::fs::write(&source, archive).map_err(io)?;
     } else { return Err(conflict("pack_format_unsupported")); }
+    tokio::task::spawn_blocking(move || {
     let mut metadata = get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
     if let Some(project) = identity {
         metadata.name = project.name;
@@ -445,4 +446,5 @@ pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>
         }
     }
     Ok((metadata, overrides.into_iter().collect()))
+    }).await.map_err(io)?
 }

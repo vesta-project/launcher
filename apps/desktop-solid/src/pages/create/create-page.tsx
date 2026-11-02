@@ -462,7 +462,7 @@ function InstanceInstallForm() {
         <header data-vesta="install-header">
           <div>
             <h1>{pack()?.name || serverName() || t("management.create-title")}</h1>
-            <Show when={serverLocked() && serverName()}><p>{t("install.server-pack-for", { name: serverName()! })}</p></Show>
+            <Show when={serverLocked() && serverName() && (pack()?.name || serverName() || "").trim().toLocaleLowerCase() !== serverName()!.trim().toLocaleLowerCase()}><p>{t("install.server-pack-for", { name: serverName()! })}</p></Show>
             <Show when={pendingResource()}>
               {(pending) => <p role="status">{t(pending().kind === "datapack" ? "browse.pending-resource-world" : "browse.pending-resource", { name: pending().project.name })}</p>}
             </Show>

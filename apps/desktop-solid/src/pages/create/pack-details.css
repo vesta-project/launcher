@@ -133,3 +133,7 @@
 @layer launcher {
   :where([data-vesta="install-resource-list"]) ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); column-gap: var(--vesta-space-4); }
 }
+
+@layer launcher {
+  :where([data-vesta="install-pack-details"][data-resources-only]) { border: 0; background: transparent; overflow: visible; }
+}

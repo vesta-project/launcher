@@ -504,6 +504,8 @@ impl ServerManager {
     }
     /// Form metadata only. Never resolve or download the pack's individual resources.
     pub async fn pack_sync_details(&self, app: &AppHandle, connection: &str) -> Result<PackDetails> {
+        static DETAILS_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        let _details_guard = DETAILS_GATE.lock().await;
         let (release, _) = self.verified_release(connection, None).await?;
         // Version the cache schema: old summaries contained fabricated zero counts and revision labels.
         let cache = self.root.join("pack-sync").join("metadata-v3").join(format!("{}.json", release.sha256));
@@ -516,7 +518,18 @@ impl ServerManager {
                 return Ok(details);
             }
         }
-        let archive = self.client(connection).await?.pack_sync_download(&release).await?;
+        // Reuse the previous complete metadata schema; only consent policy changed.
+        let previous = self.root.join("pack-sync/metadata-v2").join(format!("{}.json", release.sha256));
+        if let Ok(Some(mut details)) = read_json::<PackDetails>(&previous) {
+            if details.preview.server_id == release.server_id && details.preview.fingerprint == release.fingerprint && details.preview.artifact_sha256 == release.sha256 {
+                details.preview.connection_id = connection.into();
+                details.preview.revision = release.revision;
+                details.preview.minimum_revision = release.minimum_revision;
+                details.preview.consent_required = release.format != "catalogue";
+                write_json(&cache, &details)?;
+                return Ok(details);
+            }
+        }        let archive = self.client(connection).await?.pack_sync_download(&release).await?;
         let (name, runtime, version, author, description, icon_url, format, resources) = if release.format == "vestapack" {
             let mut zip = zip::ZipArchive::new(Cursor::new(&archive)).map_err(|_| conflict("pack_unsafe_archive"))?;
             let bytes = read_member(&mut zip, "vesta.index.json", 1024 * 1024)?;

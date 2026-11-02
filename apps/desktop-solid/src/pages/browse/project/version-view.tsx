@@ -406,11 +406,17 @@ function PackContents(props: { version: ResourceVersion; projects: DependencyPro
     },
     { name: 'packContentsEntries' },
   );
+  return <PackContentsList entries={entries()} ready={!!props.projects()} />;
+}
+
+export function PackContentsList(props: { entries: { key: string; name: string; kind: string; project?: ResourceProject; extra?: import('@solidjs/web').JSX.Element }[]; ready: boolean }) {
+  const [query, setQuery] = createSignal('');
+  const [expanded, setExpanded] = createSignal(false);
   const matching = createMemo(
     () => {
       const text = query().trim().toLowerCase();
-      if (!text) return entries();
-      return entries().filter(
+      if (!text) return props.entries;
+      return props.entries.filter(
         (entry) => entry.name.toLowerCase().includes(text) || !!entry.project?.summary?.toLowerCase().includes(text),
       );
     },
@@ -432,7 +438,7 @@ function PackContents(props: { version: ResourceVersion; projects: DependencyPro
         .filter((group) => group.items.length)
         .map((group) => ({ ...group, total: matching().filter((entry) => rankOf(entry.kind) === rankOf(group.kind)).length }));
       // One kind needs no heading; a pack still resolving its projects is one plain list.
-      return all.length > 1 && props.projects() ? all : [{ kind: 'all', items: shown() }];
+      return all.length > 1 && props.ready ? all : [{ kind: 'all', items: shown() }];
     },
     { name: 'packContentsGroups' },
   );
@@ -442,7 +448,7 @@ function PackContents(props: { version: ResourceVersion; projects: DependencyPro
         <div>
           <h2 id="pack-contents-title">
             {t('browse.pack-contents')}
-            <span data-vesta="project-tab-count">{formatNumber(embedded().length)}</span>
+            <span data-vesta="project-tab-count">{formatNumber(props.entries.length)}</span>
           </h2>
           <p data-vesta="project-muted">{t('browse.pack-contents-exact')}</p>
         </div>
@@ -479,14 +485,14 @@ function PackContents(props: { version: ResourceVersion; projects: DependencyPro
                         when={entry().project}
                         fallback={
                           <div data-vesta="pack-contents-item" data-unresolved="">
-                            <Show when={props.projects()} fallback={<Skeleton width={32} height={32} radius={6} />}>
+                            <Show when={props.ready} fallback={<Skeleton width={32} height={32} radius={6} />}>
                               <span data-vesta="project-dependency-icon" data-empty="">
                                 <Icon name="icons/content/cube" size={14} />
                               </span>
                             </Show>
                             <span data-vesta="pack-contents-text">
                               <strong>{entry().name}</strong>
-                            </span>
+                            </span>{entry().extra}
                           </div>
                         }
                       >
@@ -503,7 +509,7 @@ function PackContents(props: { version: ResourceVersion; projects: DependencyPro
                               <Show when={project().summary}>
                                 <small>{project().summary}</small>
                               </Show>
-                            </span>
+                            </span>{entry().extra}
                           </a>
                         )}
                       </Show>
