@@ -12,6 +12,7 @@ pub enum ResourceType {
     DataPack,
     Modpack,
     World,
+    Server,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -141,6 +142,8 @@ pub struct ResourceCreatorFilter {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResourceProject {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<ServerListing>,
     pub id: String,
     pub source: SourcePlatform,
     pub resource_type: ResourceType,
@@ -403,4 +406,42 @@ mod tests {
         );
         assert_eq!(SourcePlatform::from_str_id("unknown"), None);
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerListing {
+    pub address: String,
+    pub content: ServerContent,
+    pub ping: Option<ServerListingPing>,
+    pub region: Option<String>,
+    pub languages: Vec<String>,
+    pub plays2w: Option<u64>,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(
+    tag = "kind",
+    rename_all = "lowercase",
+    rename_all_fields = "camelCase"
+)]
+pub enum ServerContent {
+    Vanilla {
+        game_versions: Vec<String>,
+        recommended_version: Option<String>,
+    },
+    Modpack {
+        project_id: String,
+        version_id: String,
+        project_name: Option<String>,
+        project_icon: Option<String>,
+    },
+}
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerListingPing {
+    pub at: String,
+    pub online: u64,
+    pub max: u64,
+    pub version_name: Option<String>,
+    pub latency_ms: Option<f64>,
 }

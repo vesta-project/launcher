@@ -31,6 +31,7 @@ impl SourceCapabilities {
                     ResourceType::DataPack,
                     ResourceType::Modpack,
                     ResourceType::World,
+                    ResourceType::Server,
                 ],
                 default_sort: "relevance".to_string(),
                 sort_options: vec![

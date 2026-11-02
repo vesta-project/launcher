@@ -51,6 +51,27 @@ pub async fn check_modpack_update(
     if inst.modpack_platform.as_deref() == Some("server") {
         return Err("Server modpack binding is missing".into());
     }
+    if let Some(status) =
+        super::modrinth_servers::instance_server_status(app_handle.clone(), instance_id).await?
+    {
+        let latest_version = match status.listing.content {
+            crate::models::resource::ServerContent::Modpack {
+                project_id,
+                version_id,
+                ..
+            } if inst.modpack_id.as_ref() == Some(&project_id) => Some(ModpackVersionInfo {
+                id: version_id.clone(),
+                version_number: version_id,
+                release_type: "Release".into(),
+            }),
+            _ => None,
+        };
+        return Ok(ModpackUpdateInfo {
+            current_version: inst.modpack_version_id,
+            latest_version,
+            update_available: status.update_available,
+        });
+    }
     let current_version_id = match inst.modpack_version_id.as_deref() {
         Some(v) => v.to_string(),
         None => {
@@ -276,6 +297,10 @@ pub async fn unlink_modpack(app_handle: tauri::AppHandle, instance_id: i32) -> R
     use crate::schema::instance::dsl as fields;
     use diesel::prelude::*;
     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
+    diesel::sql_query("DELETE FROM instance_server_link WHERE instance_id = ?")
+        .bind::<diesel::sql_types::Integer, _>(instance_id)
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
     diesel::update(fields::instance.find(instance_id))
         .set((
             fields::modpack_platform.eq(None::<String>),

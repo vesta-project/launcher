@@ -1,0 +1,69 @@
+﻿{
+    "id":  "nuPdyMgK",
+    "name":  "DonutSMP",
+    "summary":  "DonutSMP is a Minecraft Server where you try to become the best player by grinding to get loot and by fighting others. The server is joinable on any version. The donutsmp ip is donutsmp.net",
+    "description":  "DonutSMP is a Minecraft Server where you try to become the best player by grinding to get loot and by fighting others. The server is joinable on any modern 1.20+ version. The IP is donutsmp.net for both Java and Bedrock edition. \n\nFor more information on joining, watch this video:\n\u003ciframe width=\"560\" height=\"315\" src=\"https://www.youtube.com/embed/mPbVIS5wL6A?si=o5mE_YRPoKHS7NCt\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen\u003e\u003c/iframe\u003e",
+    "icon_url":  "https://cdn.modrinth.com/data/nuPdyMgK/dd517f0c1e8451fa0aae3a3c8a69cd2d118e4c99_96.webp",
+    "downloads":  0,
+    "categories":  [
+                       "competitive",
+                       "pvp",
+                       "smp"
+                   ],
+    "project_types":  [
+                          "minecraft_java_server"
+                      ],
+    "slug":  "donutsmp",
+    "published":  "2026-03-04T18:20:29.970386Z",
+    "updated":  "2026-03-04T18:20:29.972913Z",
+    "followers":  188,
+    "team_id":  "2XE2inET",
+    "organization":  null,
+    "minecraft_java_server":  {
+                                  "address":  "donutsmp.net",
+                                  "content":  {
+                                                  "kind":  "vanilla",
+                                                  "supported_game_versions":  [
+                                                                                  "1.21.11",
+                                                                                  "1.21.10",
+                                                                                  "1.21.9",
+                                                                                  "1.21.8",
+                                                                                  "1.21.6",
+                                                                                  "1.21",
+                                                                                  "1.21.1",
+                                                                                  "1.21.2",
+                                                                                  "1.21.3",
+                                                                                  "1.21.4",
+                                                                                  "1.21.5",
+                                                                                  "1.21.7"
+                                                                              ],
+                                                  "recommended_game_version":  "1.21.11"
+                                              },
+                                  "ping":  {
+                                               "when":  "2026-11-02T02:33:14.916044105Z",
+                                               "address":  "donutsmp.net",
+                                               "data":  {
+                                                            "latency":  {
+                                                                            "secs":  0,
+                                                                            "nanos":  21827085
+                                                                        },
+                                                            "version_name":  "Velocity 1.7.2-26.3",
+                                                            "version_protocol":  578,
+                                                            "description":  "DonutSMP.net ",
+                                                            "players_online":  21929,
+                                                            "players_max":  50000
+                                                        }
+                                           },
+                                  "verified_plays_2w":  10521,
+                                  "verified_plays_4w":  22086
+                              },
+    "minecraft_server":  {
+                             "max_players":  null,
+                             "country":  null,
+                             "region":  "us_east",
+                             "languages":  [
+                                               "en"
+                                           ],
+                             "active_version":  null
+                         }
+}

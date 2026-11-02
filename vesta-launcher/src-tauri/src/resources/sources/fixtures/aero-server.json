@@ -1,0 +1,58 @@
+﻿{
+    "id":  "OgcNPs6n",
+    "name":  "Aero SMP",
+    "summary":  "A no-nonsense server with just Create and Create Aeronautics.",
+    "description":  "# Aero SMP!\nYou know what this server is about. We\u0027ve all been waiting for it, and it\u0027s finally here! If you want to play create aeronautics in survival with no fluff, then this is the server for you. Probably the most stable create aeronautics SMP!!\n\n\u003ciframe width=\"560\" height=\"315\" src=\"https://www.youtube-nocookie.com/embed/50ltHJOBeWk\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen\u003e\u003c/iframe\u003e\n\n### A welcoming spawn\n![Welcoming Spawn](https://cdn.modrinth.com/data/cached_images/2f90124f9f37f61ad2b82162ba44862a246bb12a.png)\n\n### Cool Bases\n![Cool Bases](https://cdn.modrinth.com/data/cached_images/9da787b337996c64f3fbd0b40557c8eff1428921.gif)\n\n### Cool Factories\n![Cool Factories](https://cdn.modrinth.com/data/cached_images/9ab3fa74c1aceaf9536a53012d05c10a2ce21880.png)\n\n### Take a stroll through the clouds\n![Stroll through the clouds](https://cdn.modrinth.com/data/cached_images/168d74649dbcee5011cb1c4e9248b89ec1db787c.png)",
+    "icon_url":  "https://cdn.modrinth.com/data/OgcNPs6n/12b5d0ea9e6843746e703223699c3e429f8f6da6_96.webp",
+    "downloads":  41851,
+    "categories":  [
+                       "smp",
+                       "social",
+                       "technical"
+                   ],
+    "project_types":  [
+                          "minecraft_java_server"
+                      ],
+    "slug":  "aero-server",
+    "published":  "2026-04-18T20:10:21.823635Z",
+    "updated":  "2026-09-10T20:12:53.374072Z",
+    "followers":  125,
+    "team_id":  "P3OIvUAG",
+    "organization":  null,
+    "minecraft_java_server":  {
+                                  "address":  "play.aerosmp.com",
+                                  "content":  {
+                                                  "kind":  "modpack",
+                                                  "version_id":  "GDELFL7Y",
+                                                  "project_id":  "OgcNPs6n",
+                                                  "project_name":  "Aero SMP",
+                                                  "project_icon":  "https://cdn.modrinth.com/data/OgcNPs6n/12b5d0ea9e6843746e703223699c3e429f8f6da6_96.webp"
+                                              },
+                                  "ping":  {
+                                               "when":  "2026-11-02T02:23:28.231859749Z",
+                                               "address":  "play.aerosmp.com",
+                                               "data":  {
+                                                            "latency":  {
+                                                                            "secs":  0,
+                                                                            "nanos":  550905241
+                                                                        },
+                                                            "version_name":  "Velocity 1.7.2-26.1.2",
+                                                            "version_protocol":  578,
+                                                            "description":  "The only ",
+                                                            "players_online":  24,
+                                                            "players_max":  300
+                                                        }
+                                           },
+                                  "verified_plays_2w":  4159,
+                                  "verified_plays_4w":  8481
+                              },
+    "minecraft_server":  {
+                             "max_players":  null,
+                             "country":  null,
+                             "region":  "europe",
+                             "languages":  [
+                                               "en"
+                                           ],
+                             "active_version":  null
+                         }
+}

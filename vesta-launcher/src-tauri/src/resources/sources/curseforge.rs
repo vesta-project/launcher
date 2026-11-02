@@ -301,6 +301,7 @@ impl CurseForgeSource {
             ResourceType::DataPack => 6945,
             ResourceType::World => 17,
             ResourceType::Modpack => 4471,
+            ResourceType::Server => 0,
         }
     }
 
@@ -545,6 +546,12 @@ impl ResourceSource for CurseForgeSource {
     }
 
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
+        if query.resource_type == ResourceType::Server {
+            return Ok(SearchResponse {
+                hits: Vec::new(),
+                total_hits: 0,
+            });
+        }
         let class_id = Self::map_type_to_class_id(query.resource_type);
         let mut url = format!(
             "https://api.curseforge.com/v1/mods/search?gameId=432&classId={}&index={}&pageSize={}",
@@ -652,6 +659,7 @@ impl ResourceSource for CurseForgeSource {
             .data
             .into_iter()
             .map(|item| ResourceProject {
+                server: None,
                 id: item.id.to_string(),
                 source: SourcePlatform::CurseForge,
                 resource_type: query.resource_type,
@@ -749,6 +757,7 @@ impl ResourceSource for CurseForgeSource {
         };
 
         Ok(ResourceProject {
+            server: None,
             id: item.id.to_string(),
             source: SourcePlatform::CurseForge,
             resource_type: Self::map_class_id_to_type(item.class_id.unwrap_or(6)),
@@ -828,6 +837,7 @@ impl ResourceSource for CurseForgeSource {
             .data
             .into_iter()
             .map(|item| ResourceProject {
+                server: None,
                 id: item.id.to_string(),
                 source: SourcePlatform::CurseForge,
                 resource_type: Self::map_class_id_to_type(item.class_id.unwrap_or(6)),

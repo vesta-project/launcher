@@ -35,6 +35,8 @@ struct ModrinthSearchResult {
 
 #[derive(Deserialize)]
 struct ModrinthProjectHit {
+    minecraft_java_server: Option<serde_json::Value>,
+    minecraft_server: Option<serde_json::Value>,
     project_id: String,
     name: String,
     #[serde(default)]
@@ -64,6 +66,8 @@ struct ModrinthProjectHit {
 
 #[derive(Deserialize)]
 struct ModrinthProject {
+    minecraft_java_server: Option<serde_json::Value>,
+    minecraft_server: Option<serde_json::Value>,
     id: String,
     name: String,
     summary: String,
@@ -189,7 +193,7 @@ fn project_type_filter(resource_type: ResourceType) -> &'static str {
 fn supports_loader_filter(resource_type: ResourceType) -> bool {
     matches!(
         resource_type,
-        ResourceType::Mod | ResourceType::Modpack | ResourceType::Plugin
+        ResourceType::Mod | ResourceType::Modpack | ResourceType::Plugin | ResourceType::Server
     )
 }
 
@@ -201,6 +205,7 @@ fn resource_type(value: &str) -> ResourceType {
         "datapack" => ResourceType::DataPack,
         "modpack" => ResourceType::Modpack,
         "world" => ResourceType::World,
+        "minecraft_java_server" => ResourceType::Server,
         _ => ResourceType::Mod,
     }
 }
@@ -215,11 +220,23 @@ fn matches_resource_type(value: &str, expected: ResourceType) -> bool {
             | ("datapack", ResourceType::DataPack)
             | ("modpack", ResourceType::Modpack)
             | ("world", ResourceType::World)
+            | ("minecraft_java_server", ResourceType::Server)
     )
 }
 
+fn project_web_path(project_type: &str) -> &str {
+    match project_type {
+        "minecraft_java_server" => "server",
+        other => other,
+    }
+}
+
 fn primary_project_type(project_types: &[String]) -> &str {
-    project_types.first().map(String::as_str).unwrap_or("mod")
+    if project_types.iter().any(|p| p == "minecraft_java_server") {
+        "minecraft_java_server"
+    } else {
+        project_types.first().map(String::as_str).unwrap_or("mod")
+    }
 }
 
 fn map_project_types(project_types: &[String]) -> Vec<ResourceType> {
@@ -602,6 +619,7 @@ impl ResourceSource for ModrinthSource {
             ResourceType::DataPack => "datapack",
             ResourceType::Modpack => "modpack",
             ResourceType::World => "world",
+            ResourceType::Server => "minecraft_java_server",
         };
         // A Modrinth project can publish mod, plugin, and datapack versions
         // under one project. `all_project_types` searches those version-level
@@ -661,7 +679,9 @@ impl ResourceSource for ModrinthSource {
             ]),
             (false, false) => None,
         };
-        if let Some(values) = environment_values {
+        if let Some(values) =
+            environment_values.filter(|_| query.resource_type != ResourceType::Server)
+        {
             filters.push(format!(
                 "environment IN [{}]",
                 values
@@ -706,6 +726,10 @@ impl ResourceSource for ModrinthSource {
                     hit.author.clone()
                 };
                 ResourceProject {
+                    server: map_server(
+                        hit.minecraft_java_server.as_ref(),
+                        hit.minecraft_server.as_ref(),
+                    ),
                     id: hit.project_id,
                     source: SourcePlatform::Modrinth,
                     resource_type: query.resource_type,
@@ -743,7 +767,7 @@ impl ResourceSource for ModrinthSource {
                     categories: hit.categories.unwrap_or_default(),
                     web_url: format!(
                         "https://modrinth.com/{}/{}",
-                        primary_project_type(&hit.project_types),
+                        project_web_path(primary_project_type(&hit.project_types)),
                         hit.slug
                     ),
                     links: Vec::new(),
@@ -810,6 +834,10 @@ impl ResourceSource for ModrinthSource {
             .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
 
         Ok(ResourceProject {
+            server: map_server(
+                project.minecraft_java_server.as_ref(),
+                project.minecraft_server.as_ref(),
+            ),
             id: project.id,
             source: SourcePlatform::Modrinth,
             resource_type: resource_type(&primary_type),
@@ -825,7 +853,11 @@ impl ResourceSource for ModrinthSource {
             download_count: project.downloads,
             follower_count: project.followers,
             categories: project.categories,
-            web_url: format!("https://modrinth.com/{}/{}", primary_type, project.slug),
+            web_url: format!(
+                "https://modrinth.com/{}/{}",
+                project_web_path(&primary_type),
+                project.slug
+            ),
             links: map_links(project.link_urls),
             environment: map_environment(&project.environment),
             external_ids: None,
@@ -945,6 +977,10 @@ impl ResourceSource for ModrinthSource {
                     .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
 
                 ResourceProject {
+                    server: map_server(
+                        p.minecraft_java_server.as_ref(),
+                        p.minecraft_server.as_ref(),
+                    ),
                     id: p.id,
                     source: SourcePlatform::Modrinth,
                     resource_type: resource_type(&primary_type),
@@ -960,7 +996,11 @@ impl ResourceSource for ModrinthSource {
                     download_count: p.downloads,
                     follower_count: p.followers,
                     categories: p.categories,
-                    web_url: format!("https://modrinth.com/{}/{}", primary_type, p.slug),
+                    web_url: format!(
+                        "https://modrinth.com/{}/{}",
+                        project_web_path(&primary_type),
+                        p.slug
+                    ),
                     links: map_links(p.link_urls),
                     environment: map_environment(&p.environment),
                     external_ids: None,
@@ -1126,7 +1166,12 @@ impl ResourceSource for ModrinthSource {
                 // Only include categories that match our supported project types
                 matches!(
                     c.project_type.as_str(),
-                    "mod" | "modpack" | "resourcepack" | "shader" | "datapack"
+                    "mod"
+                        | "modpack"
+                        | "resourcepack"
+                        | "shader"
+                        | "datapack"
+                        | "minecraft_java_server"
                 )
             })
             .map(|c| ResourceCategory {
@@ -1142,6 +1187,7 @@ impl ResourceSource for ModrinthSource {
                     "resourcepack" => Some(ResourceType::ResourcePack),
                     "shader" => Some(ResourceType::Shader),
                     "datapack" => Some(ResourceType::DataPack),
+                    "minecraft_java_server" => Some(ResourceType::Server),
                     _ => None,
                 },
             })
@@ -1333,5 +1379,117 @@ mod tests {
         let error = ModrinthSource::map_version(payload, None).unwrap_err();
 
         assert!(error.to_string().contains("has no files"));
+    }
+}
+
+fn map_server(
+    java: Option<&serde_json::Value>,
+    meta: Option<&serde_json::Value>,
+) -> Option<crate::models::resource::ServerListing> {
+    use crate::models::resource::{ServerContent, ServerListing, ServerListingPing};
+    let java = java?;
+    let content = &java["content"];
+    let content = match content["kind"].as_str()? {
+        "vanilla" => ServerContent::Vanilla {
+            game_versions: serde_json::from_value(content["supported_game_versions"].clone())
+                .ok()?,
+            recommended_version: content["recommended_game_version"]
+                .as_str()
+                .map(str::to_owned),
+        },
+        "modpack" => ServerContent::Modpack {
+            project_id: content["project_id"].as_str()?.into(),
+            version_id: content["version_id"].as_str()?.into(),
+            project_name: content["project_name"].as_str().map(str::to_owned),
+            project_icon: content["project_icon"].as_str().map(str::to_owned),
+        },
+        _ => return None,
+    };
+    let ping = (|| {
+        let p = &java["ping"];
+        let data = &p["data"];
+        let latency = &data["latency"];
+        Some(ServerListingPing {
+            at: p["when"].as_str()?.into(),
+            online: data["players_online"].as_u64()?,
+            max: data["players_max"].as_u64()?,
+            version_name: data["version_name"].as_str().map(str::to_owned),
+            latency_ms: latency.as_f64().or_else(|| {
+                Some(latency["secs"].as_f64()? * 1000.0 + latency["nanos"].as_f64()? / 1_000_000.0)
+            }),
+        })
+    })();
+    Some(ServerListing {
+        address: java["address"].as_str()?.into(),
+        content,
+        ping,
+        region: meta.and_then(|m| m["region"].as_str()).map(str::to_owned),
+        languages: meta
+            .and_then(|m| serde_json::from_value(m["languages"].clone()).ok())
+            .unwrap_or_default(),
+        plays2w: java["verified_plays_2w"].as_u64(),
+    })
+}
+#[cfg(test)]
+mod server_tests {
+    use super::*;
+    #[tokio::test]
+    #[ignore = "uses the live public Modrinth API"]
+    async fn live_server_search_and_pack_resolution() {
+        let source = ModrinthSource::new();
+        let result = source
+            .search(SearchQuery {
+                resource_type: ResourceType::Server,
+                text: Some("Aero".into()),
+                limit: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        assert!(result.total_hits > 0);
+        assert!(result
+            .hits
+            .iter()
+            .all(|p| p.resource_type == ResourceType::Server && p.server.is_some()));
+        let project = source.get_project("aero-server").await.unwrap();
+        let crate::models::resource::ServerContent::Modpack {
+            project_id,
+            version_id,
+            ..
+        } = project.server.unwrap().content
+        else {
+            panic!("expected pack")
+        };
+        let version = source.get_version(&project_id, &version_id).await.unwrap();
+        assert_eq!(version.project_id, project_id);
+        assert!(version.file_name.ends_with(".mrpack"));
+    }
+    #[test]
+    fn real_server_payloads() {
+        for (raw, vanilla) in [
+            (include_str!("fixtures/aero-server.json"), false),
+            (include_str!("fixtures/donutsmp.json"), true),
+        ] {
+            let p: ModrinthProject =
+                serde_json::from_str(raw.trim_start_matches('\u{feff}')).unwrap();
+            let s = map_server(
+                p.minecraft_java_server.as_ref(),
+                p.minecraft_server.as_ref(),
+            )
+            .unwrap();
+            assert_eq!(
+                matches!(
+                    s.content,
+                    crate::models::resource::ServerContent::Vanilla { .. }
+                ),
+                vanilla
+            );
+            assert!(!s.address.is_empty());
+            assert!(s.ping.unwrap().latency_ms.unwrap() > 0.0);
+            assert!(serde_json::to_value(&s.content)
+                .unwrap()
+                .get(if vanilla { "gameVersions" } else { "versionId" })
+                .is_some());
+        }
     }
 }

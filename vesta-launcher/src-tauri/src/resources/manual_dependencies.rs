@@ -1462,6 +1462,7 @@ mod tests {
     }
     fn project(id: &str) -> ResourceProject {
         ResourceProject {
+            server: None,
             id: id.into(),
             source: SourcePlatform::Modrinth,
             resource_type: ResourceType::Mod,
