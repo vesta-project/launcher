@@ -3,6 +3,7 @@ import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
+import { createSearchQuery } from '../../../components/search-query';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { projectPath, type ResourceVersion } from '../../../features/browse/browse-model';
@@ -10,7 +11,7 @@ import { loadProject, loadProjects, loadVersionLists, peekProject, peekVersions,
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
-  contentErrorMessage, contentGates, contentKinds, contentList, contentUpdate, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
+  contentErrorMessage, contentGates, contentKinds, contentModels, contentUpdate, groupContentRows, reuseContentModels, searchContentRows, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
   pendingSummary, primaryKind, providerLookups, rowActions, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
@@ -56,7 +57,9 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   };
   const lifecycle = useLifecycle(() => props.snapshot);
   const [filter, setFilter] = createSignal<ContentFilter>('all', { name: 'server-content:filter' });
-  const [query, setQuery] = createSignal('', { name: 'server-content:query' });
+  const search = createSearchQuery('server-content:query');
+  const query = search.applied;
+  const setQuery = search.set;
   const [menuKey, setMenuKey] = createSignal<string | null>(null, { name: 'server-content:menu' });
   const [expanded, setExpanded] = createSignal(true, { name: 'server-content:expanded' });
   const [busy, setBusy] = createSignal<ReadonlySet<string>>(new Set(), { name: 'server-content:busy' });
@@ -99,12 +102,14 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   };
 
   type ListRow = Exclude<ContentListRow, {kind: 'group'}> | {id:string;kind:'group';group:ServerContentEntry['kind']|'pack'|'own';count:number};
-  const listed = createMemo<ContentListRow[]>(() => contentList(inventory()?.items ?? [], {
+  // Built and sorted once per inventory/kind/provider change; typing only filters these models,
+  // and unchanged rows keep their objects so the virtual list does not re-render them.
+  const models = createMemo<ContentRowModel[]>((previous) => reuseContentModels(previous, contentModels(inventory()?.items ?? [], {
     filter: activeFilter(),
-    query: query(),
     project: projectOf,
     version: (entry) => versionsOf(entry)?.find((version) => version.id === entry.provider?.versionId),
-  }), { name: 'server-content:rows' });
+  })), { name: 'server-content:models' });
+  const listed = createMemo<ContentListRow[]>(() => groupContentRows(searchContentRows(models(), query()), activeFilter()), { name: 'server-content:rows' });
   const rows = createMemo<ListRow[]>(() => {
     const entries = listed().filter((r): r is Extract<ContentListRow,{kind:'entry'}> => r.kind === 'entry');
     const bundled = entries.filter(r => isModpackOwned(r.row.entry, owned()));
@@ -379,7 +384,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               value={activeFilter()} onChange={(value) => setFilter(value as ContentFilter)} />
           </Show>
           <TextField size="sm" class="resources-search" aria-label={t('server-content.search')} placeholder={t('server-content.search')}
-            icon={<Icon name="icons/content/search" size={14} />} value={query()} onChange={setQuery} />
+            icon={<Icon name="icons/content/search" size={14} />} value={search.text()} onChange={setQuery} />
           <Show when={inventory()?.capabilities.update && inventory()?.items.some(item => !!item.provider)}>
             <Button size="sm" variant="outline" disabled={checking()} onClick={() => void checkUpdates()}>
               {t(checking() ? 'server-pack.checking-content' : 'server-pack.check-content')}
@@ -428,6 +433,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
                     items={rows()}
                     key={(row) => row.id}
                     rowHeight={44}
+                    overscan={4}
                     getHeight={(index) => { const row = rows()[index]; return row?.kind === 'group' ? row.group === 'pack' ? 52 : 36 : 44; }}
                     scrollElement={viewport()}
                     pinnedKey={menuKey() ? `entry:${menuKey()}` : null}

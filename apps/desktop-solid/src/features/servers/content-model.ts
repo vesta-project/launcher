@@ -89,8 +89,17 @@ export interface ContentListInput {
   version?: (entry: ServerContentEntry) => Pick<ResourceVersion, 'version_number'> | undefined;
 }
 
-export function contentRows(items: readonly ServerContentEntry[], input: ContentListInput): ContentRowModel[] {
-  const needle = input.query.trim().toLowerCase();
+/** One collator for every comparison: `localeCompare` with options builds a new one per call. */
+const nameOrder = new Intl.Collator(undefined, { sensitivity: 'base' });
+const searchText = new WeakMap<ContentRowModel, string>();
+const searchable = (row: ContentRowModel) => {
+  let text = searchText.get(row);
+  if (text === undefined) searchText.set(row, text = `${row.name} ${row.entry.filename} ${row.version ?? ''}`.toLowerCase());
+  return text;
+};
+
+/** Sorted row models for a kind filter, before any search. Typing filters these, never rebuilds them. */
+export function contentModels(items: readonly ServerContentEntry[], input: Omit<ContentListInput, 'query'>): ContentRowModel[] {
   return items
     .filter(isContentEntry)
     .filter((entry) => input.filter === 'all' || entry.kind === input.filter)
@@ -101,22 +110,51 @@ export function contentRows(items: readonly ServerContentEntry[], input: Content
       version: entry.declared?.version ?? input.version?.(entry)?.version_number ?? null,
       identified: !!entry.provider,
     }))
-    .filter((row) => !needle || `${row.name} ${row.entry.filename} ${row.version ?? ''}`.toLowerCase().includes(needle))
-    .toSorted((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.key.localeCompare(b.key));
+    .toSorted((a, b) => nameOrder.compare(a.name, b.name) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-/** Rows in kind order; with "all" and more than one kind present, each kind gets a header. */
-export function contentList(items: readonly ServerContentEntry[], input: ContentListInput): ContentListRow[] {
-  const rows = contentRows(items, input);
+/** Keeps the previous model object for rows that did not change, so provider names arriving
+ *  in batches only touch the rows they name. */
+export function reuseContentModels(previous: readonly ContentRowModel[] | undefined, next: ContentRowModel[]): ContentRowModel[] {
+  if (!previous?.length) return next;
+  const byKey = new Map(previous.map((row) => [row.key, row]));
+  const reused = next.map((row) => {
+    const old = byKey.get(row.key);
+    return old && old.entry === row.entry && old.name === row.name && old.version === row.version && old.identified === row.identified ? old : row;
+  });
+  return reused.length === previous.length && reused.every((row, index) => row === previous[index]) ? previous as ContentRowModel[] : reused;
+}
+
+export function searchContentRows(rows: readonly ContentRowModel[], query: string): ContentRowModel[] {
+  const needle = query.trim().toLowerCase();
+  return needle ? rows.filter((row) => searchable(row).includes(needle)) : [...rows];
+}
+
+export function contentRows(items: readonly ServerContentEntry[], input: ContentListInput): ContentRowModel[] {
+  return searchContentRows(contentModels(items, input), input.query);
+}
+
+const listEntries = new WeakMap<ContentRowModel, Extract<ContentListRow, { kind: 'entry' }>>();
+/** Rows in kind order; with "all" and more than one kind present, each kind gets a header.
+ *  Entry wrappers are reused per model, so a search keeps unchanged rows' identity (no re-render). */
+export function groupContentRows(rows: readonly ContentRowModel[], filter: ContentFilter): ContentListRow[] {
   const kinds = CONTENT_KINDS.filter((kind) => rows.some((row) => row.entry.kind === kind));
-  const headed = input.filter === 'all' && kinds.length > 1;
+  const headed = filter === 'all' && kinds.length > 1;
   return kinds.flatMap((kind) => {
     const own = rows.filter((row) => row.entry.kind === kind);
     return [
       ...(headed ? [{ id: `group:${kind}`, kind: 'group' as const, group: kind, count: own.length }] : []),
-      ...own.map((row) => ({ id: `entry:${row.key}`, kind: 'entry' as const, row })),
+      ...own.map((row) => {
+        let entry = listEntries.get(row);
+        if (!entry) listEntries.set(row, entry = { id: `entry:${row.key}`, kind: 'entry' as const, row });
+        return entry;
+      }),
     ];
   });
+}
+
+export function contentList(items: readonly ServerContentEntry[], input: ContentListInput): ContentListRow[] {
+  return groupContentRows(contentRows(items, input), input.filter);
 }
 
 /* ---- Staged changes ---- */

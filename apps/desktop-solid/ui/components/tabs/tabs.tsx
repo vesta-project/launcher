@@ -1,6 +1,6 @@
-import { Tabs as KobalteTabs } from '@kobalte/core/tabs';
+import { Tabs as KobalteTabs, useTabsContext } from '@kobalte/core/tabs';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { children, createEffect, createSignal, Show } from 'solid-js';
 import './tabs.css';
 
 export interface TabsProps {
@@ -108,10 +108,49 @@ export interface TabPanelProps {
   children?: JSX.Element;
 }
 
+/** Anything that takes Tab focus by itself; hidden-ness is deliberately not checked (see below). */
+const TABBABLE = 'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), iframe, [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Kobalte's `Tabs.Content`, minus its per-mutation tabbable scan. That scan runs
+ * `getComputedStyle` from a MutationObserver on every DOM change inside the panel, forcing a
+ * synchronous style recalc each time; in virtual lists (Resources, Files) it was a third of
+ * every scroll frame. Here the panel only needs to know whether it holds a focus stop at all, so
+ * a selector check runs at most once per idle period and never reads styles.
+ */
 export function TabPanel(props: TabPanelProps) {
+  const context = useTabsContext();
+  const [element, setElement] = createSignal<HTMLDivElement | undefined>(undefined, { name: 'tab-panel:element' });
+  const [focusStop, setFocusStop] = createSignal(false, { name: 'tab-panel:focus-stop' });
+  const selected = () => context.listState().selectedKey() === props.value;
+  const id = () => context.generateContentId(props.value);
+  createEffect(() => [props.value, id()] as const, ([value, contentId]) => { context.contentIdsMap().set(value, contentId); });
+  createEffect(element, (panel) => {
+    if (!panel) return;
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const check = () => { pending = undefined; setFocusStop(!panel.querySelector(TABBABLE)); };
+    const schedule = () => { if (pending === undefined) pending = setTimeout(check, 120); };
+    check();
+    const observer = new MutationObserver(schedule);
+    observer.observe(panel, { subtree: true, childList: true, attributes: true, attributeFilter: ['tabindex', 'disabled', 'href'] });
+    return () => { observer.disconnect(); clearTimeout(pending); };
+  });
   return (
-    <KobalteTabs.Content data-vesta="tab-panel" value={props.value} forceMount={props.forceMount} class={props.class} style={props.style}>
-      {props.children}
-    </KobalteTabs.Content>
+    <Show when={props.forceMount || selected()}>
+      <div
+        ref={setElement}
+        data-vesta="tab-panel"
+        role="tabpanel"
+        id={id()}
+        tabindex={focusStop() ? 0 : undefined}
+        aria-labelledby={context.triggerIdsMap().get(props.value)}
+        data-orientation={context.orientation()}
+        data-selected={selected() ? '' : undefined}
+        class={props.class}
+        style={props.style}
+      >
+        {props.children}
+      </div>
+    </Show>
   );
 }

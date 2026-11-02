@@ -98,13 +98,17 @@
 
   /* The old launcher's wiggle: arranging cards sway slightly out of step. */
   :where([data-vesta='library-grid'][data-arranging] > [data-library-item]) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
-    animation: vesta-library-wiggle 520ms ease-in-out infinite alternate;
+    animation: vesta-library-wiggle 520ms ease-in-out infinite var(--library-wiggle-direction, alternate);
+    animation-delay: var(--library-wiggle-delay, 0ms);
     transform-origin: 50% 80%;
   }
 
-  :where([data-vesta='library-grid'][data-arranging] > [data-library-item]:nth-child(even)) > :where([data-vesta='library-card-slot'], [data-vesta='library-folder']) {
-    animation-delay: -280ms;
-    animation-direction: alternate-reverse;
+  /* The phase lives on the item. Never write `:nth-child(...) > descendant`: Blink then restyles
+     every sibling's whole subtree on any child insert/remove app-wide, so virtual lists restyled
+     all visible rows per scroll frame (checks/css-structural-invalidation.test.js). */
+  :where([data-vesta='library-grid'][data-arranging] > [data-library-item]:nth-child(even)) {
+    --library-wiggle-delay: -280ms;
+    --library-wiggle-direction: alternate-reverse;
   }
 
   :where([data-library-item][data-dragging]) {

@@ -1,4 +1,5 @@
 import { nativeDetails, mutateNativeResources, deleteNativeWorld, transferNativeWorld } from './native-details';
+import { scaleFixtureRows } from "../../platform/fixture-scale";
 import { nativeInstances, nativeRecord } from "./native-service";
 import { createSignal } from "solid-js";
 import art1 from "../../assets/images/placeholders/placeholder-image1.jpg";
@@ -149,11 +150,11 @@ function makeResources(id: string): InstalledResource[] {
       2,
     );
   const mods = 8 + (seed % (modNames.length - 7));
-  return [
+  return scaleFixtureRows([
     ...take(modNames, "mod", mods),
     ...take(packNames, "resourcepack", 1 + (seed % 3)),
     ...take(shaderNames, "shader", seed % 3),
-  ];
+  ], (row, copy) => ({ ...row, id: `${row.id}-${copy}`, name: `${row.name} ${copy + 1}`, filename: `${copy}-${row.filename}`, bundled: false }));
 }
 
 const worldSeeds: Omit<WorldInfo, "id" | "image">[] = [

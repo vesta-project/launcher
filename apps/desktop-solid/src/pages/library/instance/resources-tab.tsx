@@ -22,6 +22,7 @@ import {
 import { navigate } from "../../../app/router";
 import { projectPath } from "../../../features/browse/browse-model";
 import { prefetchProject } from "../../../features/browse/browse-projects";
+import { createSearchQuery } from "../../../components/search-query";
 import { EmptyState } from "../../../components/empty-state";
 import { VirtualList } from "../../../components/virtual-list";
 import { Icon } from "../../../components/icon";
@@ -42,6 +43,14 @@ import { t } from "../../../localization";
 import "./resources-tab.css";
 
 type Filter = "all" | ResourceKind;
+/** One collator: `localeCompare` resolves locale data on every call. */
+const nameOrder = new Intl.Collator(undefined, { sensitivity: "base" });
+const searchTexts = new WeakMap<InstalledResource, string>();
+function searchText(item: InstalledResource) {
+  let text = searchTexts.get(item);
+  if (text === undefined) searchTexts.set(item, text = `${item.name} ${item.author || item.filename} ${item.filename}`.toLowerCase());
+  return text;
+}
 const filters = () => [
   { value: "all", label: t("resources.all-types") },
   { value: "mod", label: t("resources.mods") },
@@ -97,7 +106,9 @@ function ResourceList(props: {
   const [filter, setFilter] = createSignal<Filter>("all", {
     name: "resources:filter",
   });
-  const [query, setQuery] = createSignal("", { name: "resources:query" });
+  const search = createSearchQuery("resources:query");
+  const query = search.applied;
+  const setQuery = search.set;
   const [selected, setSelected] = createSignal<string[]>([], {
     name: "resources:selection",
   });
@@ -121,19 +132,14 @@ function ResourceList(props: {
     props.world
       ? undefined
       : versionStore(props.entry.instance.id).state().pack;
+  // Sorted once per list change; typing and the kind filter only narrow this.
+  const sorted = createMemo(() => all().toSorted((a, b) => nameOrder.compare(a.name, b.name)),
+    { name: "resources:sorted" });
   const visible = createMemo(
     () => {
       const needle = query().trim().toLowerCase();
-      return all()
-        .filter(
-          (item) =>
-            (filter() === "all" || item.kind === filter()) &&
-            (!needle ||
-              `${item.name} ${item.author || item.filename} ${item.filename}`
-                .toLowerCase()
-                .includes(needle)),
-        )
-        .toSorted((a, b) => a.name.localeCompare(b.name));
+      const kind = filter();
+      return sorted().filter((item) => (kind === "all" || item.kind === kind) && (!needle || searchText(item).includes(needle)));
     },
     { name: "resources:visible" },
   );
@@ -178,9 +184,9 @@ function ResourceList(props: {
     setSelected((list) => selectVisible(list, [id], on));
   const showKind = () => !props.world && filter() === "all";
 
-  type ListRow =
-    | { id: string; kind: "resource"; item: InstalledResource }
-    | { id: string; kind: "pack" | "own" };
+  type ResourceRow = { id: string; kind: "resource"; item: InstalledResource };
+  type ListRow = ResourceRow | { id: string; kind: "pack" | "own" };
+  const resourceRows = new WeakMap<InstalledResource, ResourceRow>();
   const groups = createMemo(
     () => {
       const items = visible();
@@ -197,14 +203,14 @@ function ResourceList(props: {
     () => {
       const { bundled, own } = groups();
       const result: ListRow[] = [];
+      // Wrappers are reused per resource object, so a search or regroup keeps unchanged rows'
+      // identity and the virtual list does not re-render them.
       const add = (items: InstalledResource[]) =>
-        result.push(
-          ...items.map((item) => ({
-            id: `resource:${item.id}`,
-            kind: "resource" as const,
-            item,
-          })),
-        );
+        result.push(...items.map((item) => {
+          let row = resourceRows.get(item);
+          if (!row) resourceRows.set(item, row = { id: `resource:${item.id}`, kind: "resource" as const, item });
+          return row;
+        }));
       if (bundled.length) {
         result.push({ id: "group:pack", kind: "pack" });
         if (expanded() || query()) add(bundled);
@@ -421,7 +427,7 @@ function ResourceList(props: {
                     ? "resources.search-datapacks"
                     : "resources.search-resources",
                 )}
-                value={query()}
+                value={search.text()}
                 onChange={setQuery}
               />
               <Show when={updates().length}>
@@ -534,6 +540,7 @@ function ResourceList(props: {
                 items={rows()}
                 key={(row) => row.id}
                 rowHeight={44}
+                    overscan={4}
                 getHeight={(index) =>
                   rows()[index].kind === "pack"
                     ? 52
