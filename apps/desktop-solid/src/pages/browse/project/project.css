@@ -1463,7 +1463,10 @@
   :where([data-vesta='project-server-address']) {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    flex: 0 1 auto;
+    gap: var(--vesta-space-1);
+    max-inline-size: 100%;
+    block-size: 20px;
     min-inline-size: 0;
   }
 
@@ -1480,6 +1483,11 @@
     --button-fg: var(--vesta-color-media-text);
     --button-bg-hover: color-mix(in oklab, var(--vesta-color-media-text) 16%, transparent);
     --button-bg-active: color-mix(in oklab, var(--vesta-color-media-text) 22%, transparent);
+    /* Sized to the meta line (20px), which clips anything taller. */
+    --button-height: 20px;
+    --button-icon-size: 12px;
+
+    flex: none;
   }
 
   :where([data-vesta='project-stat'][data-freshness]) {
@@ -1504,5 +1512,154 @@
 
   :where([data-vesta='project-dependency-group'][data-kind='server-content']) {
     margin-block-end: var(--vesta-space-2);
+  }
+}
+
+/*
+ * Version page of a modpack release: what the pack ships, in the main column. The card follows
+ * the server modpack page's "Content from this modpack" panel: a raised panel, a quiet uppercase
+ * title with its count, and compact icon + name tiles.
+ * Hooks: [data-vesta=pack-contents] -head -group -grid -item -text, [data-vesta=project-changelog-empty]
+ * Knobs: --pack-contents-tile
+ */
+@layer launcher {
+  :where([data-vesta='project-changelog-empty']) {
+    margin: 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='pack-contents']) {
+    --pack-contents-tile: 240px;
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+    padding-block-end: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='pack-contents-head']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2) var(--vesta-space-4);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='pack-contents-head'] h2),
+  :where([data-vesta='pack-contents-group'] > h3) {
+    display: flex;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='pack-contents-head'] [data-vesta='project-muted']) {
+    margin-block-start: var(--vesta-space-0-5);
+    font-size: var(--vesta-text-xs);
+  }
+
+  .pack-contents-search {
+    inline-size: min(260px, 100%);
+  }
+
+  :where([data-vesta='pack-contents'] > [data-vesta='project-muted']) {
+    padding-inline: var(--vesta-space-4);
+  }
+
+  :where([data-vesta='pack-contents-group']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    padding-inline: var(--vesta-space-4);
+  }
+
+  :where([data-vesta='pack-contents-grid']) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--pack-contents-tile), 100%), 1fr));
+    gap: var(--vesta-space-1) var(--vesta-space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='pack-contents-grid']) > li {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='pack-contents-item']) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+    min-block-size: 44px;
+    margin-inline: calc(var(--vesta-space-1) * -1);
+    padding: var(--vesta-space-1);
+    border-radius: var(--vesta-radius-control);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
+    text-decoration: none;
+    cursor: default;
+  }
+
+  :where(a[data-vesta='pack-contents-item']):hover {
+    background: var(--vesta-color-fill);
+  }
+
+  :where(a[data-vesta='pack-contents-item']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 0;
+  }
+
+  :where([data-vesta='pack-contents-item'][data-unresolved]) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='pack-contents-item']) > :where([data-vesta='project-dependency-icon']) {
+    inline-size: 32px;
+    block-size: 32px;
+  }
+
+  :where([data-vesta='pack-contents-text']) {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='pack-contents-text']) > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='pack-contents-text']) > strong {
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='pack-contents-text']) > small {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  .pack-contents-more {
+    align-self: center;
+  }
+}
+
+@layer launcher {
+  :where([data-vesta='project-article']) > :where([data-vesta='pack-contents']) {
+    margin-block-start: var(--vesta-space-5);
   }
 }

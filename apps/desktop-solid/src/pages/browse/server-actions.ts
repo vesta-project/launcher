@@ -1,6 +1,6 @@
 import { createSignal, untrack } from 'solid-js';
 import { transitionTo } from '../../app/transition';
-import { projectKey, type ResourceProject } from '../../features/browse/browse-model';
+import { hasDownloadableArtifact, projectKey, type ResourceProject } from '../../features/browse/browse-model';
 import { setNotice } from '../../features/browse/browse-store';
 import { installServerPack, linkInstanceToServer } from '../../features/browse/server-links';
 import { playInstance } from '../../features/instances/catalog';
@@ -8,6 +8,9 @@ import { launchNativeInstance, nativeInstances } from '../../features/instances/
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { closePicker } from './install-actions';
+import { openInstallSource } from '../create/install-navigation';
+import { serverPack } from '../../features/browse/server-listing';
+import { loadProject, loadVersionDetails } from '../../features/browse/browse-projects';
 
 /**
  * Joining a Modrinth server listing from its page: install its pack as a new linked instance,
@@ -46,9 +49,29 @@ async function run(project: ResourceProject, message: MessageId, work: () => Pro
   }
 }
 
-/** Install & play: a new instance from the listing's content, linked to it; opens the instance. */
+/**
+ * Install & play. A modpack listing goes through the regular modpack install form (name, icon,
+ * memory, release), pinned to the listing's pack version; Create links the new instance to the
+ * listing once it exists. A vanilla listing has no pack to review, so the host creates and links
+ * its instance at the recommended version in one step.
+ */
 export function joinWithNewInstance(project: ResourceProject): Promise<void> {
   closePicker();
+  const pack = serverPack(project.server);
+  if (pack) {
+    clearServerActionError();
+    openInstallSource(async () => {
+      const [packProject, details] = await Promise.all([
+        loadProject('modrinth', pack.projectId),
+        loadVersionDetails('modrinth', pack.projectId, pack.versionId),
+      ]);
+      const release = details.version;
+      const url = hasDownloadableArtifact(release) ? release.download_url || release.files?.[0]?.url : undefined;
+      if (!url) throw new Error(t('install.release-unavailable'));
+      return { kind: 'url', value: url, online: { project: packProject, release } };
+    }, project);
+    return Promise.resolve();
+  }
   return run(
     project,
     'browse.server-install-failed',

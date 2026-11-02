@@ -75,14 +75,6 @@ export function Shell() {
       <FileDragHint enabled={route().page !== 'create'} onLibrary={route().page === 'library' && !route().section} />
       <NativeImportDialog />
       <InstanceDeleteDialog />
-      <Show when={instanceError()}>{(message) => <div data-vesta="instance-service-error">
-        <Notice
-          action={{ label: t('common.retry'), onClick: () => { clearInstanceError(); void refreshNativeInstances(true); } }}
-          actions={<Button size="sm" variant="ghost" onClick={clearInstanceError}>{t('nav.close')}</Button>}
-        >
-          {message()}
-        </Notice>
-      </div>}</Show>
       <div data-vesta="shell-body">
         <Rail />
         <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>
@@ -105,6 +97,15 @@ export function Shell() {
           </Switch>
         </main>
       </div>
+      {/* A tray that slides up from the window's bottom edge, outside the board frame (shell.css). */}
+      <Show when={instanceError()}>{(message) => <div data-vesta="instance-service-error">
+        <Notice
+          action={{ label: t('common.retry'), onClick: () => { clearInstanceError(); void refreshNativeInstances(true); } }}
+          actions={<Button size="sm" variant="ghost" onClick={clearInstanceError}>{t('nav.close')}</Button>}
+        >
+          {message()}
+        </Notice>
+      </div>}</Show>
     </div>
   );
 }

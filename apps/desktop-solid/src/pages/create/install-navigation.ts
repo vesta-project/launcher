@@ -1,11 +1,13 @@
 import { navigate } from "../../app/router";
 import { createSignal } from 'solid-js';
 import type { PackSource } from "../../features/installation/install-service";
+import type { ResourceProject } from "../../features/browse/browse-model";
 import type { PendingResourceInstall } from "../../features/browse/new-instance-install";
 let pendingResource: PendingResourceInstall | undefined;
 /** Resolve provider metadata inside the destination, so navigation never waits on IPC. */
 export type InstallSourceHandoff = PackSource | (() => Promise<PackSource>);
 let pendingSource: InstallSourceHandoff | undefined;
+let pendingListing: ResourceProject | undefined;
 
 export type CreateAction = 'new' | 'methods' | 'file' | 'launchers';
 let pendingAction: CreateAction | undefined;
@@ -14,7 +16,7 @@ const [actionRevision, setActionRevision] = createSignal(0, { name: 'createActio
 export const createActionKey = () => `create:${actionRevision()}`;
 export function requestCreateAction(action: CreateAction) {
   pendingServer = undefined;
-  pendingSource = undefined;
+  pendingSource = undefined; pendingListing = undefined;
   pendingResource = undefined;
   pendingAction = action;
   setActionRevision((value) => value + 1);
@@ -26,11 +28,12 @@ export function takeCreateAction() {
   return action;
 }
 /** One-shot handoff from the launcher-import page to archive installation. */
-export function openInstallSource(source: InstallSourceHandoff) {
+export function openInstallSource(source: InstallSourceHandoff, listing?: ResourceProject) {
   pendingServer = undefined;
   pendingAction = undefined;
   pendingResource = undefined;
   pendingSource = source;
+  pendingListing = listing;
   setActionRevision((value) => value + 1);
   navigate("/create");
 }
@@ -39,12 +42,18 @@ export function takeInstallSource() {
   pendingSource = undefined;
   return source;
 }
+/** A Modrinth server listing the pack from openInstallSource should follow once created. */
+export function takeServerListing() {
+  const listing = pendingListing;
+  pendingListing = undefined;
+  return listing;
+}
 
 /** Consumed by the mounted form; leaving it drops the unsubmitted resource. */
 export function openResourceInstall(resource: PendingResourceInstall) {
   pendingServer = undefined;
   pendingAction = undefined;
-  pendingSource = undefined;
+  pendingSource = undefined; pendingListing = undefined;
   pendingResource = resource;
   setActionRevision((value) => value + 1);
   navigate("/create");
@@ -57,7 +66,7 @@ export function takeResourceInstall() {
 
 let pendingServer: string | undefined;
 export function openServerInstall(connectionId: string) {
-  pendingSource = undefined; pendingResource = undefined; pendingAction = undefined;
+  pendingSource = undefined; pendingListing = undefined; pendingResource = undefined; pendingAction = undefined;
   pendingServer = connectionId;
   setActionRevision(value => value + 1); navigate('/create');
 }

@@ -3,6 +3,7 @@ import { Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { ContextMenu, ContextMenuItem, Tooltip } from '@vesta/ui';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
+import { activeOperationLabel, operationLabel } from './operation-label';
 import './instance-card.css';
 import { InstanceActionItems, type InstanceArrangeActions } from './action-menu';
 
@@ -137,12 +138,12 @@ export function InstanceCard(props: InstanceCardProps) {
   const playLabel = (): string => {
     switch (kind()) {
       case 'installing':
-        return `${installing()?.label}...`;
+        return `${activeOperationLabel(installing()?.label)}…`;
       case 'interrupted':
         if (interrupted()?.initial) return t('management.install');
         return interrupted()?.recovery
           ? 'Update recovery is incomplete. Click to resume recovery.'
-          : `${interrupted()?.label} interrupted. Click to resume.`;
+          : `${operationLabel(interrupted()?.label)} interrupted. Click to resume.`;
       case 'running':
         return 'Running (click to stop)';
       case 'warming':
@@ -269,7 +270,7 @@ export function InstanceCard(props: InstanceCardProps) {
               <p data-vesta="instance-card-overlay-text" data-clamp="3">
                 {interrupted()?.initial ? t('management.ready-install') : interrupted()?.recovery
                   ? 'Recovery is incomplete. Resume to finish.'
-                  : `${interrupted()?.label} was interrupted. Resume to finish.`}
+                  : `${operationLabel(interrupted()?.label)} was interrupted. Resume to finish.`}
               </p>
             </Show>
             <Show when={kind() === 'failed' || kind() === 'interrupted'}>

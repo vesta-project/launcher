@@ -12,6 +12,7 @@ import {
   instancePending,
 } from "../../../features/instances/native-service";
 import { t } from "../../../localization";
+import { activeOperationLabel, operationLabel } from "../../../features/instances/operation-label";
 import "./instance-header.css";
 import { HeaderIdentity } from "./header-identity";
 import { InstanceActionItems } from "../../../features/instances/action-menu";
@@ -45,7 +46,7 @@ function primaryAction(entry: InstanceEntry) {
       };
     case "installing":
       return {
-        label: `${state.label}…`,
+        label: `${activeOperationLabel(state.label)}…`,
         icon: "icons/actions/play",
         tone: "accent" as const,
         disabled: true,
@@ -106,7 +107,7 @@ function notice(entry: InstanceEntry) {
         tone: "warning",
         title: state.recovery
           ? t("instance.recovery-incomplete")
-          : t("instance.interrupted", { label: state.label }),
+          : t("instance.interrupted", { label: operationLabel(state.label) }),
         text: t("instance.resume-to-finish"),
         action: undefined,
       };

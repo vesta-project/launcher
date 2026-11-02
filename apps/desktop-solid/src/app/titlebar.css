@@ -91,7 +91,7 @@
 
   :where([data-vesta='titlebar-compact']) :where([data-vesta='profile-button']) {
     --profile-size: 26px;
-    --profile-radius: 5px;
+    --profile-radius: var(--vesta-radius-sm);
   }
 
   :where([data-vesta='window-controls']) {
