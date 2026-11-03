@@ -119,6 +119,38 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
     }
     // The shared parser determines Minecraft/loader identities and provider pins.
     let metadata = get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
+    let override_folder = if seen.contains("manifest.json") {
+        let manifest: Value =
+            serde_json::from_slice(&read_member(&mut zip, "manifest.json", 1024 * 1024)?)
+                .map_err(io)?;
+        manifest["overrides"]
+            .as_str()
+            .unwrap_or("overrides")
+            .to_owned()
+    } else {
+        "overrides".into()
+    };
+    if override_folder.is_empty()
+        || override_folder.contains(['\\', ':'])
+        || override_folder
+            .split('/')
+            .any(|p| p.is_empty() || p == "." || p == "..")
+    {
+        return Err(conflict("pack_unsafe_archive"));
+    }
+    // Reject unsupported override paths before any provider files are downloaded.
+    for prefix in [format!("{override_folder}/"), "client-overrides/".into()] {
+        for n in 0..zip.len() {
+            let file = zip.by_index(n).map_err(io)?;
+            if file.is_dir() { continue; }
+            if let Some(path) = file.name().strip_prefix(&prefix) {
+                safe_path(path).map_err(|error| {
+                    log::warn!("[server-pack] unsupported override path: {:?}", path.chars().take(512).collect::<String>());
+                    error
+                })?;
+            }
+        }
+    }
     let mut unsupported = HashSet::new();
     if seen.contains("modrinth.index.json") {
         let index: Value =
@@ -206,25 +238,6 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                 staged.insert(path, &scratch, got.size, got.sha256, false)?;
             }
         }
-    }
-    let override_folder = if seen.contains("manifest.json") {
-        let manifest: Value =
-            serde_json::from_slice(&read_member(&mut zip, "manifest.json", 1024 * 1024)?)
-                .map_err(io)?;
-        manifest["overrides"]
-            .as_str()
-            .unwrap_or("overrides")
-            .to_owned()
-    } else {
-        "overrides".into()
-    };
-    if override_folder.is_empty()
-        || override_folder.contains(['\\', ':'])
-        || override_folder
-            .split('/')
-            .any(|p| p.is_empty() || p == "." || p == "..")
-    {
-        return Err(conflict("pack_unsafe_archive"));
     }
     // Match shared parser precedence: client overrides replace shared overrides.
     for prefix in [format!("{override_folder}/"), "client-overrides/".into()] {
@@ -398,6 +411,15 @@ mod tests {
         staged.insert_bytes("config/a.toml".into(), b"value = 2", true).unwrap();
         assert_eq!(staged.total, 9);
         assert_eq!(staged.files.len(), 1);
+    }
+    #[test]
+    fn cobbleverse_licences_and_saved_servers_are_accepted_without_opening_unsafe_paths() {
+        for path in ["COBBLEVERSE - Third-Party Licenses.pdf", "licenses/Accessories - License.txt", "servers.dat", "shaderpacks/pack/shaders/main.vsh"] {
+            assert!(safe_path(path).is_ok(), "{path}");
+        }
+        for path in ["../escape.pdf", "licenses/../../escape.txt", "CON.pdf", "danger.exe", "config/../escape"] {
+            assert!(safe_path(path).is_err(), "{path}");
+        }
     }
     #[test]
     fn normalized_file_set_rejects_aliases_traversal_and_tree_collisions() {

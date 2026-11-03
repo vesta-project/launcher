@@ -265,9 +265,10 @@ fn safe_path(path: &str) -> Result<()> {
                 | "kubejs"
                 | "scripts"
                 | "resources"
+                | "licenses"
         )
         || parts.len() == 1
-            && matches!(
+            && (parts[0].to_ascii_lowercase().ends_with(".pdf") || matches!(
                 parts[0],
                 "options.txt"
                     | "optionsof.txt"
@@ -275,7 +276,7 @@ fn safe_path(path: &str) -> Result<()> {
                     | "servers.dat"
                     | "pack-icon.png"
                     | "pack-icon.jpg"
-            ))
+            )))
     {
         return Err(conflict("pack_unsafe_path"));
     }
@@ -958,7 +959,7 @@ impl crate::tasks::manager::Task for ServerInstallTask {
             let manager = ctx.app_handle.state::<Arc<ServerManager>>();
             let mut cancel = ctx.cancel_rx.clone();
             let result = tokio::select! {
-                result = manager.prepare_new_install(&ctx.app_handle, &instance, &details) => result.map_err(|e| e.to_string()),
+                result = manager.prepare_new_install(&ctx.app_handle, &instance, &details) => result.map_err(|e| match e.reason.as_deref() { Some(reason) => format!("{} ({reason})", e), None => e.to_string() }),
                 _ = async { loop { if *cancel.borrow() { break; } if cancel.changed().await.is_err() { break; } } } => Err("Installation cancelled".into()),
             };
             let prepared = match result {
