@@ -14,7 +14,9 @@ tempfile = "3"
 which = "8.0.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-landlock = "0.4.7"
+# Keep the shared helper compatible with the server's libc 0.2.183 baseline.
+# Vesta uses Execute/Refer and hard enforcement, not the newer ABI 7–9 APIs.
+landlock = "=0.4.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 rappct = "0.13.3"
