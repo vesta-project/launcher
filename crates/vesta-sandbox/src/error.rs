@@ -2,6 +2,9 @@ use crate::enforcement::ControlKind;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SandboxError {
+    #[error("headless sandbox policy must withhold microphone and USB capabilities")]
+    InvalidHeadlessPolicy,
+
     #[error("path does not exist and has no existing ancestor: {path}")]
     PathNotFound { path: String },
 

@@ -15,6 +15,15 @@ const BWRAP_CANDIDATES: &[&str] = &["/usr/bin/bwrap", "/bin/bwrap"];
 /// Immutable host paths commonly required by a JVM/LWJGL stack on Linux.
 const COMPAT_RO_ROOTS: &[&str] = &["/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc"];
 
+// No whole /etc, /usr or desktop runtime directory in the headless profile.
+// The runtime itself is an explicit caller allowlist entry.
+pub(crate) const HEADLESS_RO_PATHS: &[&str] = &[
+    "/usr/lib", "/usr/lib64", "/lib", "/lib64", "/lib32",
+    "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d",
+    "/etc/resolv.conf", "/etc/nsswitch.conf", "/etc/hosts", "/etc/gai.conf",
+    "/etc/ssl/certs", "/etc/pki/tls/certs", "/etc/localtime", "/usr/share/zoneinfo",
+];
+
 /// Returns the resolved bubblewrap executable path when present on this host.
 pub(crate) fn bubblewrap_path() -> Option<PathBuf> {
     for candidate in BWRAP_CANDIDATES {
@@ -68,9 +77,18 @@ pub fn sandbox_enforcement_ready() -> bool {
         && crate::landlock_exec::landlock_enforcement_ready()
 }
 
+#[cfg(test)]
 pub(crate) fn prepare(
     run_plan: &RunPlan,
     policy: &SandboxPolicy,
+) -> (SandboxedSpawn, EnforcementReport) {
+    prepare_for(run_plan, policy, false)
+}
+
+pub(crate) fn prepare_for(
+    run_plan: &RunPlan,
+    policy: &SandboxPolicy,
+    headless: bool,
 ) -> (SandboxedSpawn, EnforcementReport) {
     let Some(bwrap) = bubblewrap_path() else {
         return missing_bubblewrap(run_plan, policy);
@@ -87,10 +105,11 @@ pub(crate) fn prepare(
         }
     };
 
-    let mut args = build_bwrap_args(policy, run_plan, &sandbox_temp);
+    let mut args = build_bwrap_args_for(policy, run_plan, &sandbox_temp, headless);
     let landlock_helper = match append_landlock_exec_wrapper(&mut args, policy) {
         Ok(()) => crate::landlock_exec::landlock_helper_path(),
         Err(note) => {
+            let _ = std::fs::remove_dir_all(&sandbox_temp);
             return unsupported_with_note(run_plan, policy, note);
         }
     };
@@ -133,10 +152,12 @@ pub(crate) fn prepare(
         );
         EnforcementStatus::NotRequired
     } else {
-        notes.push(
+        if headless {
+            notes.push("Headless devices and IPC: private PID/IPC namespaces, minimal /dev, no desktop or audio sockets/environment; the namespace owner survives supervisor exit.".to_string());
+        } else { notes.push(
             "Microphone denied via bubblewrap (--unshare-ipc, no /dev/snd bind, and no PipeWire/PulseAudio sockets). Linux microphone-off also disables audio playback; GPU and display sockets remain available."
                 .to_string(),
-        );
+        ); }
         EnforcementStatus::Enforced
     };
 
@@ -249,15 +270,28 @@ fn unsupported_with_note(
     )
 }
 
+#[cfg(test)]
 fn build_bwrap_args(
     policy: &SandboxPolicy,
     run_plan: &RunPlan,
     sandbox_temp: &Path,
 ) -> Vec<String> {
-    let mut args = vec![
-        "--unshare-user".to_string(),
-        "--die-with-parent".to_string(),
-    ];
+    build_bwrap_args_for(policy, run_plan, sandbox_temp, false)
+}
+
+fn build_bwrap_args_for(
+    policy: &SandboxPolicy,
+    run_plan: &RunPlan,
+    sandbox_temp: &Path,
+    headless: bool,
+) -> Vec<String> {
+    let mut args = vec!["--unshare-user".to_string()];
+    if headless {
+        // Hide same-UID host processes and their /proc/<pid>/root/fd access.
+        args.push("--unshare-pid".to_string());
+    } else {
+        args.push("--die-with-parent".to_string());
+    }
 
     if !policy.network_allowed {
         args.push("--unshare-net".to_string());
@@ -269,11 +303,15 @@ fn build_bwrap_args(
 
     args.push("--proc".to_string());
     args.push("/proc".to_string());
-    push_device_binds(&mut args, policy.mic_allowed);
+    if headless {
+        args.extend(["--dev".to_string(), "/dev".to_string()]);
+    } else {
+        push_device_binds(&mut args, policy.mic_allowed);
+    }
 
     push_bind_mount(&mut args, sandbox_temp, sandbox_temp, true);
 
-    for root in COMPAT_RO_ROOTS {
+    for root in if headless { HEADLESS_RO_PATHS } else { COMPAT_RO_ROOTS } {
         push_existing_ro_bind(&mut args, Path::new(root));
     }
 
@@ -286,16 +324,19 @@ fn build_bwrap_args(
         push_path_access(&mut args, entry, &mut seen);
     }
 
-    push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
-    push_runtime_dir_binds(&mut args, policy.mic_allowed);
-    if let Ok(xauthority) = std::env::var("XAUTHORITY") {
+    if !headless {
+      push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
+      push_runtime_dir_binds(&mut args, policy.mic_allowed);
+      if let Ok(xauthority) = std::env::var("XAUTHORITY") {
         // XAUTHORITY often lives under XDG_RUNTIME_DIR; bind it explicitly now
         // that the runtime dir is no longer mounted wholesale.
         push_existing_ro_bind(&mut args, Path::new(&xauthority));
+      }
     }
 
     args.push("--clearenv".to_string());
-    push_host_env_if_missing(
+    if !headless {
+      push_host_env_if_missing(
         &mut args,
         run_plan,
         &[
@@ -305,7 +346,8 @@ fn build_bwrap_args(
             "XDG_RUNTIME_DIR",
             "XDG_SESSION_TYPE",
         ],
-    );
+      );
+    }
     for (key, value) in &run_plan.env {
         if key == "TMPDIR" {
             continue;
@@ -492,6 +534,31 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::process::Command;
+
+    #[test]
+    fn headless_has_private_pid_minimal_devices_and_no_desktop_or_parent_death_binding() {
+        let game = tempfile::tempdir().unwrap();
+        let private_temp = tempfile::tempdir().unwrap();
+        let mut policy = sample_policy(SandboxPreset::Modded, game.path());
+        policy.mic_allowed = false;
+        policy.usb_allowed = false;
+        let plan = RunPlan::new("/selected-jdk/bin/java", vec![], game.path(), HashMap::new());
+        let args = build_bwrap_args_for(&policy, &plan, private_temp.path(), true);
+        assert!(args.iter().any(|v| v == "--unshare-pid"));
+        assert!(args.iter().any(|v| v == "--unshare-ipc"));
+        assert!(!args.iter().any(|v| v == "--die-with-parent"));
+        assert!(!args.iter().any(|v| v == "--unshare-net"));
+        assert!(!args.iter().any(|v| v == "--dev-bind"));
+        assert!(args.windows(2).any(|v| v == ["--dev", "/dev"]));
+        for forbidden in ["/etc", "/usr", "/bin", "/sbin", "/tmp/.X11-unix",
+            "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR"] {
+            assert!(!args.iter().any(|v| v == forbidden), "unexpected {forbidden}");
+        }
+        assert!(args.windows(3).any(|v| v[0] == "--bind" && v[1] == game.path().to_str().unwrap()));
+        policy.network_allowed = false;
+        let args = build_bwrap_args_for(&policy, &plan, private_temp.path(), true);
+        assert!(args.iter().any(|v| v == "--unshare-net"));
+    }
 
     fn sample_policy(preset: SandboxPreset, game_dir: &Path) -> SandboxPolicy {
         let caps = resolve_preset(preset);

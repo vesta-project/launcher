@@ -25,8 +25,21 @@ pub use error::SandboxError;
 pub use policy::{
     resolve_preset, PathAccess, PresetCapabilities, SandboxPolicy, SandboxPreset, WrapperNesting,
 };
-pub use prepare::prepare;
+pub use prepare::{prepare, prepare_headless};
 pub use spawn::{RunPlan, SandboxCommandPlacement, SandboxedSpawn};
+
+/// Implicit read-only compatibility paths of the headless adapters.
+/// Hosts must reject protected state underneath these roots as well as their
+/// explicit allowlist. On Windows these include ambient OS/application roots;
+/// this list is not a portable denial guarantee for arbitrary administrator ACLs.
+pub fn headless_system_paths() -> Vec<std::path::PathBuf> {
+    #[cfg(target_os = "linux")]
+    { platform::linux::HEADLESS_RO_PATHS.iter().map(std::path::PathBuf::from).collect() }
+    #[cfg(target_os = "windows")]
+    { ["SystemRoot", "ProgramFiles", "ProgramFiles(x86)"].iter().filter_map(std::env::var_os).map(std::path::PathBuf::from).collect() }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    { Vec::new() }
+}
 
 /// Whether Landlock exec allowlists are available on Linux.
 pub fn landlock_available() -> bool {

@@ -14,6 +14,35 @@ pub fn prepare(
     run_plan: &RunPlan,
     policy: &SandboxPolicy,
 ) -> Result<(SandboxedSpawn, EnforcementReport), SandboxError> {
+    prepare_for(run_plan, policy, false)
+}
+
+/// Prepare a headless server using the same native adapters and control checks.
+///
+/// Linux omits desktop sockets/devices/environment, uses a private PID namespace,
+/// and exposes only JVM library and selected DNS/CA configuration paths in addition
+/// to the explicit allowlist. Its namespace owner survives its supervisor exiting;
+/// the host must retain durable ownership and explicit process-family termination.
+/// This does not supply quotas or identify the JVM through a helper process.
+pub fn prepare_headless(
+    run_plan: &RunPlan,
+    policy: &SandboxPolicy,
+) -> Result<(SandboxedSpawn, EnforcementReport), SandboxError> {
+    if policy.enabled && (policy.mic_allowed || policy.usb_allowed) {
+        return Err(SandboxError::InvalidHeadlessPolicy);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    if policy.enabled {
+        return Err(SandboxError::PresetUnsupported { preset: policy.preset });
+    }
+    prepare_for(run_plan, policy, true)
+}
+
+fn prepare_for(
+    run_plan: &RunPlan,
+    policy: &SandboxPolicy,
+    headless: bool,
+) -> Result<(SandboxedSpawn, EnforcementReport), SandboxError> {
     if !policy.enabled {
         return Ok((
             SandboxedSpawn::Passthrough,
@@ -42,7 +71,7 @@ pub fn prepare(
         return Err(SandboxError::WindowsSandboxHelperNotFound);
     }
 
-    let (spawn, report) = platform::prepare_platform(run_plan, policy);
+    let (spawn, report) = platform::prepare_platform(run_plan, policy, headless);
     if let Err(error) = validate_required_controls(policy, &report) {
         if let SandboxedSpawn::Prepared { cleanup_paths, .. } = &spawn {
             for path in cleanup_paths {
@@ -89,6 +118,16 @@ mod tests {
 
         assert_eq!(spawn, SandboxedSpawn::Passthrough);
         assert_eq!(report, EnforcementReport::not_required());
+        assert_eq!(prepare_headless(&sample_run_plan(), &policy).unwrap(), (spawn, report));
+    }
+
+    #[test]
+    fn headless_refuses_desktop_capabilities_before_native_preparation() {
+        let mut policy=SandboxPolicy::trusted();
+        policy.enabled=true;
+        assert!(matches!(prepare_headless(&sample_run_plan(), &policy), Err(SandboxError::InvalidHeadlessPolicy)));
+        policy.mic_allowed=false;
+        assert!(matches!(prepare_headless(&sample_run_plan(), &policy), Err(SandboxError::InvalidHeadlessPolicy)));
     }
 
     #[test]

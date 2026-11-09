@@ -20,21 +20,25 @@ use crate::spawn::{RunPlan, SandboxedSpawn};
 pub(crate) fn prepare_platform(
     run_plan: &RunPlan,
     policy: &SandboxPolicy,
+    headless: bool,
 ) -> (SandboxedSpawn, EnforcementReport) {
     #[cfg(target_os = "macos")]
     {
+        let _ = headless;
         macos::prepare(run_plan, policy)
     }
     #[cfg(target_os = "linux")]
     {
-        linux::prepare(run_plan, policy)
+        linux::prepare_for(run_plan, policy, headless)
     }
     #[cfg(target_os = "windows")]
     {
+        let _ = headless;
         windows::prepare(run_plan, policy)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
+        let _ = headless;
         stub::prepare_stub_report(
             run_plan,
             policy,
