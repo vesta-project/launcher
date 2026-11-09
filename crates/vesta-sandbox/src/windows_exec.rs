@@ -27,7 +27,9 @@ const DELETE: u32 = 65_536;
 const FILE_DELETE_CHILD: u32 = 64;
 const WRITE_AUTHORITY: u32 = 0x0002 | 0x0004 | 0x0010 | 0x0040 | 0x0100 | DELETE;
 const MAX_JNA_DISPATCH_BYTES: u64 = 16 * 1024 * 1024;
-const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "7";
+// Version 8 includes interactive stdin forwarding. A server must refuse an
+// older sidecar rather than launch a game that cannot receive graceful Stop.
+const WINDOWS_HELPER_PROTOCOL_VERSION: &str = "8";
 
 pub fn windows_helper_path() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
@@ -375,6 +377,23 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
     )
     .map_err(|err| format!("CreateProcess AppContainer launch failed: {err}"))?;
 
+    // Console commands must cross the same pipe boundary as stdout/stderr.
+    // Keep this reader detached: the host retains stdin while waiting for our
+    // exit, so joining a reader blocked on host input would deadlock shutdown.
+    // This CLI sidecar exits the process after the target/output relays finish;
+    // there is at most one reader per invocation and no target wait on input.
+    let _stdin_relay = child.stdin.take().map(|mut destination| {
+        std::thread::spawn(move || -> io::Result<()> {
+            let mut source = io::stdin().lock();
+            let mut buffer = [0u8; 8192];
+            loop {
+                let read = source.read(&mut buffer)?;
+                if read == 0 { return Ok(()); }
+                destination.write_all(&buffer[..read])?;
+                destination.flush()?;
+            }
+        })
+    });
     let stdout_relay = child.stdout.take().map(|mut source| {
         std::thread::spawn(move || -> io::Result<()> {
             let mut destination = io::stdout().lock();
