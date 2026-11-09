@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 const MODRINTH_API_V3: &str = "https://api.modrinth.com/v3";
+#[path = "modrinth_search.rs"]
+mod search_filters;
 // v3 does not currently expose hash lookup endpoints. Keep these calls visibly
 // isolated so the remaining v2 dependency can be removed independently.
 const MODRINTH_LEGACY_API_V2: &str = "https://api.modrinth.com/v2";
@@ -370,6 +372,159 @@ impl ModrinthSource {
         }
     }
 
+    async fn get_projects_at(&self, ids: &[String], api: &str) -> Result<Vec<ResourceProject>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let ids_json = serde_json::to_string(ids)?;
+        let projects: Vec<ModrinthProject> = self
+            .request_json(
+                self.client
+                    .get(format!("{api}/projects"))
+                    .query(&[("ids", &ids_json)]),
+                "fetch projects",
+            )
+            .await?;
+
+        let mut team_ids = projects
+            .iter()
+            .map(|project| project.team_id.clone())
+            .collect::<Vec<_>>();
+        team_ids.sort();
+        team_ids.dedup();
+        let mut organization_ids = projects
+            .iter()
+            .filter_map(|project| project.organization.clone())
+            .collect::<Vec<_>>();
+        organization_ids.sort();
+        organization_ids.dedup();
+        let team_ids_json = serde_json::to_string(&team_ids)?;
+        let organization_ids_json = serde_json::to_string(&organization_ids)?;
+        // Attribution lookups depend on projects, but not on one another.
+        let members = async {
+            if team_ids.is_empty() {
+                HashMap::new()
+            } else {
+                match self
+                    .request_json::<Vec<Vec<ModrinthTeamMember>>>(
+                        self.client
+                            .get(format!("{api}/teams"))
+                            .query(&[("ids", &team_ids_json)]),
+                        "fetch project teams",
+                    )
+                    .await
+                {
+                    Ok(groups) => groups
+                        .into_iter()
+                        .filter_map(|members| {
+                            let team_id = members.first()?.team_id.clone();
+                            Some((team_id, map_authors(members)))
+                        })
+                        .collect(),
+                    Err(error) => {
+                        log::warn!("[Modrinth] Team enrichment failed: {error}");
+                        HashMap::new()
+                    }
+                }
+            }
+        };
+
+        let organizations = async {
+            if organization_ids.is_empty() {
+                HashMap::new()
+            } else {
+                match self
+                    .request_json::<Vec<ModrinthOrganization>>(
+                        self.client
+                            .get(format!("{api}/organizations"))
+                            .query(&[("ids", &organization_ids_json)]),
+                        "fetch organizations",
+                    )
+                    .await
+                {
+                    Ok(organizations) => organizations
+                        .into_iter()
+                        .map(|organization| {
+                            (organization.id.clone(), map_organization(organization))
+                        })
+                        .collect(),
+                    Err(error) => {
+                        log::warn!("[Modrinth] Organization enrichment failed: {error}");
+                        HashMap::new()
+                    }
+                }
+            }
+        };
+        let (members_by_team, organizations_by_id) = tokio::join!(members, organizations);
+
+        Ok(projects
+            .into_iter()
+            .map(|p| {
+                let primary_type = primary_project_type(&p.project_types).to_string();
+                let author_details = members_by_team.get(&p.team_id).cloned().unwrap_or_default();
+                let authors = author_details
+                    .iter()
+                    .map(|author| author.username.clone())
+                    .collect::<Vec<_>>();
+                let author = authors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Unknown".to_string());
+                let organization = p
+                    .organization
+                    .as_ref()
+                    .and_then(|id| organizations_by_id.get(id))
+                    .cloned();
+
+                let featured_gallery = p
+                    .gallery
+                    .as_ref()
+                    .and_then(|items| items.iter().find(|i| i.featured == Some(true)))
+                    .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
+
+                ResourceProject {
+                    server: map_server(
+                        p.minecraft_java_server.as_ref(),
+                        p.minecraft_server.as_ref(),
+                    ),
+                    id: p.id,
+                    source: SourcePlatform::Modrinth,
+                    resource_type: resource_type(&primary_type),
+                    name: p.name,
+                    summary: p.summary,
+                    description: Some(p.description),
+                    icon_url: p.icon_url,
+                    author,
+                    authors,
+                    author_details,
+                    organization,
+                    project_types: map_project_types(&p.project_types),
+                    download_count: p.downloads,
+                    follower_count: p.followers,
+                    categories: p.categories,
+                    web_url: format!(
+                        "https://modrinth.com/{}/{}",
+                        project_web_path(&primary_type),
+                        p.slug
+                    ),
+                    links: map_links(p.link_urls),
+                    environment: map_environment(&p.environment),
+                    external_ids: None,
+                    gallery: p
+                        .gallery
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|i| i.raw_url.unwrap_or(i.url))
+                        .collect(),
+                    featured_gallery,
+                    published_at: Some(p.published),
+                    updated_at: Some(p.updated),
+                }
+            })
+            .collect())
+    }
+
     fn map_versions(
         versions: Vec<ModrinthVersion>,
         game_version: Option<&str>,
@@ -688,13 +843,8 @@ impl ResourceSource for ModrinthSource {
         }
 
         if let Some(loader) = query.loader {
-            // Apply loader filter for mods and modpacks
-            if supports_loader_filter(query.resource_type) {
-                if loader.to_lowercase() == "quilt" {
-                    filters.push("(loaders IN [\"quilt\"] OR loaders IN [\"fabric\"])".to_string());
-                } else {
-                    filters.push(format!("loaders IN [\"{}\"]", loader.to_lowercase()));
-                }
+            if let Some(filter) = search_filters::loader_filter(mr_type, &loader) {
+                filters.push(filter);
             }
         }
 
@@ -927,148 +1077,7 @@ impl ResourceSource for ModrinthSource {
     }
 
     async fn get_projects(&self, ids: &[String]) -> Result<Vec<ResourceProject>> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let ids_json = serde_json::to_string(ids)?;
-        let projects: Vec<ModrinthProject> = self
-            .request_json(
-                self.client
-                    .get(format!("{MODRINTH_API_V3}/projects"))
-                    .query(&[("ids", &ids_json)]),
-                "fetch projects",
-            )
-            .await?;
-
-        let mut team_ids = projects
-            .iter()
-            .map(|project| project.team_id.clone())
-            .collect::<Vec<_>>();
-        team_ids.sort();
-        team_ids.dedup();
-        let members_by_team = if team_ids.is_empty() {
-            HashMap::new()
-        } else {
-            let team_ids_json = serde_json::to_string(&team_ids)?;
-            match self
-                .request_json::<Vec<Vec<ModrinthTeamMember>>>(
-                    self.client
-                        .get(format!("{MODRINTH_API_V3}/teams"))
-                        .query(&[("ids", &team_ids_json)]),
-                    "fetch project teams",
-                )
-                .await
-            {
-                Ok(groups) => groups
-                    .into_iter()
-                    .filter_map(|members| {
-                        let team_id = members.first()?.team_id.clone();
-                        Some((team_id, map_authors(members)))
-                    })
-                    .collect(),
-                Err(error) => {
-                    log::warn!("[Modrinth] Team enrichment failed: {error}");
-                    HashMap::new()
-                }
-            }
-        };
-
-        let mut organization_ids = projects
-            .iter()
-            .filter_map(|project| project.organization.clone())
-            .collect::<Vec<_>>();
-        organization_ids.sort();
-        organization_ids.dedup();
-        let organizations_by_id = if organization_ids.is_empty() {
-            HashMap::new()
-        } else {
-            let organization_ids_json = serde_json::to_string(&organization_ids)?;
-            match self
-                .request_json::<Vec<ModrinthOrganization>>(
-                    self.client
-                        .get(format!("{MODRINTH_API_V3}/organizations"))
-                        .query(&[("ids", &organization_ids_json)]),
-                    "fetch organizations",
-                )
-                .await
-            {
-                Ok(organizations) => organizations
-                    .into_iter()
-                    .map(|organization| (organization.id.clone(), map_organization(organization)))
-                    .collect(),
-                Err(error) => {
-                    log::warn!("[Modrinth] Organization enrichment failed: {error}");
-                    HashMap::new()
-                }
-            }
-        };
-
-        Ok(projects
-            .into_iter()
-            .map(|p| {
-                let primary_type = primary_project_type(&p.project_types).to_string();
-                let author_details = members_by_team.get(&p.team_id).cloned().unwrap_or_default();
-                let authors = author_details
-                    .iter()
-                    .map(|author| author.username.clone())
-                    .collect::<Vec<_>>();
-                let author = authors
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "Unknown".to_string());
-                let organization = p
-                    .organization
-                    .as_ref()
-                    .and_then(|id| organizations_by_id.get(id))
-                    .cloned();
-
-                let featured_gallery = p
-                    .gallery
-                    .as_ref()
-                    .and_then(|items| items.iter().find(|i| i.featured == Some(true)))
-                    .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
-
-                ResourceProject {
-                    server: map_server(
-                        p.minecraft_java_server.as_ref(),
-                        p.minecraft_server.as_ref(),
-                    ),
-                    id: p.id,
-                    source: SourcePlatform::Modrinth,
-                    resource_type: resource_type(&primary_type),
-                    name: p.name,
-                    summary: p.summary,
-                    description: Some(p.description),
-                    icon_url: p.icon_url,
-                    author,
-                    authors,
-                    author_details,
-                    organization,
-                    project_types: map_project_types(&p.project_types),
-                    download_count: p.downloads,
-                    follower_count: p.followers,
-                    categories: p.categories,
-                    web_url: format!(
-                        "https://modrinth.com/{}/{}",
-                        project_web_path(&primary_type),
-                        p.slug
-                    ),
-                    links: map_links(p.link_urls),
-                    environment: map_environment(&p.environment),
-                    external_ids: None,
-                    gallery: p
-                        .gallery
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|i| i.raw_url.unwrap_or(i.url))
-                        .collect(),
-                    featured_gallery,
-                    published_at: Some(p.published),
-                    updated_at: Some(p.updated),
-                }
-            })
-            .collect())
+        self.get_projects_at(ids, MODRINTH_API_V3).await
     }
 
     async fn get_versions(
@@ -1584,3 +1593,7 @@ mod server_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "modrinth_batch_tests.rs"]
+mod batch_tests;

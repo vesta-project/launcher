@@ -73,6 +73,8 @@ dto!(PackIcon {
     content_base64: String
 });
 dto!(PackEntry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    artifact_sha512: Option<String>,
     id: String,
     kind: EntryKind,
     path: String,
@@ -522,6 +524,7 @@ mod tests {
             expected_revision: "9007199254740991".into(),
             draft_revision: "4".into(),
             resolved_entries: vec![PackEntry {
+                artifact_sha512: Some("b".repeat(128)),
                 id: "dependency".into(),
                 kind: EntryKind::Mod,
                 path: "mods/dep.jar".into(),
@@ -543,10 +546,12 @@ mod tests {
         let value = hosting::wire(serde_json::to_value(input).unwrap());
         assert_eq!(value["expected_revision"], "9007199254740991");
         assert_eq!(value["resolved_entries"][0]["source"]["version_id"], "v1");
+        assert_eq!(value["resolved_entries"][0]["artifact_sha512"], "b".repeat(128));
         assert!(value.to_string().find("download_url").is_none());
         let decoded: WorkspacePublish = from_wire(value).unwrap();
         assert!(decoded.required_update);
         assert_eq!(decoded.draft_revision, "4");
+        assert_eq!(decoded.resolved_entries[0].artifact_sha512.as_deref(),Some("b".repeat(128).as_str()));
     }
     #[test]
     fn override_and_provider_wire_are_closed_and_keep_decimal_revisions() {

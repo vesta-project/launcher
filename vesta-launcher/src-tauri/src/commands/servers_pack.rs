@@ -118,6 +118,9 @@ fn entry(
         id: format!("{}-{}", project.source.as_str(), project.id),
         kind,
         path: format!("{directory}/{}", version.file_name),
+        // Provider filename selection has no imported rename/SHA512 binding.
+        // ResourceVersion.hash is SHA1 and must not be mislabeled as SHA512.
+        artifact_sha512: None,
         required,
         environment: Environment {
             client: if required {

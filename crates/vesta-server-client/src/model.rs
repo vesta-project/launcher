@@ -63,6 +63,13 @@ pub struct ProviderErrorDetails {
     pub filename: Option<String>,
 }
 impl Error {
+    /// Refresh once for authentication failures, including legacy pack endpoints
+    /// that conflate an expired session with an access refusal. A second refusal
+    /// is returned to the caller; genuine capability denials are not retried.
+    pub(crate) fn session_needs_renewal(&self) -> bool {
+        self.code == ErrorCode::CredentialsRejected
+            || self.reason.as_deref() == Some("pack_access_denied")
+    }
     /// A newer agent may retain a domain cause beside its compatibility code.
     pub(crate) fn with_wire_reason(mut self, value: &serde_json::Value) -> Self {
         if let Some(reason) = value.as_str().filter(|reason| !reason.is_empty() && reason.len() <= 96
@@ -172,7 +179,8 @@ impl Error {
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
                 ConfirmationExpired
             }
-            "management_session_invalid" | "device_session_required" => CredentialsRejected,
+            "management_session_invalid" | "device_session_required"
+            | "device_session_invalid" | "pack_session_invalid" => CredentialsRejected,
             "management_unavailable" | "pack_access_denied" if status == 403 => NoManagementAccess,
             "not_implemented" | "legacy_endpoint_removed" => Unsupported,
             _ => match status {
@@ -614,6 +622,17 @@ pub fn from_wire<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Re
 mod provider_error_tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn session_renewal_covers_session_failures_without_retrying_permission_denials() {
+        for reason in ["management_session_invalid", "device_session_required", "device_session_invalid", "pack_session_invalid"] {
+            assert!(Error::wire(403, reason, None).session_needs_renewal());
+        }
+        let mut legacy = Error::new(ErrorCode::NoManagementAccess);
+        legacy.reason = Some("pack_access_denied".into());
+        assert!(legacy.session_needs_renewal());
+        assert!(!Error::new(ErrorCode::Forbidden).session_needs_renewal());
+        assert!(!Error::new(ErrorCode::NoManagementAccess).session_needs_renewal());
+    }
     #[test]
     fn slow_operation_does_not_erase_live_connection_but_connection_failure_does() {
         let mut state = ConnectionState {

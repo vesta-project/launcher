@@ -211,20 +211,20 @@ impl CurseForgeSource {
         Self { api_key: key }
     }
 
-    fn http_get(&self, url: &str) -> reqwest::RequestBuilder {
-        piston_lib::client::shared_client()
-            .get(url)
-            .header("x-api-key", &self.api_key)
-            .header("Accept", "application/json")
+    fn request(&self, method:reqwest::Method, raw:&str)->Result<reqwest::RequestBuilder> {
+        let url=reqwest::Url::parse(raw).map_err(|_|anyhow!("invalid_provider_origin"))?;
+        if url.scheme()!="https" || url.host_str()!=Some("api.curseforge.com") || url.port_or_known_default()!=Some(443) || !url.username().is_empty() || url.password().is_some() {
+            return Err(anyhow!("invalid_provider_origin"));
+        }
+        Ok(piston_lib::client::provider_api_client()?.request(method,url)
+            .header("x-api-key", &self.api_key).header("Accept", "application/json"))
     }
-
-    fn http_post(&self, url: &str) -> reqwest::RequestBuilder {
-        piston_lib::client::shared_client()
-            .post(url)
-            .header("x-api-key", &self.api_key)
-            .header("Accept", "application/json")
+    fn http_get(&self, url: &str) -> Result<reqwest::RequestBuilder> {
+        self.request(reqwest::Method::GET,url)
     }
-
+    fn http_post(&self, url: &str) -> Result<reqwest::RequestBuilder> {
+        self.request(reqwest::Method::POST,url)
+    }
     fn map_authors(authors: &[CFAuthor]) -> Vec<ResourceAuthor> {
         authors
             .iter()
@@ -307,7 +307,7 @@ impl CurseForgeSource {
 
     pub async fn fetch_categories_direct(&self) -> Result<Vec<CFCategoryFull>> {
         let url = "https://api.curseforge.com/v1/categories?gameId=432";
-        let response = self.http_get(url).send().await?;
+        let response = self.http_get(url)?.send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -354,7 +354,7 @@ impl CurseForgeSource {
 
             log::debug!("[CurseForge] Resolving search URL: {}", search_url);
 
-            let response = self.http_get(&search_url).send().await?;
+            let response = self.http_get(&search_url)?.send().await?;
             if response.status().is_success() {
                 let search_res: CFSearchResult = response.json().await?;
 
@@ -643,7 +643,7 @@ impl ResourceSource for CurseForgeSource {
 
         log::debug!("[CurseForge] Search URL: {}", url);
 
-        let response = self.http_get(&url).send().await?;
+        let response = self.http_get(&url)?.send().await?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
@@ -716,7 +716,7 @@ impl ResourceSource for CurseForgeSource {
         };
 
         let url = format!("https://api.curseforge.com/v1/mods/{}", numeric_id);
-        let response = self.http_get(&url).send().await?;
+        let response = self.http_get(&url)?.send().await?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
@@ -742,7 +742,7 @@ impl ResourceSource for CurseForgeSource {
             "https://api.curseforge.com/v1/mods/{}/description",
             numeric_id
         );
-        let desc_response = self.http_get(&desc_url).send().await?;
+        let desc_response = self.http_get(&desc_url)?.send().await?;
         let description = if desc_response.status().is_success() {
             let desc_data: CFDescriptionResponse = desc_response.json().await.map_err(|e| {
                 anyhow!(
@@ -817,7 +817,7 @@ impl ResourceSource for CurseForgeSource {
             "modIds": mod_ids
         });
 
-        let response = self.http_post(url).json(&body).send().await?;
+        let response = self.http_post(url)?.json(&body).send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -925,7 +925,7 @@ impl ResourceSource for CurseForgeSource {
                 }
             }
 
-            let response = self.http_get(&url).send().await?;
+            let response = self.http_get(&url)?.send().await?;
             if !response.status().is_success() {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
@@ -1030,7 +1030,7 @@ impl ResourceSource for CurseForgeSource {
         let response = self
             .http_get(&format!(
                 "https://api.curseforge.com/v1/mods/{numeric_id}/files?index=0&pageSize=3"
-            ))
+            ))?
             .send()
             .await?
             .error_for_status()?;
@@ -1063,7 +1063,7 @@ impl ResourceSource for CurseForgeSource {
                 numeric_id, version_id
             )
         };
-        let response = self.http_get(&url).send().await?;
+        let response = self.http_get(&url)?.send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -1151,7 +1151,7 @@ impl ResourceSource for CurseForgeSource {
             numeric_id, version_id
         );
 
-        let (changelog, changelog_status) = match self.http_get(&url).send().await {
+        let (changelog, changelog_status) = match self.http_get(&url)?.send().await {
             Ok(response) if response.status().is_success() => {
                 match response.json::<CFDescriptionResponse>().await {
                     Ok(payload) => {
@@ -1214,7 +1214,7 @@ impl ResourceSource for CurseForgeSource {
             "fingerprints": [fingerprint]
         });
 
-        let response = self.http_post(url).json(&body).send().await?;
+        let response = self.http_post(url)?.json(&body).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1317,7 +1317,7 @@ impl ResourceSource for CurseForgeSource {
         }
 
         let response = self
-            .http_post("https://api.curseforge.com/v1/fingerprints")
+            .http_post("https://api.curseforge.com/v1/fingerprints")?
             .json(&serde_json::json!({ "fingerprints": fingerprints }))
             .send()
             .await?;

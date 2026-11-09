@@ -33,10 +33,13 @@ impl Response {
             .ok_or_else(|| Error::new(ErrorCode::Unsupported))
     }
     pub async fn chunk(&mut self) -> Result<Option<bytes::Bytes>> {
-        self.raw
+        self.transport.check_access()?;
+        let chunk = self.raw
             .chunk()
             .await
-            .map_err(|e| self.transport.network_error(e))
+            .map_err(|e| self.transport.network_error(e))?;
+        self.transport.check_access()?;
+        Ok(chunk)
     }
     pub async fn bytes(mut self, limit: usize) -> Result<Vec<u8>> {
         let mut bytes = Vec::new();
@@ -62,7 +65,7 @@ impl Response {
     }
 }
 impl Transport {
-    async fn file_request(self: &Arc<Self>, input: &Request, token: &str) -> Result<Response> {
+    pub(crate) async fn file_request(self: &Arc<Self>, input: &Request, token: &str) -> Result<Response> {
         let retryable = input.method == Method::GET && !input.bulk;
         let result = self.file_request_once(input, token).await;
         if retryable {
@@ -90,6 +93,7 @@ impl Transport {
         } else {
             None
         };
+        self.check_access()?;
         let mut request = self
             .http
             .request(input.method.clone(), self.endpoint.route(&input.path)?)
@@ -104,6 +108,7 @@ impl Transport {
             request = request.header("Idempotency-Key", key);
         }
         let raw = request.send().await.map_err(|e| self.network_error(e))?;
+        self.check_access()?;
         let status = raw.status();
         let retry = raw
             .headers()
@@ -145,7 +150,7 @@ impl Client {
         let result = self.transport.file_request(&input, &token).await;
         if result
             .as_ref()
-            .is_err_and(|e| e.code == ErrorCode::CredentialsRejected)
+            .is_err_and(|e| e.session_needs_renewal())
         {
             token = self.token(Some(&token)).await?;
             return self.transport.file_request(&input, &token).await;

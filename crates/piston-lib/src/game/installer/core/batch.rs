@@ -2,11 +2,76 @@ use crate::game::installer::core::downloader::download_to_path;
 use crate::game::installer::try_restore_artifact;
 use crate::game::installer::types::ProgressReporter;
 use anyhow::Result;
-use futures::stream::{self, StreamExt};
+use futures::stream::{self, StreamExt, TryStreamExt};
 use reqwest::Client;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+pub const MODPACK_DOWNLOAD_CONCURRENCY: usize = 8;
+
+/// Shared bounded scheduler for provider and signed server-pack resources.
+/// Dropping this future cancels pending work; an error stops the batch immediately.
+pub async fn run_batch<I, F, Fut, T, E>(
+    jobs: I,
+    concurrency: usize,
+    run: F,
+) -> std::result::Result<Vec<T>, E>
+where
+    I: IntoIterator,
+    F: FnMut(I::Item) -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<T, E>>,
+{
+    stream::iter(jobs)
+        .map(run)
+        .buffer_unordered(concurrency.max(1))
+        .try_collect()
+        .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_batch;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[tokio::test]
+    async fn resources_overlap_without_exceeding_the_worker_limit() {
+        let active = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let results = run_batch(0..12, 3, |item| {
+            let active = &active;
+            let peak = &peak;
+            async move {
+                let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(count, Ordering::SeqCst);
+                tokio::task::yield_now().await;
+                active.fetch_sub(1, Ordering::SeqCst);
+                Ok::<_, ()>(item)
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(results.len(), 12);
+        assert_eq!(peak.load(Ordering::SeqCst), 3);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn failed_resource_does_not_wait_for_stalled_downloads() {
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            run_batch(0..2, 2, |item| async move {
+                if item == 0 {
+                    std::future::pending::<()>().await;
+                }
+                Err::<(), _>("resource failed")
+            }),
+        )
+        .await
+        .expect("the failed resource should end the batch immediately");
+        assert_eq!(result, Err("resource failed"));
+    }
+}
 
 pub struct BatchArtifact {
     pub name: String,
@@ -92,114 +157,109 @@ impl BatchDownloader {
         reporter.set_percent(base_progress);
         reporter.set_step_count(0, Some(total as u32));
 
-        stream::iter(unique_artifacts)
-            .map(|artifact| {
-                let client = self.client.clone();
-                let reporter = reporter.clone();
-                let downloaded = downloaded.clone();
+        run_batch(unique_artifacts, self.concurrency, |artifact| {
+            let client = self.client.clone();
+            let reporter = reporter.clone();
+            let downloaded = downloaded.clone();
 
-                async move {
-                    // Check for cancellation/pause before starting
+            async move {
+                // Check for cancellation/pause before starting
+                if reporter.is_cancelled() {
+                    return Err(anyhow::anyhow!("Installation cancelled by user"));
+                }
+
+                while reporter.is_paused() {
                     if reporter.is_cancelled() {
                         return Err(anyhow::anyhow!("Installation cancelled by user"));
                     }
-
-                    while reporter.is_paused() {
-                        if reporter.is_cancelled() {
-                            return Err(anyhow::anyhow!("Installation cancelled by user"));
-                        }
-                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                    }
-
-                    // Try to restore from cache if label is provided
-                    let mut restored = false;
-                    if !artifact.label.is_empty() {
-                        match try_restore_artifact(&artifact.label, &artifact.path).await {
-                            Ok(true) => {
-                                log::debug!("Restored artifact from cache: {}", artifact.label);
-                                restored = true;
-                            }
-                            Ok(false) => {}
-                            Err(e) => {
-                                log::warn!("Cache restore failed for {}: {:?}", artifact.label, e);
-                            }
-                        }
-                    }
-
-                    if !restored {
-                        let mut success = false;
-                        let mut last_err = None;
-
-                        for url in &artifact.urls {
-                            let current = downloaded.load(Ordering::SeqCst) + 1;
-                            log::info!(
-                                "Downloading: {} from {} ({}/{})",
-                                artifact.name,
-                                url,
-                                current,
-                                total
-                            );
-                            let file_reporter = BatchFileProgressReporter {
-                                parent: reporter.clone(),
-                            };
-
-                            match download_to_path(
-                                &client,
-                                url,
-                                &artifact.path,
-                                artifact.sha1.as_deref(),
-                                &file_reporter,
-                            )
-                            .await
-                            {
-                                Ok(_) => {
-                                    success = true;
-                                    break;
-                                }
-                                Err(e) => {
-                                    log::warn!(
-                                        "Failed to download {} from {}: {}",
-                                        artifact.name,
-                                        url,
-                                        e
-                                    );
-                                    last_err = Some(e);
-                                }
-                            }
-                        }
-
-                        if !success {
-                            return Err(last_err.unwrap_or_else(|| {
-                                anyhow::anyhow!("No download URLs provided for {}", artifact.name)
-                            }));
-                        }
-                    }
-
-                    let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
-
-                    // Update progress
-                    let progress =
-                        base_progress + ((count as f32 / total as f32) * progress_weight) as i32;
-                    reporter.set_percent(progress);
-                    reporter.set_step_count(count as u32, Some(total as u32));
-
-                    if count.is_multiple_of(10) || count == total {
-                        log::info!(
-                            "Batch download progress: {}/{} ({}%)",
-                            count,
-                            total,
-                            progress
-                        );
-                    }
-
-                    Ok(())
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 }
-            })
-            .buffer_unordered(self.concurrency)
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+
+                // Try to restore from cache if label is provided
+                let mut restored = false;
+                if !artifact.label.is_empty() {
+                    match try_restore_artifact(&artifact.label, &artifact.path).await {
+                        Ok(true) => {
+                            log::debug!("Restored artifact from cache: {}", artifact.label);
+                            restored = true;
+                        }
+                        Ok(false) => {}
+                        Err(e) => {
+                            log::warn!("Cache restore failed for {}: {:?}", artifact.label, e);
+                        }
+                    }
+                }
+
+                if !restored {
+                    let mut success = false;
+                    let mut last_err = None;
+
+                    for url in &artifact.urls {
+                        let current = downloaded.load(Ordering::SeqCst) + 1;
+                        log::info!(
+                            "Downloading: {} from {} ({}/{})",
+                            artifact.name,
+                            url,
+                            current,
+                            total
+                        );
+                        let file_reporter = BatchFileProgressReporter {
+                            parent: reporter.clone(),
+                        };
+
+                        match download_to_path(
+                            &client,
+                            url,
+                            &artifact.path,
+                            artifact.sha1.as_deref(),
+                            &file_reporter,
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                success = true;
+                                break;
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to download {} from {}: {}",
+                                    artifact.name,
+                                    url,
+                                    e
+                                );
+                                last_err = Some(e);
+                            }
+                        }
+                    }
+
+                    if !success {
+                        return Err(last_err.unwrap_or_else(|| {
+                            anyhow::anyhow!("No download URLs provided for {}", artifact.name)
+                        }));
+                    }
+                }
+
+                let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
+
+                // Update progress
+                let progress =
+                    base_progress + ((count as f32 / total as f32) * progress_weight) as i32;
+                reporter.set_percent(progress);
+                reporter.set_step_count(count as u32, Some(total as u32));
+
+                if count.is_multiple_of(10) || count == total {
+                    log::info!(
+                        "Batch download progress: {}/{} ({}%)",
+                        count,
+                        total,
+                        progress
+                    );
+                }
+
+                Ok(())
+            }
+        })
+        .await?;
 
         Ok(())
     }

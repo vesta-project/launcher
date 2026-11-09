@@ -339,7 +339,7 @@ impl Client {
             .await;
         if result
             .as_ref()
-            .is_err_and(|e| e.code == ErrorCode::CredentialsRejected)
+            .is_err_and(|e| e.session_needs_renewal())
         {
             token = self.token(Some(&token)).await?;
             result = self
@@ -472,7 +472,7 @@ impl Client {
         };
         let token = self.token(None).await?;
         let result = match self.transport.socket(path, &token).await {
-            Err(e) if e.code == ErrorCode::CredentialsRejected => {
+            Err(e) if e.session_needs_renewal() => {
                 let fresh = self.token(Some(&token)).await?;
                 self.transport.socket(path, &fresh).await
             }

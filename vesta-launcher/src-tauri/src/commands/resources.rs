@@ -1,3 +1,4 @@
+use crate::utils::image::resource_icon_bytes;
 use anyhow::{anyhow, Context};
 use base64::{engine::general_purpose, Engine as _};
 use serde::Serialize;
@@ -32,7 +33,7 @@ use tauri::{ipc::Channel, Manager, State};
 
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, diesel::Queryable)]
 pub struct ResourceProjectOverviewRecord {
     pub id: String,
     pub source: String,
@@ -411,7 +412,13 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
         } else {
             rp_dsl::resource_project
                 .filter(rp_dsl::id.eq_any(ids))
-                .load::<ResourceProjectRecord>(&mut conn)?
+                // List metadata excludes full descriptions and cached image bytes.
+                .select((rp_dsl::id, rp_dsl::source, rp_dsl::name, rp_dsl::summary,
+                    diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::Text>>("NULL"),
+                    rp_dsl::icon_url,
+                    diesel::dsl::sql::<diesel::sql_types::Bool>("icon_data IS NOT NULL AND length(icon_data) > 0"),
+                    rp_dsl::project_type, rp_dsl::last_updated, rp_dsl::metadata_synced_at, rp_dsl::icon_synced_at))
+                .load::<ResourceProjectOverviewRecord>(&mut conn)?
         };
         let requested_keys = refs
             .iter()
@@ -473,7 +480,10 @@ pub async fn get_instance_resource_overview(instance_id: i32) -> Result<Instance
             repair_status: "notChecked",
             revision: format!("{:x}", revision_hasher.finish()),
             resources,
-            project_records: records.into_iter().map(Into::into).collect(),
+            project_records: records.into_iter().map(|mut record| {
+                record.icon_url = record.icon_url.filter(|url| url.starts_with("https://") || url.starts_with("data:image/"));
+                record
+            }).collect(),
             missing_project_refs,
             update_snapshot,
         })
@@ -563,11 +573,7 @@ pub async fn resolve_image_url(
     }
 
     // 2. Download image with 8s timeout
-    let client = piston_lib::client::shared_client();
-    let response = client
-        .get(&url)
-        .send()
-        .await
+    let response = piston_lib::artifact_http::get_with_timeout(&url,std::time::Duration::from_secs(8)).await
         .with_context(|| format!("Failed to download image from {}", url))?;
     if !response.status().is_success() {
         return Err(anyhow!(
@@ -606,6 +612,98 @@ pub async fn resolve_image_url(
     Ok(data_url)
 }
 
+/// Small resource thumbnails: use persisted bytes before touching the network.
+/// The frontend admits only visible/nearby requests into a bounded shared pool.
+#[tauri::command]
+pub async fn get_cached_resource_images(urls: Vec<String>) -> Result<std::collections::HashMap<String, String>> {
+    if urls.len() > 32 || urls.iter().any(|url| url.len() > 8192) {
+        return Err(anyhow!("Icon cache batch is too large").into());
+    }
+    Ok(tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+        use crate::schema::resource_project::dsl as rp;
+        use diesel::prelude::*;
+        let mut conn = crate::utils::db::get_vesta_conn()?;
+        let records = rp::resource_project.filter(rp::icon_url.eq_any(urls))
+            .filter(diesel::dsl::sql::<diesel::sql_types::Bool>("length(icon_data) > 0 AND length(icon_data) <= 2097152"))
+            .select((rp::icon_url, rp::icon_data)).distinct().limit(64)
+            .load::<(Option<String>, Option<Vec<u8>>)>(&mut conn)?;
+        let mut result = std::collections::HashMap::new();
+        let mut remaining = 8 * 1024 * 1024;
+        for (url, bytes) in records {
+            if let (Some(url), Some(bytes)) = (url, bytes) {
+                if bytes.len() > remaining { continue; }
+                if let Ok(source) = resource_icon_data_url(&bytes) {
+                    remaining -= bytes.len(); result.insert(url, source);
+                }
+            }
+        }
+        Ok(result)
+    }).await.map_err(|_| anyhow!("Icon cache worker failed"))??)
+}
+
+#[tauri::command]
+pub async fn resolve_resource_image(url: String) -> Result<String> {
+    use crate::schema::resource_project::dsl as rp;
+    use diesel::prelude::*;
+    use futures::StreamExt;
+    const LIMIT: usize = 2 * 1024 * 1024;
+    let started = std::time::Instant::now();
+    let parsed = url::Url::parse(&url).map_err(|_| anyhow!("Invalid resource icon URL"))?;
+    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(anyhow!("Resource icons require HTTPS").into());
+    }
+    let query_url = url.clone();
+    let cached = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<Vec<u8>>> {
+        let mut conn = crate::utils::db::get_vesta_conn()?;
+        Ok(rp::resource_project.filter(rp::icon_url.eq(query_url))
+            .filter(diesel::dsl::sql::<diesel::sql_types::Bool>("length(icon_data) > 0 AND length(icon_data) <= 2097152"))
+            .select(rp::icon_data).first::<Option<Vec<u8>>>(&mut conn).optional()?.flatten())
+    }).await.map_err(|_| anyhow!("Icon cache worker failed"))?.unwrap_or(None);
+    let cache_hit = cached.is_some();
+    let bytes = if let Some(bytes) = cached { bytes } else {
+        let response = piston_lib::artifact_http::get_with_timeout(&url,std::time::Duration::from_secs(8)).await.context("Icon request failed")?
+            .error_for_status().context("Icon request refused")?;
+        if response.content_length().is_some_and(|size| size > LIMIT as u64) {
+            return Err(anyhow!("Resource icon is too large").into());
+        }
+        let mut bytes = Vec::new();
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Icon response interrupted")?;
+            if chunk.len() > LIMIT - bytes.len() { return Err(anyhow!("Resource icon is too large").into()); }
+            bytes.extend_from_slice(&chunk);
+        }
+        if bytes.is_empty() { return Err(anyhow!("Resource icon is empty").into()); }
+        let bytes = tokio::task::spawn_blocking(move || resource_icon_bytes(&bytes).map(|bytes| bytes.into_owned()))
+            .await.map_err(|_| anyhow!("Icon thumbnail worker failed"))??;
+        let saved = bytes.clone();
+        let saved_url = url.clone();
+        // Do not hold first display behind a contended metadata database write.
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let mut conn = crate::utils::db::get_vesta_conn()?;
+            // An icon URL change must not attach old bytes to a newer project record.
+            diesel::update(rp::resource_project.filter(rp::icon_url.eq(saved_url)))
+                .set((rp::icon_data.eq(Some(saved)), rp::icon_synced_at.eq(Some(chrono::Utc::now().to_rfc3339()))))
+                .execute(&mut conn)?;
+            Ok(())
+        });
+        bytes
+    };
+    log::debug!("[perf] resource-icon cached={} bytes={} elapsed_ms={}", cache_hit, bytes.len(), started.elapsed().as_millis());
+    Ok(resource_icon_data_url(&bytes)?)
+}
+
+fn resource_icon_data_url(bytes: &[u8]) -> anyhow::Result<String> {
+    let bytes = resource_icon_bytes(bytes)?;
+    let header = std::str::from_utf8(&bytes[..bytes.len().min(1024)]).unwrap_or("").trim_start();
+    let mime = if header.starts_with("<svg") || (header.starts_with("<?xml") && header.contains("<svg")) {
+        "image/svg+xml"
+    } else {
+        image::guess_format(&bytes).map_err(|_| anyhow!("Resource icon is not an image"))?.to_mime_type()
+    };
+    Ok(format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes)))
+}
+
 /// Batch version of `resolve_image_url`. Accepts multiple URLs, checks the cache first
 /// for each one, then downloads any uncached URLs concurrently. Returns a `Vec<String>`
 /// where each element is the base64 data URL for the corresponding input URL.
@@ -635,19 +733,14 @@ pub async fn resolve_image_urls(
         return Ok(results.into_iter().map(|r| r.unwrap_or_default()).collect());
     }
 
-    // 2. Build a reusable HTTP client
-    let client = piston_lib::client::shared_client();
+    // 2. Artifact requests use pinned public destinations.
 
     // 3. Download all uncached URLs concurrently
     let downloads = uncached.iter().map(|(_, url)| {
-        let client = client.clone();
         let url = url.clone();
         async move {
             let result = async {
-                let response = client
-                    .get(&url)
-                    .send()
-                    .await
+                let response = piston_lib::artifact_http::get_with_timeout(&url,std::time::Duration::from_secs(8)).await
                     .with_context(|| format!("Failed to download image from {}", url))?;
 
                 if !response.status().is_success() {
@@ -702,14 +795,25 @@ pub async fn resolve_image_urls(
 
 #[tauri::command]
 pub async fn get_cached_resource_projects(
-    resource_manager: State<'_, ResourceManager>,
     refs: Vec<ResourceProjectRef>,
 ) -> Result<Vec<ResourceProjectOverviewRecord>> {
-    Ok(resource_manager
-        .get_project_records(&refs)?
-        .into_iter()
-        .map(Into::into)
-        .collect())
+    Ok(tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<ResourceProjectOverviewRecord>> {
+        use crate::schema::resource_project::dsl as rp;
+        use diesel::prelude::*;
+        let keys = refs.iter().map(|reference| (reference.platform.as_str(), reference.id.as_str())).collect::<std::collections::HashSet<_>>();
+        let mut conn = crate::utils::db::get_vesta_conn()?;
+        let mut records = rp::resource_project.filter(rp::id.eq_any(refs.iter().map(|reference| &reference.id)))
+            .select((rp::id, rp::source, rp::name, rp::summary,
+                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::Text>>("NULL"),
+                rp::icon_url, diesel::dsl::sql::<diesel::sql_types::Bool>("icon_data IS NOT NULL AND length(icon_data) > 0"),
+                rp::project_type, rp::last_updated, rp::metadata_synced_at, rp::icon_synced_at))
+            .load::<ResourceProjectOverviewRecord>(&mut conn)?;
+        records.retain(|record| keys.contains(&(record.source.as_str(), record.id.as_str())));
+        for record in &mut records {
+            record.icon_url = record.icon_url.take().filter(|url| url.starts_with("https://") || url.starts_with("data:image/"));
+        }
+        Ok(records)
+    }).await.map_err(|_| anyhow!("Project metadata cache worker failed"))??)
 }
 
 #[tauri::command]

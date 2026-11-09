@@ -226,6 +226,19 @@ fn write_file(directory: &Path, before: &FileSnapshot, document: &ServerDat) -> 
     )
 }
 
+/// Add the linked server locally, independently of optional global server sync.
+pub(crate) fn ensure_linked_server(directory: &Path, name: &str, address: &str) -> Result<(), String> {
+    piston_lib::game::launcher::targets::parse_server_address(address).map_err(|e| e.to_string())?;
+    let before = read_file(directory)?;
+    if before.document.servers.iter().any(|entry| normalize_address(&entry.ip) == normalize_address(address)) {
+        return Ok(());
+    }
+    if before.document.servers.len() >= MAX_SERVERS { return Err("Server list contains too many entries".into()); }
+    let mut document = before.document.clone();
+    document.servers.push(ServerEntry { name: name.into(), ip: address.into(), icon: None, accept_textures: None, extra: HashMap::new() });
+    write_file(directory, &before, &document)
+}
+
 fn capture(bundle: &mut ServerBundle, instance_id: i32, current: &ServerDat) {
     let current = current
         .servers
@@ -661,6 +674,21 @@ mod tests {
         write_file(&directory, &missing, &document).unwrap();
         assert_eq!(std::fs::read(directory.join("servers.dat")).unwrap()[0], 10);
         assert_eq!(read_file(&directory).unwrap().document, document);
+    }
+
+    #[test]
+    fn linked_server_is_added_once_and_preserves_existing_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().canonicalize().unwrap();
+        ensure_linked_server(&directory, "Existing", "existing.example:25565").unwrap();
+        let existing = read_file(&directory).unwrap().document.servers[0].clone();
+        ensure_linked_server(&directory, "Dev server", "localhost:25565").unwrap();
+        ensure_linked_server(&directory, "Renamed", "LOCALHOST:25565").unwrap();
+        let result = read_file(&directory).unwrap().document;
+        assert_eq!(result.servers.len(), 2);
+        assert_eq!(result.servers[0], existing);
+        assert_eq!(result.servers[1].name, "Dev server");
+        assert_eq!(result.servers[1].ip, "localhost:25565");
     }
 
     #[test]

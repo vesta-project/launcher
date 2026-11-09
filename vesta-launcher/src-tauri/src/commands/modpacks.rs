@@ -893,9 +893,7 @@ async fn get_or_download_summary_archive(
 
     let archive_path = cache_dir.join(format!("summary_{}.zip", cache_key));
     let partial_path = cache_dir.join(format!("summary_{}.zip.part", cache_key));
-    let response = client
-        .get(&final_url)
-        .send()
+    let response = piston_lib::artifact_http::get(&final_url)
         .await
         .map_err(|e| format!("Could not download modpack archive: {}", e))?;
     log::info!(
@@ -1826,9 +1824,7 @@ pub async fn get_modpack_info_from_url(
         final_url
     );
 
-    let response = client
-        .get(&final_url)
-        .send()
+    let response = piston_lib::artifact_http::get(&final_url)
         .await
         .map_err(|e| e.to_string())?;
 

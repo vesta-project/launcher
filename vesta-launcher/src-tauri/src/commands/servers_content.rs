@@ -162,10 +162,11 @@ pub async fn server_content(
     app: AppHandle,
     manager: Manager<'_>,
     connection_id: String,
+    summary: Option<bool>,
 ) -> Result<ContentInventory> {
     manager
         .management_read(&app, &connection_id, |client| async move {
-            client.content_inventory().await
+            client.content_inventory_view(summary.unwrap_or(false)).await
         })
         .await
 }

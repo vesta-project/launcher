@@ -17,10 +17,14 @@ pub(crate) fn receipt(review: &Prepared) -> Receipt {
 }
 /// Legacy adapter receipts are admitted as an old manifest only after the signed
 /// binding and every owned-file precondition have been checked by the source.
-pub(crate) fn plan(root: &Path, review: &Prepared) -> Result<super::engine::UpdatePlan, String> {
+pub(crate) async fn plan(root: &Path, review: &Prepared, ctx: Option<&crate::tasks::manager::TaskContext>) -> Result<super::engine::UpdatePlan, String> {
+    if let Some(ctx) = ctx {
+        ctx.set_stage("analyzing");
+        ctx.update_description("Preparing modpack files...".into());
+    }
     verify_baseline(root, review)?;
     let changes =
-        pack_sync::diff(root, review.old.as_ref(), &review.files).map_err(|e| e.to_string())?;
+        pack_sync::diff(root, review.old.as_ref(), &review.files).map_err(|e| pack_sync::install_error(&e))?;
     if review.preview.instance_id.is_some()
         && serde_json::to_value(&changes).unwrap()
             != serde_json::to_value(&review.preview.changes).unwrap()
@@ -55,7 +59,7 @@ pub(crate) fn plan(root: &Path, review: &Prepared) -> Result<super::engine::Upda
     if let Some(receipt) = &review.old {
         for path in receipt.files.keys() {
             old.overrides.extracted.push(path.clone());
-            match std::fs::read(pack_sync::confined(root, path).map_err(|e| e.to_string())?) {
+            match std::fs::read(pack_sync::confined(root, path).map_err(|e| pack_sync::install_error(&e))?) {
                 Ok(bytes) => {
                     old.overrides.hashes.insert(
                         path.to_lowercase(),
@@ -70,11 +74,21 @@ pub(crate) fn plan(root: &Path, review: &Prepared) -> Result<super::engine::Upda
     let mut new = template(review.release.revision.clone());
     let zip_path = review.stage.path().join("reviewed-client.zip");
     let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).map_err(|e| e.to_string())?);
-    let options = zip::write::SimpleFileOptions::default();
+    // This is a private staging archive, mostly containing already compressed
+    // jars and packs. Recompressing them delays installation for no benefit.
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("modrinth.index.json", options)
         .map_err(|e| e.to_string())?;
     zip.write_all(br#"{"formatVersion":1,"game":"minecraft","versionId":"server","name":"Server pack","files":[],"dependencies":{}}"#).map_err(|e|e.to_string())?;
-    for (path, hash) in &review.files {
+    for (number, (path, hash)) in review.files.iter().enumerate() {
+        tokio::task::yield_now().await;
+        if ctx.is_some_and(|ctx| *ctx.cancel_rx.borrow()) { return Err("Update cancelled".into()); }
+        if number % 25 == 0 {
+            if let Some(ctx) = ctx {
+                ctx.update_items(number as u64, Some(review.files.len() as u64));
+                ctx.update_overall_progress((number * 20 / review.files.len().max(1)) as i32);
+            }
+        }
         let bytes = std::fs::read(review.stage.path().join(path)).map_err(|e| e.to_string())?;
         if &pack_sync::digest(&bytes) != hash {
             return Err("pack_integrity_failure".into());
@@ -139,7 +153,7 @@ pub(crate) fn verify_baseline(root: &Path, review: &Prepared) -> Result<(), Stri
         return Err("pack_review_stale".into());
     }
     let changes =
-        pack_sync::diff(root, review.old.as_ref(), &review.files).map_err(|e| e.to_string())?;
+        pack_sync::diff(root, review.old.as_ref(), &review.files).map_err(|e| pack_sync::install_error(&e))?;
     if review.preview.instance_id.is_some()
         && serde_json::to_value(changes).unwrap()
             != serde_json::to_value(&review.preview.changes).unwrap()
@@ -157,7 +171,7 @@ pub(crate) fn verify_staged(
         if change.operation == "remove" {
             continue;
         }
-        let path = pack_sync::confined(staging.root(), &change.path).map_err(|e| e.to_string())?;
+        let path = pack_sync::confined(staging.root(), &change.path).map_err(|e| pack_sync::install_error(&e))?;
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         if review.files.get(&change.path) != Some(&pack_sync::digest(&bytes)) {
             return Err("pack_integrity_failure".into());
@@ -172,11 +186,8 @@ impl crate::servers::ServerManager {
         instance: &crate::models::instance::Instance,
         review: &Arc<Prepared>,
     ) -> vesta_server_client::Result<()> {
-        if review.created.elapsed().as_secs() >= 900 {
-            return Err(vesta_server_client::pack_sync::failure(
-                "pack_review_expired",
-            ));
-        }
+        // Admission checks expiry before queueing. Once accepted, a slow install
+        // remains valid as long as the signed release still matches below.
         let (active, _) = self
             .verified_release(&review.preview.connection_id, Some(instance))
             .await?;

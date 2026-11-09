@@ -137,6 +137,8 @@ pub struct SoftwarePlan {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareJob {
+    #[serde(default)]
+    pub error_context: Option<serde_json::Value>,
     pub id: String,
     pub kind: String,
     pub state: String,
@@ -328,6 +330,11 @@ impl Client {
         }
         approval.attempt = Some(key.clone());
         from_wire(self.request(Method::POST,"/api/v3/manage/software/custom-jar/apply",Some(json!({"plan_id":id,"confirmation_token":approval.token.as_str(),"idempotency_key":key})),Some(&key),true,"content.install").await?)
+    }
+    /// Select a fresh world through the server's recoverable, owner-only operation.
+    pub async fn new_world(&self, expected_revision: String, confirm_world: String, intent: &str) -> Result<ServerWorld> {
+        let value = self.management_mutate(Method::POST, "world/new", Some(json!({"seed":"", "expected_revision":expected_revision,"confirm_world":confirm_world})), intent, "config.edit").await?;
+        from_wire(value.get("world").cloned().ok_or_else(invalid)?)
     }
     pub async fn world(&self) -> Result<ServerWorld> {
         from_wire(self.get("world", true, "config.view").await?)

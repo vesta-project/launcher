@@ -88,6 +88,7 @@ impl ServerManager {
         action: &str,
         payload: &Value,
     ) -> Result<Option<ServerOperation>> {
+        self.client(id).await?;
         let key = intent_key(intent)?;
         let digest = vesta_server_client::trust::leaf_fingerprint(
             serde_json::to_vec(payload)

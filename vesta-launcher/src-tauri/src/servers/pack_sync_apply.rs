@@ -215,7 +215,7 @@ mod tests {
         _changes: &[Change],
         _receipt: &Receipt,
     ) -> Result<crate::sync::staging::RollbackSnapshot> {
-        let plan = crate::modpack::server_source::plan(root, review).map_err(io)?;
+        let plan = futures::executor::block_on(crate::modpack::server_source::plan(root, review, None)).map_err(io)?;
         let staging = crate::sync::staging::StagingDir::new(root).map_err(io)?;
         let mut paths = vec![
             RECEIPT.into(),
@@ -398,7 +398,7 @@ mod tests {
     fn server_source_migrates_manifest_and_staged_digest_refuses_post_review_tamper() {
         let root = tempfile::tempdir().unwrap();
         let review = plan(root.path());
-        let converted = crate::modpack::server_source::plan(root.path(), &review).unwrap();
+        let converted = futures::executor::block_on(crate::modpack::server_source::plan(root.path(), &review, None)).unwrap();
         assert_eq!(converted.new_manifest.modpack_id.as_deref(), Some("server"));
         assert!(converted
             .new_manifest

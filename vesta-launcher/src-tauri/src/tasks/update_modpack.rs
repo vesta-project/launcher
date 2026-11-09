@@ -256,19 +256,27 @@ impl Task for UpdateModpackTask {
                     Some(5),
                     Some(6),
                 );
-                let finished = match crate::modpack::update::finish(
-                    &app_handle,
-                    &ctx,
-                    &inst,
-                    &plan.old_manifest,
-                    &plan.new_manifest,
-                    &new_version_id,
-                    &game_dir,
-                    &plan.zip_path,
-                    &source,
-                )
-                .await
-                {
+                let finished = match async {
+                    // Finish server integration before publishing Installed. A
+                    // failure here follows the same rollback as manifest finalization.
+                    if let UpdateSource::Server { review, .. } = &source {
+                        app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>()
+                            .ensure_instance_server(&app_handle, instance_id, &review.preview.connection_id)
+                            .await.map_err(|error| crate::servers::pack_sync::install_error(&error))?;
+                    }
+                    crate::modpack::update::finish(
+                        &app_handle,
+                        &ctx,
+                        &inst,
+                        &plan.old_manifest,
+                        &plan.new_manifest,
+                        &new_version_id,
+                        &game_dir,
+                        &plan.zip_path,
+                        &source,
+                    )
+                    .await
+                }.await {
                 Ok(finished) => finished,
                 Err(update_error) => {
                     let file_rollback = outcome.rollback();
@@ -289,7 +297,7 @@ impl Task for UpdateModpackTask {
                 }
                 };
                 if let UpdateSource::Server {review,..}=&source {
-                    app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().validate_update_review(&inst,review).await.map_err(|e|e.to_string())?;
+                    app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().validate_update_review(&inst,review).await.map_err(|e|crate::servers::pack_sync::install_error(&e))?;
                 }
                 if let Err(finalize_error) = outcome.finalize() {
                     return match status_guard.recover_failure() {

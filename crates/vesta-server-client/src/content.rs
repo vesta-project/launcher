@@ -45,6 +45,8 @@ pub struct ContentEntry {
     pub enabled: Option<bool>,
     pub sha256: Option<String>,
     pub provider: Option<ContentProvider>,
+    #[serde(default)]
+    pub display_provider: Option<ContentProvider>,
     pub declared: Option<DeclaredMetadata>,
     pub pending: Option<String>,
     pub pending_id: Option<String>,
@@ -112,8 +114,11 @@ pub struct ContentMutation {
 
 impl Client {
     pub async fn content_inventory(&self) -> Result<ContentInventory> {
+        self.content_inventory_view(false).await
+    }
+    pub async fn content_inventory_view(&self, summary: bool) -> Result<ContentInventory> {
         let inventory: ContentInventory =
-            from_wire(self.get("content", true, "files.list").await?)?;
+            from_wire(self.get(if summary { "content?view=summary" } else { "content" }, true, "files.list").await?)?;
         if inventory.items.len() > 131_072 {
             return Err(unsupported());
         }
@@ -213,7 +218,14 @@ mod tests {
         assert_eq!(entry.kind, ContentKind::Plugin);
         assert_eq!(entry.size, "9007199254740993");
         assert!(entry.provider.is_none());
+        assert!(entry.display_provider.is_none());
         assert_eq!(entry.pending_id.as_deref(), Some("stage"));
+    }
+    #[test]
+    fn inventory_preserves_display_identity_separately_from_verified_provider() {
+        let entry: ContentEntry = from_wire(json!({"kind":"mod","path":"mods/a.jar","filename":"a.jar","size":"1","enabled":true,"sha256":null,"provider":null,"display_provider":{"provider":"modrinth","project_id":"project","version_id":"version"},"declared":null,"pending":null,"pending_id":null,"pending_error":null})).unwrap();
+        assert!(entry.provider.is_none());
+        assert_eq!(entry.display_provider.unwrap().project_id, "project");
     }
     #[test]
     fn install_wire_has_no_provider_url_or_client_hash() {

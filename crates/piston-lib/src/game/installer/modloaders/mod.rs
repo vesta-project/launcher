@@ -79,9 +79,7 @@ pub async fn resolve_loader_profile(
         loader.as_str(),
         selected.id
     ));
-    let mut profile: ModrinthLoaderProfile = client
-        .get(&selected.url)
-        .send()
+    let mut profile: ModrinthLoaderProfile = crate::artifact_http::get(&selected.url)
         .await
         .with_context(|| format!("Failed to request loader profile {}", selected.url))?
         .error_for_status()

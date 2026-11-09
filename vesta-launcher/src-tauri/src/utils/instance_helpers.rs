@@ -235,8 +235,7 @@ pub fn ensure_instance_directory(instances_root: &Path, slug: &str) -> Result<Pa
 
 /// Download an icon from a URL and return it as bytes
 pub async fn download_icon_as_bytes(url: &str) -> Result<Vec<u8>> {
-    let client = piston_lib::client::shared_client();
-    let resp = client.get(url).send().await?;
+    let resp = piston_lib::artifact_http::get(url).await?;
     let bytes = resp.bytes().await?;
     Ok(bytes.to_vec())
 }

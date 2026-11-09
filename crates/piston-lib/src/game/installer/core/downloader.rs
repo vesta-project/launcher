@@ -102,14 +102,14 @@ pub async fn download_to_path(
 }
 
 async fn download_with_validation(
-    client: &Client,
+    _client: &Client,
     url: &str,
     path: &Path,
     expected_sha1: Option<&str>,
     reporter: &dyn ProgressReporter,
 ) -> Result<()> {
     let start = Instant::now();
-    let response = client.get(url).send().await?;
+    let response = crate::artifact_http::get(url).await?;
 
     if !response.status().is_success() {
         anyhow::bail!("HTTP error {}: {}", response.status(), url);
@@ -236,14 +236,14 @@ pub async fn download_to_memory_with_client(
 }
 
 async fn download_to_memory_internal(
-    client: &Client,
+    _client: &Client,
     url: &str,
     expected_sha1: Option<&str>,
     reporter: Option<&dyn ProgressReporter>,
 ) -> Result<Vec<u8>> {
-    log::debug!("Downloading to memory (reused client): {}", url);
+    log::debug!("Downloading to memory (public artifact transport): {}", url);
 
-    let response = client.get(url).send().await?;
+    let response = crate::artifact_http::get(url).await?;
 
     if !response.status().is_success() {
         anyhow::bail!("HTTP error {}: {}", response.status(), url);
@@ -305,11 +305,11 @@ pub async fn download_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<
 
 /// Download JSON using an existing Client and deserialize
 pub async fn download_json_with_client<T: serde::de::DeserializeOwned>(
-    client: &Client,
+    _client: &Client,
     url: &str,
 ) -> Result<T> {
     log::debug!("Downloading JSON (reused client): {}", url);
-    let response = client.get(url).send().await?;
+    let response = crate::artifact_http::get(url).await?;
 
     if !response.status().is_success() {
         anyhow::bail!("HTTP error {}: {}", response.status(), url);

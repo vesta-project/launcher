@@ -178,7 +178,7 @@ impl ModpackInstaller {
         if !metadata.mods.is_empty() {
             reporter.set_stage("downloading_resources");
             reporter.start_step("Downloading resources", Some(metadata.mods.len() as u32));
-            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
+            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), crate::game::installer::core::batch::MODPACK_DOWNLOAD_CONCURRENCY);
 
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();

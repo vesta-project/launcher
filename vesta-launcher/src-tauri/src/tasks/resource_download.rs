@@ -291,9 +291,7 @@ async fn download_artifact(
     ctx.update_items(index.saturating_sub(1) as u64, Some(total as u64));
     let url = Url::parse(&artifact.url)
         .map_err(|error| format!("Invalid download URL '{}': {error}", artifact.url))?;
-    let mut response = piston_lib::client::shared_client()
-        .get(url)
-        .send()
+    let mut response = piston_lib::artifact_http::get(url.as_ref())
         .await
         .map_err(|error| format!("Failed to send download request: {error}"))?;
     if !response.status().is_success() {

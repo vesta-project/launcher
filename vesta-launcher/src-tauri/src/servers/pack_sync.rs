@@ -564,6 +564,15 @@ impl ServerManager {
         connection: &str,
         instance_id: Option<i32>,
     ) -> Result<Preview> {
+        self.pack_sync_preview_with_progress(app, connection, instance_id, None).await
+    }
+    async fn pack_sync_preview_with_progress(
+        &self,
+        app: &AppHandle,
+        connection: &str,
+        instance_id: Option<i32>,
+        progress: Option<&crate::tasks::manager::TaskContext>,
+    ) -> Result<Preview> {
         let _gate = self.pack_gate.lock().await;
         let instance = instance_id
             .map(crate::commands::instances::get_instance)
@@ -619,7 +628,7 @@ impl ServerManager {
             vestapack = Some(zip);
             index
         } else {
-            let staged = legacy::normalize(app, &release, archive).await?;
+            let staged = legacy::normalize(app, &release, archive, progress).await?;
             normalized = Some((staged.stage, staged.files));
             staged.index
         };
@@ -659,7 +668,7 @@ impl ServerManager {
         let (stage, files) = match (normalized, vestapack) {
             (Some(staged), _) => staged,
             (None, Some(mut zip)) => {
-                stage_vestapack(&mut zip, index.files, instance.as_ref(), &target_runtime, app)
+                stage_vestapack(&mut zip, index.files, instance.as_ref(), &target_runtime, app, progress)
                     .await?
             }
             (None, None) => return Err(conflict("pack_format_unsupported")),
@@ -736,13 +745,27 @@ async fn stage_vestapack(
     instance: Option<&Instance>,
     target_runtime: &Runtime,
     app: &AppHandle,
+    progress: Option<&crate::tasks::manager::TaskContext>,
 ) -> Result<(tempfile::TempDir, BTreeMap<String, String>)> {
     let stage = tempfile::tempdir().map_err(io)?;
     let mut files = BTreeMap::new();
     let mut names = HashSet::new();
     let mut total = 0u64;
     let resources = app.state::<ResourceManager>();
-    for file in entries {
+    let mut downloads = Vec::new();
+    let count = entries.len();
+    if let Some(ctx) = progress {
+        ctx.set_stage("extracting");
+        ctx.update_description("Extracting bundled resources...".into());
+    }
+    for (number, file) in entries.into_iter().enumerate() {
+        tokio::task::yield_now().await;
+        if number % 25 == 0 {
+            if let Some(ctx) = progress {
+                ctx.update_items(files.len() as u64, Some(count as u64));
+                ctx.update_overall_progress((files.len() * 100 / count.max(1)) as i32);
+            }
+        }
         safe_path(&file.path)?;
         let lower = file.path.to_lowercase();
         if names.iter().any(|p: &String| {
@@ -774,6 +797,28 @@ async fn stage_vestapack(
                 read_member(zip, &format!("overrides/{}", file.path), EMBEDDED_LIMIT)?
             }
             (None, "platform" | "modrinth" | "curseforge") => {
+                downloads.push((file, target));
+                continue;
+            }
+            _ => return Err(conflict("pack_invalid_source")),
+        };
+        if bytes.len() as u64 != file.size || digest(&bytes) != file.hashes.sha256 {
+            return Err(conflict("pack_integrity_failure"));
+        }
+        if let Some(parent) = target.parent() { std::fs::create_dir_all(parent).map_err(io)?; }
+        std::fs::write(target, bytes).map_err(io)?;
+        files.insert(file.path, file.hashes.sha256);
+    }
+    let completed = std::sync::atomic::AtomicUsize::new(files.len());
+    if !downloads.is_empty() {
+        if let Some(ctx) = progress { ctx.set_stage("downloading_resources"); }
+    }
+    let downloaded = piston_lib::game::installer::core::batch::run_batch(
+        downloads, piston_lib::game::installer::core::batch::MODPACK_DOWNLOAD_CONCURRENCY,
+        |(file, target)| {
+            let resources = &resources;
+            let completed = &completed;
+            async move {
                 let source = match file.source.platform.as_deref() {
                     Some("modrinth") => crate::models::SourcePlatform::Modrinth,
                     Some("curseforge") => crate::models::SourcePlatform::CurseForge,
@@ -792,18 +837,17 @@ async fn stage_vestapack(
                 if got.size != file.size || got.sha256 != file.hashes.sha256 {
                     return Err(conflict("pack_integrity_failure"));
                 }
-                files.insert(file.path, file.hashes.sha256);
-                continue;
+                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if let Some(ctx) = progress {
+                    ctx.update_items(done as u64, Some(count as u64));
+                    ctx.update_overall_progress((done * 100 / count.max(1)) as i32);
+                    ctx.update_description(format!("Downloading modpack files ({}/{})", done, count));
+                }
+                Ok::<_, Error>((file.path, file.hashes.sha256))
             }
-            _ => return Err(conflict("pack_invalid_source")),
-        };
-        if bytes.len() as u64 != file.size || digest(&bytes) != file.hashes.sha256 {
-            return Err(conflict("pack_integrity_failure"));
-        }
-        std::fs::create_dir_all(target.parent().unwrap()).map_err(io)?;
-        std::fs::write(target, bytes).map_err(io)?;
-        files.insert(file.path, file.hashes.sha256);
-    }
+        },
+    ).await?;
+    files.extend(downloaded);
     Ok((stage, files))
 }
 
@@ -850,20 +894,18 @@ fn provider_url_allowed(url: &url::Url) -> bool {
 /// Streams an allow-listed provider download to `target`, hashing as it goes. Never
 /// buffers the body: provider jars and modpack archives exceed hundreds of MiB.
 async fn download_provider_to(raw: &str, limit: u64, target: &Path) -> Result<Downloaded> {
+    download_provider_with_progress(raw, limit, target, None).await
+}
+async fn download_provider_with_progress(raw: &str, limit: u64, target: &Path, progress: Option<&crate::tasks::manager::TaskContext>) -> Result<Downloaded> {
     use sha2::Digest;
     use tokio::io::AsyncWriteExt;
     let mut url = url::Url::parse(raw).map_err(|_| conflict("pack_download_unavailable"))?;
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(io)?;
     let idle = std::time::Duration::from_secs(60);
     for _ in 0..6 {
         if !provider_url_allowed(&url) {
             return Err(conflict("pack_download_unavailable"));
         }
-        let mut response = tokio::time::timeout(idle, client.get(url.clone()).send())
+        let mut response = tokio::time::timeout(idle, piston_lib::artifact_http::get_one(&url))
             .await
             .map_err(io)?
             .map_err(io)?;
@@ -890,6 +932,9 @@ async fn download_provider_to(raw: &str, limit: u64, target: &Path) -> Result<Do
         let (mut sha1, mut sha256, mut sha512) =
             (sha1::Sha1::new(), sha2::Sha256::new(), sha2::Sha512::new());
         let mut size = 0u64;
+        let total = response.content_length();
+        let mut last_progress = std::time::Instant::now();
+        if let Some(ctx) = progress { ctx.update_bytes(0, total); }
         let result: Result<()> = async {
             while let Some(chunk) = tokio::time::timeout(idle, response.chunk())
                 .await
@@ -902,6 +947,15 @@ async fn download_provider_to(raw: &str, limit: u64, target: &Path) -> Result<Do
                 sha256.update(&chunk);
                 sha512.update(&chunk);
                 file.write_all(&chunk).await.map_err(io)?;
+                if last_progress.elapsed() >= std::time::Duration::from_millis(200) {
+                    if let Some(ctx) = progress {
+                        ctx.update_bytes(size, total);
+                        if let Some(total) = total.filter(|total| *total > 0) {
+                            ctx.update_overall_progress((size.saturating_mul(100) / total).min(100) as i32);
+                        }
+                    }
+                    last_progress = std::time::Instant::now();
+                }
             }
             file.flush().await.map_err(io)
         }
@@ -911,6 +965,7 @@ async fn download_provider_to(raw: &str, limit: u64, target: &Path) -> Result<Do
             let _ = tokio::fs::remove_file(target).await;
             return Err(error);
         }
+        if let Some(ctx) = progress { ctx.update_bytes(size, total); ctx.update_overall_progress(100); }
         return Ok(Downloaded {
             size,
             sha1: hex::encode(sha1.finalize()),
@@ -929,38 +984,30 @@ mod check;
 pub use check::Check;
 #[path = "pack_sync_legacy.rs"]
 mod legacy;
+use crate::tasks::manager::Task;
 
 #[derive(Clone)]
-struct ServerInstallTask {
-    instance: Instance,
-    details: PackDetails,
+pub(crate) struct ServerPackInstaller {
+    pub(crate) instance: Instance,
+    pub(crate) details: PackDetails,
 }
-impl crate::tasks::manager::Task for ServerInstallTask {
-    fn name(&self) -> String { "Installing Modpack".into() }
-    fn id(&self) -> Option<String> { Some(format!("install_instance_{}_server_pack", self.instance.id)) }
-    fn activity_kind(&self) -> crate::tasks::activity::ActivityKind { crate::tasks::activity::ActivityKind::ModpackInstall }
-    fn notification_context(&self) -> Option<crate::notifications::models::NotificationContext> {
-        Some(crate::notifications::models::NotificationContext::instance(self.instance.id, Some(self.instance.name.clone())))
-    }
-    fn conflict_keys(&self) -> Vec<String> { vec![crate::tasks::manager::instance_play_conflict_key(self.instance.id)] }
-    fn cancellable(&self) -> bool { true }
-    fn show_completion_notification(&self) -> bool { true }
-    fn starting_description(&self) -> String { format!("Installing {}", self.instance.name) }
-    fn on_abandoned(&self, app: &AppHandle) -> futures::future::BoxFuture<'static, ()> {
+impl ServerPackInstaller {
+    pub(crate) fn on_abandoned(&self, app: &AppHandle) -> futures::future::BoxFuture<'static, ()> {
         let app = app.clone(); let instance = self.instance.clone();
         Box::pin(async move { if let Ok(root) = game_dir(&instance) { crate::modpack::update::rollback_start(&app, instance.id, &root); mark_server_install_interrupted(&app, instance.id); } })
     }
-    fn run(&self, ctx: crate::tasks::manager::TaskContext) -> futures::future::BoxFuture<'static, std::result::Result<(), String>> {
+    pub(crate) fn run(&self, ctx: crate::tasks::manager::TaskContext) -> futures::future::BoxFuture<'static, std::result::Result<(), String>> {
         let instance = self.instance.clone(); let details = self.details.clone();
         Box::pin(async move {
             let root = game_dir(&instance).map_err(|e| e.to_string())?;
             ctx.set_stage("downloading");
             ctx.update_description("Downloading modpack files...".into());
             let manager = ctx.app_handle.state::<Arc<ServerManager>>();
-            let mut cancel = ctx.cancel_rx.clone();
+            let preparation_progress = ctx.with_overall_range(0, 30);
             let result = tokio::select! {
-                result = manager.prepare_new_install(&ctx.app_handle, &instance, &details) => result.map_err(|e| match e.reason.as_deref() { Some(reason) => format!("{} ({reason})", e), None => e.to_string() }),
-                _ = async { loop { if *cancel.borrow() { break; } if cancel.changed().await.is_err() { break; } } } => Err("Installation cancelled".into()),
+                biased;
+                _ = crate::tasks::manager::wait_for_cancellation(ctx.cancel_rx.clone()) => Err("Installation cancelled".into()),
+                result = manager.prepare_new_install(&ctx.app_handle, &instance, &details, &preparation_progress) => result.map_err(|e| install_error(&e)),
             };
             let prepared = match result {
                 Ok(prepared) => prepared,
@@ -974,16 +1021,18 @@ impl crate::tasks::manager::Task for ServerInstallTask {
             let task = crate::tasks::update_modpack::UpdateModpackTask::from_server(instance.id, instance.name, root, prepared, false);
             let app = ctx.app_handle.clone();
             let id = instance.id;
-            let result = task.run(ctx).await;
-            if result.is_ok() { let _ = std::fs::remove_file(request_path); }
+            let result = task.run(ctx.with_overall_range(30, 100)).await;
+            if result.is_ok() {
+                let _ = std::fs::remove_file(request_path);
+            }
             else { mark_server_install_interrupted(&app, id); }
             result
         })
     }
 }
 impl ServerManager {
-    async fn prepare_new_install(&self, app: &AppHandle, instance: &Instance, details: &PackDetails) -> Result<Prepared> {
-        let preview = self.pack_sync_preview(app, &details.preview.connection_id, Some(instance.id)).await?;
+    async fn prepare_new_install(&self, app: &AppHandle, instance: &Instance, details: &PackDetails, progress: &crate::tasks::manager::TaskContext) -> Result<Prepared> {
+        let preview = self.pack_sync_preview_with_progress(app, &details.preview.connection_id, Some(instance.id), Some(progress)).await?;
         let prepared = self.pack_previews.lock().await.remove(&preview.review_id).ok_or_else(|| conflict("pack_review_expired"))?;
         if preview.revision != details.preview.revision || preview.artifact_sha256 != details.preview.artifact_sha256 || preview.server_id != details.preview.server_id || preview.fingerprint != details.preview.fingerprint {
             return Err(conflict("pack_review_stale"));
@@ -1011,7 +1060,7 @@ impl ServerManager {
         write_json(&root.join(".vesta/server-install.json"), &details)?;
         crate::modpack::update::begin(app, &instance, &root, &release.revision).map_err(io)?;
         crate::commands::instances::update_instance_operation(app, id, "server-pack-install").map_err(io)?;
-        if let Err(error) = app.state::<TaskManager>().submit(Box::new(ServerInstallTask { instance, details })).await {
+        if let Err(error) = app.state::<TaskManager>().submit(Box::new(crate::tasks::installers::modpack::InstallModpackTask::from_server(instance, details))).await {
             crate::modpack::update::rollback_start(app, id, &root);
             mark_server_install_interrupted(app, id);
             return Err(io(error));
@@ -1024,12 +1073,54 @@ fn mark_server_install_interrupted(app: &AppHandle, id: i32) {
     let _ = crate::commands::instances::update_instance_operation(app, id, "server-pack-install");
     let _ = crate::commands::instances::update_installation_status(app, id, "interrupted");
 }
+pub(crate) fn install_error(error: &Error) -> String {
+    match error.reason.as_deref() {
+        Some("pack_instance_busy") => "Another operation is already running for this instance. Open Activity to see its progress or cancel it.".into(),
+        Some("pack_review_expired") => "The saved installation details are no longer available. Open the server and install its pack again. (pack_review_expired)".into(),
+        Some("pack_review_stale") => "The server pack changed during installation. Open the server and install its current pack. (pack_review_stale)".into(),
+        Some("pack_user_file_collision") => "A local file conflicts with a file in the server pack. (pack_user_file_collision)".into(),
+        Some(reason) => format!("{} ({reason})", error),
+        None => error.to_string(),
+    }
+}
 impl ServerManager {
-    pub async fn resume_pack_install(&self, app: &AppHandle, instance: Instance) -> Result<()> {
-        let _guard = app.state::<crate::tasks::manager::TaskManager>().acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(instance.id)]).await;
-        let instance = crate::commands::instances::get_instance(instance.id).map_err(io)?;
-        if instance.installation_status.as_deref() == Some("installed") { return Ok(()); }
+    pub(crate) async fn ensure_instance_server(&self, _app: &AppHandle, id: i32, connection: &str) -> Result<()> {
+        let instance = crate::commands::instances::get_instance(id).map_err(io)?;
+        let record = self.record(connection).await?;
+        let info = match record.snapshot.info.clone() {
+            Some(info) => info,
+            None => self.client(connection).await?.info().await?,
+        };
+        let address = match info.join_address.filter(|address| !address.trim().is_empty()) {
+            Some(address) => address,
+            None => {
+                let Some(port) = info.game_port else { return Ok(()); };
+                vesta_server_client::endpoint::Endpoint::parse(&record.snapshot.connection.endpoint)?.game_address(port)
+            }
+        };
         let root = game_dir(&instance)?;
+        crate::sync::safeguards::check_instance_not_running(&root).map_err(io)?;
+        crate::settings_sync::servers::ensure_linked_server(&root, &info.name, &address).map_err(io)?;
+        // servers.dat is mutable Minecraft state. If the pack supplied it,
+        // record our merged local baseline for the next transactional update.
+        if let Some(mut receipt) = read_json::<Receipt>(&root.join(RECEIPT))? {
+            if receipt.files.contains_key("servers.dat") {
+                receipt.files.insert("servers.dat".into(), digest(&std::fs::read(root.join("servers.dat")).map_err(io)?));
+                write_json(&root.join(RECEIPT), &receipt)?;
+            }
+        }
+        Ok(())
+    }
+    pub async fn resume_pack_install(&self, app: &AppHandle, instance: Instance) -> Result<()> {
+        // Repeated Resume clicks must not wait behind the task they are resuming.
+        if app.state::<crate::tasks::manager::TaskManager>().is_task_active(&format!("install_instance_{}_server_pack", instance.id)) { return Ok(()); }
+        let _guard = app.state::<crate::tasks::manager::TaskManager>().try_acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(instance.id)]).ok_or_else(|| conflict("pack_instance_busy"))?;
+        let instance = crate::commands::instances::get_instance(instance.id).map_err(io)?;
+        let root = game_dir(&instance)?;
+        if instance.installation_status.as_deref() == Some("installed") && root.join(RECEIPT).is_file() {
+            let link = self.pack_link(instance.id).await?.ok_or_else(|| conflict("pack_server_binding_missing"))?;
+            return self.ensure_instance_server(app, instance.id, &link.connection_id).await;
+        }
         let details: PackDetails = read_json(&root.join(".vesta/server-install.json"))?.ok_or_else(|| conflict("pack_review_expired"))?;
         let (release, _) = self.verified_release(&details.preview.connection_id, Some(&instance)).await?;
         if release.revision != details.preview.revision || release.sha256 != details.preview.artifact_sha256 { return Err(conflict("pack_review_stale")); }
@@ -1037,7 +1128,7 @@ impl ServerManager {
         crate::modpack::update::begin(app, &instance, &root, &release.revision).map_err(io)?;
         crate::commands::instances::update_instance_operation(app, instance.id, "server-pack-install").map_err(io)?;
         let id = instance.id;
-        if let Err(error) = app.state::<crate::tasks::manager::TaskManager>().submit(Box::new(ServerInstallTask { instance, details })).await {
+        if let Err(error) = app.state::<crate::tasks::manager::TaskManager>().submit(Box::new(crate::tasks::installers::modpack::InstallModpackTask::from_server(instance, details))).await {
             crate::modpack::update::rollback_start(app, id, &root);
             mark_server_install_interrupted(app, id);
             return Err(io(error));

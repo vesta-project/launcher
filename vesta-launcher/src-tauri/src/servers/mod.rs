@@ -33,6 +33,55 @@ use vesta_server_client::{
     Client, Error, ErrorCode, Result,
 };
 
+// Retires every retained client even if the user switches away and back before
+// its next request. Config writes invalidate synchronously before publishing.
+static ACCOUNT_SCOPE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static ACCOUNT_MANAGERS: std::sync::OnceLock<StdMutex<Vec<std::sync::Weak<ServerManager>>>> = std::sync::OnceLock::new();
+pub(crate) fn retire_account_scope() {
+    ACCOUNT_SCOPE.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    if let Some(managers) = ACCOUNT_MANAGERS.get() {
+        if let Ok(mut managers) = managers.lock() {
+            managers.retain(|weak| {
+                let Some(manager) = weak.upgrade() else { return false; };
+                manager.retire_account_clients();
+                true
+            });
+        }
+    }
+}
+fn account_scope() -> u64 { ACCOUNT_SCOPE.load(std::sync::atomic::Ordering::Acquire) }
+fn selected_account() -> Option<String> {
+    crate::utils::config::get_app_config().ok()?.active_account_uuid
+        .and_then(|id| uuid::Uuid::parse_str(&id).ok()).map(|id| id.to_string())
+}
+fn account_matches(bound: Option<&str>, selected: Option<&str>) -> bool {
+    match (bound.and_then(|id| uuid::Uuid::parse_str(id).ok()), selected.and_then(|id| uuid::Uuid::parse_str(id).ok())) {
+        (Some(bound), Some(selected)) => bound == selected,
+        _ => false,
+    }
+}
+fn protect_transport(transport: &Transport, account: &str, scope: u64) -> Result<()> {
+    let account = account.to_owned();
+    transport.set_access_guard(Arc::new(move || account_scope() == scope && account_matches(Some(&account), selected_account().as_deref())))
+}
+fn account_snapshot(record: &Record) -> ServerSnapshot {
+    let mut snapshot = record.snapshot.clone();
+    if !account_matches(record.account_uuid.as_deref(), selected_account().as_deref()) {
+        snapshot.connection.role = None;
+        snapshot.state = Default::default();
+        snapshot.state.access = "credentials_rejected".into();
+        snapshot.state.last_error = Some(ErrorCode::CredentialsRejected);
+        snapshot.capabilities = CapabilityView { source: "unknown".into(), roles: None, granted: vec![], refused: vec![] };
+        snapshot.info = None;
+        snapshot.status = None;
+        snapshot.pack = None;
+        snapshot.join_address = None;
+        snapshot.backups_configured = None;
+        snapshot.status_observed_at_ms = None;
+    }
+    snapshot
+}
+
 struct Contact {
     discovery: Discovery,
     transport: Arc<Transport>,
@@ -44,6 +93,7 @@ struct Contact {
 struct Live {
     management: Mutex<()>,
     client: Mutex<Option<Arc<Client>>>,
+    client_scope: std::sync::atomic::AtomicU64,
     refresh: Mutex<()>,
     worker: StdMutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     capabilities_loaded: std::sync::atomic::AtomicBool,
@@ -51,6 +101,7 @@ struct Live {
     players: StdMutex<Option<PlayersView>>,
 }
 pub struct ServerManager {
+    account_app: StdMutex<Option<AppHandle>>,
     pack_previews: Mutex<HashMap<String, pack_sync::Prepared>>,
     pack_gate: Mutex<()>,
     root: PathBuf,
@@ -112,7 +163,8 @@ impl ServerManager {
                 (Store::default(), Some(e))
             }
         };
-        Ok(Arc::new(Self {
+        let manager = Arc::new(Self {
+            account_app: Default::default(),
             pack_previews: Default::default(),
             pack_gate: Default::default(),
             credentials: Arc::new(Credentials::new(&root)),
@@ -128,7 +180,30 @@ impl ServerManager {
             streaming: Arc::new(Semaphore::new(4)),
             change_pending: Default::default(),
             trackers: Default::default(),
-        }))
+        });
+        ACCOUNT_MANAGERS.get_or_init(Default::default).lock().map_err(|_| internal())?.push(Arc::downgrade(&manager));
+        Ok(manager)
+    }
+    fn retire_account_clients(&self) {
+        if let Ok(mut subscriptions) = self.subscriptions.lock() { *subscriptions = Default::default(); }
+        if let Ok(mut previews) = self.pack_previews.try_lock() { previews.clear(); }
+        if let Ok(mut trackers) = self.trackers.lock() {
+            for (_, task) in trackers.drain() { task.abort(); }
+        }
+        if let Ok(live) = self.live.lock() {
+            for slot in live.values() {
+                if let Ok(mut worker) = slot.worker.lock() {
+                    if let Some(worker) = worker.take() { worker.abort(); }
+                }
+                if let Ok(mut client) = slot.client.try_lock() { *client = None; }
+                slot.info_loaded.store(false, std::sync::atomic::Ordering::Release);
+                slot.capabilities_loaded.store(false, std::sync::atomic::Ordering::Release);
+                if let Ok(mut players) = slot.players.lock() { *players = None; }
+            }
+        }
+        if let Ok(app) = self.account_app.lock() {
+            if let Some(app) = app.as_ref() { self.changed(app); }
+        }
     }
     fn slot(&self, id: &str) -> Result<Arc<Live>> {
         let mut live = self.live.lock().map_err(|_| internal())?;
@@ -147,7 +222,7 @@ impl ServerManager {
             .await
             .connections
             .iter()
-            .map(|r| r.snapshot.clone())
+            .map(account_snapshot)
             .collect())
     }
     async fn record(&self, id: &str) -> Result<Record> {
@@ -194,15 +269,7 @@ impl ServerManager {
             Ok(())
         })
         .await?;
-        if let Ok(mut subs) = self.subscriptions.lock() {
-            subs.send(
-                &id,
-                ServerTopic::Status,
-                ServerEvent::Snapshot {
-                    snapshot: Box::new(snapshot),
-                },
-            );
-        }
+        self.deliver(&id, ServerTopic::Status, ServerEvent::Snapshot { snapshot: Box::new(snapshot) });
         self.changed(app);
         Ok(())
     }
@@ -248,10 +315,19 @@ impl ServerManager {
     }
     async fn client(&self, id: &str) -> Result<Arc<Client>> {
         let r = self.record(id).await?;
+        if !account_matches(r.account_uuid.as_deref(), selected_account().as_deref()) {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
+        let scope = account_scope();
         let slot = self.slot(id)?;
         let mut live = slot.client.lock().await;
-        if let Some(client) = &*live {
-            return Ok(client.clone());
+        if slot.client_scope.load(std::sync::atomic::Ordering::Acquire) == scope {
+            if let Some(client) = &*live { return Ok(client.clone()); }
+        } else {
+            *live = None;
+            slot.info_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
+            slot.capabilities_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
+            *slot.players.lock().map_err(|_| internal())? = None;
         }
         if r.snapshot.connection.memory_only {
             return Err(Error::new(ErrorCode::CredentialsUnavailable));
@@ -267,6 +343,7 @@ impl ServerManager {
             .map_err(|_| internal())??;
         let endpoint = Endpoint::parse(&r.snapshot.connection.endpoint)?;
         let transport = Transport::new(endpoint, Some(r.snapshot.connection.fingerprint.clone()))?;
+        protect_transport(&transport, r.account_uuid.as_deref().ok_or_else(|| Error::new(ErrorCode::CredentialsRejected))?, scope)?;
         let client = Client::new(
             transport,
             r.snapshot.connection.server_id,
@@ -282,6 +359,7 @@ impl ServerManager {
                 .filter(|i| i.connection_id == id && i.key_version < 2)
                 .map(|i| i.key.clone()),
         )?;
+        slot.client_scope.store(scope, std::sync::atomic::Ordering::Release);
         *live = Some(client.clone());
         Ok(client)
     }
@@ -414,10 +492,12 @@ impl ServerManager {
         }
         if let Some(id) = &discovery.existing_connection_id {
             let record = self.record(id).await?;
+            if account_matches(record.account_uuid.as_deref(), selected_account().as_deref()) && record.can_reuse_enrollment_key() {
             let reference = record.key_reference.clone();
             let signer = self.client(id).await?.device_signer();
             let memory = record.snapshot.connection.memory_only;
             return Ok((discovery, transport, reference, signer, memory));
+            }
         }
         let reference = new_id();
         let r = reference.clone();
@@ -464,7 +544,12 @@ impl ServerManager {
         device: String,
         role: Option<String>,
         method: &str,
+        account_uuid: &str,
+        scope: u64,
     ) -> Result<ServerSnapshot> {
+        if scope != account_scope() || !account_matches(Some(account_uuid), selected_account().as_deref()) {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
         let id = discovery.existing_connection_id.clone().unwrap_or_else(new_id);
         let connection = ServerConnection {
             id: id.clone(),
@@ -498,15 +583,20 @@ impl ServerManager {
             backups_configured: None,
             public_lifecycle: discovery.public_lifecycle.clone(),
         };
+        protect_transport(&transport, account_uuid, scope)?;
         let client = Client::new(transport, discovery.server_id, device.clone(), signer);
         let slot = self.slot(&id)?;
         let refresh = slot.refresh.lock().await;
         let management = slot.management.lock().await;
         let snapshot = self.edit_store(|s| {
+            if scope != account_scope() || !account_matches(Some(account_uuid), selected_account().as_deref()) {
+                return Err(Error::new(ErrorCode::CredentialsRejected));
+            }
             s.enroll(Record {
                 snapshot: snapshot.clone(),
                 device_id: device,
                 key_reference: reference.clone(),
+                account_uuid: Some(account_uuid.into()),
             }, discovery.existing_connection_id.as_deref())
         })
         .await?;
@@ -517,6 +607,7 @@ impl ServerManager {
             }
         }
         self.subscriptions.lock().map_err(|_| internal())?.reset_connection(&id);
+        slot.client_scope.store(scope, std::sync::atomic::Ordering::Release);
         *slot.client.lock().await = Some(client);
         slot.info_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
         slot.capabilities_loaded.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -531,7 +622,7 @@ impl ServerManager {
         // classified connection snapshot rather than encouraging code redemption again.
         let _ = self.refresh(app, &id, true).await;
         self.ensure_worker(app, &id)?;
-        Ok(self.record(&id).await?.snapshot)
+        Ok(account_snapshot(&self.record(&id).await?))
     }
     pub async fn pair(
         self: &Arc<Self>,
@@ -540,55 +631,8 @@ impl ServerManager {
         code: &str,
         memory_only: bool,
     ) -> Result<ServerSnapshot> {
-        let _gate = self
-            .enrollment_gate
-            .try_lock()
-            .map_err(|_| Error::new(ErrorCode::ServerBusy))?;
-        let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
-        let contact = self.contacts.lock().await.remove(discovery_id);
-        let result = if let Some(id) = &d.existing_connection_id {
-            self.client(id).await?.redeem_pairing(code, &local_device_name()).await
-        } else { Client::pair_named(&t, &d.server_id, code, s.as_ref(), &local_device_name()).await };
-        let e = match result
-        {
-            Ok(e) => e,
-            Err(e) => {
-                if !matches!(
-                    e.code,
-                    ErrorCode::PairOutcomeUnknown | ErrorCode::FingerprintMismatch
-                ) {
-                    if d.existing_connection_id.is_none() { self.discard_unredeemed(&r, m).await; }
-                }
-                if matches!(
-                    e.code,
-                    ErrorCode::PairCodeInvalid
-                        | ErrorCode::InvalidInput
-                        | ErrorCode::RateLimited
-                        | ErrorCode::Forbidden
-                        | ErrorCode::ServerBusy
-                ) {
-                    if let Some(contact) = contact {
-                        self.contacts
-                            .lock()
-                            .await
-                            .insert(discovery_id.into(), contact);
-                    }
-                }
-                return Err(e);
-            }
-        };
-        self.finish_enrollment(
-            app,
-            d,
-            t,
-            r,
-            s,
-            m,
-            e.device_id,
-            Some(e.role),
-            "pairing_code",
-        )
-        .await
+        let _ = (app, discovery_id, code, memory_only);
+        Err(Error::new(ErrorCode::CredentialsRejected))
     }
     pub async fn minecraft(
         self: &Arc<Self>,
@@ -596,6 +640,7 @@ impl ServerManager {
         discovery_id: &str,
         account_uuid: &str,
         memory_only: bool,
+        invitation_code: Option<&str>,
     ) -> Result<ServerSnapshot> {
         let _gate = self
             .enrollment_gate
@@ -610,7 +655,12 @@ impl ServerManager {
                 return Err(Error::new(ErrorCode::CredentialsUnavailable));
             }
         }
-        let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
+        let scope = account_scope();
+        if !account_matches(Some(account_uuid), selected_account().as_deref()) {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
+        let account_uuid = uuid::Uuid::parse_str(account_uuid).map_err(|_| Error::new(ErrorCode::InvalidInput))?.to_string();
+        let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.clone())
             .await
             .map_err(|_| Error::new(ErrorCode::CredentialsRejected))?;
         if !crate::auth::is_previously_authenticated_account(&account) {
@@ -624,6 +674,7 @@ impl ServerManager {
                 .map(|c| c.transport.clone())
                 .ok_or_else(|| Error::new(ErrorCode::NotFound))?
         };
+        protect_transport(&t, &account_uuid, scope)?;
         let challenge = t
             .request(
                 vesta_server_client::Method::POST,
@@ -654,13 +705,34 @@ impl ServerManager {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
         let (d, t, r, s, m) = self.enrollment(discovery_id, memory_only).await?;
-        self.contacts.lock().await.remove(discovery_id);
-        let complete = t.request(vesta_server_client::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(json!({"challenge":challenge_id,"device_name":local_device_name(),"public_key":s.public_key()})),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e})?;
+        let contact = self.contacts.lock().await.remove(discovery_id);
+        let reused_key = if let Some(id) = d.existing_connection_id.as_deref() {
+            self.record(id).await?.key_reference == r
+        } else { false };
+        if scope != account_scope() || !account_matches(Some(&account_uuid), selected_account().as_deref()) {
+            if !reused_key { self.discard_unredeemed(&r, m).await; }
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
+        let mut payload = json!({"challenge":challenge_id,"device_name":local_device_name(),"public_key":s.public_key()});
+        if let Some(code) = invitation_code.filter(|code| !code.trim().is_empty()) {
+            payload["invitation_code"] = json!(code);
+        }
+        let completion = t.request(vesta_server_client::Method::POST,"/api/v3/auth/minecraft/complete",None,Some(payload),None,true).await.map_err(|e| if matches!(e.code,ErrorCode::Timeout|ErrorCode::OutcomeUnknown|ErrorCode::Unreachable) { Error::new(ErrorCode::PairOutcomeUnknown) } else {e});
+        let complete = match completion {
+            Ok(complete) => complete,
+            Err(error) => {
+                if !matches!(error.code, ErrorCode::PairOutcomeUnknown | ErrorCode::FingerprintMismatch) {
+                    if !reused_key { self.discard_unredeemed(&r, m).await; }
+                    if let Some(contact) = contact { self.contacts.lock().await.insert(discovery_id.into(), contact); }
+                }
+                return Err(error);
+            }
+        };
         let device = complete["device_id"]
             .as_str()
             .ok_or_else(|| Error::new(ErrorCode::PairOutcomeUnknown))?
             .into();
-        self.finish_enrollment(app, d, t, r, s, m, device, None, "minecraft")
+        self.finish_enrollment(app, d, t, r, s, m, device, complete["role"].as_str().filter(|role| !role.is_empty()).map(str::to_owned), "minecraft", &account_uuid, scope)
             .await
     }
     pub async fn snapshot(
@@ -675,10 +747,10 @@ impl ServerManager {
             // worker. A successful explicit recovery restores existing demand.
             self.ensure_worker(app, id)?;
         }
-        Ok(self.record(id).await?.snapshot)
+        Ok(account_snapshot(&self.record(id).await?))
     }
     pub async fn refresh(&self, app: &AppHandle, id: &str, interactive: bool) -> Result<()> {
-        self.record(id).await?;
+        self.client(id).await?;
         let slot = self.slot(id)?;
         let started = Instant::now();
         let _gate = slot.refresh.lock().await;
@@ -799,8 +871,8 @@ impl ServerManager {
         if let Some(pinned) = patch.pinned {
             snapshot.connection.pinned = pinned;
         }
-        self.publish(app, snapshot.clone()).await?;
-        Ok(snapshot)
+        self.publish(app, snapshot).await?;
+        Ok(account_snapshot(&self.record(id).await?))
     }
     pub async fn approve(
         self: &Arc<Self>,
@@ -808,7 +880,7 @@ impl ServerManager {
         id: &str,
         fingerprint: &str,
     ) -> Result<ServerSnapshot> {
-        self.record(id).await?;
+        self.client(id).await?;
         let slot = self.slot(id)?;
         let _refresh = slot.refresh.lock().await;
         let fp = vesta_server_client::endpoint::fingerprint(fingerprint)?;
@@ -828,6 +900,8 @@ impl ServerManager {
                     Endpoint::parse(&snapshot.connection.endpoint)?,
                     Some(snapshot.connection.fingerprint.clone()),
                 )?;
+                let record = self.record(id).await?;
+                protect_transport(&transport, record.account_uuid.as_deref().ok_or_else(|| Error::new(ErrorCode::CredentialsRejected))?, account_scope())?;
                 *current = Some(client.repin(transport));
             }
         }
@@ -892,7 +966,9 @@ impl ServerManager {
         window: &str,
         channel: Channel<ServerEvent>,
     ) -> Result<String> {
-        let snapshot = self.record(id).await?.snapshot;
+        let record = self.record(id).await?;
+        let authorized = account_matches(record.account_uuid.as_deref(), selected_account().as_deref());
+        let snapshot = account_snapshot(&record);
         let handle = self.subscriptions.lock().map_err(|_| internal())?.add(
             id.into(),
             topic,
@@ -907,6 +983,7 @@ impl ServerManager {
                     snapshot: Box::new(snapshot),
                 },
             );
+            if authorized {
             if let Some(players) = self
                 .slot(id)?
                 .players
@@ -916,11 +993,13 @@ impl ServerManager {
             {
                 self.deliver(id, topic, ServerEvent::Players { players });
             }
+            }
         }
         self.ensure_worker(app, id)?;
         Ok(handle)
     }
     fn ensure_worker(self: &Arc<Self>, app: &AppHandle, id: &str) -> Result<()> {
+        *self.account_app.lock().map_err(|_| internal())? = Some(app.clone());
         let slot = self.slot(id)?;
         let mut worker = slot.worker.lock().map_err(|_| internal())?;
         if worker.as_ref().is_none_or(|w| w.inner().is_finished()) {
@@ -937,6 +1016,16 @@ impl ServerManager {
         self.subscriptions.lock().is_ok_and(|s| s.demand(id, topic))
     }
     fn deliver(&self, id: &str, topic: ServerTopic, event: ServerEvent) {
+        let event = {
+            let Ok(store) = self.store.try_lock() else { return; };
+            let Some(record) = store.connections.iter().find(|r| r.snapshot.connection.id == id) else { return; };
+            if !account_matches(record.account_uuid.as_deref(), selected_account().as_deref()) {
+                match event {
+                    ServerEvent::Snapshot { .. } => ServerEvent::Snapshot { snapshot: Box::new(account_snapshot(record)) },
+                    _ => return,
+                }
+            } else { event }
+        };
         if let Ok(mut s) = self.subscriptions.lock() {
             s.send(id, topic, event);
         }

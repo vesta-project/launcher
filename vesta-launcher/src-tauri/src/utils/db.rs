@@ -84,7 +84,9 @@ struct SqliteCustomizer;
 impl r2d2::CustomizeConnection<SqliteConnection, r2d2::Error> for SqliteCustomizer {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), r2d2::Error> {
         use diesel::connection::SimpleConnection;
-        conn.batch_execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;")
+        // Pool connections initialize concurrently; install the lock handler
+        // before any pragma that may need to acquire a database lock.
+        conn.batch_execute("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")
             .map_err(r2d2::Error::QueryError)?;
         Ok(())
     }
@@ -150,6 +152,7 @@ pub fn init_vesta_pool(path: PathBuf) -> Result<(), anyhow::Error> {
     let manager = ConnectionManager::<SqliteConnection>::new(url);
     let pool = Pool::builder()
         .max_size(16)
+        .min_idle(Some(1))
         .connection_customizer(Box::new(SqliteCustomizer))
         .build(manager)?;
 
@@ -184,6 +187,7 @@ pub fn init_config_pool(path: PathBuf) -> Result<(), anyhow::Error> {
     let manager = ConnectionManager::<SqliteConnection>::new(url);
     let pool = Pool::builder()
         .max_size(4)
+        .min_idle(Some(1))
         .connection_customizer(Box::new(SqliteCustomizer))
         .build(manager)?;
 

@@ -97,6 +97,7 @@ use tokio_tungstenite::{
 pub type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 type SharedRead = Shared<BoxFuture<'static, Result<Value>>>;
 pub struct Transport {
+    access_guard: Mutex<Option<Arc<dyn Fn() -> bool + Send + Sync>>>,
     pub(crate) endpoint: Endpoint,
     pub(crate) http: reqwest::Client,
     read_epoch: std::sync::atomic::AtomicU64,
@@ -127,6 +128,7 @@ impl Transport {
             .map_err(|_| Error::new(ErrorCode::Internal))?;
         let scheduler = Scheduler::for_origin(endpoint.url().as_str())?;
         Ok(Arc::new(Self {
+            access_guard: Default::default(),
             read_epoch: Default::default(),
             endpoint,
             http,
@@ -137,6 +139,18 @@ impl Transport {
             reads: Default::default(),
             validators: Default::default(),
         }))
+    }
+    /// Called for every request, including retries and retained background clients.
+    pub fn set_access_guard(&self, guard: Arc<dyn Fn() -> bool + Send + Sync>) -> Result<()> {
+        *self.access_guard.lock().map_err(|_| Error::new(ErrorCode::Internal))? = Some(guard);
+        Ok(())
+    }
+    pub(crate) fn check_access(&self) -> Result<()> {
+        let guard = self.access_guard.lock().map_err(|_| Error::new(ErrorCode::Internal))?;
+        if guard.as_ref().is_some_and(|allowed| !allowed()) {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
+        Ok(())
     }
     pub fn observed(&self) -> Option<String> {
         self.observed.lock().ok().and_then(|v| v.clone())
@@ -185,6 +199,7 @@ impl Transport {
         key: Option<&str>,
         interactive: bool,
     ) -> Result<Value> {
+        self.check_access()?;
         if method != Method::GET {
             return self
                 .execute(method, path, token, body, key, interactive)
@@ -257,7 +272,9 @@ impl Transport {
                 f
             }
         };
-        future.await
+        let result = future.await;
+        self.check_access()?;
+        result
     }
     async fn execute(
         &self,
@@ -334,6 +351,7 @@ impl Transport {
         } else {
             None
         };
+        self.check_access()?;
         let mut request = self.http.request(method, self.endpoint.route(path)?);
         if mutation
             && matches!(
@@ -360,6 +378,7 @@ impl Transport {
             request = request.header("If-None-Match", tag);
         }
         let mut response = request.send().await.map_err(|e| self.network_error(e))?;
+        self.check_access()?;
         let status = response.status();
         // A rejected revision means the cached observation used to construct the
         // mutation may already be stale. Retire before returning the error, even
@@ -391,7 +410,7 @@ impl Transport {
             .filter(|v| v.len() <= 128)
             .map(str::to_owned);
         let body_limit =
-            if path.starts_with("/api/v3/manage/pack/") || path == "/api/v3/manage/content" {
+            if path.starts_with("/api/v3/manage/pack/") || path.split('?').next() == Some("/api/v3/manage/content") {
                 32 * 1024 * 1024
             } else {
                 1024 * 1024
@@ -496,9 +515,11 @@ impl Transport {
                     .insert(path.to_owned(), (tag, data.clone()));
             }
         }
+        self.check_access()?;
         Ok(data)
     }
     pub async fn socket(&self, path: &str, token: &str) -> Result<Socket> {
+        self.check_access()?;
         if self.expected.is_none() {
             return Err(Error::new(ErrorCode::TlsFailed));
         }
@@ -531,6 +552,7 @@ impl Transport {
             ),
         )
         .await;
+        self.check_access()?;
         match result {
             Ok(Ok((socket, _))) => Ok(socket),
             Err(_) => Err(Error::new(ErrorCode::Timeout)),
@@ -566,6 +588,23 @@ impl Transport {
 mod priority_tests {
     use super::*;
 
+    #[tokio::test]
+    async fn retired_account_clients_refuse_reads_mutations_files_and_sockets_before_network() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let transport = Transport::new(Endpoint::parse("localhost:1").unwrap(), Some("ab".repeat(32))).unwrap();
+        let current = Arc::new(AtomicBool::new(true));
+        let selected = current.clone();
+        transport.set_access_guard(Arc::new(move || selected.load(Ordering::Acquire))).unwrap();
+        assert!(transport.check_access().is_ok());
+        current.store(false, Ordering::Release);
+        for method in [Method::GET, Method::POST] {
+            assert_eq!(transport.request(method, "/api/v3/manage/server/status", Some("old-session"), None, None, true).await.unwrap_err().code, ErrorCode::CredentialsRejected);
+        }
+        assert_eq!(transport.socket("/api/v3/manage/stream", "old-session").await.unwrap_err().code, ErrorCode::CredentialsRejected);
+        let input = crate::file_transport::Request { method: Method::GET, path: "/api/v3/manage/files".into(), body: vec![], headers: Default::default(), key: None, bulk: false };
+        // File requests reach the same guard before constructing a credentialed request.
+        assert_eq!(transport.file_request(&input, "old-session").await.err().unwrap().code, ErrorCode::CredentialsRejected);
+    }
     #[test]
     fn archive_upload_can_wait_out_a_session_rate_window() {
         let mut error=Error::wire(429,"rate_limited",Some(60_000));

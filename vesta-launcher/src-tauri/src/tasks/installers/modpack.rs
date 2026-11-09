@@ -22,6 +22,7 @@ use tokio::fs;
 pub enum ModpackSource {
     Path(PathBuf),
     Url(String),
+    Server(Box<crate::servers::pack_sync::PackDetails>),
 }
 
 pub struct InstallModpackTask {
@@ -211,6 +212,9 @@ impl ModpackResolver for PistonModpackResolver {
 }
 
 impl InstallModpackTask {
+    pub(crate) fn from_server(instance: Instance, details: crate::servers::pack_sync::PackDetails) -> Self {
+        Self::new(instance, ModpackSource::Server(Box::new(details)), None)
+    }
     pub fn new(
         instance: Instance,
         source: ModpackSource,
@@ -225,6 +229,19 @@ impl InstallModpackTask {
 }
 
 impl Task for InstallModpackTask {
+    fn id(&self) -> Option<String> {
+        matches!(self.source, ModpackSource::Server(_)).then(|| format!("install_instance_{}_server_pack", self.instance.id))
+    }
+    fn cancellable(&self) -> bool { matches!(self.source, ModpackSource::Server(_)) }
+    fn conflict_keys(&self) -> Vec<String> {
+        if matches!(self.source, ModpackSource::Server(_)) { vec![crate::tasks::manager::instance_play_conflict_key(self.instance.id)] } else { Vec::new() }
+    }
+    fn on_abandoned(&self, app: &tauri::AppHandle) -> futures::future::BoxFuture<'static, ()> {
+        if let ModpackSource::Server(details) = &self.source {
+            return crate::servers::pack_sync::ServerPackInstaller { instance: self.instance.clone(), details: *details.clone() }.on_abandoned(app);
+        }
+        Box::pin(async {})
+    }
     fn activity_kind(&self) -> crate::tasks::activity::ActivityKind {
         crate::tasks::activity::ActivityKind::ModpackInstall
     }
@@ -257,6 +274,9 @@ impl Task for InstallModpackTask {
     }
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
+        if let ModpackSource::Server(details) = &self.source {
+            return crate::servers::pack_sync::ServerPackInstaller { instance: self.instance.clone(), details: *details.clone() }.run(ctx);
+        }
         let instance = self.instance.clone();
         let source = self.source.clone();
         let metadata = self.metadata.clone();
@@ -279,14 +299,15 @@ impl Task for InstallModpackTask {
                 });
 
             let modpack_path = match source {
+                ModpackSource::Server(_) => unreachable!("server source handled by the shared task before archive installation"),
                 ModpackSource::Path(p) => p,
                 ModpackSource::Url(u) => {
                     reporter.set_stage("downloading");
                     reporter.start_step("Downloading archive", None);
 
-                    let client = piston_lib::client::shared_client();
 
-                    let response = client.get(&u).send().await.map_err(|e| e.to_string())?;
+
+                    let response = piston_lib::artifact_http::get(&u).await.map_err(|e| e.to_string())?;
                     let total_size = response.content_length();
 
                     let temp_dir = app_handle.path().app_cache_dir().unwrap().join("modpacks");

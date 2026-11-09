@@ -40,7 +40,7 @@ fn live_manager_storage_events_retry_and_restart() {
         let discovery = manager.discover(issued["pairing_link"].as_str().unwrap()).await.unwrap();
         assert_eq!(Endpoint::parse(&discovery.endpoint).unwrap(), Endpoint::parse(&agent.endpoint).unwrap());
         assert!(!discovery.secure_storage_available);
-        assert_eq!(manager.minecraft(&app, &discovery.discovery_id, "unused-account", false).await.unwrap_err().code, ErrorCode::CredentialsUnavailable);
+        assert_eq!(manager.minecraft(&app, &discovery.discovery_id, "unused-account", false, None).await.unwrap_err().code, ErrorCode::CredentialsUnavailable);
         assert_eq!(manager.pair(&app, &discovery.discovery_id, discovery.link_code.as_deref().unwrap(), false).await.unwrap_err().code, ErrorCode::CredentialsUnavailable);
         let temporary = manager.pair(&app, &discovery.discovery_id, discovery.link_code.as_deref().unwrap(), true).await.unwrap();
         assert!(temporary.connection.memory_only);

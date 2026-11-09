@@ -522,6 +522,41 @@ mod tests {
     use tempfile::NamedTempFile;
     use zip::write::FileOptions;
 
+    #[test]
+    fn lifecycle_client_side_and_override_selection_are_exact() {
+        let metadata=serde_json::json!({
+            "formatVersion":1,"game":"minecraft","versionId":"fixture-2.0","name":"Lifecycle fixture",
+            "dependencies":{"minecraft":"1.21.1","fabric-loader":"0.18.4"},
+            "files":[
+                {"path":"mods/client-only.jar.disabled","hashes":{"sha1":"11".repeat(20),"sha512":"22".repeat(64)},"downloads":["https://cdn.modrinth.com/data/fixture/versions/client/client.jar"],"fileSize":5,"env":{"client":"required","server":"unsupported"}},
+                {"path":"mods/server-only.jar.disabled","hashes":{"sha1":"33".repeat(20),"sha512":"44".repeat(64)},"downloads":["https://cdn.modrinth.com/data/fixture/versions/server/server.jar"],"fileSize":5,"env":{"client":"unsupported","server":"required"}}
+            ]
+        }).to_string();
+        let zip=write_zip(&[
+            ("modrinth.index.json",&metadata),
+            ("overrides/config/side.bin","shared"),
+            ("client-overrides/config/side.bin","client"),
+            ("server-overrides/config/side.bin","server"),
+            ("server-overrides/config/server-only.bin","server-only"),
+        ]);
+        let parsed=get_modpack_metadata(zip.path()).unwrap();
+        assert_eq!(parsed.version,"fixture-2.0");
+        assert_eq!(parsed.modloader_type,"fabric");
+        assert_eq!(parsed.modloader_version.as_deref(),Some("0.18.4"));
+        assert_eq!(parsed.mods.len(),1);
+        match &parsed.mods[0] {
+            ModpackMod::Modrinth{path,hashes,..}=>{
+                assert_eq!(path,"mods/client-only.jar.disabled");
+                assert_eq!(hashes["sha512"],"22".repeat(64));
+            }
+            _=>panic!("wrong provider projection"),
+        }
+        let target=tempfile::tempdir().unwrap();
+        extract_overrides(zip.path(),target.path(),ModpackFormat::Modrinth,None).unwrap();
+        assert_eq!(std::fs::read(target.path().join("config/side.bin")).unwrap(),b"client");
+        assert!(!target.path().join("config/server-only.bin").exists());
+    }
+
     fn write_zip(entries: &[(&str, &str)]) -> NamedTempFile {
         let file = NamedTempFile::new().expect("create temp zip");
         {

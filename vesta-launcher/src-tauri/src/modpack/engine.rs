@@ -82,8 +82,8 @@ pub(crate) async fn plan_source(
             manager
                 .validate_update_review(instance, review)
                 .await
-                .map_err(|e| e.to_string())?;
-            let mut plan = super::server_source::plan(game_dir, review)?;
+                .map_err(|e| crate::servers::pack_sync::install_error(&e))?;
+            let mut plan = super::server_source::plan(game_dir, review, Some(ctx)).await?;
             plan.source = source.clone();
             if *link_only && !plan.actions.is_empty() {
                 return Err("pack_existing_files_mismatch".into());
@@ -207,6 +207,7 @@ pub async fn apply(
     let mut staged = 0usize;
 
     for action in &plan.actions.actions {
+        tokio::task::yield_now().await;
         if *ctx.cancel_rx.borrow() {
             staging.rollback();
             return Err("Update cancelled".to_string());
@@ -216,16 +217,18 @@ pub async fn apply(
             SyncAction::Add { path, source, .. } | SyncAction::Update { path, source, .. } => {
                 staged += 1;
                 update_stage_progress(ctx, staged, stage_count, format!("Downloading: {}", path));
-                stage_file(
+                tokio::select! {
+                    biased;
+                    _ = crate::tasks::manager::wait_for_cancellation(ctx.cancel_rx.clone()) => Err("Update cancelled".into()),
+                    result = stage_file(
                     app_handle,
                     source,
                     path,
                     &staging,
                     &plan.zip_path,
                     plan.format,
-                )
-                .await
-                .map_err(|error| format!("Failed to download {}: {}", path, error))
+                    ) => result.map_err(|error| format!("Failed to download {}: {}", path, error)),
+                }
             }
             SyncAction::Merge {
                 path,
@@ -307,9 +310,13 @@ pub async fn apply(
                 review,
             )
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| crate::servers::pack_sync::install_error(&e))?;
         super::server_source::verify_baseline(game_dir, review)?;
         super::server_source::verify_staged(&staging, review)?;
+    }
+    if *ctx.cancel_rx.borrow() {
+        staging.rollback();
+        return Err("Update cancelled".into());
     }
     let rollback = commit_staged(game_dir, staging, paths, rotations)?;
 
@@ -586,9 +593,7 @@ async fn stage_file(
 }
 
 async fn download_bytes(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8>, String> {
-    let response = piston_lib::client::shared_client()
-        .get(url)
-        .send()
+    let response = piston_lib::artifact_http::get(url.as_ref())
         .await
         .map_err(|error| format!("Download failed: {}", error))?;
     if !response.status().is_success() {
@@ -644,9 +649,7 @@ async fn fetch_target_manifest(
     if !zip_path.exists() {
         let url = reqwest::Url::parse(&version.download_url)
             .map_err(|error| format!("Invalid download URL: {}", error))?;
-        let response = piston_lib::client::shared_client()
-            .get(url)
-            .send()
+        let response = piston_lib::artifact_http::get(url.as_ref())
             .await
             .map_err(|error| format!("Download failed: {}", error))?;
         if !response.status().is_success() {

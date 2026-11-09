@@ -19,3 +19,6 @@ mod tests {
         assert_eq!(result, 4);
     }
 }
+
+pub mod public_address;
+pub mod artifact_http;

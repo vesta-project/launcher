@@ -14,11 +14,46 @@ pub struct Record {
     pub snapshot: ServerSnapshot,
     pub device_id: String,
     pub key_reference: String,
+    /// Absent on legacy records: these keys must never authorize an account.
+    #[serde(default)]
+    pub account_uuid: Option<String>,
+}
+
+impl Record {
+    /// An explicit re-pair must replace keys already rejected or unavailable.
+    /// Server identity and selected-account checks remain the caller's prerequisite.
+    pub(crate) fn can_reuse_enrollment_key(&self) -> bool {
+        !matches!(self.snapshot.state.access.as_str(), "credentials_rejected" | "credentials_unavailable")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_records_are_unbound_and_account_switch_requires_a_new_key() {
+        let mut old = persistent_record();
+        let mut json = serde_json::to_value(&old).unwrap();
+        json.as_object_mut().unwrap().remove("accountUuid");
+        let legacy: Record = serde_json::from_value(json).unwrap();
+        assert!(legacy.account_uuid.is_none());
+        let mut store = Store::default();
+        assert_eq!(store.enroll(legacy.clone(), None).unwrap_err().code, ErrorCode::CredentialsRejected);
+        store.connections.push(legacy);
+        assert_eq!(store.enroll(old.clone(), Some("one")).unwrap_err().code, ErrorCode::CredentialsRejected);
+        old.key_reference = uuid::Uuid::new_v4().to_string();
+        store.enroll(old.clone(), Some("one")).unwrap();
+        let mut other = old.clone();
+        other.account_uuid = Some("123e4567-e89b-42d3-a456-426614174000".into());
+        assert_eq!(store.enroll(other.clone(), Some("one")).unwrap_err().code, ErrorCode::CredentialsRejected);
+        assert_eq!(store.connections[0].account_uuid, old.account_uuid);
+        other.key_reference = uuid::Uuid::new_v4().to_string();
+        other.snapshot.connection.auth_revision = Some("other-account".into());
+        store.enroll(other.clone(), Some("one")).unwrap();
+        assert_eq!(store.connections[0].account_uuid, other.account_uuid);
+        assert_eq!(store.connections[0].key_reference, other.key_reference);
+        assert!(store.pending_credential_deletions.contains(&old.key_reference));
+    }
     #[tokio::test]
     async fn reauthentication_preserves_connection_and_retires_credentials_only_after_commit() {
         let root = tempfile::tempdir().unwrap();
@@ -69,6 +104,19 @@ mod tests {
         store.connections[0].snapshot.connection.auth_revision = Some("new".into());
         assert_eq!(store.reserve_management_intent(pending, false).unwrap_err().code, ErrorCode::Conflict);
     }
+    #[test]
+    fn explicit_repair_rotates_rejected_credentials_without_changing_identity() {
+        let mut old=persistent_record();
+        old.snapshot.state.observe_request_failure(&Error::new(ErrorCode::CredentialsRejected), 1);
+        assert!(!old.can_reuse_enrollment_key(), "a rejected key must not be reused by explicit re-pairing");
+        let mut replacement=old.clone(); replacement.key_reference=uuid::Uuid::new_v4().to_string(); replacement.device_id="fresh-device".into();
+        let mut store=Store::default();store.connections.push(old.clone());
+        let result=store.enroll(replacement,Some("one")).unwrap();
+        assert_eq!(result.connection.id,old.snapshot.connection.id);
+        assert_eq!(result.connection.server_id,old.snapshot.connection.server_id);
+        assert_eq!(result.connection.fingerprint,old.snapshot.connection.fingerprint);
+        assert!(store.pending_credential_deletions.contains(&old.key_reference));
+    }
     fn persistent_record() -> Record {
         let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
             "connection":{"id":"one","name":"Server","endpoint":"localhost:8443","serverId":"server","fingerprint":"ab".repeat(32),"role":null,"signInMethod":"pairing_code","memoryOnly":false,"pinned":false,"addedAtMs":0,"lastConnectedAtMs":null},
@@ -77,6 +125,7 @@ mod tests {
             "capabilities":{"source":"unknown","granted":[],"refused":[]},"restartRequired":false
         })).unwrap();
         Record {
+            account_uuid: Some("550e8400-e29b-41d4-a716-446655440000".into()),
             snapshot,
             device_id: "device".into(),
             key_reference: uuid::Uuid::new_v4().to_string(),
@@ -372,6 +421,7 @@ mod tests {
         })).unwrap();
         let mut store = Store::default();
         store.connections.push(Record {
+            account_uuid: None,
             snapshot,
             device_id: "temporary-device".into(),
             key_reference: "temporary-key".into(),
@@ -471,8 +521,14 @@ pub struct Store {
 }
 const FILE: &str = "server-connections-v1.json";
 const MAX_BYTES: u64 = 4 * 1024 * 1024;
-fn failed(_: impl std::fmt::Display) -> Error {
+fn failed(error: impl std::fmt::Display) -> Error {
+    log::error!("Unable to persist server connection state: {error}");
     Error::new(ErrorCode::Internal)
+}
+fn save_failed(error: impl std::fmt::Display) -> Error {
+    let mut failure = failed(error);
+    failure.reason = Some("local_state_not_saved".into());
+    failure
 }
 impl Store {
     pub fn intent_uses_current_auth(&self, intent: &PendingIntent) -> bool {
@@ -601,10 +657,16 @@ impl Store {
         Ok(())
     }
     pub fn enroll(&mut self, mut record: Record, existing: Option<&str>) -> Result<ServerSnapshot> {
+        if record.account_uuid.as_deref().and_then(|id| uuid::Uuid::parse_str(id).ok()).is_none() {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
         if let Some(id) = existing {
             let index = self.connections.iter().position(|r| r.snapshot.connection.id == id)
                 .ok_or_else(|| Error::new(ErrorCode::Conflict))?;
             let old = &self.connections[index];
+            if old.key_reference == record.key_reference && old.account_uuid != record.account_uuid {
+                return Err(Error::new(ErrorCode::CredentialsRejected));
+            }
             let before = &old.snapshot.connection;
             let after = &mut record.snapshot.connection;
             if before.server_id != after.server_id || before.fingerprint != after.fingerprint {
@@ -708,15 +770,15 @@ impl Store {
                 r.snapshot.connection.id == i.connection_id && r.snapshot.connection.memory_only
             })
         });
-        let bytes = serde_json::to_vec(&persisted).map_err(failed)?;
+        let bytes = serde_json::to_vec(&persisted).map_err(save_failed)?;
         if bytes.len() as u64 > MAX_BYTES {
             return Err(Error::new(ErrorCode::ServerBusy));
         }
-        std::fs::create_dir_all(root).map_err(failed)?;
-        let mut file = tempfile::NamedTempFile::new_in(root).map_err(failed)?;
-        file.write_all(&bytes).map_err(failed)?;
-        file.as_file().sync_all().map_err(failed)?;
-        file.persist(root.join(FILE)).map_err(failed)?;
+        std::fs::create_dir_all(root).map_err(save_failed)?;
+        let mut file = tempfile::NamedTempFile::new_in(root).map_err(save_failed)?;
+        file.write_all(&bytes).map_err(save_failed)?;
+        file.as_file().sync_all().map_err(save_failed)?;
+        file.persist(root.join(FILE)).map_err(save_failed)?;
         Ok(())
     }
 }

@@ -13,6 +13,8 @@ use vesta_server_client::{
 };
 
 static OWNER: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+#[path = "support/install_lifecycle.rs"]
+mod install_lifecycle;
 
 #[tokio::test]
 async fn player_session_and_public_lifecycle_need_no_management_status_access() {
@@ -1266,4 +1268,19 @@ async fn mutation_invalidates_reads_and_large_old_agent_fallback_respects_budget
         ErrorCode::RateLimited | ErrorCode::ServerBusy
     ));
     assert!(b.state.lock().unwrap().calls.len() <= 40);
+}
+
+#[tokio::test]
+#[ignore = "bounded local HTTPS400-item inventory/cache baseline"]
+async fn audit_client_inventory_400_baseline() {
+ let _owner=OWNER.lock().await; let a=Agent::start().await;
+ let items:Vec<_>=(0..400).map(|i|json!({"kind":"mod","path":format!("mods/item-{i}.jar"),"filename":format!("item-{i}.jar"),"size":"1000","enabled":true,"sha256":null,"provider":null,"declared":null,"pending":null,"pending_id":null,"pending_error":null})).collect();
+ let route="/api/v3/manage/content";
+ a.set("GET",route,json!({"items":items,"capabilities":{"list":true,"install":true,"update":true,"remove":true,"toggle":true,"cancel":true,"mods_supported":true,"plugins_supported":false},"minecraft_version":"1.21.1","software":"fabric","truncated":false}));
+ for phase in ["cold","warm","invalidated"] {
+   if phase=="invalidated" {a.client.transport.invalidate_reads();}
+   let before=a.calls(route).len(); let start=std::time::Instant::now();
+   let value=a.client.content_inventory().await.unwrap(); assert_eq!(value.items.len(),400);
+   println!("AUDIT_CLIENT phase={phase} items=400 elapsed_ms={} requests={}",start.elapsed().as_secs_f64()*1000.0,a.calls(route).len()-before);
+ }
 }

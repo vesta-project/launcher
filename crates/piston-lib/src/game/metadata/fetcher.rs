@@ -367,11 +367,21 @@ fn build_initial_game_versions(manifest: &MojangVersionManifest) -> Vec<GameVers
 
 /// Generic HTTP GET with retry logic, backoff, and 429 handling
 pub(crate) async fn send_with_retry(
-    client: &reqwest::Client,
+    _client: &reqwest::Client,
     url: &str,
     max_retries: u32,
     initial_backoff_ms: u64,
 ) -> Result<reqwest::Response> {
+    // Version/profile URLs come from provider manifests. They receive the same
+    // public-only destination policy as binary artifacts, including redirects.
+    send_with_retry_using(url, max_retries, initial_backoff_ms, |url| async move {
+        crate::artifact_http::get(&url).await
+    }).await
+}
+async fn send_with_retry_using<F, Fut>(
+    url: &str, max_retries: u32, initial_backoff_ms: u64, mut request: F,
+) -> Result<reqwest::Response>
+where F: FnMut(String) -> Fut, Fut: std::future::Future<Output=Result<reqwest::Response>> {
     let mut last_error = None;
 
     for attempt in 0..max_retries {
@@ -390,7 +400,7 @@ pub(crate) async fn send_with_retry(
             tokio::time::sleep(tokio::time::Duration::from_millis(total_backoff)).await;
         }
 
-        match client.get(url).send().await {
+        match request(url.to_owned()).await {
             Ok(response) => {
                 let status = response.status();
 
@@ -493,6 +503,12 @@ mod tests {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
     use wiremock::{Request, Respond};
+
+    // These tests exercise retry/status semantics through an injected loopback
+    // transport. Public destination enforcement has its own artifact_http tests.
+    async fn send_with_retry(client:&reqwest::Client,url:&str,count:u32,backoff:u64)->Result<reqwest::Response> {
+        send_with_retry_using(url,count,backoff,|url|async move {Ok(client.get(url).send().await?)}).await
+    }
 
     struct FailThenOkResponder {
         first_status: u16,

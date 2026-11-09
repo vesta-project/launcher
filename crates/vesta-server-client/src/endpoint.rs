@@ -12,6 +12,22 @@ pub struct Address {
     pub fingerprint: Option<String>,
     pub server_id: Option<String>,
 }
+
+#[cfg(test)]
+mod game_address_tests {
+    use super::Endpoint;
+    #[test]
+    fn game_port_uses_validated_host_for_saved_endpoints() {
+        for (endpoint, expected) in [
+            ("localhost:8443", "localhost:25565"),
+            ("https://example.com:8443/", "example.com:25565"),
+            ("[::1]:8443", "[::1]:25565"),
+            ("127.0.0.1:8443", "127.0.0.1:25565"),
+        ] {
+            assert_eq!(Endpoint::parse(endpoint).unwrap().game_address(25565), expected);
+        }
+    }
+}
 impl Endpoint {
     pub fn parse(input: &str) -> Result<Self> {
         let bad = || Error::new(ErrorCode::InvalidAddress);
@@ -53,6 +69,14 @@ impl Endpoint {
     }
     pub fn url(&self) -> &Url {
         &self.url
+    }
+    /// Use the management host with Minecraft's separately advertised port.
+    pub fn game_address(&self, port: u16) -> String {
+        let host = match self.url.host().expect("validated host") {
+            Host::Ipv6(value) => format!("[{value}]"),
+            value => value.to_string(),
+        };
+        format!("{host}:{port}")
     }
     pub fn display(&self) -> String {
         let host = match self.url.host().expect("validated host") {

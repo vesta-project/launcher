@@ -1010,6 +1010,10 @@ pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
         .map_err(anyhow::Error::msg)?;
     let mut conn = get_config_conn()?;
 
+    let previous: Option<String> = app_config.filter(id.eq(1)).select(active_account_uuid).first(&mut conn)?;
+    if previous != config.active_account_uuid {
+        crate::servers::retire_account_scope();
+    }
     diesel::update(app_config.filter(id.eq(1)))
         .set(config)
         .execute(&mut conn)?;

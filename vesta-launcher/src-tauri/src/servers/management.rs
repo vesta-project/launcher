@@ -90,7 +90,12 @@ impl ServerManager {
                 once,
             )
         })
-        .await?;
+        .await.map_err(|mut error| {
+            if error.code == ErrorCode::Internal {
+                error.reason = Some("local_intent_not_saved".into());
+            }
+            error
+        })?;
         let result = write(client).await;
         match &result {
             Ok(value) => {

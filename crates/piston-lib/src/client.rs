@@ -235,6 +235,16 @@ pub fn shared_client() -> &'static Client {
     SHARED_CLIENT.get_or_init(build_shared_client)
 }
 
+/// Credentialed provider APIs must never forward custom API-key headers through
+/// reqwest's automatic redirects (which only strip standard sensitive headers).
+pub fn provider_api_client() -> Result<Client, reqwest::Error> {
+    let mut builder = base_client_builder().redirect(reqwest::redirect::Policy::none());
+    if let Some(proxy) = configured_proxy_url() {
+        builder = builder.proxy(reqwest::Proxy::all(&proxy)?);
+    }
+    builder.build()
+}
+
 static SHARED_CLIENT: OnceLock<Client> = OnceLock::new();
 static SHARED_PROXY_CONFIG: OnceLock<ProxyConfig> = OnceLock::new();
 
@@ -288,5 +298,19 @@ mod tests {
         );
         assert_eq!(redact_proxy_url("http://[::1]:8080"), "http://[::1]:8080/");
         assert_eq!(redact_proxy_url("not a url"), "<invalid proxy url>");
+    }
+}
+
+#[cfg(test)]
+mod provider_redirect_tests {
+    #[tokio::test]
+    async fn custom_provider_key_cannot_follow_cross_origin_redirect() {
+        use wiremock::{Mock,MockServer,ResponseTemplate,matchers::{method,path}};
+        let origin=MockServer::start().await;let other=MockServer::start().await;
+        Mock::given(method("GET")).and(path("/keyed")).respond_with(ResponseTemplate::new(302).insert_header("Location",format!("{}/artifact",other.uri()))).mount(&origin).await;
+        Mock::given(method("GET")).and(path("/artifact")).respond_with(ResponseTemplate::new(200)).mount(&other).await;
+        let response=super::provider_api_client().unwrap().get(format!("{}/keyed",origin.uri())).header("x-api-key","FAKE_TEST_KEY").send().await.unwrap();
+        assert_eq!(response.status().as_u16(),302,"credentialed metadata API must refuse automatic redirects");
+        assert_eq!(other.received_requests().await.unwrap().len(),0,"redirect target must receive no request or key");
     }
 }

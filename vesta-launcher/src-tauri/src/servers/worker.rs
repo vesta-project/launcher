@@ -37,6 +37,13 @@ fn blocked(code: ErrorCode) -> bool {
 
 impl ServerManager {
     pub(super) async fn run_worker(self: Arc<Self>, app: AppHandle, id: String) {
+        let scope = account_scope();
+        let account_changed = async {
+            loop {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if account_scope() != scope { return; }
+            }
+        };
         let observe = self.clone().observe_worker(app, id.clone());
         let idle = async {
             let mut idle_since = None;
@@ -60,7 +67,7 @@ impl ServerManager {
             }
         };
         // Also cancel a hung observation when its last subscriber goes away.
-        tokio::select! { _ = observe => {}, _ = idle => {} }
+        tokio::select! { _ = observe => {}, _ = idle => {}, _ = account_changed => {} }
     }
     async fn observe_worker(self: Arc<Self>, app: AppHandle, id: String) {
         // Four streaming servers; waiting owners do no background work and can

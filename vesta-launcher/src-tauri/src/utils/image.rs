@@ -34,3 +34,48 @@ pub fn detect_image_mime(data: &[u8]) -> &'static str {
     }
     "image/png"
 }
+
+/// Prepare bounded list thumbnails while leaving small icons and SVG bytes intact.
+pub fn resource_icon_bytes(bytes: &[u8]) -> anyhow::Result<std::borrow::Cow<'_, [u8]>> {
+    let header = std::str::from_utf8(&bytes[..bytes.len().min(1024)]).unwrap_or("").trim_start();
+    if header.starts_with("<svg") || (header.starts_with("<?xml") && header.contains("<svg")) {
+        return Ok(std::borrow::Cow::Borrowed(bytes));
+    }
+    let format = image::guess_format(bytes)?;
+    let (width, height) = image::ImageReader::with_format(std::io::Cursor::new(bytes), format).into_dimensions()?;
+    if width <= 192 && height <= 192 { return Ok(std::borrow::Cow::Borrowed(bytes)); }
+    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(bytes), format);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(8192); limits.max_image_height = Some(8192); limits.max_alloc = Some(64 * 1024 * 1024);
+    reader.limits(limits);
+    let icon = reader.decode()?.thumbnail(192, 192);
+    let mut output = std::io::Cursor::new(Vec::new());
+    icon.write_to(&mut output, image::ImageFormat::Png)?;
+    Ok(std::borrow::Cow::Owned(output.into_inner()))
+}
+
+#[cfg(test)]
+mod resource_icon_tests {
+    use super::*;
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let image = image::DynamicImage::new_rgba8(width, height);
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut bytes, image::ImageFormat::Png).unwrap();
+        bytes.into_inner()
+    }
+    #[test]
+    fn large_icons_are_bounded_without_changing_aspect_ratio() {
+        let original = png(1024, 512);
+        let thumbnail = resource_icon_bytes(&original).unwrap();
+        let decoded = image::load_from_memory(&thumbnail).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (192, 96));
+    }
+    #[test]
+    fn small_icons_and_svg_are_reused_without_reencoding() {
+        let original = png(32, 32);
+        assert!(matches!(resource_icon_bytes(&original).unwrap(), std::borrow::Cow::Borrowed(_)));
+        let svg = b"<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'></svg>";
+        assert_eq!(resource_icon_bytes(svg).unwrap().as_ref(), svg);
+        assert!(resource_icon_bytes(b"not an image").is_err());
+    }
+}

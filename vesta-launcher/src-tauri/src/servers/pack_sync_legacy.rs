@@ -56,7 +56,7 @@ impl Staged {
     }
 }
 
-pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<Normalized> {
+pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u8>, progress: Option<&crate::tasks::manager::TaskContext>) -> Result<Normalized> {
     let resources = app.state::<ResourceManager>();
     let mut staged = Staged::new()?;
     let source = staged.scratch();
@@ -82,7 +82,9 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
             return Err(conflict("pack_invalid_source"));
         }
         let v = resources.get_version(platform, project, version).await.map_err(io)?;
-        download_provider_to(&v.download_url, PROVIDER_ARCHIVE_LIMIT, &source)
+        if let Some(ctx) = progress { ctx.update_description("Downloading modpack archive...".into()); }
+        let archive_progress = progress.map(|ctx| ctx.with_overall_range(0, 20));
+        download_provider_with_progress(&v.download_url, PROVIDER_ARCHIVE_LIMIT, &source, archive_progress.as_ref())
             .await?
             .verify(&v.hash)?;
     } else {
@@ -167,79 +169,111 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
         }
     }
     let resolver = crate::tasks::installers::modpack::PistonModpackResolver::new(app.clone());
-    for entry in metadata.mods {
-        match entry {
-            ModpackMod::Modrinth {
-                path, hashes, size, ..
-            } => {
-                safe_path(&path)?;
-                if unsupported.contains(&path) {
-                    continue;
+    if let Some(ctx) = progress { ctx.set_stage("downloading_resources"); }
+    let total = metadata.mods.len();
+    let staged = std::sync::Mutex::new(staged);
+    let completed = std::sync::atomic::AtomicUsize::new(0);
+    let loader = &metadata.modloader_type;
+    piston_lib::game::installer::core::batch::run_batch(
+        metadata.mods,
+        piston_lib::game::installer::core::batch::MODPACK_DOWNLOAD_CONCURRENCY,
+        |entry| {
+            let staged = &staged;
+            let resources = &resources;
+            let resolver = &resolver;
+            let unsupported = &unsupported;
+            let completed = &completed;
+            async move {
+                match entry {
+                    ModpackMod::Modrinth {
+                        path, hashes, size, ..
+                    } => {
+                        safe_path(&path)?;
+                        if unsupported.contains(&path) {
+                            return Ok(());
+                        }
+                        { let state = staged.lock().unwrap(); admit(&state.files, state.total, &path, size)?; }
+                        let hash = hashes
+                            .get("sha1")
+                            .ok_or_else(|| conflict("pack_download_unavailable"))?;
+                        let (project, version) = resources
+                            .get_by_hash(crate::models::SourcePlatform::Modrinth, hash)
+                            .await
+                            .map_err(io)?;
+                        compatible(&version, loader, path.starts_with("mods/"))?;
+                        if project.environment.is_some_and(|e| {
+                            e.client_requirement
+                                == Some(crate::models::resource::SideRequirement::Unsupported)
+                        }) {
+                            return Err(conflict("pack_incompatible_runtime"));
+                        }
+                        let scratch = staged.lock().unwrap().scratch();
+                        if let Some(ctx) = progress { ctx.set_file_name(&path); }
+                        let got = download_provider_with_progress(&version.download_url, FILE_LIMIT, &scratch, None).await?;
+                        if got.size != size {
+                            return Err(conflict("pack_integrity_failure"));
+                        }
+                        let hash = hashes
+                            .get("sha512")
+                            .or_else(|| hashes.get("sha256"))
+                            .or_else(|| hashes.get("sha1"))
+                            .ok_or_else(|| conflict("pack_integrity_failure"))?;
+                        got.verify(hash)?;
+                        staged.lock().unwrap().insert(path, &scratch, got.size, got.sha256, false)?;
+                    }
+                    ModpackMod::CurseForge {
+                        project_id,
+                        file_id,
+                        hash,
+                        ..
+                    } => {
+                        let resolved = resolver
+                            .resolve_curseforge(project_id, file_id, hash)
+                            .await
+                            .map_err(io)?;
+                        let project = project_id.ok_or_else(|| conflict("pack_download_unavailable"))?;
+                        let version = resources
+                            .get_version(
+                                crate::models::SourcePlatform::CurseForge,
+                                &project.to_string(),
+                                &file_id.to_string(),
+                            )
+                            .await
+                            .map_err(io)?;
+                        compatible(&version, loader, resolved.subfolder == "mods")?;
+                        let path = format!("{}/{}", resolved.subfolder, resolved.filename);
+                        safe_path(&path)?;
+                        { let state = staged.lock().unwrap(); admit(&state.files, state.total, &path, 0)?; }
+                        let sha1 = resolved
+                            .sha1
+                            .as_deref()
+                            .filter(|h| !h.is_empty())
+                            .ok_or_else(|| conflict("pack_download_unavailable"))?;
+                        let scratch = staged.lock().unwrap().scratch();
+                        if let Some(ctx) = progress { ctx.set_file_name(&path); }
+                        let got = download_provider_with_progress(&resolved.url, FILE_LIMIT, &scratch, None).await?;
+                        got.verify(sha1)?;
+                        staged.lock().unwrap().insert(path, &scratch, got.size, got.sha256, false)?;
+                    }
                 }
-                admit(&staged.files, staged.total, &path, size)?;
-                let hash = hashes
-                    .get("sha1")
-                    .ok_or_else(|| conflict("pack_download_unavailable"))?;
-                let (project, version) = resources
-                    .get_by_hash(crate::models::SourcePlatform::Modrinth, hash)
-                    .await
-                    .map_err(io)?;
-                compatible(&version, &metadata.modloader_type, path.starts_with("mods/"))?;
-                if project.environment.is_some_and(|e| {
-                    e.client_requirement
-                        == Some(crate::models::resource::SideRequirement::Unsupported)
-                }) {
-                    return Err(conflict("pack_incompatible_runtime"));
+
+                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                if let Some(ctx) = progress {
+                    ctx.update_items(done as u64, Some(total as u64));
+                    ctx.update_overall_progress(20 + (done * 70 / total.max(1)) as i32);
+                    ctx.update_description(format!("Downloading modpack files ({}/{})", done, total));
                 }
-                let scratch = staged.scratch();
-                let got = download_provider_to(&version.download_url, FILE_LIMIT, &scratch).await?;
-                if got.size != size {
-                    return Err(conflict("pack_integrity_failure"));
-                }
-                let hash = hashes
-                    .get("sha512")
-                    .or_else(|| hashes.get("sha256"))
-                    .or_else(|| hashes.get("sha1"))
-                    .ok_or_else(|| conflict("pack_integrity_failure"))?;
-                got.verify(hash)?;
-                staged.insert(path, &scratch, got.size, got.sha256, false)?;
+                Ok::<(), Error>(())
             }
-            ModpackMod::CurseForge {
-                project_id,
-                file_id,
-                hash,
-                ..
-            } => {
-                let resolved = resolver
-                    .resolve_curseforge(project_id, file_id, hash)
-                    .await
-                    .map_err(io)?;
-                let project = project_id.ok_or_else(|| conflict("pack_download_unavailable"))?;
-                let version = resources
-                    .get_version(
-                        crate::models::SourcePlatform::CurseForge,
-                        &project.to_string(),
-                        &file_id.to_string(),
-                    )
-                    .await
-                    .map_err(io)?;
-                compatible(&version, &metadata.modloader_type, resolved.subfolder == "mods")?;
-                let path = format!("{}/{}", resolved.subfolder, resolved.filename);
-                safe_path(&path)?;
-                admit(&staged.files, staged.total, &path, 0)?;
-                let sha1 = resolved
-                    .sha1
-                    .as_deref()
-                    .filter(|h| !h.is_empty())
-                    .ok_or_else(|| conflict("pack_download_unavailable"))?;
-                let scratch = staged.scratch();
-                let got = download_provider_to(&resolved.url, FILE_LIMIT, &scratch).await?;
-                got.verify(sha1)?;
-                staged.insert(path, &scratch, got.size, got.sha256, false)?;
-            }
-        }
-    }
+        },
+    ).await?;
+    let mut staged = staged.into_inner().unwrap();
     // Match shared parser precedence: client overrides replace shared overrides.
+    if let Some(ctx) = progress {
+        ctx.set_stage("extracting");
+        ctx.update_overall_progress(90);
+        ctx.update_description("Extracting modpack files...".into());
+    }
     for prefix in [format!("{override_folder}/"), "client-overrides/".into()] {
         let names: Vec<_> = (0..zip.len())
             .filter_map(|n| {
@@ -250,7 +284,15 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
             })
             .filter(|n| n.starts_with(&prefix))
             .collect();
-        for name in names {
+        let count = names.len();
+        for (number, name) in names.into_iter().enumerate() {
+            tokio::task::yield_now().await;
+            if number % 25 == 0 {
+                if let Some(ctx) = progress {
+                    ctx.update_items(number as u64, Some(count as u64));
+                    ctx.update_overall_progress(90 + (number * 10 / count.max(1)) as i32);
+                }
+            }
             let path = name.strip_prefix(&prefix).unwrap().to_owned();
             safe_path(&path)?;
             let scratch = staged.scratch();
