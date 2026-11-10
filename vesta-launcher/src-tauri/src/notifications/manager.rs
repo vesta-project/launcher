@@ -86,7 +86,7 @@ mod tests {
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn build_test_app() -> tauri::App {
         tauri::Builder::default()
-            .build(crate::tauri_context())
+            .build(tauri::generate_context!())
             .unwrap()
     }
 
@@ -406,7 +406,11 @@ impl NotificationManager {
                             && notif.dismissible
                         {
                             if let Err(e) = self.delete(key.clone()) {
-                                log::error!("Failed to auto-dismiss notification after action invocation (key: {}): {}", key, e);
+                                log::error!(
+                                    "Failed to auto-dismiss notification after action invocation (key: {}): {}",
+                                    key,
+                                    e
+                                );
                             }
                         }
                     }
