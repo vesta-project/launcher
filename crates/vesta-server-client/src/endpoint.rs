@@ -24,7 +24,10 @@ mod game_address_tests {
             ("[::1]:8443", "[::1]:25565"),
             ("127.0.0.1:8443", "127.0.0.1:25565"),
         ] {
-            assert_eq!(Endpoint::parse(endpoint).unwrap().game_address(25565), expected);
+            assert_eq!(
+                Endpoint::parse(endpoint).unwrap().game_address(25565),
+                expected
+            );
         }
     }
 }

@@ -11,7 +11,8 @@
 }
 
 /* Fix windows icon styling */
-.unified-page-viewer-root[data-os="windows"] header
+.unified-page-viewer-root[data-os="windows"]
+	header
 	div
 	.page-viewer-window-controls-wrapper
 	div

@@ -117,8 +117,18 @@ impl Client {
         self.content_inventory_view(false).await
     }
     pub async fn content_inventory_view(&self, summary: bool) -> Result<ContentInventory> {
-        let inventory: ContentInventory =
-            from_wire(self.get(if summary { "content?view=summary" } else { "content" }, true, "files.list").await?)?;
+        let inventory: ContentInventory = from_wire(
+            self.get(
+                if summary {
+                    "content?view=summary"
+                } else {
+                    "content"
+                },
+                true,
+                "files.list",
+            )
+            .await?,
+        )?;
         if inventory.items.len() > 131_072 {
             return Err(unsupported());
         }

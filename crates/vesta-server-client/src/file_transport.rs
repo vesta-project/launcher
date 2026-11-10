@@ -34,7 +34,8 @@ impl Response {
     }
     pub async fn chunk(&mut self) -> Result<Option<bytes::Bytes>> {
         self.transport.check_access()?;
-        let chunk = self.raw
+        let chunk = self
+            .raw
             .chunk()
             .await
             .map_err(|e| self.transport.network_error(e))?;
@@ -65,7 +66,11 @@ impl Response {
     }
 }
 impl Transport {
-    pub(crate) async fn file_request(self: &Arc<Self>, input: &Request, token: &str) -> Result<Response> {
+    pub(crate) async fn file_request(
+        self: &Arc<Self>,
+        input: &Request,
+        token: &str,
+    ) -> Result<Response> {
         let retryable = input.method == Method::GET && !input.bulk;
         let result = self.file_request_once(input, token).await;
         if retryable {
@@ -138,8 +143,9 @@ impl Transport {
                     .and_then(Value::as_str)
                     .unwrap_or(""),
                 retry,
-            ).with_wire_reason(value.pointer("/error/reason").unwrap_or(&Value::Null))
-             .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null)));
+            )
+            .with_wire_reason(value.pointer("/error/reason").unwrap_or(&Value::Null))
+            .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null)));
         }
         Ok(response)
     }
@@ -148,10 +154,7 @@ impl Client {
     pub(crate) async fn file_request(&self, input: Request) -> Result<Response> {
         let mut token = self.token(None).await?;
         let result = self.transport.file_request(&input, &token).await;
-        if result
-            .as_ref()
-            .is_err_and(|e| e.session_needs_renewal())
-        {
+        if result.as_ref().is_err_and(|e| e.session_needs_renewal()) {
             token = self.token(Some(&token)).await?;
             return self.transport.file_request(&input, &token).await;
         }

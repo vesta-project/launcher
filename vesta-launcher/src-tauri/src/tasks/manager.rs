@@ -252,8 +252,12 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub async fn wait_for_cancellation(mut cancel: watch::Receiver<bool>) {
     loop {
-        if *cancel.borrow() { return; }
-        if cancel.changed().await.is_err() { return; }
+        if *cancel.borrow() {
+            return;
+        }
+        if cancel.changed().await.is_err() {
+            return;
+        }
     }
 }
 
@@ -458,9 +462,14 @@ impl TaskConflictCoordinator {
     {
         let keys = normalize_conflict_keys(keys);
         let mut active = self.state.active.lock().unwrap();
-        if keys.iter().any(|key| active.contains(key)) { return None; }
+        if keys.iter().any(|key| active.contains(key)) {
+            return None;
+        }
         active.extend(keys.iter().cloned());
-        Some(TaskConflictGuard { state: self.state.clone(), keys })
+        Some(TaskConflictGuard {
+            state: self.state.clone(),
+            keys,
+        })
     }
     pub async fn acquire<I, S>(&self, keys: I) -> TaskConflictGuard
     where
@@ -1050,7 +1059,10 @@ impl TaskManager {
     pub fn is_task_active(&self, id: &str) -> bool {
         self.active_tasks.lock().unwrap().contains_key(id)
     }
-    pub fn try_acquire_conflicts(&self, keys: impl IntoIterator<Item = String>) -> Option<TaskConflictGuard> {
+    pub fn try_acquire_conflicts(
+        &self,
+        keys: impl IntoIterator<Item = String>,
+    ) -> Option<TaskConflictGuard> {
         self.conflicts.try_acquire(keys)
     }
 
@@ -1506,7 +1518,9 @@ mod conflict_tests {
     fn busy_retry_fails_immediately_without_reserving_other_keys() {
         let coordinator = TaskConflictCoordinator::default();
         let first = coordinator.try_acquire(["instance:1"]).unwrap();
-        assert!(coordinator.try_acquire(["instance:1", "instance:2"]).is_none());
+        assert!(coordinator
+            .try_acquire(["instance:1", "instance:2"])
+            .is_none());
         let unrelated = coordinator.try_acquire(["instance:2"]).unwrap();
         drop(first);
         assert!(coordinator.try_acquire(["instance:1"]).is_some());
@@ -1518,10 +1532,21 @@ mod conflict_tests {
         let (send, receive) = tokio::sync::watch::channel(false);
         let waiting = super::wait_for_cancellation(receive.clone());
         tokio::pin!(waiting);
-        assert!(tokio::time::timeout(Duration::from_millis(10), &mut waiting).await.is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut waiting)
+                .await
+                .is_err()
+        );
         send.send(true).unwrap();
-        tokio::time::timeout(Duration::from_secs(1), waiting).await.unwrap();
-        tokio::time::timeout(Duration::from_secs(1), super::wait_for_cancellation(receive)).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(1), waiting)
+            .await
+            .unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            super::wait_for_cancellation(receive),
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

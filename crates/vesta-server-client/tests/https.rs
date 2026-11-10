@@ -383,7 +383,9 @@ async fn route(
         "/api/v3/manage/pack/install/plan" => {
             let mode = state.pack_plan_error_mode.load(Ordering::SeqCst);
             if mode == 4 {
-                let mut response = plain(json!({"api_version":"3","error":{"code":"invalid_request","reason":"file_path_protected","issue":{"code":"file_path_protected","rule":"protected_server_control_file","item":"wrapper-config.toml"}}}));
+                let mut response = plain(
+                    json!({"api_version":"3","error":{"code":"invalid_request","reason":"file_path_protected","issue":{"code":"file_path_protected","rule":"protected_server_control_file","item":"wrapper-config.toml"}}}),
+                );
                 *response.status_mut() = StatusCode::BAD_REQUEST;
                 return Ok(response);
             }
@@ -416,7 +418,8 @@ async fn pack_review_failure_preserves_file_identity_over_pinned_https() {
     let _owner = TEST_OWNER.lock().await;
     let agent = Agent::start().await;
     let client = agent.paired().await;
-    let input = PackInstallRequest { analyze: false,
+    let input = PackInstallRequest {
+        analyze: false,
         source: PackInstallSource::Provider {
             provider: "curseforge".into(),
             project_id: "1714524".into(),

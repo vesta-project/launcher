@@ -26,15 +26,29 @@ struct Staged {
 }
 impl Staged {
     fn new() -> Result<Self> {
-        Ok(Self { stage: tempfile::tempdir().map_err(io)?, files: BTreeMap::new(), total: 0, scratch: 0 })
+        Ok(Self {
+            stage: tempfile::tempdir().map_err(io)?,
+            files: BTreeMap::new(),
+            total: 0,
+            scratch: 0,
+        })
     }
     /// A private scratch name outside every pack path (pack paths never start with '.').
     fn scratch(&mut self) -> PathBuf {
         self.scratch += 1;
-        self.stage.path().join(format!(".download-{}", self.scratch))
+        self.stage
+            .path()
+            .join(format!(".download-{}", self.scratch))
     }
     /// Admit `path` (replacing it when `replace`), then move `from` into place.
-    fn insert(&mut self, path: String, from: &Path, size: u64, sha256: String, replace: bool) -> Result<()> {
+    fn insert(
+        &mut self,
+        path: String,
+        from: &Path,
+        size: u64,
+        sha256: String,
+        replace: bool,
+    ) -> Result<()> {
         if replace {
             if let Some((previous, _)) = self.files.remove(&path) {
                 self.total -= previous;
@@ -56,7 +70,12 @@ impl Staged {
     }
 }
 
-pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u8>, progress: Option<&crate::tasks::manager::TaskContext>) -> Result<Normalized> {
+pub(super) async fn normalize(
+    app: &AppHandle,
+    release: &Release,
+    archive: Vec<u8>,
+    progress: Option<&crate::tasks::manager::TaskContext>,
+) -> Result<Normalized> {
     let resources = app.state::<ResourceManager>();
     let mut staged = Staged::new()?;
     let source = staged.scratch();
@@ -81,12 +100,22 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
         if p.resource_type != crate::models::resource::ResourceType::Modpack {
             return Err(conflict("pack_invalid_source"));
         }
-        let v = resources.get_version(platform, project, version).await.map_err(io)?;
-        if let Some(ctx) = progress { ctx.update_description("Downloading modpack archive...".into()); }
+        let v = resources
+            .get_version(platform, project, version)
+            .await
+            .map_err(io)?;
+        if let Some(ctx) = progress {
+            ctx.update_description("Downloading modpack archive...".into());
+        }
         let archive_progress = progress.map(|ctx| ctx.with_overall_range(0, 20));
-        download_provider_with_progress(&v.download_url, PROVIDER_ARCHIVE_LIMIT, &source, archive_progress.as_ref())
-            .await?
-            .verify(&v.hash)?;
+        download_provider_with_progress(
+            &v.download_url,
+            PROVIDER_ARCHIVE_LIMIT,
+            &source,
+            archive_progress.as_ref(),
+        )
+        .await?
+        .verify(&v.hash)?;
     } else {
         std::fs::write(&source, &archive).map_err(io)?;
     }
@@ -144,10 +173,15 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
     for prefix in [format!("{override_folder}/"), "client-overrides/".into()] {
         for n in 0..zip.len() {
             let file = zip.by_index(n).map_err(io)?;
-            if file.is_dir() { continue; }
+            if file.is_dir() {
+                continue;
+            }
             if let Some(path) = file.name().strip_prefix(&prefix) {
                 safe_path(path).map_err(|error| {
-                    log::warn!("[server-pack] unsupported override path: {:?}", path.chars().take(512).collect::<String>());
+                    log::warn!(
+                        "[server-pack] unsupported override path: {:?}",
+                        path.chars().take(512).collect::<String>()
+                    );
                     error
                 })?;
             }
@@ -169,7 +203,9 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
         }
     }
     let resolver = crate::tasks::installers::modpack::PistonModpackResolver::new(app.clone());
-    if let Some(ctx) = progress { ctx.set_stage("downloading_resources"); }
+    if let Some(ctx) = progress {
+        ctx.set_stage("downloading_resources");
+    }
     let total = metadata.mods.len();
     let staged = std::sync::Mutex::new(staged);
     let completed = std::sync::atomic::AtomicUsize::new(0);
@@ -192,7 +228,10 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                         if unsupported.contains(&path) {
                             return Ok(());
                         }
-                        { let state = staged.lock().unwrap(); admit(&state.files, state.total, &path, size)?; }
+                        {
+                            let state = staged.lock().unwrap();
+                            admit(&state.files, state.total, &path, size)?;
+                        }
                         let hash = hashes
                             .get("sha1")
                             .ok_or_else(|| conflict("pack_download_unavailable"))?;
@@ -208,8 +247,16 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                             return Err(conflict("pack_incompatible_runtime"));
                         }
                         let scratch = staged.lock().unwrap().scratch();
-                        if let Some(ctx) = progress { ctx.set_file_name(&path); }
-                        let got = download_provider_with_progress(&version.download_url, FILE_LIMIT, &scratch, None).await?;
+                        if let Some(ctx) = progress {
+                            ctx.set_file_name(&path);
+                        }
+                        let got = download_provider_with_progress(
+                            &version.download_url,
+                            FILE_LIMIT,
+                            &scratch,
+                            None,
+                        )
+                        .await?;
                         if got.size != size {
                             return Err(conflict("pack_integrity_failure"));
                         }
@@ -219,7 +266,10 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                             .or_else(|| hashes.get("sha1"))
                             .ok_or_else(|| conflict("pack_integrity_failure"))?;
                         got.verify(hash)?;
-                        staged.lock().unwrap().insert(path, &scratch, got.size, got.sha256, false)?;
+                        staged
+                            .lock()
+                            .unwrap()
+                            .insert(path, &scratch, got.size, got.sha256, false)?;
                     }
                     ModpackMod::CurseForge {
                         project_id,
@@ -231,7 +281,8 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                             .resolve_curseforge(project_id, file_id, hash)
                             .await
                             .map_err(io)?;
-                        let project = project_id.ok_or_else(|| conflict("pack_download_unavailable"))?;
+                        let project =
+                            project_id.ok_or_else(|| conflict("pack_download_unavailable"))?;
                         let version = resources
                             .get_version(
                                 crate::models::SourcePlatform::CurseForge,
@@ -243,17 +294,31 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                         compatible(&version, loader, resolved.subfolder == "mods")?;
                         let path = format!("{}/{}", resolved.subfolder, resolved.filename);
                         safe_path(&path)?;
-                        { let state = staged.lock().unwrap(); admit(&state.files, state.total, &path, 0)?; }
+                        {
+                            let state = staged.lock().unwrap();
+                            admit(&state.files, state.total, &path, 0)?;
+                        }
                         let sha1 = resolved
                             .sha1
                             .as_deref()
                             .filter(|h| !h.is_empty())
                             .ok_or_else(|| conflict("pack_download_unavailable"))?;
                         let scratch = staged.lock().unwrap().scratch();
-                        if let Some(ctx) = progress { ctx.set_file_name(&path); }
-                        let got = download_provider_with_progress(&resolved.url, FILE_LIMIT, &scratch, None).await?;
+                        if let Some(ctx) = progress {
+                            ctx.set_file_name(&path);
+                        }
+                        let got = download_provider_with_progress(
+                            &resolved.url,
+                            FILE_LIMIT,
+                            &scratch,
+                            None,
+                        )
+                        .await?;
                         got.verify(sha1)?;
-                        staged.lock().unwrap().insert(path, &scratch, got.size, got.sha256, false)?;
+                        staged
+                            .lock()
+                            .unwrap()
+                            .insert(path, &scratch, got.size, got.sha256, false)?;
                     }
                 }
 
@@ -261,12 +326,16 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
                 if let Some(ctx) = progress {
                     ctx.update_items(done as u64, Some(total as u64));
                     ctx.update_overall_progress(20 + (done * 70 / total.max(1)) as i32);
-                    ctx.update_description(format!("Downloading modpack files ({}/{})", done, total));
+                    ctx.update_description(format!(
+                        "Downloading modpack files ({}/{})",
+                        done, total
+                    ));
                 }
                 Ok::<(), Error>(())
             }
         },
-    ).await?;
+    )
+    .await?;
     let mut staged = staged.into_inner().unwrap();
     // Match shared parser precedence: client overrides replace shared overrides.
     if let Some(ctx) = progress {
@@ -302,7 +371,11 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
     }
     drop(zip);
     let _ = std::fs::remove_file(&source);
-    let files = staged.files.iter().map(|(path, (_, sha))| (path.clone(), sha.clone())).collect();
+    let files = staged
+        .files
+        .iter()
+        .map(|(path, (_, sha))| (path.clone(), sha.clone()))
+        .collect();
     let index = Index {
         format_version: 1,
         name: metadata.name.into(),
@@ -312,7 +385,11 @@ pub(super) async fn normalize(app: &AppHandle, release: &Release, archive: Vec<u
         modloader_version: metadata.modloader_version,
         files: vec![],
     };
-    Ok(Normalized { index, stage: staged.stage, files })
+    Ok(Normalized {
+        index,
+        stage: staged.stage,
+        files,
+    })
 }
 /// Stream one archive member to disk, enforcing the per-file bound and hashing it.
 fn copy_member<R: Read + std::io::Seek>(
@@ -321,7 +398,9 @@ fn copy_member<R: Read + std::io::Seek>(
     target: &Path,
 ) -> Result<(u64, String)> {
     use sha2::Digest;
-    let mut member = zip.by_name(name).map_err(|_| conflict("pack_missing_file"))?;
+    let mut member = zip
+        .by_name(name)
+        .map_err(|_| conflict("pack_missing_file"))?;
     if member.size() > FILE_LIMIT || member.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
         return Err(conflict("pack_unsafe_archive"));
     }
@@ -348,7 +427,11 @@ fn copy_member<R: Read + std::io::Seek>(
 /// files tagged only for a sibling release (e.g. `1.21` in a `1.21.1` pack) are what the
 /// author shipped, and every ordinary provider install accepts them. Only reject mods
 /// whose provider metadata positively names other loaders.
-fn compatible(version: &crate::models::resource::ResourceVersion, loader: &str, is_mod: bool) -> Result<()> {
+fn compatible(
+    version: &crate::models::resource::ResourceVersion,
+    loader: &str,
+    is_mod: bool,
+) -> Result<()> {
     if is_mod
         && !version.loaders.is_empty()
         && !crate::resources::manager::is_loader_compatible(&version.loaders, loader)
@@ -367,7 +450,9 @@ fn admit(files: &BTreeMap<String, (u64, String)>, total: u64, path: &str, size: 
     }) {
         return Err(conflict("pack_file_collision"));
     }
-    let total = total.checked_add(size).ok_or_else(|| conflict("pack_too_large"))?;
+    let total = total
+        .checked_add(size)
+        .ok_or_else(|| conflict("pack_too_large"))?;
     if total > TOTAL_LIMIT || size > FILE_LIMIT || files.len() >= 4096 {
         return Err(conflict("pack_too_large"));
     }
@@ -389,16 +474,26 @@ mod tests {
     fn normalization_accepts_large_packs_and_still_bounds_entry_count() {
         let mut staged = Staged::new().unwrap();
         for n in 0..4096 {
-            staged.insert_bytes(format!("mods/{n}.jar"), b"", false).unwrap();
+            staged
+                .insert_bytes(format!("mods/{n}.jar"), b"", false)
+                .unwrap();
         }
         assert_eq!(staged.files.len(), 4096);
-        assert!(staged.insert_bytes("mods/overflow.jar".into(), b"", false).is_err());
+        assert!(staged
+            .insert_bytes("mods/overflow.jar".into(), b"", false)
+            .is_err());
     }
     #[test]
     fn provider_scale_files_are_admitted() {
         // COBBLEVERSE: a 130 MiB Cobblemon jar within 412 MiB of pinned mods.
         let files = BTreeMap::new();
-        admit(&files, 412 * 1024 * 1024, "mods/Cobblemon-fabric-1.7.3+1.21.1.jar", 130 * 1024 * 1024).unwrap();
+        admit(
+            &files,
+            412 * 1024 * 1024,
+            "mods/Cobblemon-fabric-1.7.3+1.21.1.jar",
+            130 * 1024 * 1024,
+        )
+        .unwrap();
         let error = admit(&files, 0, "mods/huge.jar", FILE_LIMIT + 1).unwrap_err();
         assert_eq!(error.reason.as_deref(), Some("pack_too_large"));
         assert!(PROVIDER_ARCHIVE_LIMIT >= 215 * 1024 * 1024);
@@ -438,7 +533,12 @@ mod tests {
         let mut bytes = Cursor::new(Vec::new());
         {
             let mut writer = zip::ZipWriter::new(&mut bytes);
-            writer.start_file("overrides/config/a.toml", zip::write::SimpleFileOptions::default()).unwrap();
+            writer
+                .start_file(
+                    "overrides/config/a.toml",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
             writer.write_all(b"value = 1").unwrap();
             writer.finish().unwrap();
         }
@@ -447,26 +547,46 @@ mod tests {
         let scratch = staged.scratch();
         let (size, sha) = copy_member(&mut zip, "overrides/config/a.toml", &scratch).unwrap();
         assert_eq!((size, sha.as_str()), (9, digest(b"value = 1").as_str()));
-        staged.insert("config/a.toml".into(), &scratch, size, sha, true).unwrap();
-        assert_eq!(std::fs::read(staged.stage.path().join("config/a.toml")).unwrap(), b"value = 1");
+        staged
+            .insert("config/a.toml".into(), &scratch, size, sha, true)
+            .unwrap();
+        assert_eq!(
+            std::fs::read(staged.stage.path().join("config/a.toml")).unwrap(),
+            b"value = 1"
+        );
         // Client overrides replace shared overrides in place.
-        staged.insert_bytes("config/a.toml".into(), b"value = 2", true).unwrap();
+        staged
+            .insert_bytes("config/a.toml".into(), b"value = 2", true)
+            .unwrap();
         assert_eq!(staged.total, 9);
         assert_eq!(staged.files.len(), 1);
     }
     #[test]
     fn cobbleverse_licences_and_saved_servers_are_accepted_without_opening_unsafe_paths() {
-        for path in ["COBBLEVERSE - Third-Party Licenses.pdf", "licenses/Accessories - License.txt", "servers.dat", "shaderpacks/pack/shaders/main.vsh"] {
+        for path in [
+            "COBBLEVERSE - Third-Party Licenses.pdf",
+            "licenses/Accessories - License.txt",
+            "servers.dat",
+            "shaderpacks/pack/shaders/main.vsh",
+        ] {
             assert!(safe_path(path).is_ok(), "{path}");
         }
-        for path in ["../escape.pdf", "licenses/../../escape.txt", "CON.pdf", "danger.exe", "config/../escape"] {
+        for path in [
+            "../escape.pdf",
+            "licenses/../../escape.txt",
+            "CON.pdf",
+            "danger.exe",
+            "config/../escape",
+        ] {
             assert!(safe_path(path).is_err(), "{path}");
         }
     }
     #[test]
     fn normalized_file_set_rejects_aliases_traversal_and_tree_collisions() {
         let mut staged = Staged::new().unwrap();
-        staged.insert_bytes("mods/one.jar".into(), b"jar", false).unwrap();
+        staged
+            .insert_bytes("mods/one.jar".into(), b"jar", false)
+            .unwrap();
         for path in ["mods/ONE.jar", "mods/one.jar/child", "mods/../escape"] {
             assert!(staged.insert_bytes(path.into(), b"", false).is_err());
         }
@@ -474,41 +594,78 @@ mod tests {
     }
 }
 
-pub(super) async fn details(app: &AppHandle, release: &Release, archive: Vec<u8>) -> Result<(piston_lib::game::modpack::types::ModpackMetadata, Vec<String>)> {
+pub(super) async fn details(
+    app: &AppHandle,
+    release: &Release,
+    archive: Vec<u8>,
+) -> Result<(
+    piston_lib::game::modpack::types::ModpackMetadata,
+    Vec<String>,
+)> {
     let stage = tempfile::tempdir().map_err(io)?;
     let source = stage.path().join("pack.zip");
     let mut identity = None;
     if release.format == "catalogue" {
-        let value: Value = serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
-        if value["schemaVersion"] != 1 || value["content"]["mode"] != "platform" { return Err(conflict("pack_invalid_index")); }
+        let value: Value =
+            serde_json::from_slice(&archive).map_err(|_| conflict("pack_invalid_index"))?;
+        if value["schemaVersion"] != 1 || value["content"]["mode"] != "platform" {
+            return Err(conflict("pack_invalid_index"));
+        }
         let content = &value["content"];
-        let platform = match content["platform"].as_str() { Some("modrinth") => crate::models::SourcePlatform::Modrinth, Some("curseforge") => crate::models::SourcePlatform::CurseForge, _ => return Err(conflict("pack_invalid_source")) };
-        let project = content["projectId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
-        let version = content["versionId"].as_str().ok_or_else(|| conflict("pack_invalid_source"))?;
+        let platform = match content["platform"].as_str() {
+            Some("modrinth") => crate::models::SourcePlatform::Modrinth,
+            Some("curseforge") => crate::models::SourcePlatform::CurseForge,
+            _ => return Err(conflict("pack_invalid_source")),
+        };
+        let project = content["projectId"]
+            .as_str()
+            .ok_or_else(|| conflict("pack_invalid_source"))?;
+        let version = content["versionId"]
+            .as_str()
+            .ok_or_else(|| conflict("pack_invalid_source"))?;
         let resources = app.state::<ResourceManager>();
         identity = resources.get_project(platform, project).await.ok();
-        let version = resources.get_version(platform, project, version).await.map_err(io)?;
-        download_provider_to(&version.download_url, PROVIDER_ARCHIVE_LIMIT, &source).await?.verify(&version.hash)?;
+        let version = resources
+            .get_version(platform, project, version)
+            .await
+            .map_err(io)?;
+        download_provider_to(&version.download_url, PROVIDER_ARCHIVE_LIMIT, &source)
+            .await?
+            .verify(&version.hash)?;
     } else if matches!(release.format.as_str(), "zip" | "mrpack") {
         std::fs::write(&source, archive).map_err(io)?;
-    } else { return Err(conflict("pack_format_unsupported")); }
+    } else {
+        return Err(conflict("pack_format_unsupported"));
+    }
     tokio::task::spawn_blocking(move || {
-    let mut metadata = get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
-    if let Some(project) = identity {
-        metadata.name = project.name;
-        metadata.author = (!project.author.is_empty()).then_some(project.author);
-        metadata.description = (!project.summary.is_empty()).then_some(project.summary);
-        metadata.icon_url = project.icon_url.or(metadata.icon_url);
-    }
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(&source).map_err(io)?).map_err(io)?;
-    let mut overrides = std::collections::BTreeSet::new();
-    for index in 0..zip.len() {
-        let file = zip.by_index(index).map_err(io)?;
-        let name = file.name().strip_prefix(metadata.root_prefix.as_deref().unwrap_or("")).unwrap_or(file.name());
-        if let Some(path) = name.strip_prefix("overrides/").or_else(|| name.strip_prefix("client-overrides/")) {
-            if is_pack_resource(path) { overrides.insert(path.to_owned()); }
+        let mut metadata =
+            get_modpack_metadata(&source).map_err(|_| conflict("pack_invalid_index"))?;
+        if let Some(project) = identity {
+            metadata.name = project.name;
+            metadata.author = (!project.author.is_empty()).then_some(project.author);
+            metadata.description = (!project.summary.is_empty()).then_some(project.summary);
+            metadata.icon_url = project.icon_url.or(metadata.icon_url);
         }
-    }
-    Ok((metadata, overrides.into_iter().collect()))
-    }).await.map_err(io)?
+        let mut zip =
+            zip::ZipArchive::new(std::fs::File::open(&source).map_err(io)?).map_err(io)?;
+        let mut overrides = std::collections::BTreeSet::new();
+        for index in 0..zip.len() {
+            let file = zip.by_index(index).map_err(io)?;
+            let name = file
+                .name()
+                .strip_prefix(metadata.root_prefix.as_deref().unwrap_or(""))
+                .unwrap_or(file.name());
+            if let Some(path) = name
+                .strip_prefix("overrides/")
+                .or_else(|| name.strip_prefix("client-overrides/"))
+            {
+                if is_pack_resource(path) {
+                    overrides.insert(path.to_owned());
+                }
+            }
+        }
+        Ok((metadata, overrides.into_iter().collect()))
+    })
+    .await
+    .map_err(io)?
 }

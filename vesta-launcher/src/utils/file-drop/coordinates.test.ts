@@ -62,18 +62,16 @@ describe("nativeToCssPoint", () => {
 		});
 	});
 
-	it.each([
-		0,
-		-1,
-		Number.NaN,
-		Number.POSITIVE_INFINITY,
-	])("ignores an unusable scale factor (%s) and uses devicePixelRatio", (scale) => {
-		setDevicePixelRatio(2);
-		expect(nativeToCssPoint({ x: 200, y: 100 }, "physical", scale)).toEqual({
-			x: 100,
-			y: 50,
-		});
-	});
+	it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+		"ignores an unusable scale factor (%s) and uses devicePixelRatio",
+		(scale) => {
+			setDevicePixelRatio(2);
+			expect(nativeToCssPoint({ x: 200, y: 100 }, "physical", scale)).toEqual({
+				x: 100,
+				y: 50,
+			});
+		},
+	);
 
 	it("uses 1 when neither the scale factor nor devicePixelRatio is usable", () => {
 		setDevicePixelRatio(0);

@@ -1934,8 +1934,10 @@ pub async fn get_modpack_manifest_info_from_url(
 ) -> Result<ModpackInfo, String> {
     let (_, path) = get_or_download_summary_archive(&app, &url).await?;
     let metadata = run_blocking_modpack_io("inspect pack runtime", move || {
-        get_modpack_metadata(&path).map_err(|e| anyhow::anyhow!("Failed to parse pack manifest: {e}"))
-    }).await?;
+        get_modpack_metadata(&path)
+            .map_err(|e| anyhow::anyhow!("Failed to parse pack manifest: {e}"))
+    })
+    .await?;
     if metadata.minecraft_version.trim().is_empty() || metadata.modloader_type.trim().is_empty() {
         return Err("Pack manifest does not specify a Minecraft version and loader".into());
     }
@@ -2524,7 +2526,15 @@ pub async fn install_modpack_from_url(
 ) -> Result<i32, String> {
     install_modpack_from_url_linked(_app, url, instance_data, metadata, task_manager, None).await
 }
-pub(crate) async fn install_modpack_from_url_linked(_app: AppHandle, url: String, instance_data: Instance, metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>, task_manager: State<'_, TaskManager>, server_link: Option<(String, String)>) -> Result<i32, String> {    let client = piston_lib::client::shared_client();
+pub(crate) async fn install_modpack_from_url_linked(
+    _app: AppHandle,
+    url: String,
+    instance_data: Instance,
+    metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
+    task_manager: State<'_, TaskManager>,
+    server_link: Option<(String, String)>,
+) -> Result<i32, String> {
+    let client = piston_lib::client::shared_client();
 
     let (final_url, _) = resolve_modpack_resource(client, &url).await;
     log::info!(
@@ -2559,7 +2569,9 @@ pub(crate) async fn install_modpack_from_url_linked(_app: AppHandle, url: String
         saved_instance.modpack_version_id
     );
 
-    if let Some((project, address)) = server_link { super::modrinth_servers::save_link(saved_instance.id, &project, &address)?; }
+    if let Some((project, address)) = server_link {
+        super::modrinth_servers::save_link(saved_instance.id, &project, &address)?;
+    }
     // Emit created event so UI home page updates immediately
     use tauri::Emitter;
     let _ = _app.emit("core://instance-created", &saved_instance);
@@ -2738,7 +2750,10 @@ mod tests {
 
     #[test]
     fn legacy_curseforge_manifest_supplies_exact_runtime() {
-        let file = write_zip(&[("manifest.json", r#"{"manifestType":"minecraftModpack","manifestVersion":1,"name":"RLCraft","version":"2.9.3","minecraft":{"version":"1.12.2","modLoaders":[{"id":"forge-14.23.5.2860","primary":true}]},"files":[],"overrides":"overrides"}"#)]);
+        let file = write_zip(&[(
+            "manifest.json",
+            r#"{"manifestType":"minecraftModpack","manifestVersion":1,"name":"RLCraft","version":"2.9.3","minecraft":{"version":"1.12.2","modLoaders":[{"id":"forge-14.23.5.2860","primary":true}]},"files":[],"overrides":"overrides"}"#,
+        )]);
         let metadata = get_modpack_metadata(file.path()).unwrap();
         assert_eq!(metadata.minecraft_version, "1.12.2");
         assert_eq!(metadata.modloader_type, "forge");
@@ -2753,7 +2768,13 @@ mod tests {
         assert_eq!(metadata.minecraft_version, "1.12.2");
         assert_eq!(metadata.modloader_type, "forge");
         assert_eq!(metadata.modloader_version.as_deref(), Some("14.23.5.2860"));
-        eprintln!("RLCRAFT launcher manifest plan: {}/{}/{:?}, mods={}", metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version, metadata.mods.len());
+        eprintln!(
+            "RLCRAFT launcher manifest plan: {}/{}/{:?}, mods={}",
+            metadata.minecraft_version,
+            metadata.modloader_type,
+            metadata.modloader_version,
+            metadata.mods.len()
+        );
     }
 
     #[test]

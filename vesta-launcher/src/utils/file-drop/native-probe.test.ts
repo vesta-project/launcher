@@ -415,25 +415,26 @@ describe("registration failure", () => {
 		],
 	];
 
-	it.each(
-		failures,
-	)("a %s failure reports error with a safe reason and releases what subscribed", async (_name, fail) => {
-		const harness = installTauri();
-		fail(harness);
+	it.each(failures)(
+		"a %s failure reports error with a safe reason and releases what subscribed",
+		async (_name, fail) => {
+			const harness = installTauri();
+			fail(harness);
 
-		probe.initializeNativeDropProbe();
-		await flush();
+			probe.initializeNativeDropProbe();
+			await flush();
 
-		const diagnostic = probe.nativeDropDiagnostic();
-		expect(diagnostic).toMatchObject({
-			status: "error",
-			reason: "listener-setup-failed",
-		});
-		expect(JSON.stringify(diagnostic)).not.toContain("/Users/u/private");
-		for (const unlisten of harness.dropUnlisteners) {
-			expect(unlisten).toHaveBeenCalledTimes(1);
-		}
-	});
+			const diagnostic = probe.nativeDropDiagnostic();
+			expect(diagnostic).toMatchObject({
+				status: "error",
+				reason: "listener-setup-failed",
+			});
+			expect(JSON.stringify(diagnostic)).not.toContain("/Users/u/private");
+			for (const unlisten of harness.dropUnlisteners) {
+				expect(unlisten).toHaveBeenCalledTimes(1);
+			}
+		},
+	);
 
 	it("a fresh initialization can start again after a failed setup", async () => {
 		const harness = installTauri();

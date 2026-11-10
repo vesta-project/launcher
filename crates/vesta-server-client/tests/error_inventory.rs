@@ -19,7 +19,13 @@ fn every_inventoried_wire_code_survives_ipc_serialization() {
 
 #[test]
 fn wire_reason_rejects_non_codes() {
-    for code in ["", "error with secrets", "https://example.com", "bad\ncode", &"a".repeat(97)] {
+    for code in [
+        "",
+        "error with secrets",
+        "https://example.com",
+        "bad\ncode",
+        &"a".repeat(97),
+    ] {
         assert!(Error::wire(500, code, None).reason.is_none());
     }
 }

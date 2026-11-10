@@ -388,7 +388,9 @@ fn run_invocation(invocation: &Invocation) -> Result<u32, String> {
             let mut buffer = [0u8; 8192];
             loop {
                 let read = source.read(&mut buffer)?;
-                if read == 0 { return Ok(()); }
+                if read == 0 {
+                    return Ok(());
+                }
                 destination.write_all(&buffer[..read])?;
                 destination.flush()?;
             }

@@ -48,7 +48,13 @@ pub async fn server_sign_in_minecraft(
     invitation_code: Option<String>,
 ) -> Result<ServerSnapshot> {
     manager
-        .minecraft(&app, &discovery_id, &account_uuid, memory_only, invitation_code.as_deref())
+        .minecraft(
+            &app,
+            &discovery_id,
+            &account_uuid,
+            memory_only,
+            invitation_code.as_deref(),
+        )
         .await
 }
 #[tauri::command]

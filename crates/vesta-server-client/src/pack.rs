@@ -157,10 +157,11 @@ dto!(ServerModpackVersion {
 });
 dto!(ServerModpackUpdate {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,available:Option<PackInstallSource>});
 dto!(ServerModpackLink {installed:Option<ServerModpackVersion>,pending:Option<ServerModpackVersion>,source:PackInstallSource,display_version:String,files:std::collections::BTreeMap<String,String>,state:String,pending_ids:Vec<String>});
-#[derive(Clone,Debug,Deserialize,Serialize)]
-#[serde(rename_all="camelCase",deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ClientPackConfig {
-    #[serde(default)] pub allow_custom_content: bool,
+    #[serde(default)]
+    pub allow_custom_content: bool,
     pub mode: String,
     pub require_update: bool,
 }
@@ -233,8 +234,16 @@ dto!(UploadReceipt {
     deny_unknown_fields
 )]
 pub enum ImportRequest {
-    Provider { expected_revision: String, provider: String, project_id: String, version_id: String },
-    Unlink { expected_revision: String, choice: String },
+    Provider {
+        expected_revision: String,
+        provider: String,
+        project_id: String,
+        version_id: String,
+    },
+    Unlink {
+        expected_revision: String,
+        choice: String,
+    },
     Archive {
         expected_revision: String,
         content_base64: String,
@@ -281,26 +290,39 @@ pub enum PackInstallSource {
         revision: String,
     },
 }
-fn is_false(value: &bool) -> bool { !*value }
+fn is_false(value: &bool) -> bool {
+    !*value
+}
 dto!(PackInstallRequest {
-    #[serde(default, skip_serializing_if="is_false")]
+    #[serde(default, skip_serializing_if = "is_false")]
     analyze: bool,
     source: PackInstallSource
 });
 dto!(PackInstallFile {path:String,sha256:String,expected_sha256:Option<String>,conflict:Option<String>,operation:String});
 dto!(SoftwareSwitchTarget {software:String,minecraft_version:String,loader_version:Option<String>});
-dto!(SoftwareSwitch {from:SoftwareSwitchTarget,to:SoftwareSwitchTarget});
-dto!(InstallWarning {code:String,rule:String,item:String,detail:String});
-#[derive(Clone,Debug,Deserialize,Serialize)]
+dto!(SoftwareSwitch {
+    from: SoftwareSwitchTarget,
+    to: SoftwareSwitchTarget
+});
+dto!(InstallWarning {
+    code: String,
+    rule: String,
+    item: String,
+    detail: String
+});
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum PackInstallWarning { Structured(InstallWarning), Legacy(String) }
+pub enum PackInstallWarning {
+    Structured(InstallWarning),
+    Legacy(String),
+}
 dto!(PackInstallPlan {#[serde(default)] deferred:bool,software_switch:Option<SoftwareSwitch>,plan_id:String,confirmation_token:String,expires_at_ms:i64,minecraft_version:String,software:String,loader_version:Option<String>,software_switch_required:bool,valid:bool,files:Vec<PackInstallFile>,skipped:Vec<String>,warnings:Vec<PackInstallWarning>,backup_recommended:bool,removed:Vec<(String,String)>});
 dto!(PackInstallChoice {
     path: String,
     choice: String
 });
-#[derive(Clone,Debug,Deserialize,Serialize)]
-#[serde(rename_all="camelCase",deny_unknown_fields)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackInstallApply {
     #[serde(default)]
     pub acknowledge_warnings: bool,
@@ -546,12 +568,18 @@ mod tests {
         let value = hosting::wire(serde_json::to_value(input).unwrap());
         assert_eq!(value["expected_revision"], "9007199254740991");
         assert_eq!(value["resolved_entries"][0]["source"]["version_id"], "v1");
-        assert_eq!(value["resolved_entries"][0]["artifact_sha512"], "b".repeat(128));
+        assert_eq!(
+            value["resolved_entries"][0]["artifact_sha512"],
+            "b".repeat(128)
+        );
         assert!(value.to_string().find("download_url").is_none());
         let decoded: WorkspacePublish = from_wire(value).unwrap();
         assert!(decoded.required_update);
         assert_eq!(decoded.draft_revision, "4");
-        assert_eq!(decoded.resolved_entries[0].artifact_sha512.as_deref(),Some("b".repeat(128).as_str()));
+        assert_eq!(
+            decoded.resolved_entries[0].artifact_sha512.as_deref(),
+            Some("b".repeat(128).as_str())
+        );
     }
     #[test]
     fn override_and_provider_wire_are_closed_and_keep_decimal_revisions() {
@@ -607,7 +635,8 @@ mod install_wire_tests {
         assert_eq!(value["set_as_modpack"], true);
         let decoded: PackInstallApply = from_wire(value).unwrap();
         assert_eq!(decoded.choices[0].path, "config/My_Mod.json");
-        let source = PackInstallRequest { analyze: false,
+        let source = PackInstallRequest {
+            analyze: false,
             source: PackInstallSource::Provider {
                 provider: "modrinth".into(),
                 project_id: "project".into(),
@@ -660,10 +689,16 @@ mod custom_link_wire_tests {
         let wire = serde_json::to_value(link).unwrap();
         assert_eq!(wire["projectId"], "pack");
         for choice in ["keep_everything", "keep_resources", "remove_everything"] {
-            let request: ImportRequest = serde_json::from_value(serde_json::json!({"source":"unlink","expectedRevision":"8","choice":choice})).unwrap();
+            let request: ImportRequest = serde_json::from_value(
+                serde_json::json!({"source":"unlink","expectedRevision":"8","choice":choice}),
+            )
+            .unwrap();
             assert_eq!(serde_json::to_value(request).unwrap()["choice"], choice);
         }
         let manifest: PackManifest = serde_json::from_value(serde_json::json!({"name":"Custom","summary":"","icon":null,"displayVersion":"1","minecraftVersion":"1.21.1","loader":"none","loaderVersion":null,"entries":[],"modpackLink":{"provider":"curseforge","projectId":"123","versionId":"456","entries":["mod"],"overrides":[["overrides","config/test.txt"]]}})).unwrap();
-        assert_eq!(manifest.modpack_link.unwrap().overrides[0].1, "config/test.txt");
+        assert_eq!(
+            manifest.modpack_link.unwrap().overrides[0].1,
+            "config/test.txt"
+        );
     }
 }

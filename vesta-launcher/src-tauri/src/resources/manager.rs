@@ -35,7 +35,8 @@ fn is_record_incomplete(record: &ResourceProjectRecord) -> bool {
 }
 
 async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
-    let response = piston_lib::artifact_http::get_with_timeout(url,std::time::Duration::from_secs(8)).await?;
+    let response =
+        piston_lib::artifact_http::get_with_timeout(url, std::time::Duration::from_secs(8)).await?;
     if !response.status().is_success() {
         return Err(anyhow!(
             "Icon download failed with HTTP {} for {}",

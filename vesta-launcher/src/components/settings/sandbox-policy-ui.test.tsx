@@ -22,13 +22,13 @@ describe("SandboxHostNotice", () => {
 		);
 	});
 
-	it.each([
-		"windows",
-		"macos",
-	])("does not warn about playback on %s", (hostOs) => {
-		render(() => <SandboxHostNotice support={{ ...support, hostOs }} />);
-		expect(screen.queryByRole("alert")).toBeNull();
-	});
+	it.each(["windows", "macos"])(
+		"does not warn about playback on %s",
+		(hostOs) => {
+			render(() => <SandboxHostNotice support={{ ...support, hostOs }} />);
+			expect(screen.queryByRole("alert")).toBeNull();
+		},
+	);
 
 	it("prioritizes unavailable enforcement over the Linux playback notice", () => {
 		render(() => (

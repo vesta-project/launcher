@@ -305,12 +305,41 @@ mod tests {
 mod provider_redirect_tests {
     #[tokio::test]
     async fn custom_provider_key_cannot_follow_cross_origin_redirect() {
-        use wiremock::{Mock,MockServer,ResponseTemplate,matchers::{method,path}};
-        let origin=MockServer::start().await;let other=MockServer::start().await;
-        Mock::given(method("GET")).and(path("/keyed")).respond_with(ResponseTemplate::new(302).insert_header("Location",format!("{}/artifact",other.uri()))).mount(&origin).await;
-        Mock::given(method("GET")).and(path("/artifact")).respond_with(ResponseTemplate::new(200)).mount(&other).await;
-        let response=super::provider_api_client().unwrap().get(format!("{}/keyed",origin.uri())).header("x-api-key","FAKE_TEST_KEY").send().await.unwrap();
-        assert_eq!(response.status().as_u16(),302,"credentialed metadata API must refuse automatic redirects");
-        assert_eq!(other.received_requests().await.unwrap().len(),0,"redirect target must receive no request or key");
+        use wiremock::{
+            matchers::{method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let origin = MockServer::start().await;
+        let other = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/keyed"))
+            .respond_with(
+                ResponseTemplate::new(302)
+                    .insert_header("Location", format!("{}/artifact", other.uri())),
+            )
+            .mount(&origin)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/artifact"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&other)
+            .await;
+        let response = super::provider_api_client()
+            .unwrap()
+            .get(format!("{}/keyed", origin.uri()))
+            .header("x-api-key", "FAKE_TEST_KEY")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status().as_u16(),
+            302,
+            "credentialed metadata API must refuse automatic redirects"
+        );
+        assert_eq!(
+            other.received_requests().await.unwrap().len(),
+            0,
+            "redirect target must receive no request or key"
+        );
     }
 }

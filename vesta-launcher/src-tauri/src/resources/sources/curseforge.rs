@@ -211,19 +211,26 @@ impl CurseForgeSource {
         Self { api_key: key }
     }
 
-    fn request(&self, method:reqwest::Method, raw:&str)->Result<reqwest::RequestBuilder> {
-        let url=reqwest::Url::parse(raw).map_err(|_|anyhow!("invalid_provider_origin"))?;
-        if url.scheme()!="https" || url.host_str()!=Some("api.curseforge.com") || url.port_or_known_default()!=Some(443) || !url.username().is_empty() || url.password().is_some() {
+    fn request(&self, method: reqwest::Method, raw: &str) -> Result<reqwest::RequestBuilder> {
+        let url = reqwest::Url::parse(raw).map_err(|_| anyhow!("invalid_provider_origin"))?;
+        if url.scheme() != "https"
+            || url.host_str() != Some("api.curseforge.com")
+            || url.port_or_known_default() != Some(443)
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
             return Err(anyhow!("invalid_provider_origin"));
         }
-        Ok(piston_lib::client::provider_api_client()?.request(method,url)
-            .header("x-api-key", &self.api_key).header("Accept", "application/json"))
+        Ok(piston_lib::client::provider_api_client()?
+            .request(method, url)
+            .header("x-api-key", &self.api_key)
+            .header("Accept", "application/json"))
     }
     fn http_get(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        self.request(reqwest::Method::GET,url)
+        self.request(reqwest::Method::GET, url)
     }
     fn http_post(&self, url: &str) -> Result<reqwest::RequestBuilder> {
-        self.request(reqwest::Method::POST,url)
+        self.request(reqwest::Method::POST, url)
     }
     fn map_authors(authors: &[CFAuthor]) -> Vec<ResourceAuthor> {
         authors

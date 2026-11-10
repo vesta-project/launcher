@@ -41,7 +41,9 @@ impl ServerManager {
         let account_changed = async {
             loop {
                 tokio::time::sleep(Duration::from_millis(100)).await;
-                if account_scope() != scope { return; }
+                if account_scope() != scope {
+                    return;
+                }
             }
         };
         let observe = self.clone().observe_worker(app, id.clone());
@@ -181,7 +183,11 @@ impl ServerManager {
                 continue;
             }
             if (want_status || want_metrics)
-                && snapshot.capabilities.granted.iter().any(|cap| cap == "metrics.view")
+                && snapshot
+                    .capabilities
+                    .granted
+                    .iter()
+                    .any(|cap| cap == "metrics.view")
                 && telemetry.is_none()
                 && !metrics_stopped
                 && !metrics_stream_disabled
@@ -197,23 +203,57 @@ impl ServerManager {
                 ));
             }
             if overflow.swap(false, Ordering::Relaxed) {
-                players_revision=None; players_generation=None;
+                players_revision = None;
+                players_generation = None;
                 client.transport.invalidate_reads();
-                self.deliver(&id,ServerTopic::Status,ServerEvent::Resync{topic:ServerTopic::Status});
+                self.deliver(
+                    &id,
+                    ServerTopic::Status,
+                    ServerEvent::Resync {
+                        topic: ServerTopic::Status,
+                    },
+                );
             }
             while let Ok(message) = recv.try_recv() {
-                if let StreamMessage::Update(value)=&message {
-                    if value["type"]=="resources.changed" {
+                if let StreamMessage::Update(value) = &message {
+                    if value["type"] == "resources.changed" {
                         client.transport.invalidate_reads();
-                        self.deliver(&id,ServerTopic::Status,ServerEvent::ResourcesChanged{resources:value["resources"].clone()});
-                    } else if value["type"]=="players.delta" {
-                        let delta=&value["data"];
-                        let applied=self.slot(&id).ok().is_some_and(|slot| slot.players.lock().ok().is_some_and(|mut cached| cached.as_mut().is_some_and(|r|r.apply_delta(delta))));
+                        self.deliver(
+                            &id,
+                            ServerTopic::Status,
+                            ServerEvent::ResourcesChanged {
+                                resources: value["resources"].clone(),
+                            },
+                        );
+                    } else if value["type"] == "players.delta" {
+                        let delta = &value["data"];
+                        let applied = self.slot(&id).ok().is_some_and(|slot| {
+                            slot.players.lock().ok().is_some_and(|mut cached| {
+                                cached.as_mut().is_some_and(|r| r.apply_delta(delta))
+                            })
+                        });
                         if applied {
-                            players_revision=delta["revision"].as_str().map(str::to_owned);
-                            players_count=self.slot(&id).ok().and_then(|slot|slot.players.lock().ok().and_then(|c|match c.as_ref(){Some(PlayersView::Known{player_count,..})=>Some(*player_count),_=>None}));
-                            self.deliver(&id,ServerTopic::Status,ServerEvent::PlayersDelta{delta:delta.clone()});
-                        } else {players_generation=None;players_revision=None;players_retry=Instant::now();}
+                            players_revision = delta["revision"].as_str().map(str::to_owned);
+                            players_count = self.slot(&id).ok().and_then(|slot| {
+                                slot.players.lock().ok().and_then(|c| match c.as_ref() {
+                                    Some(PlayersView::Known { player_count, .. }) => {
+                                        Some(*player_count)
+                                    }
+                                    _ => None,
+                                })
+                            });
+                            self.deliver(
+                                &id,
+                                ServerTopic::Status,
+                                ServerEvent::PlayersDelta {
+                                    delta: delta.clone(),
+                                },
+                            );
+                        } else {
+                            players_generation = None;
+                            players_revision = None;
+                            players_retry = Instant::now();
+                        }
                     }
                 }
                 if let StreamMessage::Ended(topic, error) = message {
@@ -377,7 +417,11 @@ impl ServerManager {
                 }
             }
             if want_metrics
-                && snapshot.capabilities.granted.iter().any(|cap| cap == "metrics.view")
+                && snapshot
+                    .capabilities
+                    .granted
+                    .iter()
+                    .any(|cap| cap == "metrics.view")
                 && telemetry.is_none()
                 && !metrics_stopped
                 && last_metrics_poll.elapsed() >= Duration::from_secs(10)
@@ -399,7 +443,11 @@ impl ServerManager {
                 }
             }
             if want_ops
-                && snapshot.capabilities.granted.iter().any(|cap| cap == "tasks.view")
+                && snapshot
+                    .capabilities
+                    .granted
+                    .iter()
+                    .any(|cap| cap == "tasks.view")
                 && !self.tracks_operations(&id)
                 && last_operation_poll.elapsed() >= Duration::from_secs(10)
             {
@@ -463,7 +511,10 @@ fn spawn_socket(
                                         if sender.try_send(StreamMessage::Console(value)).is_err() {
                                             overflow.store(true, Ordering::Relaxed);
                                         }
-                                    } else if matches!(value["type"].as_str(), Some("resources.changed" | "players.delta")) {
+                                    } else if matches!(
+                                        value["type"].as_str(),
+                                        Some("resources.changed" | "players.delta")
+                                    ) {
                                         if sender.try_send(StreamMessage::Update(value)).is_err() {
                                             overflow.store(true, Ordering::Relaxed);
                                         }

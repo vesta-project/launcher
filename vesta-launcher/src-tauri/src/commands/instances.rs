@@ -2172,14 +2172,26 @@ pub async fn repair_instance(
 ) -> Result<(), String> {
     let repair_target = get_instance(instance_id)?;
     let servers = app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>();
-    if servers.pack_install_details(instance_id).map_err(|e| crate::servers::pack_sync::install_error(&e))?.is_some() {
-        return servers.resume_pack_install(&app_handle, repair_target).await
+    if servers
+        .pack_install_details(instance_id)
+        .map_err(|e| crate::servers::pack_sync::install_error(&e))?
+        .is_some()
+    {
+        return servers
+            .resume_pack_install(&app_handle, repair_target)
+            .await
             .map_err(|e| crate::servers::pack_sync::install_error(&e));
     }
-    if let Some(link) = servers.pack_link(instance_id).await.map_err(|e| crate::servers::pack_sync::install_error(&e))? {
+    if let Some(link) = servers
+        .pack_link(instance_id)
+        .await
+        .map_err(|e| crate::servers::pack_sync::install_error(&e))?
+    {
         let _guard = task_manager.try_acquire_conflicts([crate::tasks::manager::instance_play_conflict_key(instance_id)])
             .ok_or("Another operation is running for this instance. Wait for it to finish before repairing.")?;
-        servers.ensure_instance_server(&app_handle, instance_id, &link.connection_id).await
+        servers
+            .ensure_instance_server(&app_handle, instance_id, &link.connection_id)
+            .await
             .map_err(|e| crate::servers::pack_sync::install_error(&e))?;
     }
     // Set status to 'installing' so UI shows progress
@@ -2246,7 +2258,11 @@ pub async fn resume_instance_operation(
     );
 
     match op {
-        "server-pack-install" => app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().resume_pack_install(&app_handle, inst.clone()).await.map_err(|error| crate::servers::pack_sync::install_error(&error)),
+        "server-pack-install" => app_handle
+            .state::<std::sync::Arc<crate::servers::ServerManager>>()
+            .resume_pack_install(&app_handle, inst.clone())
+            .await
+            .map_err(|error| crate::servers::pack_sync::install_error(&error)),
         "repair" => repair_instance(app_handle, task_manager, instance_id, None).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
         "external-import" => {
@@ -2349,7 +2365,15 @@ pub async fn update_instance_modpack_version(
     instance_id: i32,
     version_id: String,
 ) -> Result<(), String> {
-    if app_handle.state::<std::sync::Arc<crate::servers::ServerManager>>().pack_link(instance_id).await.map_err(|error| error.to_string())?.is_some() { return Err("This pack version is controlled by its server".into()); }
+    if app_handle
+        .state::<std::sync::Arc<crate::servers::ServerManager>>()
+        .pack_link(instance_id)
+        .await
+        .map_err(|error| error.to_string())?
+        .is_some()
+    {
+        return Err("This pack version is controlled by its server".into());
+    }
     use crate::schema::instance::dsl::*;
     use tauri::Emitter;
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;

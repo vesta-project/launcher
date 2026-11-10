@@ -131,15 +131,51 @@ impl ThreeWayDiffer {
         let has_mod = old_mod.is_some() || new_mod.is_some();
         let old = old_mod.is_some() || (!has_mod && in_old_overrides);
         let new = new_mod.is_some() || (!has_mod && in_new_overrides);
-        let source = || new_mod.map(mod_source_to_file_source).unwrap_or_else(|| FileSource::ZipOverride { relative_path: display_path.into() });
-        let action = match modpack_engine::decide(false, old, new, old_hash.as_deref(), current.map(|c| c.hash.as_str()), new_hash.as_deref()) {
-            Decision::Add => SyncAction::Add { path: display_path.into(), source: source(), expected_hash: if has_mod {new_hash.clone()} else {None} },
-            Decision::Update => SyncAction::Update { path: display_path.into(), source: source(), old_hash: old_hash.clone(), new_hash: new_hash.clone() },
-            Decision::Remove => SyncAction::Remove { path: display_path.into(), reason: RemoveReason::AuthorRemoved, last_hash: old_hash.clone() },
-            Decision::Current => SyncAction::Skip { path: display_path.into(), reason: SkipReason::AlreadyCurrent },
+        let source = || {
+            new_mod
+                .map(mod_source_to_file_source)
+                .unwrap_or_else(|| FileSource::ZipOverride {
+                    relative_path: display_path.into(),
+                })
+        };
+        let action = match modpack_engine::decide(
+            false,
+            old,
+            new,
+            old_hash.as_deref(),
+            current.map(|c| c.hash.as_str()),
+            new_hash.as_deref(),
+        ) {
+            Decision::Add => SyncAction::Add {
+                path: display_path.into(),
+                source: source(),
+                expected_hash: if has_mod { new_hash.clone() } else { None },
+            },
+            Decision::Update => SyncAction::Update {
+                path: display_path.into(),
+                source: source(),
+                old_hash: old_hash.clone(),
+                new_hash: new_hash.clone(),
+            },
+            Decision::Remove => SyncAction::Remove {
+                path: display_path.into(),
+                reason: RemoveReason::AuthorRemoved,
+                last_hash: old_hash.clone(),
+            },
+            Decision::Current => SyncAction::Skip {
+                path: display_path.into(),
+                reason: SkipReason::AlreadyCurrent,
+            },
             Decision::Protect => {
-                tree.protected_count+=1;
-                SyncAction::Skip { path: display_path.into(), reason: if new_mod.is_some() {SkipReason::UserModifiedBinary} else {SkipReason::UserModified} }
+                tree.protected_count += 1;
+                SyncAction::Skip {
+                    path: display_path.into(),
+                    reason: if new_mod.is_some() {
+                        SkipReason::UserModifiedBinary
+                    } else {
+                        SkipReason::UserModified
+                    },
+                }
             }
             _ => return,
         };
@@ -160,10 +196,34 @@ impl ThreeWayDiffer {
         current: Option<&FileHash>,
     ) {
         use modpack_engine::Decision;
-        let action = match modpack_engine::decide(true, in_old_overrides || old_mod.is_some(), in_new_overrides || new_mod.is_some(), old_hash.as_deref(), current.map(|c| c.hash.as_str()), None) {
-            Decision::Add => SyncAction::Add { path: display_path.into(), source: FileSource::ZipOverride { relative_path: display_path.into() }, expected_hash: None },
-            Decision::Merge => SyncAction::Merge { path: display_path.into(), merged_content: String::new(), old_hash: old_hash.clone(), new_hash: None },
-            Decision::Keep => { tree.protected_count+=1; SyncAction::Skip {path:display_path.into(), reason:SkipReason::NotInNewVersion} }
+        let action = match modpack_engine::decide(
+            true,
+            in_old_overrides || old_mod.is_some(),
+            in_new_overrides || new_mod.is_some(),
+            old_hash.as_deref(),
+            current.map(|c| c.hash.as_str()),
+            None,
+        ) {
+            Decision::Add => SyncAction::Add {
+                path: display_path.into(),
+                source: FileSource::ZipOverride {
+                    relative_path: display_path.into(),
+                },
+                expected_hash: None,
+            },
+            Decision::Merge => SyncAction::Merge {
+                path: display_path.into(),
+                merged_content: String::new(),
+                old_hash: old_hash.clone(),
+                new_hash: None,
+            },
+            Decision::Keep => {
+                tree.protected_count += 1;
+                SyncAction::Skip {
+                    path: display_path.into(),
+                    reason: SkipReason::NotInNewVersion,
+                }
+            }
             _ => return,
         };
         tree.add_action(action);
@@ -196,7 +256,10 @@ impl ThreeWayDiffer {
             let lower = n_path.to_lowercase();
             if let Some(Some(expected_old_hash)) = old_level_dats.get(&lower) {
                 if let Some(current_fh) = current_hashes.get(&lower) {
-                    if modpack_engine::world::needs_rotation(Some(expected_old_hash), Some(&current_fh.hash)) {
+                    if modpack_engine::world::needs_rotation(
+                        Some(expected_old_hash),
+                        Some(&current_fh.hash),
+                    ) {
                         let Some(world_folder) = world_folder_from_level_dat(n_path) else {
                             continue;
                         };

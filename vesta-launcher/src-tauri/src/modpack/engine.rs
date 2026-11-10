@@ -72,7 +72,13 @@ pub(crate) async fn plan_source(
     match source {
         crate::tasks::update_modpack::UpdateSource::Provider => {
             if instance.modpack_platform.as_deref() == Some("server")
-                || app.state::<std::sync::Arc<crate::servers::ServerManager>>().pack_link(instance.id).await.map_err(|e| e.to_string())?.is_some() {
+                || app
+                    .state::<std::sync::Arc<crate::servers::ServerManager>>()
+                    .pack_link(instance.id)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .is_some()
+            {
                 return Err("Server modpack review is required".into());
             }
             plan(app, instance, game_dir, target, ctx).await

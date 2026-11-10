@@ -376,12 +376,19 @@ pub(crate) async fn send_with_retry(
     // public-only destination policy as binary artifacts, including redirects.
     send_with_retry_using(url, max_retries, initial_backoff_ms, |url| async move {
         crate::artifact_http::get(&url).await
-    }).await
+    })
+    .await
 }
 async fn send_with_retry_using<F, Fut>(
-    url: &str, max_retries: u32, initial_backoff_ms: u64, mut request: F,
+    url: &str,
+    max_retries: u32,
+    initial_backoff_ms: u64,
+    mut request: F,
 ) -> Result<reqwest::Response>
-where F: FnMut(String) -> Fut, Fut: std::future::Future<Output=Result<reqwest::Response>> {
+where
+    F: FnMut(String) -> Fut,
+    Fut: std::future::Future<Output = Result<reqwest::Response>>,
+{
     let mut last_error = None;
 
     for attempt in 0..max_retries {
@@ -506,8 +513,16 @@ mod tests {
 
     // These tests exercise retry/status semantics through an injected loopback
     // transport. Public destination enforcement has its own artifact_http tests.
-    async fn send_with_retry(client:&reqwest::Client,url:&str,count:u32,backoff:u64)->Result<reqwest::Response> {
-        send_with_retry_using(url,count,backoff,|url|async move {Ok(client.get(url).send().await?)}).await
+    async fn send_with_retry(
+        client: &reqwest::Client,
+        url: &str,
+        count: u32,
+        backoff: u64,
+    ) -> Result<reqwest::Response> {
+        send_with_retry_using(url, count, backoff, |url| async move {
+            Ok(client.get(url).send().await?)
+        })
+        .await
     }
 
     struct FailThenOkResponder {

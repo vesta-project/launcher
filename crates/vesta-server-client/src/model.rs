@@ -51,7 +51,11 @@ pub struct Error {
 /// A bounded public file identity, never a provider response, URL or credential.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct PackRefusal { pub code: String, pub rule: String, pub item: String }
+pub struct PackRefusal {
+    pub code: String,
+    pub rule: String,
+    pub item: String,
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderErrorDetails {
@@ -72,18 +76,30 @@ impl Error {
     }
     /// A newer agent may retain a domain cause beside its compatibility code.
     pub(crate) fn with_wire_reason(mut self, value: &serde_json::Value) -> Self {
-        if let Some(reason) = value.as_str().filter(|reason| !reason.is_empty() && reason.len() <= 96
-            && reason.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))) {
+        if let Some(reason) = value.as_str().filter(|reason| {
+            !reason.is_empty()
+                && reason.len() <= 96
+                && reason
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.'))
+        }) {
             self.reason = Some(reason.to_owned());
         }
         self
     }
     pub(crate) fn with_pack_issue(mut self, value: &serde_json::Value) -> Self {
-        self.issue = serde_json::from_value::<PackRefusal>(value.clone()).ok().filter(|issue| {
-            Some(issue.code.as_str()) == self.reason.as_deref() && issue.rule.len() <= 96
-                && issue.rule.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
-                && issue.item.len() <= 8192 && !issue.item.chars().any(char::is_control)
-        });
+        self.issue = serde_json::from_value::<PackRefusal>(value.clone())
+            .ok()
+            .filter(|issue| {
+                Some(issue.code.as_str()) == self.reason.as_deref()
+                    && issue.rule.len() <= 96
+                    && issue
+                        .rule
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b == b'_')
+                    && issue.item.len() <= 8192
+                    && !issue.item.chars().any(char::is_control)
+            });
         self
     }
     pub(crate) fn with_provider_details(mut self, value: &serde_json::Value) -> Self {
@@ -153,14 +169,21 @@ impl Error {
     pub fn wire(status: u16, code: &str, retry_after_ms: Option<u64>) -> Self {
         // Preserve bounded machine codes across IPC, independently of the closed
         // status category; presentation owns the explicit known-code allowlist.
-        let reason = (!code.is_empty() && code.len() <= 96
-            && code.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.')))
-            .then(|| code.to_owned());
+        let reason = (!code.is_empty()
+            && code.len() <= 96
+            && code
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.')))
+        .then(|| code.to_owned());
         use ErrorCode::*;
         let code = match code {
-            "content_pack_source_unsafe" | "content_pack_metadata_invalid"
-            | "content_pack_hash_mismatch" | "content_pack_download_unavailable"
-            | "pack_path_invalid" | "pack_archive_invalid" | "pack_too_large" => InvalidInput,
+            "content_pack_source_unsafe"
+            | "content_pack_metadata_invalid"
+            | "content_pack_hash_mismatch"
+            | "content_pack_download_unavailable"
+            | "pack_path_invalid"
+            | "pack_archive_invalid"
+            | "pack_too_large" => InvalidInput,
             "content_pack_download_failed" => Internal,
             "software_runtime_unavailable" | "software_disabled" => Unsupported,
             "software_busy" | "pack_storage_low" => ServerBusy,
@@ -179,8 +202,10 @@ impl Error {
             "confirmation_invalid" | "confirmation_expired" | "confirmation_required" => {
                 ConfirmationExpired
             }
-            "management_session_invalid" | "device_session_required"
-            | "device_session_invalid" | "pack_session_invalid" => CredentialsRejected,
+            "management_session_invalid"
+            | "device_session_required"
+            | "device_session_invalid"
+            | "pack_session_invalid" => CredentialsRejected,
             "management_unavailable" | "pack_access_denied" if status == 403 => NoManagementAccess,
             "not_implemented" | "legacy_endpoint_removed" => Unsupported,
             _ => match status {
@@ -624,7 +649,12 @@ mod provider_error_tests {
     use serde_json::json;
     #[test]
     fn session_renewal_covers_session_failures_without_retrying_permission_denials() {
-        for reason in ["management_session_invalid", "device_session_required", "device_session_invalid", "pack_session_invalid"] {
+        for reason in [
+            "management_session_invalid",
+            "device_session_required",
+            "device_session_invalid",
+            "pack_session_invalid",
+        ] {
             assert!(Error::wire(403, reason, None).session_needs_renewal());
         }
         let mut legacy = Error::new(ErrorCode::NoManagementAccess);
@@ -720,12 +750,19 @@ mod pack_policy_mapping_tests {
     use super::*;
     #[test]
     fn typed_provider_refusals_are_never_busy() {
-        for reason in ["content_pack_source_unsafe", "content_pack_metadata_invalid", "content_pack_hash_mismatch"] {
+        for reason in [
+            "content_pack_source_unsafe",
+            "content_pack_metadata_invalid",
+            "content_pack_hash_mismatch",
+        ] {
             let error = Error::wire(502, reason, None);
             assert_eq!(error.code, ErrorCode::InvalidInput);
             assert_eq!(error.reason.as_deref(), Some(reason));
         }
-        assert_eq!(Error::wire(503, "temporarily_unavailable", None).code, ErrorCode::ServerBusy);
+        assert_eq!(
+            Error::wire(503, "temporarily_unavailable", None).code,
+            ErrorCode::ServerBusy
+        );
     }
 }
 
@@ -737,8 +774,16 @@ mod pack_issue_tests {
         let error = Error::wire(400, "pack_path_invalid", None).with_pack_issue(&serde_json::json!({"code":"pack_path_invalid","rule":"safe_relative_path","item":"../outside.jar"}));
         assert_eq!(error.code, ErrorCode::InvalidInput);
         assert_eq!(error.issue.as_ref().unwrap().item, "../outside.jar");
-        assert_eq!(serde_json::to_value(error).unwrap()["issue"]["rule"], "safe_relative_path");
-        assert!(Error::wire(400, "pack_path_invalid", None).with_pack_issue(&serde_json::json!({"code":"different","rule":"safe_relative_path","item":"file"})).issue.is_none());
+        assert_eq!(
+            serde_json::to_value(error).unwrap()["issue"]["rule"],
+            "safe_relative_path"
+        );
+        assert!(Error::wire(400, "pack_path_invalid", None)
+            .with_pack_issue(
+                &serde_json::json!({"code":"different","rule":"safe_relative_path","item":"file"})
+            )
+            .issue
+            .is_none());
     }
 }
 #[cfg(test)]
@@ -749,7 +794,12 @@ mod wire_reason_tests {
         let error = Error::wire(400, "invalid_request", None)
             .with_wire_reason(&serde_json::json!("file_path_protected"));
         assert_eq!(error.reason.as_deref(), Some("file_path_protected"));
-        for value in [serde_json::json!(""), serde_json::json!("secret message"), serde_json::json!(42), serde_json::Value::Null] {
+        for value in [
+            serde_json::json!(""),
+            serde_json::json!("secret message"),
+            serde_json::json!(42),
+            serde_json::Value::Null,
+        ] {
             assert_eq!(error.clone().with_wire_reason(&value).reason, error.reason);
         }
     }
@@ -758,18 +808,48 @@ mod wire_reason_tests {
 impl PlayersView {
     /// A mismatching base is a gap, never permission to apply a partial roster.
     pub fn apply_delta(&mut self, delta: &serde_json::Value) -> bool {
-        let Self::Known { generation, revision, names, player_count, .. } = self else { return false; };
-        if delta["generation"].as_str() != Some(generation.as_str()) || delta["base_revision"].as_str() != revision.as_deref() { return false; }
-        let Some(next) = delta["revision"].as_str() else { return false; };
-        let Some(changes) = delta["changes"].as_array() else { return false; };
-        if changes.iter().any(|c| c["name"].as_str().is_none_or(|n| n.is_empty() || n.len()>16 || !n.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_')) || !matches!(c["kind"].as_str(),Some("join"|"leave"))) { return false; }
-        for change in changes {
-            let name=change["name"].as_str().unwrap();
-            if change["kind"]=="join" { if !names.iter().any(|n|n==name) {names.push(name.into());} }
-            else { names.retain(|n|n!=name); }
+        let Self::Known {
+            generation,
+            revision,
+            names,
+            player_count,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        if delta["generation"].as_str() != Some(generation.as_str())
+            || delta["base_revision"].as_str() != revision.as_deref()
+        {
+            return false;
         }
-        *player_count=names.len() as u32;
-        *revision=Some(next.into());
+        let Some(next) = delta["revision"].as_str() else {
+            return false;
+        };
+        let Some(changes) = delta["changes"].as_array() else {
+            return false;
+        };
+        if changes.iter().any(|c| {
+            c["name"].as_str().is_none_or(|n| {
+                n.is_empty()
+                    || n.len() > 16
+                    || !n.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            }) || !matches!(c["kind"].as_str(), Some("join" | "leave"))
+        }) {
+            return false;
+        }
+        for change in changes {
+            let name = change["name"].as_str().unwrap();
+            if change["kind"] == "join" {
+                if !names.iter().any(|n| n == name) {
+                    names.push(name.into());
+                }
+            } else {
+                names.retain(|n| n != name);
+            }
+        }
+        *player_count = names.len() as u32;
+        *revision = Some(next.into());
         true
     }
 }
@@ -778,11 +858,25 @@ mod roster_delta_tests {
     use super::*;
     #[test]
     fn deltas_require_matching_generation_and_revision_and_are_atomic() {
-        let mut roster=PlayersView::Known {known:true,generation:"g".into(),revision:Some("4".into()),player_count:1,names:vec!["Alex".into()]};
-        let delta=serde_json::json!({"generation":"g","base_revision":"4","revision":"6","changes":[{"kind":"join","name":"Sam"},{"kind":"leave","name":"Alex"}]});
+        let mut roster = PlayersView::Known {
+            known: true,
+            generation: "g".into(),
+            revision: Some("4".into()),
+            player_count: 1,
+            names: vec!["Alex".into()],
+        };
+        let delta = serde_json::json!({"generation":"g","base_revision":"4","revision":"6","changes":[{"kind":"join","name":"Sam"},{"kind":"leave","name":"Alex"}]});
         assert!(roster.apply_delta(&delta));
         assert!(!roster.apply_delta(&delta));
-        let PlayersView::Known {names,player_count,..}=roster else {panic!()};
-        assert_eq!(names,vec!["Sam"]); assert_eq!(player_count,1);
+        let PlayersView::Known {
+            names,
+            player_count,
+            ..
+        } = roster
+        else {
+            panic!()
+        };
+        assert_eq!(names, vec!["Sam"]);
+        assert_eq!(player_count, 1);
     }
 }

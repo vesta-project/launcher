@@ -227,15 +227,33 @@ fn write_file(directory: &Path, before: &FileSnapshot, document: &ServerDat) -> 
 }
 
 /// Add the linked server locally, independently of optional global server sync.
-pub(crate) fn ensure_linked_server(directory: &Path, name: &str, address: &str) -> Result<(), String> {
-    piston_lib::game::launcher::targets::parse_server_address(address).map_err(|e| e.to_string())?;
+pub(crate) fn ensure_linked_server(
+    directory: &Path,
+    name: &str,
+    address: &str,
+) -> Result<(), String> {
+    piston_lib::game::launcher::targets::parse_server_address(address)
+        .map_err(|e| e.to_string())?;
     let before = read_file(directory)?;
-    if before.document.servers.iter().any(|entry| normalize_address(&entry.ip) == normalize_address(address)) {
+    if before
+        .document
+        .servers
+        .iter()
+        .any(|entry| normalize_address(&entry.ip) == normalize_address(address))
+    {
         return Ok(());
     }
-    if before.document.servers.len() >= MAX_SERVERS { return Err("Server list contains too many entries".into()); }
+    if before.document.servers.len() >= MAX_SERVERS {
+        return Err("Server list contains too many entries".into());
+    }
     let mut document = before.document.clone();
-    document.servers.push(ServerEntry { name: name.into(), ip: address.into(), icon: None, accept_textures: None, extra: HashMap::new() });
+    document.servers.push(ServerEntry {
+        name: name.into(),
+        ip: address.into(),
+        icon: None,
+        accept_textures: None,
+        extra: HashMap::new(),
+    });
     write_file(directory, &before, &document)
 }
 

@@ -33,7 +33,9 @@ pub fn prepare_headless(
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     if policy.enabled {
-        return Err(SandboxError::PresetUnsupported { preset: policy.preset });
+        return Err(SandboxError::PresetUnsupported {
+            preset: policy.preset,
+        });
     }
     prepare_for(run_plan, policy, true)
 }
@@ -118,16 +120,25 @@ mod tests {
 
         assert_eq!(spawn, SandboxedSpawn::Passthrough);
         assert_eq!(report, EnforcementReport::not_required());
-        assert_eq!(prepare_headless(&sample_run_plan(), &policy).unwrap(), (spawn, report));
+        assert_eq!(
+            prepare_headless(&sample_run_plan(), &policy).unwrap(),
+            (spawn, report)
+        );
     }
 
     #[test]
     fn headless_refuses_desktop_capabilities_before_native_preparation() {
-        let mut policy=SandboxPolicy::trusted();
-        policy.enabled=true;
-        assert!(matches!(prepare_headless(&sample_run_plan(), &policy), Err(SandboxError::InvalidHeadlessPolicy)));
-        policy.mic_allowed=false;
-        assert!(matches!(prepare_headless(&sample_run_plan(), &policy), Err(SandboxError::InvalidHeadlessPolicy)));
+        let mut policy = SandboxPolicy::trusted();
+        policy.enabled = true;
+        assert!(matches!(
+            prepare_headless(&sample_run_plan(), &policy),
+            Err(SandboxError::InvalidHeadlessPolicy)
+        ));
+        policy.mic_allowed = false;
+        assert!(matches!(
+            prepare_headless(&sample_run_plan(), &policy),
+            Err(SandboxError::InvalidHeadlessPolicy)
+        ));
     }
 
     #[test]

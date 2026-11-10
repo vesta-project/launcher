@@ -89,7 +89,8 @@ pub struct AppearanceSnapshot {
     #[serde(skip)]
     pub(crate) safe_fallback: bool,
 }
-const HEADER_HELP: &str = "A .css theme must start with a header comment: /* @vesta-theme name: My theme */";
+const HEADER_HELP: &str =
+    "A .css theme must start with a header comment: /* @vesta-theme name: My theme */";
 
 /// Authors write either the `.vestatheme` JSON envelope or a plain stylesheet whose first
 /// comment is a `@vesta-theme` header (`name:`, optional `contract:` and `base:` lines).
@@ -135,7 +136,10 @@ fn css_envelope(text: &str) -> Result<serde_json::Value, String> {
             if rest.is_empty() {
                 continue;
             }
-            return Err(format!("Theme header line {}: put each setting on its own line", index + 1));
+            return Err(format!(
+                "Theme header line {}: put each setting on its own line",
+                index + 1
+            ));
         }
         let (key, value) = line
             .split_once(':')
@@ -149,9 +153,14 @@ fn css_envelope(text: &str) -> Result<serde_json::Value, String> {
                 })?
             }
             "base" => {
-                base = Some(serde_json::from_str::<serde_json::Value>(value).map_err(|e| {
-                    format!("Theme header line {}: base must be a JSON object ({e})", index + 1)
-                })?)
+                base = Some(
+                    serde_json::from_str::<serde_json::Value>(value).map_err(|e| {
+                        format!(
+                            "Theme header line {}: base must be a JSON object ({e})",
+                            index + 1
+                        )
+                    })?,
+                )
             }
             other => {
                 return Err(format!(
@@ -484,8 +493,10 @@ mod tests {
     fn classic_stylesheet_form_imports_like_the_envelope() {
         let root = tempfile::tempdir().unwrap();
         let mut s = Store::read(root.path()).unwrap();
-        s.import(include_str!("../../../../apps/desktop-solid/examples/windows-2000.css"))
-            .unwrap();
+        s.import(include_str!(
+            "../../../../apps/desktop-solid/examples/windows-2000.css"
+        ))
+        .unwrap();
         let saved = s.persist(root.path()).unwrap();
         assert_eq!(saved.imports[0].name, "Windows 2000");
         assert!(saved.imports[0].css.starts_with("@layer theme.author {"));
@@ -499,16 +510,26 @@ mod tests {
     fn stylesheet_headers_report_their_line() {
         for (input, needle) in [
             ("a{color:red}", "header comment"),
-            ("/* @vesta-theme\n * colour: red\n */ a{color:red}", "line 2: unknown key"),
-            ("/* @vesta-theme\n * base: {mode}\n */ a{color:red}", "line 2: base must be a JSON object"),
+            (
+                "/* @vesta-theme\n * colour: red\n */ a{color:red}",
+                "line 2: unknown key",
+            ),
+            (
+                "/* @vesta-theme\n * base: {mode}\n */ a{color:red}",
+                "line 2: base must be a JSON object",
+            ),
             ("/* @vesta-theme */ a{color:red}", "needs a `name:` line"),
-            ("/* @vesta-theme\n name: X\n base: {\"shade\": 1}\n */ a{color:red}", "unknown field"),
+            (
+                "/* @vesta-theme\n name: X\n base: {\"shade\": 1}\n */ a{color:red}",
+                "unknown field",
+            ),
         ] {
             let error = parse_author_source(input).unwrap_err();
             assert!(error.contains(needle), "{input:?} gave {error:?}");
         }
         let partial = parse_author_source(
-            &file("Partial", "a{color:red}").replace("\"css\"", "\"base\":{\"mode\":\"dark\"},\"css\""),
+            &file("Partial", "a{color:red}")
+                .replace("\"css\"", "\"base\":{\"mode\":\"dark\"},\"css\""),
         )
         .unwrap();
         assert_eq!(serde_json::to_value(&partial.base).unwrap()["mode"], "dark");

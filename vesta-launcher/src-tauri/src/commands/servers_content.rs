@@ -135,7 +135,10 @@ pub async fn server_content_dependencies(
         let installed = inventory.items.iter().any(|item| {
             item.enabled == Some(true)
                 && item.sha256.is_some()
-                && !matches!(item.pending.as_deref(), Some("remove" | "disable" | "install"))
+                && !matches!(
+                    item.pending.as_deref(),
+                    Some("remove" | "disable" | "install")
+                )
                 && item.provider.as_ref().is_some_and(|p| {
                     p.provider == provider
                         && p.project_id == project.id
@@ -166,7 +169,9 @@ pub async fn server_content(
 ) -> Result<ContentInventory> {
     manager
         .management_read(&app, &connection_id, |client| async move {
-            client.content_inventory_view(summary.unwrap_or(false)).await
+            client
+                .content_inventory_view(summary.unwrap_or(false))
+                .await
         })
         .await
 }

@@ -13,7 +13,8 @@ describe("parseSandboxExtraPaths", () => {
 		"42",
 		'"path"',
 	])("returns no paths for empty or malformed input %j", (raw) =>
-		expect(parseSandboxExtraPaths(raw)).toEqual([]));
+		expect(parseSandboxExtraPaths(raw)).toEqual([]),
+	);
 
 	it("preserves Windows and Unix paths in stored JSON", () => {
 		const paths = [

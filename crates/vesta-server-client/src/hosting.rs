@@ -258,14 +258,26 @@ pub(super) fn wire(value: Value) -> Value {
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EulaState { pub accepted: bool }
+pub struct EulaState {
+    pub accepted: bool,
+}
 impl Client {
     pub async fn eula(&self) -> Result<EulaState> {
         from_wire(self.get("eula", true, "config.view").await?)
     }
     pub async fn set_eula(&self, accepted: bool, intent: &str) -> Result<EulaState> {
         let key = self.intent_key(intent)?;
-        from_wire(self.request(Method::POST, "/api/v3/manage/eula", Some(json!({"accepted":accepted})), Some(&key), true, "config.edit").await?)
+        from_wire(
+            self.request(
+                Method::POST,
+                "/api/v3/manage/eula",
+                Some(json!({"accepted":accepted})),
+                Some(&key),
+                true,
+                "config.edit",
+            )
+            .await?,
+        )
     }
 
     pub async fn custom_jar_plan(
@@ -332,7 +344,12 @@ impl Client {
         from_wire(self.request(Method::POST,"/api/v3/manage/software/custom-jar/apply",Some(json!({"plan_id":id,"confirmation_token":approval.token.as_str(),"idempotency_key":key})),Some(&key),true,"content.install").await?)
     }
     /// Select a fresh world through the server's recoverable, owner-only operation.
-    pub async fn new_world(&self, expected_revision: String, confirm_world: String, intent: &str) -> Result<ServerWorld> {
+    pub async fn new_world(
+        &self,
+        expected_revision: String,
+        confirm_world: String,
+        intent: &str,
+    ) -> Result<ServerWorld> {
         let value = self.management_mutate(Method::POST, "world/new", Some(json!({"seed":"", "expected_revision":expected_revision,"confirm_world":confirm_world})), intent, "config.edit").await?;
         from_wire(value.get("world").cloned().ok_or_else(invalid)?)
     }

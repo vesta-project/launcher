@@ -11,13 +11,18 @@ fn operation_title(operation: &ServerOperation) -> String {
             LifecycleAction::Kill => "Force stop server",
             LifecycleAction::Sleep => "Sleep server",
             LifecycleAction::Wake => "Wake server",
-        }.into(),
+        }
+        .into(),
         Some(OperationSummary::ConsoleCommand { .. }) => "Send console command".into(),
         Some(OperationSummary::PlayersModerate { action, player, .. }) => {
             let action = match action.as_str() {
-                "whitelist_add" => "Whitelist", "whitelist_remove" => "Remove from whitelist",
-                "kick" => "Kick", "ban" => "Ban", "pardon" => "Unban",
-                "op" => "Make operator", "deop" => "Remove operator",
+                "whitelist_add" => "Whitelist",
+                "whitelist_remove" => "Remove from whitelist",
+                "kick" => "Kick",
+                "ban" => "Ban",
+                "pardon" => "Unban",
+                "op" => "Make operator",
+                "deop" => "Remove operator",
                 _ => "Manage player",
             };
             format!("{action}: {player}")
@@ -31,11 +36,18 @@ fn operation_title(operation: &ServerOperation) -> String {
             Some("lifecycle.kill") => "Force stop server",
             Some("console.command") => "Send console command",
             _ => "Server task",
-        }.into(),
+        }
+        .into(),
     }
 }
 
-fn activity(app: &AppHandle, id: &str, server_name: &str, operation: &ServerOperation, initial: bool) {
+fn activity(
+    app: &AppHandle,
+    id: &str,
+    server_name: &str,
+    operation: &ServerOperation,
+    initial: bool,
+) {
     let activity_id = format!("server:{id}:{}", operation.operation_id);
     let title = format!("{}: {server_name}", operation_title(operation));
     if initial {
@@ -66,7 +78,17 @@ fn notify_failure(app: &AppHandle, id: &str, operation: &ServerOperation) {
         models::{CreateNotificationInput, NotificationType},
     };
     if let Some(notifications) = app.try_state::<NotificationManager>() {
-        let _=notifications.create(CreateNotificationInput {client_key:Some(format!("server:{id}:{}",operation.operation_id)),title:Some(format!("{} needs attention", operation_title(operation))),description:Some(format!("Result: {}. Review this server's console and Activity for details.", operation.outcome.as_deref().unwrap_or(&operation.state))),severity:Some("warning".into()),notification_type:Some(NotificationType::Patient),..Default::default()});
+        let _ = notifications.create(CreateNotificationInput {
+            client_key: Some(format!("server:{id}:{}", operation.operation_id)),
+            title: Some(format!("{} needs attention", operation_title(operation))),
+            description: Some(format!(
+                "Result: {}. Review this server's console and Activity for details.",
+                operation.outcome.as_deref().unwrap_or(&operation.state)
+            )),
+            severity: Some("warning".into()),
+            notification_type: Some(NotificationType::Patient),
+            ..Default::default()
+        });
     }
 }
 
@@ -145,7 +167,11 @@ impl ServerManager {
                 operation: operation.clone(),
             },
         );
-        let server_name = self.record(id).await.map(|record| record.snapshot.connection.name).unwrap_or_else(|_| "Server".into());
+        let server_name = self
+            .record(id)
+            .await
+            .map(|record| record.snapshot.connection.name)
+            .unwrap_or_else(|_| "Server".into());
         match self.start_tracker(app, id, &server_name, operation) {
             Err(e) if e.code == ErrorCode::ServerBusy => {
                 // The remote acceptance and its durable ID are already known.
@@ -347,7 +373,11 @@ impl ServerManager {
                     }
                     let mut changed = false;
                     let mut finished = Vec::new();
-                    let server_name = manager.record(&id).await.map(|record| record.snapshot.connection.name).unwrap_or_else(|_| "Server".into());
+                    let server_name = manager
+                        .record(&id)
+                        .await
+                        .map(|record| record.snapshot.connection.name)
+                        .unwrap_or_else(|_| "Server".into());
                     for mut operation in observations {
                         manager.decorate_operation(&id, &mut operation).await;
                         if operation.terminal() && !operation.reconciling {

@@ -223,7 +223,9 @@ impl Client {
         Ok(enrollment)
     }
     /// Redeem into the current authenticated principal, preserving its device identity.
-    pub fn device_signer(&self) -> Arc<dyn DeviceSigner> { self.signer.clone() }
+    pub fn device_signer(&self) -> Arc<dyn DeviceSigner> {
+        self.signer.clone()
+    }
     pub async fn redeem_pairing(&self, code: &str, device_name: &str) -> Result<Enrollment> {
         let value = self.request(Method::POST, "/api/v3/manage/pair",
             Some(json!({"code":code,"device_name":device_name,"public_key":self.signer.public_key()})),
@@ -337,10 +339,7 @@ impl Client {
                 interactive,
             )
             .await;
-        if result
-            .as_ref()
-            .is_err_and(|e| e.session_needs_renewal())
-        {
+        if result.as_ref().is_err_and(|e| e.session_needs_renewal()) {
             token = self.token(Some(&token)).await?;
             result = self
                 .transport

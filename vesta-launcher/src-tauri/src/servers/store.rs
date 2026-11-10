@@ -23,7 +23,10 @@ impl Record {
     /// An explicit re-pair must replace keys already rejected or unavailable.
     /// Server identity and selected-account checks remain the caller's prerequisite.
     pub(crate) fn can_reuse_enrollment_key(&self) -> bool {
-        !matches!(self.snapshot.state.access.as_str(), "credentials_rejected" | "credentials_unavailable")
+        !matches!(
+            self.snapshot.state.access.as_str(),
+            "credentials_rejected" | "credentials_unavailable"
+        )
     }
 }
 
@@ -38,21 +41,32 @@ mod tests {
         let legacy: Record = serde_json::from_value(json).unwrap();
         assert!(legacy.account_uuid.is_none());
         let mut store = Store::default();
-        assert_eq!(store.enroll(legacy.clone(), None).unwrap_err().code, ErrorCode::CredentialsRejected);
+        assert_eq!(
+            store.enroll(legacy.clone(), None).unwrap_err().code,
+            ErrorCode::CredentialsRejected
+        );
         store.connections.push(legacy);
-        assert_eq!(store.enroll(old.clone(), Some("one")).unwrap_err().code, ErrorCode::CredentialsRejected);
+        assert_eq!(
+            store.enroll(old.clone(), Some("one")).unwrap_err().code,
+            ErrorCode::CredentialsRejected
+        );
         old.key_reference = uuid::Uuid::new_v4().to_string();
         store.enroll(old.clone(), Some("one")).unwrap();
         let mut other = old.clone();
         other.account_uuid = Some("123e4567-e89b-42d3-a456-426614174000".into());
-        assert_eq!(store.enroll(other.clone(), Some("one")).unwrap_err().code, ErrorCode::CredentialsRejected);
+        assert_eq!(
+            store.enroll(other.clone(), Some("one")).unwrap_err().code,
+            ErrorCode::CredentialsRejected
+        );
         assert_eq!(store.connections[0].account_uuid, old.account_uuid);
         other.key_reference = uuid::Uuid::new_v4().to_string();
         other.snapshot.connection.auth_revision = Some("other-account".into());
         store.enroll(other.clone(), Some("one")).unwrap();
         assert_eq!(store.connections[0].account_uuid, other.account_uuid);
         assert_eq!(store.connections[0].key_reference, other.key_reference);
-        assert!(store.pending_credential_deletions.contains(&old.key_reference));
+        assert!(store
+            .pending_credential_deletions
+            .contains(&old.key_reference));
     }
     #[tokio::test]
     async fn reauthentication_preserves_connection_and_retires_credentials_only_after_commit() {
@@ -74,10 +88,16 @@ mod tests {
         let new_key = new.key_reference.clone();
         let blocked = root.path().join("file-not-directory");
         std::fs::write(&blocked, b"blocked").unwrap();
-        assert!(Store::edit(&shared, &blocked, |s| s.enroll(new.clone(), Some("one"))).await.is_err());
+        assert!(
+            Store::edit(&shared, &blocked, |s| s.enroll(new.clone(), Some("one")))
+                .await
+                .is_err()
+        );
         assert_eq!(shared.lock().await.connections[0].key_reference, old_key);
         assert!(shared.lock().await.pending_credential_deletions.is_empty());
-        let saved = Store::edit(&shared, root.path(), |s| s.enroll(new, Some("one"))).await.unwrap();
+        let saved = Store::edit(&shared, root.path(), |s| s.enroll(new, Some("one")))
+            .await
+            .unwrap();
         assert_eq!(saved.connection.id, "one");
         assert_eq!(saved.connection.name, "My server");
         assert!(saved.connection.pinned);
@@ -85,11 +105,22 @@ mod tests {
         assert_eq!(reloaded.connections.len(), 1);
         assert_eq!(reloaded.connections[0].key_reference, new_key);
         assert_eq!(reloaded.pending_credential_deletions, [old_key]);
-        let (observation, changed) = Store::observe(&shared, root.path(), old_snapshot).await.unwrap();
-        assert_eq!(observation.connection.auth_revision.as_deref(), Some("new-auth"));
+        let (observation, changed) = Store::observe(&shared, root.path(), old_snapshot)
+            .await
+            .unwrap();
+        assert_eq!(
+            observation.connection.auth_revision.as_deref(),
+            Some("new-auth")
+        );
         assert!(!changed);
         old.snapshot.connection.fingerprint = "cd".repeat(32);
-        assert_eq!(Store::edit(&shared, root.path(), |s| s.enroll(old, Some("one"))).await.unwrap_err().code, ErrorCode::FingerprintMismatch);
+        assert_eq!(
+            Store::edit(&shared, root.path(), |s| s.enroll(old, Some("one")))
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::FingerprintMismatch
+        );
     }
 
     #[test]
@@ -98,24 +129,58 @@ mod tests {
         let mut record = persistent_record();
         record.snapshot.connection.auth_revision = Some("old".into());
         store.connections.push(record);
-        let pending = PendingIntent { connection_id: "one".into(), key: "intent".into(), key_version: 2, auth_revision: None,
-            action: "console.command".into(), payload_hash: "hash".into(), operation_id: None, created_at_ms: 1, terminal: false, uncertain: true };
-        store.reserve_management_intent(pending.clone(), false).unwrap();
+        let pending = PendingIntent {
+            connection_id: "one".into(),
+            key: "intent".into(),
+            key_version: 2,
+            auth_revision: None,
+            action: "console.command".into(),
+            payload_hash: "hash".into(),
+            operation_id: None,
+            created_at_ms: 1,
+            terminal: false,
+            uncertain: true,
+        };
+        store
+            .reserve_management_intent(pending.clone(), false)
+            .unwrap();
         store.connections[0].snapshot.connection.auth_revision = Some("new".into());
-        assert_eq!(store.reserve_management_intent(pending, false).unwrap_err().code, ErrorCode::Conflict);
+        assert_eq!(
+            store
+                .reserve_management_intent(pending, false)
+                .unwrap_err()
+                .code,
+            ErrorCode::Conflict
+        );
     }
     #[test]
     fn explicit_repair_rotates_rejected_credentials_without_changing_identity() {
-        let mut old=persistent_record();
-        old.snapshot.state.observe_request_failure(&Error::new(ErrorCode::CredentialsRejected), 1);
-        assert!(!old.can_reuse_enrollment_key(), "a rejected key must not be reused by explicit re-pairing");
-        let mut replacement=old.clone(); replacement.key_reference=uuid::Uuid::new_v4().to_string(); replacement.device_id="fresh-device".into();
-        let mut store=Store::default();store.connections.push(old.clone());
-        let result=store.enroll(replacement,Some("one")).unwrap();
-        assert_eq!(result.connection.id,old.snapshot.connection.id);
-        assert_eq!(result.connection.server_id,old.snapshot.connection.server_id);
-        assert_eq!(result.connection.fingerprint,old.snapshot.connection.fingerprint);
-        assert!(store.pending_credential_deletions.contains(&old.key_reference));
+        let mut old = persistent_record();
+        old.snapshot
+            .state
+            .observe_request_failure(&Error::new(ErrorCode::CredentialsRejected), 1);
+        assert!(
+            !old.can_reuse_enrollment_key(),
+            "a rejected key must not be reused by explicit re-pairing"
+        );
+        let mut replacement = old.clone();
+        replacement.key_reference = uuid::Uuid::new_v4().to_string();
+        replacement.device_id = "fresh-device".into();
+        let mut store = Store::default();
+        store.connections.push(old.clone());
+        let result = store.enroll(replacement, Some("one")).unwrap();
+        assert_eq!(result.connection.id, old.snapshot.connection.id);
+        assert_eq!(
+            result.connection.server_id,
+            old.snapshot.connection.server_id
+        );
+        assert_eq!(
+            result.connection.fingerprint,
+            old.snapshot.connection.fingerprint
+        );
+        assert!(store
+            .pending_credential_deletions
+            .contains(&old.key_reference));
     }
     fn persistent_record() -> Record {
         let snapshot: ServerSnapshot = serde_json::from_value(serde_json::json!({
@@ -532,8 +597,10 @@ fn save_failed(error: impl std::fmt::Display) -> Error {
 }
 impl Store {
     pub fn intent_uses_current_auth(&self, intent: &PendingIntent) -> bool {
-        self.connections.iter().any(|record| record.snapshot.connection.id == intent.connection_id
-            && record.snapshot.connection.auth_revision == intent.auth_revision)
+        self.connections.iter().any(|record| {
+            record.snapshot.connection.id == intent.connection_id
+                && record.snapshot.connection.auth_revision == intent.auth_revision
+        })
     }
     /// Called by a serialized maintenance owner. Re-read after each deletion so
     /// concurrent removals cannot get stranded behind a stale queue snapshot.
@@ -657,14 +724,23 @@ impl Store {
         Ok(())
     }
     pub fn enroll(&mut self, mut record: Record, existing: Option<&str>) -> Result<ServerSnapshot> {
-        if record.account_uuid.as_deref().and_then(|id| uuid::Uuid::parse_str(id).ok()).is_none() {
+        if record
+            .account_uuid
+            .as_deref()
+            .and_then(|id| uuid::Uuid::parse_str(id).ok())
+            .is_none()
+        {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
         if let Some(id) = existing {
-            let index = self.connections.iter().position(|r| r.snapshot.connection.id == id)
+            let index = self
+                .connections
+                .iter()
+                .position(|r| r.snapshot.connection.id == id)
                 .ok_or_else(|| Error::new(ErrorCode::Conflict))?;
             let old = &self.connections[index];
-            if old.key_reference == record.key_reference && old.account_uuid != record.account_uuid {
+            if old.key_reference == record.key_reference && old.account_uuid != record.account_uuid
+            {
                 return Err(Error::new(ErrorCode::CredentialsRejected));
             }
             let before = &old.snapshot.connection;
@@ -673,39 +749,60 @@ impl Store {
                 return Err(Error::new(ErrorCode::FingerprintMismatch));
             }
             if !before.memory_only && old.key_reference != record.key_reference {
-                if self.pending_credential_deletions.len() >= 256 { return Err(Error::new(ErrorCode::ServerBusy)); }
-                self.pending_credential_deletions.push(old.key_reference.clone());
+                if self.pending_credential_deletions.len() >= 256 {
+                    return Err(Error::new(ErrorCode::ServerBusy));
+                }
+                self.pending_credential_deletions
+                    .push(old.key_reference.clone());
             }
             after.id = before.id.clone();
             after.name = before.name.clone();
             after.pinned = before.pinned;
             after.added_at_ms = before.added_at_ms;
-            self.pending_enrollment_keys.retain(|key| key != &record.key_reference);
+            self.pending_enrollment_keys
+                .retain(|key| key != &record.key_reference);
             let snapshot = record.snapshot.clone();
             self.connections[index] = record;
             Ok(snapshot)
         } else {
-            if self.connections.len() >= 100 { return Err(Error::new(ErrorCode::ServerBusy)); }
-            if self.connections.iter().any(|r| r.snapshot.connection.server_id == record.snapshot.connection.server_id) {
+            if self.connections.len() >= 100 {
+                return Err(Error::new(ErrorCode::ServerBusy));
+            }
+            if self
+                .connections
+                .iter()
+                .any(|r| r.snapshot.connection.server_id == record.snapshot.connection.server_id)
+            {
                 return Err(Error::new(ErrorCode::Conflict));
             }
             let snapshot = record.snapshot.clone();
-            self.pending_enrollment_keys.retain(|key| key != &record.key_reference);
+            self.pending_enrollment_keys
+                .retain(|key| key != &record.key_reference);
             self.connections.push(record);
             Ok(snapshot)
         }
     }
     /// Reserve before sending. One-shot routes bypass agent replay caches, so even
     /// an identical intent must not be submitted again after a launcher restart.
-    pub fn reserve_management_intent(&mut self, mut pending: PendingIntent, once: bool) -> Result<()> {
-        pending.auth_revision = self.connections.iter().find(|r| r.snapshot.connection.id == pending.connection_id)
+    pub fn reserve_management_intent(
+        &mut self,
+        mut pending: PendingIntent,
+        once: bool,
+    ) -> Result<()> {
+        pending.auth_revision = self
+            .connections
+            .iter()
+            .find(|r| r.snapshot.connection.id == pending.connection_id)
             .and_then(|r| r.snapshot.connection.auth_revision.clone());
         if let Some(old) = self
             .intents
             .iter()
             .find(|i| i.connection_id == pending.connection_id && i.key == pending.key)
         {
-            if old.action != pending.action || old.payload_hash != pending.payload_hash || old.auth_revision != pending.auth_revision {
+            if old.action != pending.action
+                || old.payload_hash != pending.payload_hash
+                || old.auth_revision != pending.auth_revision
+            {
                 return Err(Error::new(ErrorCode::Conflict));
             }
             return if once {

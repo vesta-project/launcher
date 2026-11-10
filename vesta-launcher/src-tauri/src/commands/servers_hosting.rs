@@ -288,12 +288,32 @@ pub async fn server_java_download(
 }
 
 #[tauri::command]
-pub async fn server_world_datapack_offline(app: AppHandle, manager: Manager<'_>, connection_id: String, pack_id: String, enabled: bool, expected_revision: String, intent_id: String) -> Result<ServerWorld> {
+pub async fn server_world_datapack_offline(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    pack_id: String,
+    enabled: bool,
+    expected_revision: String,
+    intent_id: String,
+) -> Result<ServerWorld> {
     let journal = intent_id.clone();
     let payload = json!({"packId":pack_id,"enabled":enabled,"expectedRevision":expected_revision});
-    manager.management_write(&app, &connection_id, &journal, "world/datapacks/offline", payload, false, |client| async move {
-        client.world_datapack_offline(pack_id, enabled, expected_revision, &intent_id).await
-    }).await
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "world/datapacks/offline",
+            payload,
+            false,
+            |client| async move {
+                client
+                    .world_datapack_offline(pack_id, enabled, expected_revision, &intent_id)
+                    .await
+            },
+        )
+        .await
 }
 
 #[tauri::command]
@@ -328,17 +348,51 @@ pub async fn server_world_datapack_toggle(
 
 read_command!(server_eula, EulaState, eula);
 #[tauri::command]
-pub async fn server_eula_update(app: AppHandle, manager: Manager<'_>, connection_id: String, accepted: bool, intent_id: String) -> Result<EulaState> {
+pub async fn server_eula_update(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    accepted: bool,
+    intent_id: String,
+) -> Result<EulaState> {
     let journal = intent_id.clone();
-    manager.management_write(&app, &connection_id, &journal, "eula", json!({"accepted": accepted}), false,
-        |client| async move { client.set_eula(accepted, &intent_id).await }).await
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "eula",
+            json!({"accepted": accepted}),
+            false,
+            |client| async move { client.set_eula(accepted, &intent_id).await },
+        )
+        .await
 }
 
 #[tauri::command]
-pub async fn server_world_new(app: AppHandle, manager: Manager<'_>, connection_id: String, expected_revision: String, confirm_world: String, intent_id: String) -> Result<ServerWorld> {
+pub async fn server_world_new(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    expected_revision: String,
+    confirm_world: String,
+    intent_id: String,
+) -> Result<ServerWorld> {
     let journal = intent_id.clone();
     let payload = json!({"expectedRevision":expected_revision,"confirmWorld":confirm_world});
-    manager.management_write(&app, &connection_id, &journal, "world/new", payload, false, |client| async move {
-        client.new_world(expected_revision, confirm_world, &intent_id).await
-    }).await
+    manager
+        .management_write(
+            &app,
+            &connection_id,
+            &journal,
+            "world/new",
+            payload,
+            false,
+            |client| async move {
+                client
+                    .new_world(expected_revision, confirm_world, &intent_id)
+                    .await
+            },
+        )
+        .await
 }

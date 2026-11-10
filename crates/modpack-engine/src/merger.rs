@@ -36,8 +36,16 @@ pub fn merge_config(
     current_content: Option<&str>,
     new_content: Option<&str>,
 ) -> MergeResult {
-    if old_content.is_none() || current_content.is_none() || new_content.is_none() { return MergeResult::Unsupported; }
-    if [old_content,current_content,new_content].into_iter().flatten().any(|content|content.len()>MAX_CONFIG_BYTES) {return MergeResult::Unsupported;}
+    if old_content.is_none() || current_content.is_none() || new_content.is_none() {
+        return MergeResult::Unsupported;
+    }
+    if [old_content, current_content, new_content]
+        .into_iter()
+        .flatten()
+        .any(|content| content.len() > MAX_CONFIG_BYTES)
+    {
+        return MergeResult::Unsupported;
+    }
     let lower = path.to_lowercase();
 
     if lower.ends_with(".properties") {
@@ -168,7 +176,10 @@ fn apply_properties_merge(
     // Append user-added keys (in C but not in N or O) at the end
     let mut user_added: Vec<String> = Vec::new();
     for (key, val) in current_kv.iter() {
-        if !processed_keys.contains_key(key) && !new_kv.contains_key(key) && !old_kv.contains_key(key) {
+        if !processed_keys.contains_key(key)
+            && !new_kv.contains_key(key)
+            && !old_kv.contains_key(key)
+        {
             user_added.push(format!("# User-added key\n{}={}\n", key, val));
         }
     }
@@ -243,9 +254,13 @@ fn merge_json(
         return MergeResult::Corrupted("Failed to parse new JSON".into());
     }
 
-    if current_content.is_some() && current_kv.is_none() { return MergeResult::Corrupted("Failed to parse current JSON".into()); }
+    if current_content.is_some() && current_kv.is_none() {
+        return MergeResult::Corrupted("Failed to parse current JSON".into());
+    }
 
-    if old_content.is_some() && old_kv.is_none() { return MergeResult::Corrupted("Failed to parse old JSON".into()); }
+    if old_content.is_some() && old_kv.is_none() {
+        return MergeResult::Corrupted("Failed to parse old JSON".into());
+    }
 
     // Build merged KV map
     let mut merged = BTreeMap::new();
@@ -319,7 +334,9 @@ fn flatten_value(value: &serde_json::Value, prefix: &str, map: &mut BTreeMap<Str
             map.insert(
                 prefix.to_string(),
                 match value {
-                    serde_json::Value::String(s) => serde_json::to_string(s).expect("string serialization"),
+                    serde_json::Value::String(s) => {
+                        serde_json::to_string(s).expect("string serialization")
+                    }
                     other => other.to_string(),
                 },
             );
@@ -500,24 +517,71 @@ mod tests {
     }
 }
 
-#[cfg(test)] mod parity_tests { use super::*;
-#[test] fn properties_removed_author_keys_and_user_additions() {
- let MergeResult::Merged(s)=merge_config("config/a.properties",Some("removed=1\nchanged=1"),Some("removed=1\nchanged=2\nuser=3"),Some("changed=4")) else { panic!() };
- assert!(!s.contains("removed=")); assert!(s.contains("changed=2")); assert!(s.contains("user=3"));
-}
-#[test] fn json_strings_retain_their_type() {
- let MergeResult::Merged(s)=merge_config("config/a.json",Some(r#"{"v":"true"}"#),Some(r#"{"v":"123"}"#),Some(r#"{"v":"false"}"#)) else {panic!()};
- assert_eq!(serde_json::from_str::<serde_json::Value>(&s).unwrap()["v"],"123");
-}
-#[test] fn missing_base_retains_local_config() {assert!(matches!(merge_config("a.json",None,Some("{}"),Some("{}")),MergeResult::Unsupported));}
+#[cfg(test)]
+mod parity_tests {
+    use super::*;
+    #[test]
+    fn properties_removed_author_keys_and_user_additions() {
+        let MergeResult::Merged(s) = merge_config(
+            "config/a.properties",
+            Some("removed=1\nchanged=1"),
+            Some("removed=1\nchanged=2\nuser=3"),
+            Some("changed=4"),
+        ) else {
+            panic!()
+        };
+        assert!(!s.contains("removed="));
+        assert!(s.contains("changed=2"));
+        assert!(s.contains("user=3"));
+    }
+    #[test]
+    fn json_strings_retain_their_type() {
+        let MergeResult::Merged(s) = merge_config(
+            "config/a.json",
+            Some(r#"{"v":"true"}"#),
+            Some(r#"{"v":"123"}"#),
+            Some(r#"{"v":"false"}"#),
+        ) else {
+            panic!()
+        };
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&s).unwrap()["v"],
+            "123"
+        );
+    }
+    #[test]
+    fn missing_base_retains_local_config() {
+        assert!(matches!(
+            merge_config("a.json", None, Some("{}"), Some("{}")),
+            MergeResult::Unsupported
+        ));
+    }
 }
 
-#[cfg(test)] mod safety_parity_tests {use super::*;
-#[test] fn corrupt_json_and_unavailable_text_are_preserved() {
- for (old,current,new) in [("{","{}","{}"),("{}","{","{}"),("{}","{}","{")] {
- assert!(matches!(merge_config("config/a.json",Some(old),Some(current),Some(new)),MergeResult::Corrupted(_)));
- }
- assert!(matches!(merge_config("config/a.json",Some("{}"),None,Some("{}")),MergeResult::Unsupported));
- let oversized="x".repeat(MAX_CONFIG_BYTES+1);
- assert!(matches!(merge_config("config/a.properties",Some("a=1"),Some(&oversized),Some("a=2")),MergeResult::Unsupported));
-}}
+#[cfg(test)]
+mod safety_parity_tests {
+    use super::*;
+    #[test]
+    fn corrupt_json_and_unavailable_text_are_preserved() {
+        for (old, current, new) in [("{", "{}", "{}"), ("{}", "{", "{}"), ("{}", "{}", "{")] {
+            assert!(matches!(
+                merge_config("config/a.json", Some(old), Some(current), Some(new)),
+                MergeResult::Corrupted(_)
+            ));
+        }
+        assert!(matches!(
+            merge_config("config/a.json", Some("{}"), None, Some("{}")),
+            MergeResult::Unsupported
+        ));
+        let oversized = "x".repeat(MAX_CONFIG_BYTES + 1);
+        assert!(matches!(
+            merge_config(
+                "config/a.properties",
+                Some("a=1"),
+                Some(&oversized),
+                Some("a=2")
+            ),
+            MergeResult::Unsupported
+        ));
+    }
+}

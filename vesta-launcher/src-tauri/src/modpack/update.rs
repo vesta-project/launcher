@@ -430,7 +430,9 @@ pub(crate) async fn finish(
         updated.modpack_platform = Some("server".into());
         updated.modpack_id = Some(review.release.server_id.clone());
         updated.modpack_version_id = Some(review.release.revision.clone());
-        if let Some(provider) = &review.provider_pack { updated.modpack_icon_url = provider.icon_url.clone(); }
+        if let Some(provider) = &review.provider_pack {
+            updated.modpack_icon_url = provider.icon_url.clone();
+        }
     }
 
     if runtime_changed

@@ -80,12 +80,24 @@ pub(crate) fn server_busy_retry_delay(error: &Error) -> Option<Duration> {
 }
 
 fn upload_retry_delay(error: &Error, attempt: u32) -> Option<Duration> {
-    if attempt >= 3 || !matches!(error.code, ErrorCode::RateLimited | ErrorCode::ServerBusy
-        | ErrorCode::Timeout | ErrorCode::Unreachable | ErrorCode::OutcomeUnknown) {
+    if attempt >= 3
+        || !matches!(
+            error.code,
+            ErrorCode::RateLimited
+                | ErrorCode::ServerBusy
+                | ErrorCode::Timeout
+                | ErrorCode::Unreachable
+                | ErrorCode::OutcomeUnknown
+        )
+    {
         return None;
     }
     let backoff = Duration::from_millis(250 * (1 << attempt));
-    let delay = error.retry_after_ms.map(Duration::from_millis).unwrap_or(backoff).max(backoff);
+    let delay = error
+        .retry_after_ms
+        .map(Duration::from_millis)
+        .unwrap_or(backoff)
+        .max(backoff);
     // Do not shorten a server's Retry-After or hold an upload indefinitely.
     (delay <= Duration::from_secs(120)).then_some(delay)
 }
@@ -142,11 +154,17 @@ impl Transport {
     }
     /// Called for every request, including retries and retained background clients.
     pub fn set_access_guard(&self, guard: Arc<dyn Fn() -> bool + Send + Sync>) -> Result<()> {
-        *self.access_guard.lock().map_err(|_| Error::new(ErrorCode::Internal))? = Some(guard);
+        *self
+            .access_guard
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))? = Some(guard);
         Ok(())
     }
     pub(crate) fn check_access(&self) -> Result<()> {
-        let guard = self.access_guard.lock().map_err(|_| Error::new(ErrorCode::Internal))?;
+        let guard = self
+            .access_guard
+            .lock()
+            .map_err(|_| Error::new(ErrorCode::Internal))?;
         if guard.as_ref().is_some_and(|allowed| !allowed()) {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
@@ -287,14 +305,23 @@ impl Transport {
     ) -> Result<Value> {
         // Upload receipts are durable and bound to the body and idempotency key.
         // Retry the same chunk after pacing or a lost reply; never restart the upload.
-        let upload = method == Method::POST && key.is_some() && matches!(path,
-            "/api/v3/manage/pack/draft/uploads/begin"
-            | "/api/v3/manage/pack/draft/uploads/chunk"
-            | "/api/v3/manage/pack/draft/uploads/finish");
+        let upload = method == Method::POST
+            && key.is_some()
+            && matches!(
+                path,
+                "/api/v3/manage/pack/draft/uploads/begin"
+                    | "/api/v3/manage/pack/draft/uploads/chunk"
+                    | "/api/v3/manage/pack/draft/uploads/finish"
+            );
         if upload {
             for attempt in 0..4 {
-                let result = self.execute_once(method.clone(), path, token, body.clone(), key, interactive).await;
-                let delay = result.as_ref().err().and_then(|error| upload_retry_delay(error, attempt));
+                let result = self
+                    .execute_once(method.clone(), path, token, body.clone(), key, interactive)
+                    .await;
+                let delay = result
+                    .as_ref()
+                    .err()
+                    .and_then(|error| upload_retry_delay(error, attempt));
                 match delay {
                     Some(delay) => tokio::time::sleep(delay).await,
                     None => return result,
@@ -409,12 +436,13 @@ impl Transport {
             .and_then(|v| v.to_str().ok())
             .filter(|v| v.len() <= 128)
             .map(str::to_owned);
-        let body_limit =
-            if path.starts_with("/api/v3/manage/pack/") || path.split('?').next() == Some("/api/v3/manage/content") {
-                32 * 1024 * 1024
-            } else {
-                1024 * 1024
-            };
+        let body_limit = if path.starts_with("/api/v3/manage/pack/")
+            || path.split('?').next() == Some("/api/v3/manage/content")
+        {
+            32 * 1024 * 1024
+        } else {
+            1024 * 1024
+        };
         if response
             .content_length()
             .is_some_and(|n| n > body_limit as u64)
@@ -482,7 +510,10 @@ impl Transport {
             .with_provider_details(value.pointer("/error/details").unwrap_or(&Value::Null))
             .with_pack_issue(value.pointer("/error/issue").unwrap_or(&Value::Null));
             if error.code == ErrorCode::Conflict {
-                error.current = value.pointer("/error/current").filter(|v| v.is_object()).cloned();
+                error.current = value
+                    .pointer("/error/current")
+                    .filter(|v| v.is_object())
+                    .cloned();
             }
             // Some policy adapters signal revision conflicts by wire code with
             // another status. Apply the same rule after closed-code decoding.
@@ -591,40 +622,95 @@ mod priority_tests {
     #[tokio::test]
     async fn retired_account_clients_refuse_reads_mutations_files_and_sockets_before_network() {
         use std::sync::atomic::{AtomicBool, Ordering};
-        let transport = Transport::new(Endpoint::parse("localhost:1").unwrap(), Some("ab".repeat(32))).unwrap();
+        let transport = Transport::new(
+            Endpoint::parse("localhost:1").unwrap(),
+            Some("ab".repeat(32)),
+        )
+        .unwrap();
         let current = Arc::new(AtomicBool::new(true));
         let selected = current.clone();
-        transport.set_access_guard(Arc::new(move || selected.load(Ordering::Acquire))).unwrap();
+        transport
+            .set_access_guard(Arc::new(move || selected.load(Ordering::Acquire)))
+            .unwrap();
         assert!(transport.check_access().is_ok());
         current.store(false, Ordering::Release);
         for method in [Method::GET, Method::POST] {
-            assert_eq!(transport.request(method, "/api/v3/manage/server/status", Some("old-session"), None, None, true).await.unwrap_err().code, ErrorCode::CredentialsRejected);
+            assert_eq!(
+                transport
+                    .request(
+                        method,
+                        "/api/v3/manage/server/status",
+                        Some("old-session"),
+                        None,
+                        None,
+                        true
+                    )
+                    .await
+                    .unwrap_err()
+                    .code,
+                ErrorCode::CredentialsRejected
+            );
         }
-        assert_eq!(transport.socket("/api/v3/manage/stream", "old-session").await.unwrap_err().code, ErrorCode::CredentialsRejected);
-        let input = crate::file_transport::Request { method: Method::GET, path: "/api/v3/manage/files".into(), body: vec![], headers: Default::default(), key: None, bulk: false };
+        assert_eq!(
+            transport
+                .socket("/api/v3/manage/stream", "old-session")
+                .await
+                .unwrap_err()
+                .code,
+            ErrorCode::CredentialsRejected
+        );
+        let input = crate::file_transport::Request {
+            method: Method::GET,
+            path: "/api/v3/manage/files".into(),
+            body: vec![],
+            headers: Default::default(),
+            key: None,
+            bulk: false,
+        };
         // File requests reach the same guard before constructing a credentialed request.
-        assert_eq!(transport.file_request(&input, "old-session").await.err().unwrap().code, ErrorCode::CredentialsRejected);
+        assert_eq!(
+            transport
+                .file_request(&input, "old-session")
+                .await
+                .err()
+                .unwrap()
+                .code,
+            ErrorCode::CredentialsRejected
+        );
     }
     #[test]
     fn archive_upload_can_wait_out_a_session_rate_window() {
-        let mut error=Error::wire(429,"rate_limited",Some(60_000));
-        error.retry_after_ms=Some(60_000);
-        assert_eq!(upload_retry_delay(&error,0),Some(Duration::from_secs(60)));
-        assert_eq!(upload_retry_delay(&error,3),None);
+        let mut error = Error::wire(429, "rate_limited", Some(60_000));
+        error.retry_after_ms = Some(60_000);
+        assert_eq!(upload_retry_delay(&error, 0), Some(Duration::from_secs(60)));
+        assert_eq!(upload_retry_delay(&error, 3), None);
     }
     #[test]
     fn upload_retry_honors_pacing_and_never_retries_refusals() {
         let mut error = Error::new(ErrorCode::RateLimited).local_pressure();
         error.retry_after_ms = Some(1500);
-        assert_eq!(upload_retry_delay(&error, 0), Some(Duration::from_millis(1500)));
+        assert_eq!(
+            upload_retry_delay(&error, 0),
+            Some(Duration::from_millis(1500))
+        );
         assert_eq!(upload_retry_delay(&error, 3), None);
         error.retry_after_ms = Some(120_001);
         assert_eq!(upload_retry_delay(&error, 0), None);
-        for code in [ErrorCode::Timeout, ErrorCode::Unreachable, ErrorCode::OutcomeUnknown] {
+        for code in [
+            ErrorCode::Timeout,
+            ErrorCode::Unreachable,
+            ErrorCode::OutcomeUnknown,
+        ] {
             assert!(upload_retry_delay(&Error::new(code), 0).is_some());
         }
-        for code in [ErrorCode::InvalidInput, ErrorCode::Forbidden, ErrorCode::Conflict,
-            ErrorCode::TlsFailed, ErrorCode::FingerprintMismatch, ErrorCode::Unsupported] {
+        for code in [
+            ErrorCode::InvalidInput,
+            ErrorCode::Forbidden,
+            ErrorCode::Conflict,
+            ErrorCode::TlsFailed,
+            ErrorCode::FingerprintMismatch,
+            ErrorCode::Unsupported,
+        ] {
             assert_eq!(upload_retry_delay(&Error::new(code), 0), None);
         }
     }

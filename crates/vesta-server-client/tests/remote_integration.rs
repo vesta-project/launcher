@@ -1,18 +1,18 @@
 //! Opt-in cross-device endpoint test. Temporary account/runtime fixtures only.
 //! Never discovers hosts, launches games, or accepts an unexpected certificate.
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use reqwest::Method;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::{
     fs,
     sync::Arc,
     time::{Duration, Instant},
 };
 use vesta_server_client::{
-    Client, Error, ErrorCode,
     auth::{DeviceSigner, Ed25519Signer},
     endpoint::Endpoint,
     transport::Transport,
+    Client, Error, ErrorCode,
 };
 const ROOT: &str = "C:/Users/eatha/AppData/Local/Temp/vesta-remote-integration-20261109";
 fn signer(label: &str) -> Arc<Ed25519Signer> {
@@ -280,11 +280,10 @@ async fn remote_endpoint_batch() {
             !plan.software_switch_required,
             "fixture runtime must match; no runtime download allowed"
         );
-        assert!(
-            plan.files
-                .iter()
-                .any(|f| f.path == "config/remote-managed.json")
-        );
+        assert!(plan
+            .files
+            .iter()
+            .any(|f| f.path == "config/remote-managed.json"));
         let apply = vesta_server_client::pack::PackInstallApply {
             plan_id: plan.plan_id,
             confirmation_token: plan.confirmation_token,

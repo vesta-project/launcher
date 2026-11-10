@@ -21,14 +21,22 @@ async fn player_session_and_public_lifecycle_need_no_management_status_access() 
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;
     a.set("GET", "/api/v3/manage/session", json!({"server_id":"server-1", "principal_id":"player", "roles":[], "capabilities":["public.info"]}));
-    a.set("GET", "/api/v3/status", json!({"api_version":"3", "server_id":"server-1", "state":"offline"}));
+    a.set(
+        "GET",
+        "/api/v3/status",
+        json!({"api_version":"3", "server_id":"server-1", "state":"offline"}),
+    );
     let capabilities = a.client.capabilities(None).await.unwrap();
     assert_eq!(capabilities.source, "session");
     assert!(!capabilities.granted.iter().any(|cap| cap == "status.view"));
     assert_eq!(a.client.public_lifecycle().await.unwrap(), "offline");
     assert!(a.calls("/api/v3/manage/server").is_empty());
     assert!(a.calls("/api/v3/manage/server/status").is_empty());
-    a.set("GET", "/api/v3/status", json!({"api_version":"3", "server_id":"other-server", "state":"online"}));
+    a.set(
+        "GET",
+        "/api/v3/status",
+        json!({"api_version":"3", "server_id":"other-server", "state":"online"}),
+    );
     a.client.transport.invalidate_reads();
     assert!(a.client.public_lifecycle().await.is_err());
 }
@@ -37,12 +45,34 @@ async fn player_session_and_public_lifecycle_need_no_management_status_access() 
 async fn pack_upload_retries_pressure_with_identical_chunk_and_intent() {
     use vesta_server_client::pack::UploadChunk;
     let _owner = OWNER.lock().await;
-    for (status, code) in [(503, "temporarily_unavailable"), (429, "rate_limited"), (502, "gateway_lost_reply")] {
+    for (status, code) in [
+        (503, "temporarily_unavailable"),
+        (429, "rate_limited"),
+        (502, "gateway_lost_reply"),
+    ] {
         let a = Agent::start().await;
         let route = "/api/v3/manage/pack/draft/uploads/chunk";
-        a.set("POST", route, json!({"upload_id":"upload", "size":"3", "sha256":"a".repeat(64), "complete":false}));
-        a.state.lock().unwrap().once.insert(("POST".into(), route.into()), (status, json!({"code":code})));
-        let receipt = a.client.pack_upload_chunk(UploadChunk { upload_id:"upload".into(), offset:"0".into(), content_base64:"YWJj".into() }, "same-chunk").await.unwrap();
+        a.set(
+            "POST",
+            route,
+            json!({"upload_id":"upload", "size":"3", "sha256":"a".repeat(64), "complete":false}),
+        );
+        a.state.lock().unwrap().once.insert(
+            ("POST".into(), route.into()),
+            (status, json!({"code":code})),
+        );
+        let receipt = a
+            .client
+            .pack_upload_chunk(
+                UploadChunk {
+                    upload_id: "upload".into(),
+                    offset: "0".into(),
+                    content_base64: "YWJj".into(),
+                },
+                "same-chunk",
+            )
+            .await
+            .unwrap();
         assert_eq!(receipt.size, "3");
         let calls = a.calls(route);
         assert_eq!(calls.len(), 2);
@@ -56,34 +86,86 @@ async fn pack_upload_retries_pressure_with_identical_chunk_and_intent() {
 async fn pack_upload_retry_is_bounded_and_refusals_stop_immediately() {
     use vesta_server_client::pack::UploadChunk;
     let _owner = OWNER.lock().await;
-    for (status, code, attempts) in [(503, "temporarily_unavailable", 4), (409, "idempotency_conflict", 1), (403, "forbidden", 1)] {
+    for (status, code, attempts) in [
+        (503, "temporarily_unavailable", 4),
+        (409, "idempotency_conflict", 1),
+        (403, "forbidden", 1),
+    ] {
         let a = Agent::start().await;
         let route = "/api/v3/manage/pack/draft/uploads/chunk";
         a.reply("POST", route, status, json!({"code":code}));
-        assert!(a.client.pack_upload_chunk(UploadChunk { upload_id:"upload".into(), offset:"0".into(), content_base64:"YWJj".into() }, "same-chunk").await.is_err());
+        assert!(a
+            .client
+            .pack_upload_chunk(
+                UploadChunk {
+                    upload_id: "upload".into(),
+                    offset: "0".into(),
+                    content_base64: "YWJj".into()
+                },
+                "same-chunk"
+            )
+            .await
+            .is_err());
         assert_eq!(a.calls(route).len(), attempts);
     }
 }
 
 #[tokio::test]
 async fn backup_configuration_bridge_maps_closed_drafts_and_preserves_retry_intents() {
-    use vesta_server_client::backups_config::{BackupConfigDraft, BackupConfigLimits, BackupProfileConfig};
+    use vesta_server_client::backups_config::{
+        BackupConfigDraft, BackupConfigLimits, BackupProfileConfig,
+    };
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;
     a.set("GET", "/api/v3/manage/backups/config", json!({"source":"host_config","revision":null,"profiles":[],"limits":{"max_snapshots":null,"max_repository_bytes":null,"min_free_bytes":1073741824},"repository":{"kind":"local","location":"C:/Vesta/backups/repository","initialized":false},"backups_configured":false,"schedule_owner":"automation"}));
     let view = a.client.backup_configuration().await.unwrap();
-    assert!(!view.backups_configured); assert!(!view.repository.initialized);
+    assert!(!view.backups_configured);
+    assert!(!view.repository.initialized);
     assert_eq!(view.revision, None);
     let draft = BackupConfigDraft {
-        profiles: vec![BackupProfileConfig {name:"daily".into(),mode:"stopped".into(),keep_total:10,keep_hourly:0,keep_last:7,keep_daily:7,keep_weekly:4,keep_monthly:3,on_mutation:"fail-world".into(),warn_seconds:60,max_snapshots:None,include:vec![],exclude:vec!["logs/".into()]}],
-        limits: BackupConfigLimits {max_snapshots:None,max_repository_bytes:None,min_free_bytes:1073741824}, initialize_repository:true,
+        profiles: vec![BackupProfileConfig {
+            name: "daily".into(),
+            mode: "stopped".into(),
+            keep_total: 10,
+            keep_hourly: 0,
+            keep_last: 7,
+            keep_daily: 7,
+            keep_weekly: 4,
+            keep_monthly: 3,
+            on_mutation: "fail-world".into(),
+            warn_seconds: 60,
+            max_snapshots: None,
+            include: vec![],
+            exclude: vec!["logs/".into()],
+        }],
+        limits: BackupConfigLimits {
+            max_snapshots: None,
+            max_repository_bytes: None,
+            min_free_bytes: 1073741824,
+        },
+        initialize_repository: true,
     };
-    a.set("PUT", "/api/v3/manage/backups/config", json!({"revision":1}));
-    assert_eq!(a.client.backup_configure(draft.clone(), None, "setup-config").await.unwrap().revision, 1);
-    a.client.backup_configure(draft.clone(), None, "setup-config").await.unwrap();
+    a.set(
+        "PUT",
+        "/api/v3/manage/backups/config",
+        json!({"revision":1}),
+    );
+    assert_eq!(
+        a.client
+            .backup_configure(draft.clone(), None, "setup-config")
+            .await
+            .unwrap()
+            .revision,
+        1
+    );
+    a.client
+        .backup_configure(draft.clone(), None, "setup-config")
+        .await
+        .unwrap();
     let calls = a.calls("/api/v3/manage/backups/config");
     let writes: Vec<_> = calls.iter().filter(|c| c.method == "PUT").collect();
-    assert_eq!(writes.len(), 2); assert_eq!(writes[0].key, writes[1].key);
+    assert_eq!(writes.len(), 2);
+    assert_eq!(writes[0].key, writes[1].key);
     assert_eq!(writes[0].body, writes[1].body);
     assert_eq!(writes[0].body["profiles"][0]["keep_last"], 7);
     assert_eq!(writes[0].body["initialize_repository"], true);
@@ -93,25 +175,67 @@ async fn backup_configuration_bridge_maps_closed_drafts_and_preserves_retry_inte
 #[tokio::test]
 async fn hosting_bridge_preserves_seed_precision_and_keeps_approval_tokens_native() {
     use vesta_server_client::hosting::SoftwarePlanRequest;
-    let _owner=OWNER.lock().await;
-    let a=Agent::start().await;
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
     a.set("GET","/api/v3/manage/world",json!({"name":"world","seed":"-9223372036854775808","configured_seed":"","exists":true,"revision":"a".repeat(64)}));
-    assert_eq!(a.client.world().await.unwrap().seed.as_deref(),Some("-9223372036854775808"));
-    let id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    assert_eq!(
+        a.client.world().await.unwrap().seed.as_deref(),
+        Some("-9223372036854775808")
+    );
+    let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     a.set("POST","/api/v3/manage/software/plan",json!({"plan_id":id,"confirmation_token":"native-secret","expires_at_ms":4102444800000i64,"expected_revision":9007199254740993u64,"software":"paper","version":"1.21.4","build":null,"java":{"major":21,"evidence":"fixture"},"warnings":[],"risks":[]}));
-    let plan=a.client.software_plan(SoftwarePlanRequest{software:"paper".into(),version:"1.21.4".into(),build:None,loader_version:None,experimental:None}).await.unwrap();
-    assert_eq!(plan.expected_revision,"9007199254740993");
-    assert!(!serde_json::to_string(&plan).unwrap().contains("native-secret"));
-    assert_eq!(a.calls("/api/v3/manage/software/plan")[0].body["experimental"],false);
+    let plan = a
+        .client
+        .software_plan(SoftwarePlanRequest {
+            software: "paper".into(),
+            version: "1.21.4".into(),
+            build: None,
+            loader_version: None,
+            experimental: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(plan.expected_revision, "9007199254740993");
+    assert!(!serde_json::to_string(&plan)
+        .unwrap()
+        .contains("native-secret"));
+    assert_eq!(
+        a.calls("/api/v3/manage/software/plan")[0].body["experimental"],
+        false
+    );
     a.set("POST","/api/v3/manage/software/apply",json!({"id":"job","kind":"apply","state":"queued","created_at_ms":1,"updated_at_ms":1,"error":null}));
-    a.client.software_apply(id.into(),true,false,"apply-once").await.unwrap();
-    a.client.software_apply(id.into(),true,false,"apply-once").await.unwrap();
-    let calls=a.calls("/api/v3/manage/software/apply");
-    assert_eq!(calls.len(),2);assert_eq!(calls[0].key,calls[1].key);assert_eq!(calls[0].body,calls[1].body);
-    assert_eq!(calls[0].body["confirmation_token"],"native-secret");
-    assert_eq!(a.client.software_apply(id.into(),true,false,"another-intent").await.unwrap_err().code,ErrorCode::Conflict);
-    a.reply("POST","/api/v3/manage/software/apply",403,json!({"code":"software_forbidden"}));
-    assert!(a.client.software_apply(id.into(),true,false,"apply-once").await.is_err());
+    a.client
+        .software_apply(id.into(), true, false, "apply-once")
+        .await
+        .unwrap();
+    a.client
+        .software_apply(id.into(), true, false, "apply-once")
+        .await
+        .unwrap();
+    let calls = a.calls("/api/v3/manage/software/apply");
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[0].key, calls[1].key);
+    assert_eq!(calls[0].body, calls[1].body);
+    assert_eq!(calls[0].body["confirmation_token"], "native-secret");
+    assert_eq!(
+        a.client
+            .software_apply(id.into(), true, false, "another-intent")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    a.reply(
+        "POST",
+        "/api/v3/manage/software/apply",
+        403,
+        json!({"code":"software_forbidden"}),
+    );
+    assert!(a
+        .client
+        .software_apply(id.into(), true, false, "apply-once")
+        .await
+        .is_err());
 }
 
 #[tokio::test]
@@ -609,11 +733,17 @@ async fn route(
         )
     } else if path == "/api/v3/status" {
         assert!(req.headers().get("authorization").is_none());
-        state.routes.get(&(method, full)).cloned().unwrap_or((404, Value::Null))
+        state
+            .routes
+            .get(&(method, full))
+            .cloned()
+            .unwrap_or((404, Value::Null))
     } else {
         assert_eq!(req.headers()["authorization"], "Bearer session");
         let route_key = (method, full);
-        let (status, data) = state.once.remove(&route_key)
+        let (status, data) = state
+            .once
+            .remove(&route_key)
             .or_else(|| state.routes.get(&route_key).cloned())
             .unwrap_or((501, json!({"code":"not_implemented"})));
         (
@@ -915,8 +1045,14 @@ async fn users_roles_devices_invitations_and_access_mutations_match_wire() {
         a.calls("/api/v3/manage/invitations")[0].body,
         json!({"role":"viewer","expires_minutes":15})
     );
-    a.client.invitation_create_bulk("player",30,"bulk-invite",true,Some(20)).await.unwrap();
-    assert_eq!(a.calls("/api/v3/manage/invitations").last().unwrap().body,json!({"role":"player","expires_minutes":30,"multi_use":true,"max_uses":20}));
+    a.client
+        .invitation_create_bulk("player", 30, "bulk-invite", true, Some(20))
+        .await
+        .unwrap();
+    assert_eq!(
+        a.calls("/api/v3/manage/invitations").last().unwrap().body,
+        json!({"role":"player","expires_minutes":30,"multi_use":true,"max_uses":20})
+    );
     a.set(
         "DELETE",
         "/api/v3/manage/invitations/invite-1",
@@ -1273,14 +1409,23 @@ async fn mutation_invalidates_reads_and_large_old_agent_fallback_respects_budget
 #[tokio::test]
 #[ignore = "bounded local HTTPS400-item inventory/cache baseline"]
 async fn audit_client_inventory_400_baseline() {
- let _owner=OWNER.lock().await; let a=Agent::start().await;
- let items:Vec<_>=(0..400).map(|i|json!({"kind":"mod","path":format!("mods/item-{i}.jar"),"filename":format!("item-{i}.jar"),"size":"1000","enabled":true,"sha256":null,"provider":null,"declared":null,"pending":null,"pending_id":null,"pending_error":null})).collect();
- let route="/api/v3/manage/content";
- a.set("GET",route,json!({"items":items,"capabilities":{"list":true,"install":true,"update":true,"remove":true,"toggle":true,"cancel":true,"mods_supported":true,"plugins_supported":false},"minecraft_version":"1.21.1","software":"fabric","truncated":false}));
- for phase in ["cold","warm","invalidated"] {
-   if phase=="invalidated" {a.client.transport.invalidate_reads();}
-   let before=a.calls(route).len(); let start=std::time::Instant::now();
-   let value=a.client.content_inventory().await.unwrap(); assert_eq!(value.items.len(),400);
-   println!("AUDIT_CLIENT phase={phase} items=400 elapsed_ms={} requests={}",start.elapsed().as_secs_f64()*1000.0,a.calls(route).len()-before);
- }
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let items:Vec<_>=(0..400).map(|i|json!({"kind":"mod","path":format!("mods/item-{i}.jar"),"filename":format!("item-{i}.jar"),"size":"1000","enabled":true,"sha256":null,"provider":null,"declared":null,"pending":null,"pending_id":null,"pending_error":null})).collect();
+    let route = "/api/v3/manage/content";
+    a.set("GET",route,json!({"items":items,"capabilities":{"list":true,"install":true,"update":true,"remove":true,"toggle":true,"cancel":true,"mods_supported":true,"plugins_supported":false},"minecraft_version":"1.21.1","software":"fabric","truncated":false}));
+    for phase in ["cold", "warm", "invalidated"] {
+        if phase == "invalidated" {
+            a.client.transport.invalidate_reads();
+        }
+        let before = a.calls(route).len();
+        let start = std::time::Instant::now();
+        let value = a.client.content_inventory().await.unwrap();
+        assert_eq!(value.items.len(), 400);
+        println!(
+            "AUDIT_CLIENT phase={phase} items=400 elapsed_ms={} requests={}",
+            start.elapsed().as_secs_f64() * 1000.0,
+            a.calls(route).len() - before
+        );
+    }
 }

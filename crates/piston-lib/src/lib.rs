@@ -20,5 +20,5 @@ mod tests {
     }
 }
 
-pub mod public_address;
 pub mod artifact_http;
+pub mod public_address;

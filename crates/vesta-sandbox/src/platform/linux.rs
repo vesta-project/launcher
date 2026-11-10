@@ -18,10 +18,22 @@ const COMPAT_RO_ROOTS: &[&str] = &["/usr", "/lib", "/lib64", "/lib32", "/bin", "
 // No whole /etc, /usr or desktop runtime directory in the headless profile.
 // The runtime itself is an explicit caller allowlist entry.
 pub(crate) const HEADLESS_RO_PATHS: &[&str] = &[
-    "/usr/lib", "/usr/lib64", "/lib", "/lib64", "/lib32",
-    "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d",
-    "/etc/resolv.conf", "/etc/nsswitch.conf", "/etc/hosts", "/etc/gai.conf",
-    "/etc/ssl/certs", "/etc/pki/tls/certs", "/etc/localtime", "/usr/share/zoneinfo",
+    "/usr/lib",
+    "/usr/lib64",
+    "/lib",
+    "/lib64",
+    "/lib32",
+    "/etc/ld.so.cache",
+    "/etc/ld.so.conf",
+    "/etc/ld.so.conf.d",
+    "/etc/resolv.conf",
+    "/etc/nsswitch.conf",
+    "/etc/hosts",
+    "/etc/gai.conf",
+    "/etc/ssl/certs",
+    "/etc/pki/tls/certs",
+    "/etc/localtime",
+    "/usr/share/zoneinfo",
 ];
 
 /// Returns the resolved bubblewrap executable path when present on this host.
@@ -154,10 +166,12 @@ pub(crate) fn prepare_for(
     } else {
         if headless {
             notes.push("Headless devices and IPC: private PID/IPC namespaces, minimal /dev, no desktop or audio sockets/environment; the namespace owner survives supervisor exit.".to_string());
-        } else { notes.push(
+        } else {
+            notes.push(
             "Microphone denied via bubblewrap (--unshare-ipc, no /dev/snd bind, and no PipeWire/PulseAudio sockets). Linux microphone-off also disables audio playback; GPU and display sockets remain available."
                 .to_string(),
-        ); }
+        );
+        }
         EnforcementStatus::Enforced
     };
 
@@ -311,7 +325,11 @@ fn build_bwrap_args_for(
 
     push_bind_mount(&mut args, sandbox_temp, sandbox_temp, true);
 
-    for root in if headless { HEADLESS_RO_PATHS } else { COMPAT_RO_ROOTS } {
+    for root in if headless {
+        HEADLESS_RO_PATHS
+    } else {
+        COMPAT_RO_ROOTS
+    } {
         push_existing_ro_bind(&mut args, Path::new(root));
     }
 
@@ -325,28 +343,28 @@ fn build_bwrap_args_for(
     }
 
     if !headless {
-      push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
-      push_runtime_dir_binds(&mut args, policy.mic_allowed);
-      if let Ok(xauthority) = std::env::var("XAUTHORITY") {
-        // XAUTHORITY often lives under XDG_RUNTIME_DIR; bind it explicitly now
-        // that the runtime dir is no longer mounted wholesale.
-        push_existing_ro_bind(&mut args, Path::new(&xauthority));
-      }
+        push_existing_ro_bind(&mut args, Path::new("/tmp/.X11-unix"));
+        push_runtime_dir_binds(&mut args, policy.mic_allowed);
+        if let Ok(xauthority) = std::env::var("XAUTHORITY") {
+            // XAUTHORITY often lives under XDG_RUNTIME_DIR; bind it explicitly now
+            // that the runtime dir is no longer mounted wholesale.
+            push_existing_ro_bind(&mut args, Path::new(&xauthority));
+        }
     }
 
     args.push("--clearenv".to_string());
     if !headless {
-      push_host_env_if_missing(
-        &mut args,
-        run_plan,
-        &[
-            "DISPLAY",
-            "WAYLAND_DISPLAY",
-            "XAUTHORITY",
-            "XDG_RUNTIME_DIR",
-            "XDG_SESSION_TYPE",
-        ],
-      );
+        push_host_env_if_missing(
+            &mut args,
+            run_plan,
+            &[
+                "DISPLAY",
+                "WAYLAND_DISPLAY",
+                "XAUTHORITY",
+                "XDG_RUNTIME_DIR",
+                "XDG_SESSION_TYPE",
+            ],
+        );
     }
     for (key, value) in &run_plan.env {
         if key == "TMPDIR" {
@@ -542,7 +560,12 @@ mod tests {
         let mut policy = sample_policy(SandboxPreset::Modded, game.path());
         policy.mic_allowed = false;
         policy.usb_allowed = false;
-        let plan = RunPlan::new("/selected-jdk/bin/java", vec![], game.path(), HashMap::new());
+        let plan = RunPlan::new(
+            "/selected-jdk/bin/java",
+            vec![],
+            game.path(),
+            HashMap::new(),
+        );
         let args = build_bwrap_args_for(&policy, &plan, private_temp.path(), true);
         assert!(args.iter().any(|v| v == "--unshare-pid"));
         assert!(args.iter().any(|v| v == "--unshare-ipc"));
@@ -550,11 +573,25 @@ mod tests {
         assert!(!args.iter().any(|v| v == "--unshare-net"));
         assert!(!args.iter().any(|v| v == "--dev-bind"));
         assert!(args.windows(2).any(|v| v == ["--dev", "/dev"]));
-        for forbidden in ["/etc", "/usr", "/bin", "/sbin", "/tmp/.X11-unix",
-            "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR"] {
-            assert!(!args.iter().any(|v| v == forbidden), "unexpected {forbidden}");
+        for forbidden in [
+            "/etc",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/tmp/.X11-unix",
+            "DISPLAY",
+            "WAYLAND_DISPLAY",
+            "XAUTHORITY",
+            "XDG_RUNTIME_DIR",
+        ] {
+            assert!(
+                !args.iter().any(|v| v == forbidden),
+                "unexpected {forbidden}"
+            );
         }
-        assert!(args.windows(3).any(|v| v[0] == "--bind" && v[1] == game.path().to_str().unwrap()));
+        assert!(args
+            .windows(3)
+            .any(|v| v[0] == "--bind" && v[1] == game.path().to_str().unwrap()));
         policy.network_allowed = false;
         let args = build_bwrap_args_for(&policy, &plan, private_temp.path(), true);
         assert!(args.iter().any(|v| v == "--unshare-net"));

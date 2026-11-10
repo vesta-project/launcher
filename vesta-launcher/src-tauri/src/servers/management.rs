@@ -90,7 +90,8 @@ impl ServerManager {
                 once,
             )
         })
-        .await.map_err(|mut error| {
+        .await
+        .map_err(|mut error| {
             if error.code == ErrorCode::Internal {
                 error.reason = Some("local_intent_not_saved".into());
             }

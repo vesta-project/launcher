@@ -485,7 +485,7 @@ function InstallPage(props: InstallPageRouteProps) {
 
 	const contextBackLabel = createMemo(() => {
 		if (effectiveProjectId()) return "Back to Browser";
-		if (isLocalModpackUpload() || !!source.modpackUrl()) return "Change import";
+		if (isLocalModpackUpload() || source.modpackUrl()) return "Change import";
 		if (isResourceInstanceMode()) return "Back";
 		return "Import";
 	});

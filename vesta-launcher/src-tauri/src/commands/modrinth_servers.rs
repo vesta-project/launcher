@@ -191,7 +191,10 @@ pub async fn install_server_pack(
     instance_data: Option<Instance>,
 ) -> Result<i32, String> {
     let (project_id, name, listing) = listing(&app_handle, &project_id).await?;
-    let mut inst = instance_data.unwrap_or_else(|| Instance { name, ..Default::default() });
+    let mut inst = instance_data.unwrap_or_else(|| Instance {
+        name,
+        ..Default::default()
+    });
     let instance_id = match &listing.content {
         ServerContent::Modpack {
             project_id: pack_id,
