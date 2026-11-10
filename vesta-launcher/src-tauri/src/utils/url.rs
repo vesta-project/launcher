@@ -6,6 +6,7 @@
 /// # Example
 ///
 /// ```
+/// use vesta_launcher::utils::url::normalize_url;
 /// let url = "https://www.curseforge.com/minecraft/mc-mods/geckolib/?page=1";
 /// let normalized = normalize_url(url);
 /// assert_eq!(normalized, "https://www.curseforge.com/minecraft/mc-mods/geckolib");

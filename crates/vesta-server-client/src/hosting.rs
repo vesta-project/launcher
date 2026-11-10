@@ -137,7 +137,7 @@ pub struct SoftwarePlan {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoftwareJob {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error_context: Option<serde_json::Value>,
     pub id: String,
     pub kind: String,
@@ -848,9 +848,17 @@ mod software_ids_tests {
         let old = serde_json::json!({"id":"job","kind":"apply","state":"succeeded","createdAtMs":1,"updatedAtMs":2,"error":null});
         let job: super::SoftwareJob = serde_json::from_value(old.clone()).unwrap();
         assert!(job.warnings.is_empty());
+        assert!(job.error_context.is_none());
         let mut new = old;
         new["warnings"] = serde_json::json!(["source_build_reference_mismatch"]);
         let job: super::SoftwareJob = serde_json::from_value(new.clone()).unwrap();
+        assert_eq!(serde_json::to_value(job).unwrap(), new);
+        new["errorContext"] = serde_json::json!({"provider":"modrinth","project":"project","version":"version","phase":"download_verify","filename":"original.jar"});
+        let job: super::SoftwareJob = serde_json::from_value(new.clone()).unwrap();
+        assert_eq!(
+            job.error_context.as_ref().unwrap()["phase"],
+            "download_verify"
+        );
         assert_eq!(serde_json::to_value(job).unwrap(), new);
     }
     #[test]

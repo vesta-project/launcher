@@ -15,27 +15,35 @@
 //!
 //! 3 steps needed:
 //!
-//! 1. **Add field to `AppConfig` struct**:
+//! 1. **Add the field to `AppConfig` and its schema**. This standalone example
+//!    uses a small example table; use the real configuration table in a migration:
 //!    ```rust
+//!    # use diesel::{AsChangeset, Insertable, Queryable, Selectable};
+//!    # use serde::{Deserialize, Serialize};
+//!    # diesel::table! { app_config (id) { id -> Integer, new_field_name -> Text, } }
 //!    #[derive(Queryable, Selectable, Insertable, AsChangeset, Serialize, Deserialize)]
 //!    #[diesel(table_name = app_config)]
 //!    pub struct AppConfig {
-//!        // ... existing fields ...
-//!        pub new_field_name: Type,  // ← Add this
+//!        pub id: i32,
+//!        pub new_field_name: String,
 //!    }
+//!    # let config = AppConfig { id: 1, new_field_name: String::from("example") };
+//!    # assert_eq!(serde_json::to_value(config).unwrap()["new_field_name"], "example");
 //!    ```
 //!
 //! 2. **Update `Default` impl**:
 //!    ```rust
+//!    # struct AppConfig { new_field_name: String }
 //!    impl Default for AppConfig {
 //!        fn default() -> Self {
 //!            AppConfig {
 //!                // ... existing fields ...
-//!                new_field_name: default_value,  // ← Add this
+//!                new_field_name: String::new(),
 //!                // ...
 //!            }
 //!        }
 //!    }
+//!    # assert!(AppConfig::default().new_field_name.is_empty());
 //!    ```
 //!
 //! 3. **Create a Diesel migration**:
