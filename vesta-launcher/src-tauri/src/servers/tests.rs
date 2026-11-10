@@ -23,10 +23,12 @@ async fn completed(client: &Client, id: &str) {
 #[ignore = "real agent, vault and Tauri runtime; requires VESTA_LIVE_AGENT=1"]
 fn live_manager_storage_events_retry_and_restart() {
     assert_eq!(std::env::var("VESTA_LIVE_AGENT").as_deref(), Ok("1"));
-    let app = tauri::Builder::default()
-        .any_thread()
-        .build(tauri::generate_context!())
-        .unwrap();
+    let builder = tauri::Builder::default();
+    // Tauri permits a non-main event loop only on Windows and Linux. This
+    // opt-in live fixture remains ignored by default on every platform.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.any_thread();
+    let app = builder.build(tauri::generate_context!()).unwrap();
     let app = app.handle().clone();
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
