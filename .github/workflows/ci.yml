@@ -45,7 +45,7 @@ jobs:
 
       - name: Run existing headless rewrite checks
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: bun test ./checks
+        run: bun --conditions=development test ./checks
 
       - name: Check rewrite TypeScript
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}

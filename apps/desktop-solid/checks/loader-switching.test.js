@@ -3,11 +3,11 @@ import { transform } from '@solidjs/compiler';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Installed Kobalte state/collection code with an inert host boundary: no DOM or browser.
 async function harness() {
-  const app = new URL('../', import.meta.url).pathname;
+  const app = fileURLToPath(new URL('../', import.meta.url)).replaceAll('\\', '/');
   const directory = await mkdtemp(join(tmpdir(), 'vesta-loader-switch-'));
   try {
     const entrypoint = join(directory, 'fixture.js');
@@ -52,11 +52,11 @@ async function harness() {
         `}));
         build.onResolve({filter: /^\.\.\/features\/settings\/config$/}, () => ({path: 'settings', namespace: 'fixture'}));
         build.onLoad({filter: /.*/, namespace: 'fixture'}, () => ({loader: 'js', contents: 'export const setting = () => false;'}));
-        build.onLoad({filter: /polymorphic\/index\.js$/}, () => ({loader: 'js', contents: `
+        build.onLoad({filter: /polymorphic[\\/]index\.js$/}, () => ({loader: 'js', contents: `
           import {children} from '${app}node_modules/solid-js/dist/solid.dev.js';
           export const Polymorphic = props => children(() => props.children);
         `}));
-        build.onLoad({filter: /@solid-primitives\/platform\/dist\/index\.js$/}, () => ({loader: 'js',
+        build.onLoad({filter: /@solid-primitives[\\/]platform[\\/]dist[\\/]index\.js$/}, () => ({loader: 'js',
           contents: 'export const isWebKit = false, isAppleDevice = false, isMac = false, isIOS = false, isAndroid = false, isFirefox = false, isSafari = false;'
         }));
       }}],

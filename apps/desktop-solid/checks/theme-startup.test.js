@@ -2,11 +2,11 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // Real theme sync/runtime and desktop presentation; only native IPC and DOM are substituted.
 async function harness() {
-  const app = new URL('../', import.meta.url).pathname;
+  const app = fileURLToPath(new URL('../', import.meta.url)).replaceAll('\\', '/');
   const directory = await mkdtemp(join(tmpdir(), 'vesta-theme-startup-'));
   try {
     const entry = join(directory, 'entry.ts');
@@ -25,17 +25,20 @@ async function harness() {
       }); }
     `);
     const built = await Bun.build({ entrypoints: [entry], target: 'browser', conditions: ['browser', 'development'], plugins: [{name: 'theme-host', setup(build) {
+      // Absolute entry imports and relative runtime imports must share the same
+      // state module on Windows as well as Unix.
+      build.onResolve({filter:/author-themes(?:\.ts)?$/}, () => ({path:fileURLToPath(new URL('../src/features/settings/author-themes.ts', import.meta.url))}));
       build.onResolve({filter: /^probe$/}, () => ({path:'probe',namespace:'stub'}));
       build.onLoad({filter:/.*/,namespace:'stub'}, () => ({loader:'js',contents:`export const probe={reads:[],calls:[],scheme:undefined};`}));
-      build.onLoad({filter:/@tauri-apps\/api\/core\.(js|ts)$/}, () => ({loader:'js',contents:`
+      build.onLoad({filter:/@tauri-apps[\\/]api[\\/]core\.(js|ts)$/}, () => ({loader:'js',contents:`
         import {probe} from 'probe'; export const isTauri=()=>true;
         export const invoke=(command,args)=>{probe.calls.push(command);if(command==='present_window_when_ready')probe.presented={author:document.documentElement.dataset.vestaAuthorTheme,scheme:probe.scheme};return command==='get_author_theme_state' ? new Promise((resolve,reject)=>probe.reads.push({resolve,reject})) : Promise.resolve();};
       `}));
-      build.onLoad({filter:/@tauri-apps\/api\/event\.(js|ts)$/}, () => ({loader:'js',contents:`export const listen=async()=>()=>{};`}));
-      build.onLoad({filter:/@tauri-apps\/api\/window\.(js|ts)$/}, () => ({loader:'js',contents:`export const getCurrentWindow=()=>({label:'main'});`}));
-      build.onLoad({filter:/features\/activity\/activity-sync\.ts$/}, () => ({loader:'js',contents:`export const startActivitySync=()=>()=>{};`}));
-      build.onLoad({filter:/app\/preferences\.ts$/}, () => ({loader:'js',contents:`import {probe} from 'probe'; export const setThemeSchemeOverride=value=>{probe.scheme=value;};`}));
-      build.onLoad({filter:/features\/settings\/config\.ts$/}, ({path}) => ({loader:'js',contents:`import {defaultTheme,themeSettings} from '${join(path,'../theme-model.ts')}';export const setting=key=>themeSettings(defaultTheme)[key];`}));
+      build.onLoad({filter:/@tauri-apps[\\/]api[\\/]event\.(js|ts)$/}, () => ({loader:'js',contents:`export const listen=async()=>()=>{};`}));
+      build.onLoad({filter:/@tauri-apps[\\/]api[\\/]window\.(js|ts)$/}, () => ({loader:'js',contents:`export const getCurrentWindow=()=>({label:'main'});`}));
+      build.onLoad({filter:/features[\\/]activity[\\/]activity-sync\.ts$/}, () => ({loader:'js',contents:`export const startActivitySync=()=>()=>{};`}));
+      build.onLoad({filter:/app[\\/]preferences\.ts$/}, () => ({loader:'js',contents:`import {probe} from 'probe'; export const setThemeSchemeOverride=value=>{probe.scheme=value;};`}));
+      build.onLoad({filter:/features[\\/]settings[\\/]config\.ts$/}, ({path}) => ({loader:'js',contents:`import {defaultTheme,themeSettings} from '${join(path,'../theme-model.ts').replaceAll('\\', '/')}';export const setting=key=>themeSettings(defaultTheme)[key];`}));
       build.onLoad({filter:/\.css$/}, () => ({loader:'js',contents:''}));
     }}] });
     if (!built.success) throw new Error(built.logs.join('\n'));

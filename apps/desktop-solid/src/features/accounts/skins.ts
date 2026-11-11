@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { createEffect, createSignal, onSettled, untrack } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { Account } from './account-bootstrap';
 
 export type SkinVariant = 'classic' | 'slim';
@@ -208,6 +208,10 @@ export function createSkinController(account: () => Account | undefined) {
 
   /** The account whose panel is on screen. Commits for other accounts still finish but never touch the UI. */
   let currentUuid: string | undefined;
+  let generation = 0;
+  let disposed = false;
+  onCleanup(() => { disposed = true; currentUuid = undefined; generation++; });
+  const current = (uuid: string, expected: number) => !disposed && uuid === currentUuid && expected === generation;
   /** Latest server state per account, used to skip edits that change nothing. */
   const committed = new Map<string, SkinProfile>();
   let inFlight = 0;
@@ -216,7 +220,9 @@ export function createSkinController(account: () => Account | undefined) {
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const fetchProfile = async (uuid: string, sync: boolean) => {
+    const expected = generation;
     const next = await loadProfile(uuid, sync);
+    if (!current(uuid, expected)) return next;
     if (hiddenCape.has(uuid)) {
       next.capeId = undefined;
       next.cape = undefined;
@@ -296,20 +302,21 @@ export function createSkinController(account: () => Account | undefined) {
 
   const run = async (batch: Pending) => {
     const uuid = batch.uuid;
-    if (uuid === currentUuid) {
+    const expected = generation;
+    if (current(uuid, expected)) {
       setStatus('saving');
       setError(undefined);
     }
     try {
       await send(batch);
       // One reload after the batch; the mutating commands already synced the profile on the host.
-      await fetchProfile(uuid, false);
-      if (uuid === currentUuid) {
+      if (current(uuid, expected)) await fetchProfile(uuid, false);
+      if (current(uuid, expected)) {
         if (latest) setStatus('pending');
         else markSaved();
       }
     } catch (reason) {
-      if (uuid === currentUuid) {
+      if (current(uuid, expected)) {
         // Drop the failed edit and show what Mojang really has. No automatic retry, to avoid hammering a rate limit.
         setError(messageOf(reason));
         setStatus('error');
@@ -317,7 +324,7 @@ export function createSkinController(account: () => Account | undefined) {
       }
     } finally {
       inFlight--;
-      if (!inFlight) setCommitting(undefined);
+      if (!inFlight && !disposed) setCommitting(undefined);
     }
   };
 
@@ -341,7 +348,7 @@ export function createSkinController(account: () => Account | undefined) {
   /** Merge one edit into the pending batch and restart the idle timer. */
   const stage = (change: (batch: Pending) => void) => {
     const uuid = currentUuid;
-    if (!uuid || !profile()) return;
+    if (disposed || !uuid || !profile()) return;
     const batch: Pending = { ...(latest?.uuid === uuid ? latest : undefined), uuid } as Pending;
     change(batch);
     setPending(batch);
@@ -353,12 +360,14 @@ export function createSkinController(account: () => Account | undefined) {
   createEffect(
     () => (canManageSkin(account()) ? account()?.uuid : undefined),
     (uuid) => {
+      generation++;
       currentUuid = uuid;
       setProfile(undefined);
       setBusy(undefined);
       setError(undefined);
       setStatus('idle');
-      if (uuid) void fetchProfile(uuid, true).catch((reason) => uuid === currentUuid && setError(messageOf(reason)));
+      const expected = generation;
+      if (uuid) void fetchProfile(uuid, true).catch((reason) => current(uuid, expected) && setError(messageOf(reason)));
       // Leaving this account: its staged edits go to it, not to whoever is selected next.
       return () => void flush();
     },
@@ -383,17 +392,18 @@ export function createSkinController(account: () => Account | undefined) {
   /** Local-only or destructive actions that run straight away. */
   const immediate = async (key: string, work: (uuid: string) => Promise<void>) => {
     const uuid = currentUuid;
+    const expected = generation;
     if (!uuid || busy()) return;
     setBusy(key);
     setError(undefined);
     try {
       await chain;
       await work(uuid);
-      await fetchProfile(uuid, false);
+      if (current(uuid, expected)) await fetchProfile(uuid, false);
     } catch (reason) {
-      if (uuid === currentUuid) setError(messageOf(reason));
+      if (current(uuid, expected)) setError(messageOf(reason));
     } finally {
-      if (uuid === currentUuid) setBusy(undefined);
+      if (current(uuid, expected)) setBusy(undefined);
     }
   };
 

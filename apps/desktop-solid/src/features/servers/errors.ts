@@ -64,6 +64,7 @@ const packReasons: Record<string, { message: MessageId; action: RecoveryAction }
   content_pack_hash_mismatch: { message: 'server-pack.hash-mismatch', action: 'retry' },
   content_pack_source_unsafe: { message: 'server-pack.source-unsafe', action: 'none' },
   // Native client-side pack preparation (src-tauri servers/pack_sync*): never the generic conflict.
+  pack_instance_busy: { message: 'servers.error.client-busy', action: 'wait' },
   pack_download_unavailable: { message: 'server-pack.client-download-unavailable', action: 'retry' },
   pack_executable_consent_required: { message: 'server-pack.client-consent-required', action: 'fix_input' },
   pack_format_unsupported: { message: 'server-pack.client-format-unsupported', action: 'none' },
@@ -80,6 +81,7 @@ const packReasons: Record<string, { message: MessageId; action: RecoveryAction }
   pack_recovery_required: { message: 'server-pack.client-recovery-required', action: 'none' },
   pack_review_expired: { message: 'server-pack.client-review-again', action: 'refresh' },
   pack_review_stale: { message: 'server-pack.client-review-again', action: 'refresh' },
+  pack_server_binding_missing: { message: 'server-pack.client-binding-mismatch', action: 'none' },
   pack_server_binding_mismatch: { message: 'server-pack.client-binding-mismatch', action: 'none' },
   pack_path_invalid: { message: 'server-pack.path-invalid', action: 'none' },
   pack_catalogue_invalid: { message: 'server-pack.archive-invalid', action: 'none' },

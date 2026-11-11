@@ -11,10 +11,10 @@ const LOGO_SRC = '/assets/branding/vesta-full.png';
 export function WelcomeLogo(props: { intro: boolean; ref?: (element: HTMLElement) => void }) {
   return (
     <h1 data-vesta="welcome-logo" data-layered={props.intro ? '' : undefined} ref={props.ref}>
-      <img data-vesta="welcome-logo-image" src={LOGO_SRC} alt="Vesta" width="1200" height="269" draggable={false} />
+      <img data-vesta="welcome-logo-image" src={LOGO_SRC} alt="Vesta" width="1200" height="269" draggable="false" />
       <Show when={props.intro}>
         <span data-vesta="welcome-logo-mark" aria-hidden="true">
-          <img src={LOGO_SRC} alt="" width="1200" height="269" draggable={false} />
+          <img src={LOGO_SRC} alt="" width="1200" height="269" draggable="false" />
         </span>
         <span data-vesta="welcome-logo-ember" aria-hidden="true" />
       </Show>

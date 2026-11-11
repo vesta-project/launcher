@@ -1,0 +1,5 @@
+
+# Author-theme examples are generated from a canonical LF fixture.
+apps/desktop-solid/src/styles/themes/windows-2000.css text eol=lf
+apps/desktop-solid/examples/windows-2000.css text eol=lf
+apps/desktop-solid/examples/windows-2000.vestatheme text eol=lf

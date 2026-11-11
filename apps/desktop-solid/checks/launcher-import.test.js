@@ -165,12 +165,12 @@ test('candidateState is reactive through idle/loading/ready with no Solid diagno
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const { pathToFileURL } = await import('node:url');
+  const { fileURLToPath, pathToFileURL } = await import('node:url');
   const build = await Bun.build({
-    entrypoints: [new URL('../src/features/launcher-import/service.ts', import.meta.url).pathname],
+    entrypoints: [fileURLToPath(new URL('../src/features/launcher-import/service.ts', import.meta.url))],
     target: 'bun', conditions: ['browser', 'development'],
     plugins: [{ name: 'import-reactivity', setup(builder) {
-      builder.onLoad({ filter: /launcher-import\/service\.ts$/ }, async ({ path }) => ({
+      builder.onLoad({ filter: /launcher-import[\\/]service\.ts$/ }, async ({ path }) => ({
         loader: 'ts', contents: await Bun.file(path).text() + `
           export { createRoot, createEffect, flush } from 'solid-js';
           export { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';

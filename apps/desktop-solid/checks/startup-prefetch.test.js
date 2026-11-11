@@ -18,6 +18,7 @@ test('startup stays light, Settings intent enables scans, and disposal cancels i
     }
     build.onLoad({ filter: /activity[\\/]activity-store\.ts$/ }, () => ({ loader: 'js', contents: 'export const runBackgroundActivity = (_, run) => run();' }));
     build.onLoad({ filter: /localization[\\/]index\.ts$/ }, () => ({ loader: 'js', contents: 'export const t = key => key;' }));
+    build.onLoad({ filter: /pages[\\/]servers[\\/]nav-prefetch\.ts$/ }, () => ({ loader: 'js', contents: "import { calls } from 'startup-observer'; export const prefetchServerOpen = id => calls.push('server:' + id);" }));
     build.onLoad({ filter: /app[\\/]router\.ts$/ }, () => ({ loader: 'js', contents: "export const route = () => ({page:'library'});" }));
     build.onLoad({ filter: /browse[\\/]browse-store\.ts$/ }, () => ({ loader: 'js', contents: "import { calls } from 'startup-observer'; export const prefetchBrowse = () => calls.push('browse');" }));
     build.onLoad({ filter: /browse[\\/]browse-projects\.ts$/ }, () => ({ loader: 'js', contents: 'export const prefetchProject = () => {};' }));

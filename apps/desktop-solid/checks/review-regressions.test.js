@@ -2,12 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Exercise real state modules with inert IPC/storage adapters. No browser or rendering.
 async function harness(file, prelude, extra = "", fixtures = {}) {
+  const entrypoint = fileURLToPath(new URL(`../src/${file}`, import.meta.url));
   const built = await Bun.build({
-    entrypoints: [new URL(`../src/${file}`, import.meta.url).pathname],
+    entrypoints: [entrypoint],
     target: "bun",
     conditions: ["browser", "development"],
     plugins: [{
@@ -16,10 +17,12 @@ async function harness(file, prelude, extra = "", fixtures = {}) {
         const fixturePattern = Object.keys(fixtures).map((path) => path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
         build.onResolve({ filter: new RegExp(`^(?:${fixturePattern})$`) }, ({ path }) => ({ path, namespace: "fixture" }));
         build.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({ contents: fixtures[path], loader: "js" }));
-        build.onLoad({ filter: new RegExp(`${file.replaceAll(".", "\\.")}$`) }, async ({ path }) => ({
-          contents: prelude + await Bun.file(path).text() + extra,
+        build.onLoad({ filter: /\.[jt]s$/ }, async ({ path }) => path === entrypoint ? ({
+          // These state-module checks provide no browser. Match the document
+          // boundary used by their inert window without mounting or rendering.
+          contents: `const document = { visibilityState: "visible", addEventListener() {}, removeEventListener() {} };\n` + prelude + await Bun.file(path).text() + extra,
           loader: "ts",
-        }));
+        }) : undefined);
       },
     }],
   });
@@ -54,7 +57,7 @@ test("skin mutations cannot publish across account changes or after disposal", a
     export const captureSkinArtifact = (scenario) => captureArtifact(scenario, { scenario: 'skin-account-switch-and-dispose' });
     export const assertSkinDiagnostics = (artifact) => expectNoDiagnostics(artifact);
     export { setInvoke } from '@tauri-apps/api/core';
-    const window = {};
+    const window = { addEventListener() {}, removeEventListener() {} };
   `, `
     export function mount(uuid) {
       return createRoot((dispose) => {
@@ -102,9 +105,49 @@ test("skin mutations cannot publish across account changes or after disposal", a
   module.assertSkinDiagnostics(artifact);
 });
 
+for (const stale of ["success", "failure"]) test(`returning to an account ignores ${stale} from its previous profile read`, async () => {
+  const module = await harness("features/accounts/skins.ts", `
+    import { createRoot, flush as flushSignals } from 'solid-js';
+    export { flushSignals };
+    export { setInvoke } from '@tauri-apps/api/core';
+    const window = { addEventListener() {}, removeEventListener() {} };
+  `, `
+    export function mount() {
+      return createRoot(dispose => {
+        const [account, setAccount] = createSignal({ uuid: 'A', account_type: 'Microsoft' });
+        return { controller: createSkinController(account), setAccount, dispose };
+      });
+    }
+  `, { "@tauri-apps/api/core": core });
+  const reads = [];
+  module.setInvoke((command, args) => command === "get_complete_skin_data"
+    ? new Promise((resolve, reject) => reads.push({ uuid: args.accountUuid, resolve, reject })) : undefined);
+  const mounted = module.mount();
+  try {
+    await tick(module);
+    mounted.setAccount({ uuid: "B", account_type: "Microsoft" });
+    await tick(module);
+    mounted.setAccount({ uuid: "A", account_type: "Microsoft" });
+    await tick(module);
+    expect(reads.map(read => read.uuid)).toEqual(["A", "B", "A"]);
+    const profile = image => ({ current_skin_base64: image, current_variant: "classic", recent_history: [], capes: [] });
+    reads[2].resolve(profile("latest-A"));
+    await tick(module);
+    expect(mounted.controller.profile().skin).toEndWith(",latest-A");
+    if (stale === "success") reads[0].resolve(profile("stale-A"));
+    else reads[0].reject(new Error("obsolete account read"));
+    reads[1].resolve(profile("stale-B"));
+    await tick(module);
+    expect(mounted.controller.profile().skin).toEndWith(",latest-A");
+    expect(mounted.controller.error()).toBeUndefined();
+  } finally {
+    mounted.dispose();
+  }
+});
+
 test("settings mirrors remove existing secrets and exclude subsequent secret edits", async () => {
   const module = await harness("features/settings/config.ts", `
-    const window = { addEventListener() {} };
+    const window = { addEventListener() {}, removeEventListener() {} };
     const values = new Map([['vesta:launcher-config', JSON.stringify({
       developer_mode: true, proxy_url: 'credential', default_environment_variables: 'TOKEN=credential',
       default_pre_launch_hook: 'credential', default_java_args: 'credential'
@@ -127,7 +170,7 @@ test("settings mirrors remove existing secrets and exclude subsequent secret edi
 
 test("queued sync selection edits build on the preceding saved selection", async () => {
   const module = await harness("features/settings/sync.ts", `
-    const window = {};
+    const window = { addEventListener() {}, removeEventListener() {} };
     export { setInvoke } from '@tauri-apps/api/core';
   `, "", {
     "@tauri-apps/api/core": core,

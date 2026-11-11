@@ -5,7 +5,7 @@ const marker = "[data-vesta-theme-example='windows-2000']";
 /** Convert our trusted fixture to document scope, not an untrusted-CSS sanitizer. */
 function documentScope(css) {
   if (!css.includes(marker)) throw new Error('Classic fixture scope has changed.');
-  return css.replaceAll(marker, ':root');
+  return css.replace(/\r\n?/g, '\n').replaceAll(marker, ':root');
 }
 
 /** The JSON envelope form (complete base). */

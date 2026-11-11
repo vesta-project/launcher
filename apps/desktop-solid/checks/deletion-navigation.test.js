@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 test('capture deletion guard survives stopped propagation, unloaded catalog and saved back overrides', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'vesta-deletion-'));
@@ -37,7 +37,7 @@ test('capture deletion guard survives stopped propagation, unloaded catalog and 
         shortcuts = () => [{id: 'back', chord: 'Backspace'}, {id: 'forward', chord: 'Delete'}];`,
     };
     const built = await Bun.build({
-      entrypoints: [new URL('../src/features/settings/shortcut-runtime.ts', import.meta.url).pathname], target: 'bun',
+      entrypoints: [fileURLToPath(new URL('../src/features/settings/shortcut-runtime.ts', import.meta.url))], target: 'bun',
       plugins: [{ name: 'shortcut-boundaries', setup(build) {
         build.onResolve({ filter: /.*/ }, ({ path }) => path in fixtures ? { path, namespace: 'fixture' } : undefined);
         build.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents: `const c = globalThis[${JSON.stringify(key)}];` + fixtures[path] }));

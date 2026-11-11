@@ -2,15 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Bundle the real session with inert host/data adapters, without installing global
 // module mocks that would affect the other checks. No DOM or browser is involved.
 async function sessionHarness() {
   const built = await Bun.build({
     entrypoints: [
-      new URL("../src/features/instances/console-session.ts", import.meta.url)
-        .pathname,
+      fileURLToPath(new URL("../src/features/instances/console-session.ts", import.meta.url)),
     ],
     target: "bun",
     conditions: ["browser", "development"],
