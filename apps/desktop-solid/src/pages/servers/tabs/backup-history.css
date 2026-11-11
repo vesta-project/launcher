@@ -1,0 +1,159 @@
+/*
+ * Backup history: a git-style graph of restore points.
+ * Hooks: [data-vesta=backup-graph] -commit -commit-body -commit-title -commit-meta -commit-actions
+ *        -commit-kept -commit-rename -graph-lines
+ * States: backup-commit: data-live (on the live world's ancestry), data-kind=live|point;
+ *         lines and nodes: data-live, data-kind=live|safety|point
+ * Knobs: --graph-width (set from the lane count)
+ */
+@layer launcher {
+  :where([data-vesta="backup-graph"]) {
+    display: grid;
+    margin: 0;
+    padding: 0 var(--vesta-space-2) var(--vesta-space-2);
+    list-style: none;
+  }
+
+  :where([data-vesta="backup-commit"]) {
+    display: grid;
+    position: relative;
+    grid-template-columns: var(--graph-width, 24px) minmax(0, 1fr);
+    align-items: start;
+    column-gap: var(--vesta-space-2);
+    padding-inline-end: var(--vesta-space-2);
+    border-radius: var(--vesta-radius-md);
+  }
+
+  :where([data-vesta="backup-commit"][data-kind="point"]):hover,
+  :where([data-vesta="backup-commit"][data-kind="point"]):focus-within {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  /* The row's text sets its height; the lines fill whatever that is. */
+  :where([data-vesta="backup-graph-cell"]) {
+    position: relative;
+    align-self: stretch;
+    min-block-size: 44px;
+  }
+
+  :where([data-vesta="backup-graph-lines"]) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: visible;
+  }
+
+  :where([data-vesta="backup-graph-lines"]) :where(line, path) {
+    fill: none;
+    stroke: var(--vesta-color-border-strong, var(--vesta-color-border));
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  :where([data-vesta="backup-graph-lines"]) :where(line, path)[data-live] {
+    stroke: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta="backup-graph-lines"] circle) {
+    fill: var(--vesta-color-surface-raised);
+    stroke: var(--vesta-color-border-strong, var(--vesta-color-border));
+    stroke-width: 2;
+  }
+
+  :where([data-vesta="backup-graph-lines"] circle[data-live]) {
+    fill: var(--vesta-color-accent);
+    stroke: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta="backup-graph-lines"] circle[data-kind="safety"]:not([data-live])) {
+    stroke: var(--vesta-color-warning, var(--vesta-color-border-strong));
+  }
+
+  /* The live world: an open accent ring, the newest thing on its branch. */
+  :where([data-vesta="backup-graph-lines"] circle[data-kind="live"]) {
+    fill: var(--vesta-color-surface-raised);
+    stroke: var(--vesta-color-accent);
+    stroke-width: 3;
+  }
+
+  :where([data-vesta="backup-commit-body"]) {
+    display: grid;
+    gap: 2px;
+    min-inline-size: 0;
+    padding-block: var(--vesta-space-2) var(--vesta-space-3);
+  }
+
+  :where([data-vesta="backup-commit-title"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="backup-commit-title"] strong) {
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="backup-commit-meta"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="backup-commit-meta"] code) {
+    color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
+    font-family: var(--vesta-font-mono);
+  }
+
+  :where([data-vesta="backup-commit-kept"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-xs);
+  }
+
+  /* Actions stay out of the way until the row is pointed at or focused. */
+  :where([data-vesta="backup-commit-actions"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    padding: var(--vesta-space-1);
+    position: absolute;
+    inset-block-start: var(--vesta-space-1);
+    inset-inline-end: var(--vesta-space-1);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta="backup-commit"]):hover :where([data-vesta="backup-commit-actions"]),
+  :where([data-vesta="backup-commit"]):focus-within :where([data-vesta="backup-commit-actions"]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  :where([data-vesta="backup-commit-actions"]) :where([aria-pressed="true"]) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta="backup-commit-rename"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="backup-commit-rename"]) > :first-child {
+    flex: 1 1 200px;
+  }
+}

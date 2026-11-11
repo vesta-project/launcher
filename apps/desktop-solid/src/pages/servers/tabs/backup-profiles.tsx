@@ -275,7 +275,7 @@ export function BackupsEnabled(props: { snapshot: ServerSnapshot; profile: strin
  * settings, and the whole set saves together. `actions` renders a saved profile's run and
  * backup-list controls.
  */
-export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions: (name: string) => JSX.Element; details: (name: string) => JSX.Element }) {
+export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions: (name: string) => JSX.Element; details?: (name: string) => JSX.Element }) {
   const connection = stableConnectionId(() => props.snapshot);
   const config = useServerResource(connection, backupConfigResource);
   const base = createMemo(() => { const value = config.value(); return value ? editDraft(value) : null; }, { name: 'server-backup-config:base' });
@@ -407,7 +407,7 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
                         </div>
                       </div>
                     </Show>
-                    <Show when={saved() && !isOpen()}>{props.details(row().profile.name)}</Show>
+                    <Show when={saved() && !isOpen()}>{props.details?.(row().profile.name)}</Show>
                   </div>
                 );
               }}

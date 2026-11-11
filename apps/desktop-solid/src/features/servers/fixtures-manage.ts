@@ -9,6 +9,7 @@ import type {
 } from './native-manage';
 import { capabilitiesForRole } from './capabilities';
 import type { BackupConfiguration, BackupConfigDraft, BackupConfigOutcome, BackupProfileConfig } from './native-backups-config';
+import type { BackupHistory, BackupPoint } from './backup-graph-model';
 
 export interface ManageHost {
   /** Throws `not_found` for unknown connections. */
@@ -44,6 +45,12 @@ interface ManageState {
   configReceipts: Map<string, { payload: string; result: BackupConfigOutcome }>;
   jobs: BackupJob[];
   snapshots: Record<string, BackupSnapshot[]>;
+  /** Branches: which point each one descends from, its name and whether retention may drop it. */
+  lineage: Map<string, { parentId: string | null; label: string | null; kept: boolean }>;
+  /** Safety snapshots taken before a restore: the tips of branches left behind. */
+  safetyPoints: BackupSnapshot[];
+  /** The point the live world descends from. */
+  head: string | null;
   recoveryRequired: boolean;
   pendingRestore: Map<string, { expiresAtMs: number }>;
   roles: RoleSummary[];
@@ -79,10 +86,26 @@ function seed(): ManageState {
       { id: `job-${hex(6)}`, profile: 'before-updates', kind: 'backup', state: 'failed', requestedBy: 'RedstoneRae', snapshotId: null, errorCode: 'backup_requires_stopped_server',
         createdAtMs: now - 2 * day, startedAtMs: now - 2 * day, finishedAtMs: now - 2 * day + 2_000, result: null },
     ],
-    snapshots: {
-      daily: Array.from({ length: 7 }, (_, index) => ({ id: hex(32), time: new Date(now - index * day - day / 3).toISOString(), safety: false })),
-      'before-updates': [{ id: hex(32), time: new Date(now - 6 * day).toISOString(), safety: false }],
-    },
+    // A world restored two and a half days ago to the point from four days ago: the days in
+    // between stay as a branch, its tip the safety snapshot taken before the restore.
+    ...(() => {
+      const daily = Array.from({ length: 7 }, (_, index) => ({ id: hex(32), time: new Date(now - index * day - day / 3).toISOString(), safety: false }));
+      const updates = { id: hex(32), time: new Date(now - 6 * day).toISOString(), safety: false };
+      const safety = { id: hex(32), time: new Date(now - 2.6 * day).toISOString(), safety: true };
+      const [d0, d1, d2, d3, d4, d5, d6] = daily.map((point) => point.id) as [string, string, string, string, string, string, string];
+      const lineage = new Map<string, { parentId: string | null; label: string | null; kept: boolean }>([
+        [d6, { parentId: null, label: null, kept: false }],
+        [updates.id, { parentId: d6, label: 'Before 1.21.4', kept: true }],
+        [d5, { parentId: updates.id, label: null, kept: false }],
+        [d4, { parentId: d5, label: null, kept: false }],
+        [d3, { parentId: d4, label: null, kept: false }],
+        [safety.id, { parentId: d3, label: 'Nether portal attempt', kept: true }],
+        [d2, { parentId: d4, label: null, kept: false }],
+        [d1, { parentId: d2, label: null, kept: false }],
+        [d0, { parentId: d1, label: null, kept: false }],
+      ]);
+      return { snapshots: { daily, 'before-updates': [updates] }, lineage, safetyPoints: [safety], head: d0 };
+    })(),
     recoveryRequired: false,
     pendingRestore: new Map(),
     roles,
@@ -112,7 +135,7 @@ export function createManageFixtures(host: ManageHost) {
     if (!value) {
       value = seed();
       if (!target.snapshot.backupsConfigured) {
-        value.profiles = []; value.jobs = []; value.snapshots = {}; value.repositoryInitialized = false;
+        value.profiles = []; value.jobs = []; value.snapshots = {}; value.lineage = new Map(); value.safetyPoints = []; value.head = null; value.repositoryInitialized = false;
         value.backupLimits = { maxSnapshots: null, maxRepositoryBytes: null, minFreeBytes: 1_073_741_824 };
       }
       states.set(id, value);
@@ -210,6 +233,7 @@ export function createManageFixtures(host: ManageHost) {
         created.snapshotId = hex(32);
         created.result = { filesNew: 12, filesChanged: 96, filesUnmodified: 10_204, dataAdded: 41_200_000, consistency: 'world_save_consistent', worldChanged: true };
         state(connectionId).snapshots[profile] = [{ id: created.snapshotId, time: new Date().toISOString(), safety: false }, ...(state(connectionId).snapshots[profile] ?? [])];
+        const current = state(connectionId); current.lineage.set(created.snapshotId, { parentId: current.head, label: null, kept: false }); current.head = created.snapshotId;
       });
       return clone(created);
     },
@@ -240,7 +264,8 @@ export function createManageFixtures(host: ManageHost) {
       host.requireOnline(target);
       host.requireCapability(target, 'backups.restore');
       if (target.snapshot.status?.state !== 'stopped') fail('stale_target');
-      if (!(state(connectionId).snapshots[profile] ?? []).some((entry) => entry.id === snapshot)) fail('not_found');
+      // A safety snapshot has no profile; it restores like any other point.
+      if (![...(state(connectionId).snapshots[profile] ?? []), ...state(connectionId).safetyPoints].some((entry) => entry.id === snapshot)) fail('not_found');
       const created = job(connectionId, profile, 'restore_in_place');
       created.state = 'awaiting_confirmation';
       created.snapshotId = snapshot;
@@ -261,8 +286,45 @@ export function createManageFixtures(host: ManageHost) {
       if (pending!.expiresAtMs < Date.now()) { created.state = 'failed'; created.errorCode = 'backup_confirmation_expired'; fail('confirmation_expired'); }
       if (target.snapshot.status?.state !== 'stopped') { created.state = 'failed'; created.errorCode = 'backup_requires_stopped_server'; fail('stale_target'); }
       created.state = 'queued';
-      progress(created, () => { created.result = { ...created.result, filesWritten: 3_204, filesRemoved: 18 }; });
+      progress(created, () => {
+        created.result = { ...created.result, filesWritten: 3_204, filesRemoved: 18 };
+        // The world now descends from the restored point; what it was before is kept as a branch tip.
+        const safetyId = created.result.safetySnapshotId;
+        if (safetyId) {
+          current.safetyPoints.unshift({ id: safetyId, time: new Date().toISOString(), safety: true });
+          current.lineage.set(safetyId, { parentId: current.head, label: null, kept: true });
+        }
+        current.head = created.snapshotId;
+      });
       return clone(created);
+    },
+    /** GET backups/history: every restore point with its parent, newest first, and the live head. */
+    async backupHistory(connectionId: ConnectionId): Promise<BackupHistory> {
+      await host.wait(200);
+      host.requireCapability(host.server(connectionId), 'backups.view');
+      const current = state(connectionId);
+      const points: BackupPoint[] = [
+        ...Object.entries(current.snapshots).flatMap(([profile, list]) => list.map((entry) => ({ ...entry, profile }))),
+        ...current.safetyPoints.map((entry) => ({ ...entry, profile: null })),
+      ].map((entry) => { const line = current.lineage.get(entry.id); return { id: entry.id, time: entry.time, profile: entry.profile, safety: entry.safety, parentId: line?.parentId ?? null, label: line?.label ?? null, kept: line?.kept ?? false }; })
+        .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
+      return clone({ head: current.head, points });
+    },
+    /** PATCH backups/points/<id>: a name, and whether retention may drop it. */
+    async backupPointUpdate(connectionId: ConnectionId, pointId: string, request: { label?: string | null; kept?: boolean }, _intentId: string): Promise<BackupPoint> {
+      await host.wait(200);
+      const target = host.server(connectionId);
+      host.requireOnline(target);
+      host.requireCapability(target, 'backups.restore');
+      const current = state(connectionId);
+      const line = current.lineage.get(pointId) ?? fail('not_found');
+      if (request.label !== undefined) {
+        const label = request.label?.trim() || null;
+        if (label && label.length > 60) fail('invalid_input');
+        line.label = label;
+      }
+      if (request.kept !== undefined) line.kept = request.kept;
+      return (await this.backupHistory(connectionId)).points.find((point) => point.id === pointId) ?? fail('not_found');
     },
     async backupResolveRecovery(connectionId: ConnectionId, jobId: string): Promise<BackupJob> {
       await host.wait();

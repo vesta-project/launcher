@@ -12,9 +12,11 @@ import { serverCommand, useServersClock } from '../../../features/servers/store'
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
 import { createBackupJobFollower } from '../../../features/servers/backup-jobs';
-import { backupSnapshotsResource, backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
+import { backupStorageResource, backupsResource } from '../../../features/servers/server-resources';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { BackupJob, BackupSnapshot } from '../../../features/servers/native-manage';
+import type { BackupJob } from '../../../features/servers/native-manage';
+import type { BackupPoint } from '../../../features/servers/backup-graph-model';
+import { BackupHistory } from './backup-history';
 import { ServerErrorNote } from '../parts';
 import { backupsConfigured } from '../../../features/servers/shell-model';
 import { BackupProfilesEditor, BackupSetup, BackupsEnabled, retentionSummary, retentionText as retention } from './backup-profiles';
@@ -69,8 +71,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const storage = () => space.value() ?? null;
   const error = backups.error;
   const loading = () => backups.loading() || backups.refreshing();
-  const [openProfile, setOpenProfile] = createSignal<string | null>(null, { name: 'server-backups:open-profile' });
-  const [restoring, setRestoring] = createSignal<{ profile: string; snapshot: BackupSnapshot } | null>(null, { name: 'server-backups:restoring' });
+  const [restoring, setRestoring] = createSignal<BackupPoint | null>(null, { name: 'server-backups:restoring' });
   const [started, setStarted] = createSignal<BackupJob | null>(null, { name: 'server-backups:started' });
   const can = (capability: string) => gate(props.snapshot.capabilities, capability) === 'allowed';
   const canConfigure = () => can('backups.configure');
@@ -83,16 +84,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
       <Show when={can('backups.create')}>
         <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
       </Show>
-      {/* Restore points open under the row; a disclosure, not another labelled button. */}
-      <Button size="sm" variant="ghost" data-vesta="server-backup-points-toggle" aria-label={t('servers.backups.show-points')} title={t('servers.backups.show-points')}
-        aria-expanded={openProfile() === name ? 'true' : 'false'} icon={<Icon name="icons/controls/chevron-down" size={14} />}
-        onClick={() => setOpenProfile(openProfile() === name ? null : name)} />
     </>
-  );
-  const profilePoints = (name: string) => (
-    <Show when={openProfile() === name}>
-      <BackupList snapshot={props.snapshot} profile={name} onRestore={(point) => setRestoring({ profile: name, snapshot: point })} onStarted={(job) => { setStarted(job); void refresh(); }} />
-    </Show>
   );
   let disposed = false;
   onCleanup(() => { disposed = true; });
@@ -100,7 +92,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
     const requestedId = id();
     // Storage refresh retires the native read cache before snapshots are re-read.
     await space.refresh();
-    if (!disposed && requestedId === id()) invalidateServerResources(requestedId, ['backup-snapshots']);
+    if (!disposed && requestedId === id()) invalidateServerResources(requestedId, ['backup-snapshots', 'backup-history']);
   };
   const refresh = async () => { await Promise.all([backups.refresh(), refreshProjections()]); };
   // Scope polling to the connection as well as the pane's lifetime. The jobs effect is a
@@ -182,7 +174,6 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                       </div>
                       <div data-vesta="setting-row-control">{profileActions(profile.name)}</div>
                     </div>
-                    {profilePoints(profile.name)}
                   </div>
                 )}
               </For>
@@ -190,8 +181,9 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
           </div>
         </section>
         }>
-          <BackupProfilesEditor snapshot={props.snapshot} actions={profileActions} details={profilePoints} />
+          <BackupProfilesEditor snapshot={props.snapshot} actions={profileActions} />
         </Show>
+        <Show when={configured()}><BackupHistory snapshot={props.snapshot} onRestore={setRestoring} onStarted={(job) => { setStarted(job); void refresh(); }} /></Show>
         </div>
         <aside data-vesta="backups-side">
         <Show when={storage()}>
@@ -255,54 +247,14 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
         </Show>
       </div>
       <Show when={restoring()} keyed>
-        {(target) => <RestoreDialog snapshot={props.snapshot} profile={target.profile} point={target.snapshot} onClose={() => setRestoring(null)} onDone={(job) => { setStarted(job); void refresh(); }} />}
-      </Show>
-    </div>
-  );
-}
-
-function BackupList(props: { snapshot: ServerSnapshot; profile: string; onRestore: (point: BackupSnapshot) => void; onStarted: (job: BackupJob) => void }) {
-  const id = () => props.snapshot.connection.id;
-  const points = useServerResource(stableConnectionId(() => props.snapshot), backupSnapshotsResource, { args: () => props.profile });
-  const canRestore = () => gate(props.snapshot.capabilities, 'backups.restore') === 'allowed';
-  const copy = async (point: BackupSnapshot) => {
-    try {
-      const job = await serverCommand((client) => client.backupRestoreCopy(id(), props.profile, point.id, [], newIntentId()));
-      toast.show({ title: t('servers.backups.copy-started'), tone: 'neutral' });
-      props.onStarted(job);
-    } catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
-  };
-  return (
-    <div data-vesta="settings-reveal">
-      <ServerErrorNote error={points.error()} onRetry={() => void points.refresh()} />
-      <Show when={points.value()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p>}>
-        {(list) => (
-          <Show when={list().length} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('servers.backups.no-points')}</p>}>
-            <For each={list()}>
-              {(point) => (
-                <div data-vesta="setting-row">
-                  <div data-vesta="setting-row-copy">
-                    <span data-vesta="setting-row-label">{new Date(point.time).toLocaleString()}</span>
-                    <span data-vesta="setting-row-description"><span data-vesta="metadata"><code>{point.id.slice(0, 12)}</code><Show when={point.safety}><span>{t('servers.backups.safety')}</span></Show></span></span>
-                  </div>
-                  <Show when={canRestore()}>
-                    <div data-vesta="setting-row-control">
-                      <Button size="sm" variant="ghost" onClick={() => void copy(point)}>{t('servers.backups.restore-copy')}</Button>
-                      <Button size="sm" variant="outline" tone="danger" onClick={() => props.onRestore(point)}>{t('servers.backups.restore')}</Button>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </Show>
-        )}
+        {(point) => <RestoreDialog snapshot={props.snapshot} profile={point.profile ?? ''} point={point} onClose={() => setRestoring(null)} onDone={(job) => { setStarted(job); void refresh(); }} />}
       </Show>
     </div>
   );
 }
 
 /** In-place restore: the game must be stopped, a safety snapshot is on by default, and the server's confirmation expires. */
-function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point: BackupSnapshot; onClose: () => void; onDone: (job: BackupJob) => void }) {
+function RestoreDialog(props: { snapshot: ServerSnapshot; profile: string; point: BackupPoint; onClose: () => void; onDone: (job: BackupJob) => void }) {
   const now = useServersClock();
   const [safety, setSafety] = createSignal(true, { name: 'server-restore:safety' });
   const [prepared, setPrepared] = createSignal<{ jobId: string; expiresAtMs: number } | null>(null, { name: 'server-restore:prepared' });

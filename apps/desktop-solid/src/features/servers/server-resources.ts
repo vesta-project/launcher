@@ -4,6 +4,7 @@ import { readServerResource, serverResource } from './resources';
 import { keepMinecraft, softwareVersionKind } from './software-flow';
 import { loadOperations, serverCommand } from './store';
 import type { BackupOverview, BackupStorage } from './native-manage';
+import type { BackupHistory, BackupPoint } from './backup-graph-model';
 import type { SoftwareId } from './hosting-native';
 import { historyRequest, type GraphRange } from './metrics-model';
 
@@ -101,3 +102,29 @@ export const metricsHistoryResource = serverResource('metrics-history', (id, ran
   serverCommand((client) => client.metricsHistory(id, historyRequest(range, Date.now()))));
 
 export const eulaResource = serverResource('eula', (id) => serverCommand(client => client.eula(id)));
+
+/**
+ * The adapter for `GET backups/history` and `PATCH backups/points/<id>` lands in
+ * native-backup-history.ts; until the client spreads it in, these calls are typed here.
+ */
+type BackupHistoryApi = {
+  backupHistory(connectionId: string): Promise<BackupHistory>;
+  backupPointUpdate(connectionId: string, pointId: string, request: { label?: string | null; kept?: boolean }, intentId: string): Promise<BackupPoint>;
+};
+export const historyApi = (client: unknown) => client as BackupHistoryApi;
+
+/**
+ * Every restore point as a branch history. A host without lineage answers the per-profile
+ * listings only; those read as one line in time order (see withLineage).
+ */
+export const backupHistoryResource = serverResource('backup-history', async (id): Promise<BackupHistory> => {
+  try { return await serverCommand((client) => historyApi(client).backupHistory(id)); }
+  catch (reason) {
+    const code = toServerError(reason).code;
+    if (code !== 'not_found' && code !== 'unsupported') throw reason;
+    const overview = await serverCommand((client) => client.backups(id, null));
+    const lists = await Promise.all(overview.profiles.map(async (profile) =>
+      (await serverCommand((client) => client.backupSnapshots(id, profile.name))).map((point): BackupPoint => ({ ...point, profile: point.safety ? null : profile.name, parentId: null, label: null, kept: false }))));
+    return { head: null, points: lists.flat() };
+  }
+});
