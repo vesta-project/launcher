@@ -93,7 +93,8 @@ export function InstallJobPanel() {
           <img src={icon()} alt="" width={40} height={40} draggable="false" />
           <span data-vesta="pack-job-heading">
             <h3>{title()}</h3>
-            <span data-vesta="pack-job-sub">{active() ? t(phaseLabel(phase()!)) : name() ?? ''}</span>
+            {/* Steps and the progress line already say what is happening; name the server. */}
+            <span data-vesta="pack-job-sub">{active() ? area.snapshot().connection.name : name() ?? ''}</span>
           </span>
           <Show when={!active()}>
             <span data-vesta="pack-job-mark" data-tone={phase() === 'succeeded' ? 'success' : phase() === 'interrupted' ? 'warning' : 'danger'}>

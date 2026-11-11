@@ -28,12 +28,49 @@ interface Host {
   content?(id: string): Promise<ServerContentInventory>;
   publish?(id: string): void;
   wait(ms?: number): Promise<unknown>;
+  /** Simulate the agent's timed preparation and install job (dev app); tests stay instant. */
+  jobs?: boolean;
 }
 export function createPackFixtures(host: Host): typeof serversPackNative & { fixturePublishedManifest(id: string): PackManifest; fixtureRestartServerModpack(id: string): void } {
   const history = new Map<string, import('./native-pack').PublishedRevision[]>();
   const states = new Map<string, { view: PackWorkspace; published: PackManifest; publishedDraft: string }>();
   const receipts = new Map<string, { input: string; result: unknown }>();
   const installPlans = new Map<string,{id:string;plan:PackInstallPlan;source:PackInstallSource}>();
+  // Agent-like timelines: stages in the agent's order, totals where the agent knows them, bytes only
+  // while downloading, and a persisted job that moves queued -> staging (-> activating) -> succeeded.
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  const progress = (id: string, value: import('./native-pack').PackInstallProgress | null) => { const s = states.get(id); if (s) s.view.installProgress = value; };
+  async function stage(id: string, name: import('./native-pack').PackInstallProgress['stage'], total: number, ms: number, bytes = 0) {
+    const steps = 8;
+    for (let i = 0; i <= steps; i++) {
+      progress(id, { stage: name, completed: Math.round(total * i / steps), total, ...(bytes ? { bytesCompleted: Math.round(bytes * i / steps) } : {}) });
+      await sleep(ms / steps);
+    }
+  }
+  async function preparation(id: string) {
+    if (!host.jobs) return;
+    progress(id, { stage: 'archive', completed: 0, total: 0 }); await sleep(2500);
+    await stage(id, 'download_verify', 0, 3000, 182 * 1048576);
+    await stage(id, 'extract_hash', 140, 1500);
+    await stage(id, 'metadata', 140, 1000);
+    await stage(id, 'review', 140, 1000);
+    progress(id, null);
+  }
+  function installJob(id: string, softwareSwitch: boolean): string | null {
+    if (!host.jobs) return null;
+    const job = { id: crypto.randomUUID(), state: 'queued', error: null as string | null, decisions: ['kept:config/sodium-options.json'] };
+    const s = states.get(id)!;
+    s.view.installJob = job;
+    void (async () => {
+      await sleep(800); job.state = 'staging';
+      await stage(id, 'download_verify', 0, 1500, 64 * 1048576);
+      await stage(id, 'writing', 140, 3000);
+      progress(id, null);
+      if (softwareSwitch) { job.state = 'activating'; await sleep(2000); }
+      job.state = 'succeeded';
+    })();
+    return job.id;
+  }
   const blobs = new Map<string, Uint8Array>();
   const uploads = new Map<string, { request: PackUploadBegin; bytes: Uint8Array; complete: boolean }>();
   const tails = new Map<string, Promise<unknown>>();
@@ -179,7 +216,9 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
       const plan=seedPackInstallPlan(scenario); plan.planId=crypto.randomUUID(); plan.confirmationToken=crypto.randomUUID();plan.expiresAtMs=Date.now()+900000;
       plan.softwareSwitchRequired=host.software(id)!==plan.software||(host.minecraftVersion?.(id)??'1.21.4')!==plan.minecraftVersion;
       plan.softwareSwitch = plan.softwareSwitchRequired ? {from:{software:host.software(id)??'unknown',minecraftVersion:host.minecraftVersion?.(id)??'1.21.4',loaderVersion:null},to:{software:plan.software,minecraftVersion:plan.minecraftVersion,loaderVersion:plan.loaderVersion}} : null;
-      installPlans.set(plan.planId,{id,plan:clone(plan),source:clone(request.source)});return plan;
+      installPlans.set(plan.planId,{id,plan:clone(plan),source:clone(request.source)});
+      await preparation(id);
+      return plan;
     },
     async packInstallApply(id, request, intent) {
       requireCap(id,'content.install');
@@ -198,7 +237,8 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
         if(p.softwareSwitchRequired)host.switchSoftware?.(id,{software:p.software,minecraftVersion:p.minecraftVersion,loaderVersion:p.loaderVersion});
         view.serverModpack={source:clone(saved.source),displayVersion:'1',files:Object.fromEntries(selected.map(f=>[f.path,f.sha256])),state:'staged_until_restart',installed:view.serverModpack?.installed??null,pending:{source:clone(saved.source),displayVersion:'1'},pendingIds:selected.map((_,i)=>`${p.planId}-${i}`)};
         if(!selected.length){view.serverModpack.installed=view.serverModpack.pending;view.serverModpack.pending=null;view.serverModpack.state='installed';}
-        return {state:'staged_until_restart' as const,pendingIds:selected.map((_,i)=>`${p.planId}-${i}`),modpackRevision:null,serverModpack:clone(view.serverModpack)};
+        const softwareJobId=installJob(id,p.softwareSwitchRequired);
+        return {state:'staged_until_restart' as const,pendingIds:selected.map((_,i)=>`${p.planId}-${i}`),modpackRevision:null,serverModpack:clone(view.serverModpack),...(softwareJobId?{softwareJobId}:{})};
       });
     },
     async packArchiveInspect(id, uploadId) {

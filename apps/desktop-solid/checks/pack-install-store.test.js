@@ -268,6 +268,11 @@ test('the install appears in the activity panel and cancels through it while can
   expect(row).toMatchObject({ kind: 'modpack_install', state: 'running', cancellable: true, target: { route: `/servers/${id}/pack` } });
   expect(row.title).toContain('All the Mods');
   expect(row.title).toContain('Survival');
+  // Progress uses the activity panel's 0-1 scale, matching the in-page bar.
+  handlers.packDraft = () => Promise.resolve(workspace(null, { stage: 'extract_hash', completed: 70, total: 140 }));
+  await until(() => activities.get(row.id).progress !== undefined);
+  expect(activities.get(row.id).progress).toBe(0.5);
+  expect(activities.get(row.id).counter).toBe('70 / 140');
   cancels.get('server-pack:')(row.id);
   expect(activities.get(row.id).state).toBe('cancelled');
   expect(phase(id)).toBeNull();

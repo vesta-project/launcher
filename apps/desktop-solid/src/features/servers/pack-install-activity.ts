@@ -23,7 +23,7 @@ function finish(id: ConnectionId, state: PackInstallJobState, phase: PackJobPhas
   if (!activityId) return;
   activityIds.delete(id);
   receiveActivity({
-    id: activityId, state: outcome, finishedAt: Date.now(), cancellable: false, progress: outcome === 'done' ? 100 : undefined,
+    id: activityId, state: outcome, finishedAt: Date.now(), cancellable: false, progress: outcome === 'done' ? 1 : undefined,
     doneTitle: t('server-pack.job-activity-done', names(id, state)),
     ...(outcome === 'failed' ? { error: t(phaseLabel(phase ?? 'failed')) } : {}),
     ...(note === 'cancelled-backup-continues' ? { subtitle: t('server-pack.job-cancel-backup-continues') } : {}),
@@ -44,7 +44,8 @@ function update(id: ConnectionId, state: PackInstallJobState, phase: PackJobPhas
     title: t('server-pack.job-activity-title', names(id, state)),
     stageLabel: t(view.stage),
     counter: view.items ? `${view.items.completed} / ${view.items.total}` : view.bytes ? formatBytes(view.bytes) : undefined,
-    progress: view.percent,
+    // Activity rows use a 0-1 fraction (native rows are normalized the same way).
+    progress: view.percent === undefined ? undefined : view.percent / 100,
     cancellable: cancellablePhase(phase),
     target: { route: serverModpackPath(id) },
     action: 'open',
