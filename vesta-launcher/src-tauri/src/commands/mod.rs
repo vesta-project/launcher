@@ -39,3 +39,5 @@ pub mod servers_pack_sync;
 pub mod destinations;
 
 pub mod modrinth_servers;
+
+pub mod servers_setup;

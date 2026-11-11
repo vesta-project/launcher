@@ -16,7 +16,7 @@ pub mod streams;
 pub mod transport;
 pub mod trust;
 pub use client::{
-    automation, backups_config, branding, content, hosting, management, pack, presence, Client,
+    automation, backups_config, branding, content, hosting, management, pack, presence, setup, Client,
 };
 pub use model::{Error, ErrorCode, Result};
 // Keep callers independent of the HTTP major version selected by this crate.

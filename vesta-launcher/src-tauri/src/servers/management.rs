@@ -137,7 +137,12 @@ impl ServerManager {
                     true,
                 );
                 if let Some(job_id) = job_id {
-                    if !terminal && state != Some("awaiting_confirmation") {
+                    // Pending jobs are polled through their dedicated API; they
+                    // must never be sent to the normal backup-job tracker.
+                    if !terminal
+                        && state != Some("awaiting_confirmation")
+                        && !action.starts_with("setup/")
+                    {
                         if action.starts_with("software/") {
                             self.track_software(app, id, job_id, action);
                         } else {

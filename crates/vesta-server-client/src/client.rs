@@ -14,6 +14,8 @@ pub mod management;
 pub mod pack;
 #[path = "presence.rs"]
 pub mod presence;
+#[path = "setup.rs"]
+pub mod setup;
 use crate::role_defaults::role_defaults;
 use crate::{
     auth::{self, Challenge, DeviceSigner, Enrollment, Session},
@@ -59,6 +61,7 @@ pub struct Client {
     pub(crate) file_validators: Mutex<HashMap<String, (String, String)>>,
     management: management::State,
     hosting: hosting::State,
+    setup: setup::State,
 }
 #[derive(Clone)]
 enum Intent {
@@ -163,6 +166,7 @@ impl Client {
             file_validators: Default::default(),
             management: Default::default(),
             hosting: Default::default(),
+            setup: Default::default(),
         })
     }
     pub async fn pair(

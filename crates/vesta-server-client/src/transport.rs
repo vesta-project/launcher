@@ -363,7 +363,9 @@ impl Transport {
             )
             .await?;
         if self.expected.is_none()
-            && (method != Method::GET || path != "/api/v3/status" || token.is_some())
+            && (method != Method::GET
+                || !matches!(path, "/api/v3/status" | "/api/v3/setup")
+                || token.is_some())
         {
             return Err(Error::new(ErrorCode::TlsFailed));
         }
@@ -525,14 +527,23 @@ impl Transport {
             }
             return Err(error);
         }
-        // Implemented auth routes predate the v3 management envelope and return
-        // plain objects. Never extend this exception to operational routes.
+        // Auth and pending setup use plain DTOs. Setup decoding is strict and
+        // authenticated setup requests still require the enrolled TLS pin.
         let auth = path.starts_with("/api/v3/auth/") || path == "/api/v3/manage/pair";
-        if !auth && value.get("api_version").and_then(Value::as_str) != Some("3") {
+        let setup = matches!(
+            path,
+            "/api/v3/setup/claim"
+                | "/api/v3/setup/status"
+                | "/api/v3/setup/plan"
+                | "/api/v3/setup/apply"
+        ) || path
+            .strip_prefix("/api/v3/setup/jobs/")
+            .is_some_and(|id| uuid::Uuid::parse_str(id).is_ok());
+        if !auth && !setup && value.get("api_version").and_then(Value::as_str) != Some("3") {
             return Err(Error::new(ErrorCode::Unsupported));
         }
         let data = value.get("data").cloned().unwrap_or(value);
-        if mutation && path.starts_with("/api/v3/manage/") {
+        if mutation && (path.starts_with("/api/v3/manage/") || setup) {
             // New reads must not reuse a pre-mutation projection. In-flight old
             // readers may complete, but their epoch cannot repopulate the new cache.
             self.read_epoch

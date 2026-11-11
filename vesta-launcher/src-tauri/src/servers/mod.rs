@@ -2,6 +2,8 @@ mod credentials;
 pub(crate) mod files;
 mod hosting;
 mod management;
+mod setup;
+pub use setup::SetupDiscovery;
 pub(crate) mod pack_sync;
 mod store;
 mod subscriptions;
@@ -454,7 +456,19 @@ impl ServerManager {
                 None,
                 true,
             )
-            .await?;
+            .await;
+        // Pending hosts deliberately have no managed status route. Discovery is
+        // credential-free; enrollment always uses the observed TLS pin.
+        let status = match status {
+            Ok(status) => status,
+            Err(error) if error.code == ErrorCode::NotFound => {
+                transport.request(
+                    vesta_server_client::Method::GET,
+                    "/api/v3/setup", None, None, None, true,
+                ).await?
+            },
+            Err(error) => return Err(error),
+        };
         let server_id = status["server_id"]
             .as_str()
             .filter(|s| !s.is_empty() && s.len() <= 256)
@@ -486,7 +500,10 @@ impl ServerManager {
             endpoint: parsed.endpoint.display(),
             server_id,
             fingerprint,
-            public_lifecycle: status["state"].as_str().map(str::to_owned),
+            public_lifecycle: status["state"]
+                .as_str()
+                .or_else(|| status["status"].as_str())
+                .map(str::to_owned),
             expected_fingerprint: parsed.fingerprint,
             link_code: parsed.code,
             existing_connection_id: existing,
@@ -499,6 +516,12 @@ impl ServerManager {
         };
         // Retire capture-mode pool now. Enrollment can only use the observed pin.
         let pinned = Transport::new(parsed.endpoint, Some(discovery.fingerprint.clone()))?;
+        if status.get("status").is_some() {
+            let ready = Client::setup_readiness(&pinned, &discovery.server_id).await?;
+            if status["installation_id"].as_str() != Some(ready.installation_id.as_str()) {
+                return Err(Error::new(ErrorCode::FingerprintMismatch));
+            }
+        }
         self.contacts.lock().await.insert(
             discovery.discovery_id.clone(),
             Contact {
@@ -623,6 +646,7 @@ impl ServerManager {
         {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
+        let pending_setup = discovery.public_lifecycle.as_deref() == Some("awaiting_app_onboarding");
         let id = discovery
             .existing_connection_id
             .clone()
@@ -718,8 +742,10 @@ impl ServerManager {
         self.cleanup_deleted_credentials().await;
         // Enrollment succeeded even if a follow-up read fails. Return an honest
         // classified connection snapshot rather than encouraging code redemption again.
-        let _ = self.refresh(app, &id, true).await;
-        self.ensure_worker(app, &id)?;
+        if !pending_setup {
+            let _ = self.refresh(app, &id, true).await;
+            self.ensure_worker(app, &id)?;
+        }
         Ok(account_snapshot(&self.record(&id).await?))
     }
     pub async fn pair(

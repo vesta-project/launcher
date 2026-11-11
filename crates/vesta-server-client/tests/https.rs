@@ -31,6 +31,8 @@ mod file_tests;
 
 #[derive(Default)]
 struct State {
+    setup_status_mode: AtomicUsize,
+    setup_apply_bodies: Mutex<Vec<Value>>,
     files: file_tests::Files,
     key: Mutex<Option<[u8; 32]>>,
     pairs: AtomicUsize,
@@ -197,7 +199,56 @@ async fn route(
         return Ok(file_tests::route(&req, &bytes, &body, &state.files));
     }
     let response = match path.as_str() {
+        "/api/v3/setup" => {
+            assert!(req.headers().get("authorization").is_none());
+            assert!(bytes.is_empty());
+            plain(
+                json!({"api_version":"3","installation_id":"installation-1","server_id":"server-1","status":"awaiting_app_onboarding","management_available":false,"provisioning_available":true}),
+            )
+        }
+        "/api/v3/setup/claim" | "/api/v3/setup/status" => {
+            assert!(bytes.is_empty());
+            assert!(req.headers().get("authorization").is_some());
+            plain(json!({"installation_id":"installation-1","server_id":"server-1","claimed":true}))
+        }
+        "/api/v3/setup/plan" => {
+            assert_eq!(
+                body,
+                json!({"kind":"adopt_copy","name":"Copied","minecraft_version":"1.21.1"})
+            );
+            plain(
+                json!({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","state":"planning","phase":"metadata","error":null,"review":null,"confirmation":null}),
+            )
+        }
+        "/api/v3/setup/jobs/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" => plain(
+            json!({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","state":"review","phase":"review","error":null,"review":{"name":"Copied","minecraft_version":"1.21.1","software":null,"loader_version":null,"files":3,"bytes":18446744073709551615u64,"warnings":["legacy_checksum"]},"confirmation":"native-only-confirmation"}),
+        ),
+        "/api/v3/setup/apply" => {
+            assert_eq!(body["confirmation"], "native-only-confirmation");
+            assert_eq!(
+                body["idempotency_key"],
+                req.headers()["idempotency-key"].to_str().unwrap()
+            );
+            state.setup_apply_bodies.lock().unwrap().push(body);
+            plain(
+                json!({"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","state":"applying","phase":"preparing","error":null,"review":null,"confirmation":null}),
+            )
+        }
         "/api/v3/status" => {
+            match state.setup_status_mode.load(Ordering::SeqCst) {
+                1 => return Ok(error(StatusCode::NOT_FOUND, "not_found")),
+                2 => {
+                    return Ok(plain(
+                        json!({"api_version":"3","server_id":"wrong-server","state":"offline"}),
+                    ))
+                }
+                3 => {
+                    let (sender, body) = Body::channel();
+                    sender.abort();
+                    return Ok(Response::new(body));
+                }
+                _ => {}
+            }
             plain(json!({"api_version":"3","server_id":"server-1","state":"offline","motd":{}}))
         }
         "/api/v3/manage/pair" => {
@@ -296,6 +347,9 @@ async fn route(
                 r
             }
         }
+        "/api/v3/manage/server" => envelope(
+            json!({"server_id":"server-1","name":"First","agent_version":"test","minecraft_version":"1.21.1","pack_version":"initial","game_port":25565,"backups_configured":false,"join_address":null}),
+        ),
         "/api/v3/manage/lifecycle/start" => {
             state.starts.fetch_add(1, Ordering::SeqCst);
             if state.busy_start.load(Ordering::SeqCst) {
@@ -1056,4 +1110,116 @@ async fn named_pairing_sends_device_label_and_refuses_invalid_names_before_netwo
         );
     }
     assert_eq!(agent.state.pairs.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn setup_handoff_requires_managed_status_identity_and_fresh_session() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    client.capabilities(Some("owner")).await.unwrap();
+    let before = agent.state.sessions.load(Ordering::SeqCst);
+    agent.state.setup_status_mode.store(1, Ordering::SeqCst);
+    assert_eq!(
+        client.setup_handoff().await.unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(agent.state.sessions.load(Ordering::SeqCst), before);
+    agent.state.setup_status_mode.store(2, Ordering::SeqCst);
+    assert_eq!(
+        client.setup_handoff().await.unwrap_err().code,
+        ErrorCode::FingerprintMismatch
+    );
+    agent.state.setup_status_mode.store(0, Ordering::SeqCst);
+    client.setup_handoff().await.unwrap();
+    assert_eq!(agent.state.sessions.load(Ordering::SeqCst), before + 1);
+    agent.state.wrong_identity.store(true, Ordering::SeqCst);
+    assert_eq!(
+        client.setup_handoff().await.unwrap_err().code,
+        ErrorCode::FingerprintMismatch
+    );
+    agent.state.wrong_identity.store(false, Ordering::SeqCst);
+    let wrong_pin = Transport::new(agent.endpoint.clone(), Some("00".repeat(32))).unwrap();
+    let signer: Arc<dyn DeviceSigner> = Arc::new(Ed25519Signer::from_seed([17; 32]));
+    let wrong = Client::new(wrong_pin, "server-1".into(), "device-1".into(), signer);
+    assert_eq!(
+        wrong.setup_handoff().await.unwrap_err().code,
+        ErrorCode::FingerprintMismatch
+    );
+    agent.state.setup_status_mode.store(3, Ordering::SeqCst);
+    client.transport.invalidate_reads();
+    assert!(
+        client.setup_handoff().await.is_err(),
+        "disconnect cannot complete handoff"
+    );
+}
+
+#[tokio::test]
+async fn setup_wire_contract_and_identical_apply_retry() {
+    use vesta_server_client::setup::{SetupJobState, SetupPlanRequest};
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    let capture = Transport::new(agent.endpoint.clone(), None).unwrap();
+    let detected = capture
+        .request(
+            vesta_server_client::Method::GET,
+            "/api/v3/setup",
+            None,
+            None,
+            None,
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(detected["server_id"], "server-1");
+    assert_eq!(
+        Client::setup_readiness(&capture, "server-1")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::TlsFailed
+    );
+    let ready = Client::setup_readiness(&client.transport, "server-1")
+        .await
+        .unwrap();
+    assert!(ready.provisioning_available);
+    assert_eq!(
+        Client::setup_readiness(&client.transport, "wrong")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::FingerprintMismatch
+    );
+    assert!(client.setup_claim().await.unwrap().claimed);
+    assert!(client.setup_status().await.unwrap().claimed);
+    let job = client
+        .setup_plan(SetupPlanRequest::AdoptCopy {
+            name: "Copied".into(),
+            minecraft_version: "1.21.1".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(job.state, SetupJobState::Planning);
+    let review = client.setup_job(&job.id).await.unwrap();
+    assert_eq!(
+        review.review.as_ref().unwrap().bytes,
+        "18446744073709551615"
+    );
+    assert!(!serde_json::to_string(&review)
+        .unwrap()
+        .contains("confirmation"));
+    for _ in 0..2 {
+        assert_eq!(
+            client
+                .setup_apply(&job.id, true, false, "setup-retry")
+                .await
+                .unwrap()
+                .state,
+            SetupJobState::Applying
+        );
+    }
+    let bodies = agent.state.setup_apply_bodies.lock().unwrap();
+    assert_eq!(bodies.len(), 2);
+    assert_eq!(bodies[0], bodies[1]);
 }
