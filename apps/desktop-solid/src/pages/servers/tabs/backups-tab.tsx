@@ -80,13 +80,13 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
 
   const profileActions = (name: string) => (
     <>
-      <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/controls/chevron-down" size={12} />} aria-expanded={openProfile() === name ? 'true' : 'false'}
-        onClick={() => setOpenProfile(openProfile() === name ? null : name)}>
-        {t('servers.backups.show-points')}
-      </Button>
       <Show when={can('backups.create')}>
         <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
       </Show>
+      {/* Restore points open under the row; a disclosure, not another labelled button. */}
+      <Button size="sm" variant="ghost" data-vesta="server-backup-points-toggle" aria-label={t('servers.backups.show-points')} title={t('servers.backups.show-points')}
+        aria-expanded={openProfile() === name ? 'true' : 'false'} icon={<Icon name="icons/controls/chevron-down" size={14} />}
+        onClick={() => setOpenProfile(openProfile() === name ? null : name)} />
     </>
   );
   const profilePoints = (name: string) => (

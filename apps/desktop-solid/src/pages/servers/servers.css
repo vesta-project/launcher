@@ -435,7 +435,9 @@
   :where([data-vesta="server-backup-meter-track"]) > span { display: block; block-size: 100%; border-radius: inherit; background: var(--vesta-color-accent); }
   :where([data-vesta="server-backup-meter"]) > small { justify-self: end; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-backup-profile"]) + :where([data-vesta="server-backup-profile"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
-  :where([data-vesta="server-backup-profile"]) [data-vesta="setting-row-control"] { flex-wrap: wrap; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-backup-profile"]) [data-vesta="setting-row-control"] { flex-wrap: nowrap; gap: var(--vesta-space-1); }
+  :where([data-vesta="server-backup-points-toggle"]) svg { transition: transform var(--vesta-duration-fast) ease; }
+  :where([data-vesta="server-backup-points-toggle"][aria-expanded="true"]) svg { transform: rotate(180deg); }
 
   /* Backup setup and profile editing */
   :where([data-vesta="server-backup-fields"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); padding: var(--vesta-space-3) var(--vesta-space-4); max-inline-size: 640px; }

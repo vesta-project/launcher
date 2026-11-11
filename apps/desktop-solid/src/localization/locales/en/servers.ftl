@@ -428,7 +428,7 @@ servers-backups-keep-monthly = { $count ->
    *[other] one per month for { $count } months
 }
 servers-backups-keep-total = at most { $count } in total
-servers-backups-show-points = Backups
+servers-backups-show-points = Show restore points
 servers-backups-hide-points = Hide backups
 servers-backups-run = Back up now
 servers-backups-started = Backup "{ $name }" started
