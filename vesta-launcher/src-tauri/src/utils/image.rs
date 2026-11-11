@@ -61,6 +61,145 @@ pub fn resource_icon_bytes(bytes: &[u8]) -> anyhow::Result<std::borrow::Cow<'_, 
     Ok(std::borrow::Cow::Owned(output.into_inner()))
 }
 
+/// On-disk resource icon thumbnails keyed by their URL.
+///
+/// Icons were persisted only onto an existing `resource_project` row, so any icon whose URL had
+/// no cached project record (server resources, pack contents, uncached browse results) was
+/// downloaded again on every visit. This cache does not depend on a project row. It stores the
+/// already-bounded thumbnail bytes, writes atomically and keeps a bounded number of files.
+pub mod icon_cache {
+    use sha2::{Digest, Sha256};
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Same bound as the database copy: a thumbnail is at most a few hundred KB.
+    pub const MAX_ICON_BYTES: u64 = 2 * 1024 * 1024;
+    /// Roughly 100 MB at typical 30-40 KB thumbnails; the oldest are removed first.
+    pub const MAX_FILES: usize = 3000;
+    const PRUNE_EVERY: usize = 200;
+    static WRITES: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn default_dir() -> Option<PathBuf> {
+        crate::utils::db_manager::get_app_config_dir()
+            .ok()
+            .map(|dir| dir.join("cache").join("resource-icons"))
+    }
+
+    /// A file name that cannot carry path syntax from the URL.
+    pub fn file_name(url: &str) -> String {
+        hex::encode(Sha256::digest(url.as_bytes()))
+    }
+
+    pub fn read_in(dir: &Path, url: &str) -> Option<Vec<u8>> {
+        let path = dir.join(file_name(url));
+        let metadata = std::fs::metadata(&path).ok()?;
+        if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_ICON_BYTES {
+            return None;
+        }
+        std::fs::read(path).ok()
+    }
+
+    pub fn write_in(dir: &Path, url: &str, bytes: &[u8]) -> std::io::Result<()> {
+        if bytes.is_empty() || bytes.len() as u64 > MAX_ICON_BYTES {
+            return Ok(());
+        }
+        std::fs::create_dir_all(dir)?;
+        let name = file_name(url);
+        let temp = dir.join(format!("{name}.{}.tmp", std::process::id()));
+        std::fs::write(&temp, bytes)?;
+        // Rename is atomic on one volume: readers never see a partial icon.
+        if let Err(error) = std::fs::rename(&temp, dir.join(&name)) {
+            let _ = std::fs::remove_file(&temp);
+            return Err(error);
+        }
+        if WRITES.fetch_add(1, Ordering::Relaxed) % PRUNE_EVERY == PRUNE_EVERY - 1 {
+            prune_in(dir, MAX_FILES);
+        }
+        Ok(())
+    }
+
+    /// Keeps the newest `keep` icons by modification time.
+    pub fn prune_in(dir: &Path, keep: usize) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let mut files: Vec<(std::time::SystemTime, PathBuf)> = entries
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                let metadata = entry.metadata().ok()?;
+                metadata.is_file().then(|| (metadata.modified().unwrap_or(std::time::UNIX_EPOCH), entry.path()))
+            })
+            .collect();
+        if files.len() <= keep {
+            return;
+        }
+        files.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, path) in files.into_iter().skip(keep) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    pub fn read(url: &str) -> Option<Vec<u8>> {
+        read_in(&default_dir()?, url)
+    }
+
+    pub fn write(url: &str, bytes: &[u8]) {
+        if let Some(dir) = default_dir() {
+            if let Err(error) = write_in(&dir, url, bytes) {
+                log::debug!("[resource-icon] cache write failed: {error}");
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn icons_round_trip_by_url_and_never_collide() {
+            let dir = tempfile::tempdir().unwrap();
+            write_in(dir.path(), "https://cdn.example/a.png", b"first").unwrap();
+            write_in(dir.path(), "https://cdn.example/b.png", b"second").unwrap();
+            assert_eq!(read_in(dir.path(), "https://cdn.example/a.png").as_deref(), Some(&b"first"[..]));
+            assert_eq!(read_in(dir.path(), "https://cdn.example/b.png").as_deref(), Some(&b"second"[..]));
+            assert_eq!(read_in(dir.path(), "https://cdn.example/missing.png"), None);
+            // Rewriting replaces the icon in place.
+            write_in(dir.path(), "https://cdn.example/a.png", b"third").unwrap();
+            assert_eq!(read_in(dir.path(), "https://cdn.example/a.png").as_deref(), Some(&b"third"[..]));
+        }
+
+        #[test]
+        fn file_names_carry_no_path_syntax_from_urls() {
+            let name = file_name("https://cdn.example/../../etc/passwd?x=../y");
+            assert_eq!(name.len(), 64);
+            assert!(name.chars().all(|c| c.is_ascii_hexdigit()));
+        }
+
+        #[test]
+        fn empty_and_oversized_icons_are_not_stored_or_read() {
+            let dir = tempfile::tempdir().unwrap();
+            write_in(dir.path(), "https://cdn.example/empty.png", b"").unwrap();
+            assert_eq!(read_in(dir.path(), "https://cdn.example/empty.png"), None);
+            let big = vec![0u8; (MAX_ICON_BYTES + 1) as usize];
+            write_in(dir.path(), "https://cdn.example/big.png", &big).unwrap();
+            assert_eq!(read_in(dir.path(), "https://cdn.example/big.png"), None);
+            assert_eq!(std::fs::read_dir(dir.path()).map(|entries| entries.count()).unwrap_or(0), 0);
+        }
+
+        #[test]
+        fn pruning_keeps_the_newest_icons() {
+            let dir = tempfile::tempdir().unwrap();
+            for index in 0..5 {
+                write_in(dir.path(), &format!("https://cdn.example/{index}.png"), b"icon").unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            prune_in(dir.path(), 2);
+            assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+            assert!(read_in(dir.path(), "https://cdn.example/4.png").is_some());
+            assert!(read_in(dir.path(), "https://cdn.example/3.png").is_some());
+            assert!(read_in(dir.path(), "https://cdn.example/0.png").is_none());
+        }
+    }
+}
+
 #[cfg(test)]
 mod resource_icon_tests {
     use super::*;

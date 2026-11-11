@@ -72,3 +72,27 @@ test('broken URLs do not restart downloads on every visibility change', async ()
   let failed; queue.request('broken', 0, ok => { failed = !ok; }); await settle();
   expect(failed).toBe(true); expect(calls).toBe(1);
 });
+
+import { IMAGE_MEMORY } from '../src/components/resource-image-queue';
+test('a page of icons stays in memory, so revisiting paints them synchronously', () => {
+  // A mod list or browse page is a few hundred icons; they all survive leaving the page.
+  expect(IMAGE_MEMORY.entries).toBeGreaterThanOrEqual(500);
+  const queue = createResourceImageQueue(() => Promise.resolve(), 4);
+  for (let index = 0; index < 400; index++) queue.remember(`https://cdn.example/${index}.png`, `data:image/png;base64,${index}`);
+  // Warm hit: no request, no await.
+  expect(queue.peek('https://cdn.example/0.png')).toBe('data:image/png;base64,0');
+  let ready;
+  queue.request('https://cdn.example/1.png', 0, (ok, source) => { ready = { ok, source }; });
+  expect(ready).toEqual({ ok: true, source: 'data:image/png;base64,1' });
+});
+
+test('memory stays bounded by entries and bytes, oldest first', () => {
+  const queue = createResourceImageQueue(() => Promise.resolve(), 4, { entries: 3, bytes: 1000 });
+  for (const name of ['a', 'b', 'c', 'd']) queue.remember(name, 'x'.repeat(10));
+  expect(queue.peek('a')).toBeUndefined();
+  expect(queue.peek('d')).toBe('x'.repeat(10));
+  queue.remember('big', 'y'.repeat(995));
+  // The byte cap evicts older icons to make room.
+  expect(queue.peek('b')).toBeUndefined();
+  expect(queue.peek('big')).toBe('y'.repeat(995));
+});

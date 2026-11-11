@@ -644,6 +644,7 @@ pub async fn get_cached_resource_images(
         use crate::schema::resource_project::dsl as rp;
         use diesel::prelude::*;
         let mut conn = crate::utils::db::get_vesta_conn()?;
+        let requested = urls.clone();
         let records = rp::resource_project
             .filter(rp::icon_url.eq_any(urls))
             .filter(diesel::dsl::sql::<diesel::sql_types::Bool>(
@@ -663,6 +664,23 @@ pub async fn get_cached_resource_images(
                 if let Ok(source) = resource_icon_data_url(&bytes) {
                     remaining -= bytes.len();
                     result.insert(url, source);
+                }
+            }
+        }
+        // Icons without a project record live in the URL-keyed file cache.
+        if let Some(dir) = crate::utils::image::icon_cache::default_dir() {
+            for url in requested {
+                if result.contains_key(&url) {
+                    continue;
+                }
+                if let Some(bytes) = crate::utils::image::icon_cache::read_in(&dir, &url) {
+                    if bytes.len() > remaining {
+                        continue;
+                    }
+                    if let Ok(source) = resource_icon_data_url(&bytes) {
+                        remaining -= bytes.len();
+                        result.insert(url, source);
+                    }
                 }
             }
         }
@@ -687,14 +705,15 @@ pub async fn resolve_resource_image(url: String) -> Result<String> {
     let cached = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<Vec<u8>>> {
         let mut conn = crate::utils::db::get_vesta_conn()?;
         Ok(rp::resource_project
-            .filter(rp::icon_url.eq(query_url))
+            .filter(rp::icon_url.eq(query_url.clone()))
             .filter(diesel::dsl::sql::<diesel::sql_types::Bool>(
                 "length(icon_data) > 0 AND length(icon_data) <= 2097152",
             ))
             .select(rp::icon_data)
             .first::<Option<Vec<u8>>>(&mut conn)
             .optional()?
-            .flatten())
+            .flatten()
+            .or_else(|| crate::utils::image::icon_cache::read(&query_url)))
     })
     .await
     .map_err(|_| anyhow!("Icon cache worker failed"))?
@@ -736,6 +755,9 @@ pub async fn resolve_resource_image(url: String) -> Result<String> {
         let saved_url = url.clone();
         // Do not hold first display behind a contended metadata database write.
         tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            // Always keep the thumbnail, whether or not a project record names this URL;
+            // the row update below only reaches icons of already-cached projects.
+            crate::utils::image::icon_cache::write(&saved_url, &saved);
             let mut conn = crate::utils::db::get_vesta_conn()?;
             // An icon URL change must not attach old bytes to a newer project record.
             diesel::update(rp::resource_project.filter(rp::icon_url.eq(saved_url)))

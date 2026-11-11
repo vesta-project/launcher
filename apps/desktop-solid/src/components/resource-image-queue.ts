@@ -1,5 +1,13 @@
+/**
+ * Shown icons are kept in memory so a revisit paints them synchronously. One instance's mod list
+ * or a browse page is a few hundred icons; the previous 128-entry bound evicted the page just
+ * left. Thumbnails are bounded to 192px natively, so the byte cap is what really limits memory.
+ */
+export const IMAGE_MEMORY = { entries: 600, bytes: 48 * 1024 * 1024 } as const;
+
 /** Visible icons share a bounded pool; offscreen work cannot start a download flood. */
-export function createResourceImageQueue(load: (url: string, priority: number) => Promise<string | void>, concurrency = 4) {
+export function createResourceImageQueue(load: (url: string, priority: number) => Promise<string | void>, concurrency = 4,
+  memory: { entries: number; bytes: number } = IMAGE_MEMORY) {
   type Client = { priority: number; ready: (ok: boolean, source?: string) => void };
   const jobs = new Map<string, Set<Client>>();
   const cached = new Map<string, string>();
@@ -10,7 +18,7 @@ export function createResourceImageQueue(load: (url: string, priority: number) =
   const remember = (url: string, source: string) => {
     cachedBytes -= cached.get(url)?.length ?? 0;
     cached.delete(url); cached.set(url, source); cachedBytes += source.length;
-    while (cached.size > 128 || cachedBytes > 16 * 1024 * 1024) {
+    while (cached.size > memory.entries || cachedBytes > memory.bytes) {
       const oldest = cached.keys().next().value!;
       cachedBytes -= cached.get(oldest)!.length; cached.delete(oldest);
     }
