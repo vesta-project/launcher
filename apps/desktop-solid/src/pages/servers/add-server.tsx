@@ -13,6 +13,7 @@ import type { MessageId } from '../../localization/messages';
 import { roleLabel } from '../../features/servers/model';
 import { FingerprintView, ServerErrorNote } from './parts';
 import { initialAddress, type HostMode } from '../../features/servers/onboarding-model';
+import { awaitingFirstServer } from '../../features/servers/first-server-store';
 
 type Step = 'address' | 'verify' | 'sign-in' | 'done';
 
@@ -109,6 +110,8 @@ export function AddServer(props: { connectionId?: string; guide?: { mode: HostMo
       const snapshot = await serverCommand(client => client.signInMinecraft(found.discoveryId, selected.uuid, { memoryOnly: memoryOnly(), invitationCode: code().trim() ? normalizePairingCode(code()) : undefined }));
       putSnapshot(snapshot);
       setResult(snapshot);
+      // A freshly installed host has no server yet: continue straight into setting one up.
+      if (guide && await awaitingFirstServer(snapshot.connection.id)) { transitionTo(`/servers/add/setup/${snapshot.connection.id}`); return; }
       setStep('done');
     });
   };

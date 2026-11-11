@@ -18,15 +18,17 @@ export const LOCAL_HOST_ADDRESS = 'localhost:8443';
 /** The guide's steps, in order; connecting reuses the normal connect steps after these. */
 export const hostGuideSteps: readonly MessageId[] = ['servers.step.install', 'servers.step.address', 'servers.step.verify', 'servers.step.sign-in'];
 
-/** `/servers/add/<detail>`: a start page, a guide, the connect flow, or re-pairing a saved server. */
+/** `/servers/add/<detail>`: a start page, a guide, the connect flow, first-server setup, or re-pairing. */
 export type AddRoute =
   | { kind: 'start' }
   | { kind: 'connect' }
   | { kind: 'host'; mode: HostMode }
+  | { kind: 'setup'; connectionId: string }
   | { kind: 'reconnect'; connectionId: string };
 
-export function addRoute(detail: string | undefined): AddRoute {
+export function addRoute(detail: string | undefined, item?: string): AddRoute {
   if (!detail) return { kind: 'start' };
+  if (detail === 'setup' && item) return { kind: 'setup', connectionId: item };
   if (detail === 'connect') return { kind: 'connect' };
   if (detail === 'host') return { kind: 'host', mode: 'local' };
   if (detail === 'remote') return { kind: 'host', mode: 'remote' };

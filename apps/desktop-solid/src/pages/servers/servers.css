@@ -840,4 +840,28 @@
     background: var(--vesta-color-surface-sunken);
   }
   :where([data-vesta="server-host-command"]) code { flex: 1; min-inline-size: 0; overflow-x: auto; font-size: var(--vesta-text-sm); white-space: nowrap; }
+
+  /* First server setup: software as choice tiles, then next steps on the ready screen. */
+  :where([data-vesta="first-server-software"]) { display: grid; gap: var(--vesta-space-2); margin: 0; padding: 0; border: 0; }
+  :where([data-vesta="first-server-software"]) legend { margin-block-end: var(--vesta-space-2); padding: 0; font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="first-server-software"]) > button { justify-self: start; }
+  :where([data-vesta="first-server-choice"]) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    cursor: default;
+  }
+  :where([data-vesta="first-server-choice"]):hover { background: var(--vesta-color-fill-hover); }
+  :where([data-vesta="first-server-choice"][data-selected]) { border-color: var(--vesta-color-accent-border); background: color-mix(in oklab, var(--vesta-color-accent) 10%, var(--vesta-color-surface-raised)); }
+  :where([data-vesta="first-server-choice"]):has(input:focus-visible) { outline: 2px solid var(--vesta-color-focus); outline-offset: 2px; }
+  :where([data-vesta="first-server-choice"]) input { position: absolute; opacity: 0; pointer-events: none; }
+  :where([data-vesta="first-server-choice"]) > span:last-child { display: grid; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="first-server-choice"]) small { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="first-server-next"]) { display: grid; gap: var(--vesta-space-2); margin: 0; padding: 0; list-style: none; }
+  :where([data-vesta="first-server-next"]) li { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
 }

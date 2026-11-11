@@ -9,6 +9,7 @@ import { usingFixtures } from '../../features/servers/service';
 import { refreshServers, serverSnapshots, serversListError, serversLoaded, useServersClock } from '../../features/servers/store';
 import { AddServer } from './add-server';
 import { HostGuide, ServerStart, serverStartChoices } from './onboarding';
+import { FirstServerSetup } from './first-server';
 import { addRoute } from '../../features/servers/onboarding-model';
 import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
@@ -34,13 +35,16 @@ export function ServersPage() {
 
 /** `/servers/add` and its guides; a saved connection id re-pairs that server. */
 function AddPage() {
-  const target = () => addRoute(route().detail);
+  const target = () => addRoute(route().detail, route().item);
   return (
     <Switch>
       <Match when={target().kind === 'start'}><ServerStart /></Match>
       <Match when={target().kind === 'connect'}><AddServer /></Match>
       <Match when={(() => { const value = target(); return value.kind === 'host' ? value.mode : undefined; })()} keyed>
         {(mode) => <HostGuide mode={mode} />}
+      </Match>
+      <Match when={(() => { const value = target(); return value.kind === 'setup' ? value.connectionId : undefined; })()} keyed>
+        {(id) => <FirstServerSetup connectionId={id} />}
       </Match>
       <Match when={(() => { const value = target(); return value.kind === 'reconnect' ? value.connectionId : undefined; })()} keyed>
         {(id) => <AddServer connectionId={id} />}
