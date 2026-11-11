@@ -108,33 +108,6 @@
   :where([data-vesta="server-software-java"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-2); }
   :where([data-vesta="server-software-hero"]) > :where([data-vesta="server-hosting-job"]) { padding: 0 var(--vesta-space-4) var(--vesta-space-3); }
 
-  /* The way back stays quiet: one muted line, the action reads as a link. */
-  :where([data-vesta="server-software-previous"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-1-5, 6px);
-    flex-wrap: wrap;
-    padding: var(--vesta-space-3) var(--vesta-space-4);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-md);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-  :where([data-vesta="server-software-restore"]) {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--vesta-color-text-muted);
-    font: inherit;
-    text-decoration: underline;
-    text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
-    text-underline-offset: 3px;
-    cursor: default;
-  }
-  :where([data-vesta="server-software-restore"]):hover:not(:disabled) { color: var(--vesta-color-text); }
-  :where([data-vesta="server-software-restore"]):focus-visible { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: 2px; }
-  :where([data-vesta="server-software-restore"]):disabled { opacity: 0.6; text-decoration: none; }
-
   /* ---- Change flow: fields like the instance Versions tab ---- */
   :where([data-vesta="server-software-flow"]) {
     display: flex;

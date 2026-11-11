@@ -383,10 +383,11 @@ export function updateEntry(manifest: PackManifest, entryId: string, next: Conte
 
 /* ---- Files (override roots) ---- */
 
-export interface PackRootDef { id: PackOverrideRoot; label: MessageId; hint: MessageId }
+/** All is the default; only the one-sided roots need a word about where their files go. */
+export interface PackRootDef { id: PackOverrideRoot; label: MessageId; hint?: MessageId }
 /** Like mrpack: shared overrides go to both sides, the other two to one side only. */
 export const packFileRoots: readonly PackRootDef[] = [
-  { id: 'overrides', label: 'server-pack.root-all', hint: 'server-pack.root-all-hint' },
+  { id: 'overrides', label: 'server-pack.root-all' },
   { id: 'client-overrides', label: 'server-pack.root-client', hint: 'server-pack.root-client-hint' },
   { id: 'server-overrides', label: 'server-pack.root-server', hint: 'server-pack.root-server-hint' },
 ];

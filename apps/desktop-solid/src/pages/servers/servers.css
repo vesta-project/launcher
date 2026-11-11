@@ -137,7 +137,6 @@
     font-size: var(--vesta-text-sm);
     line-height: 1.45;
   }
-  :where([data-vesta="dialog-body"] > [data-vesta="server-callout"]:not(:first-child)) { margin-block-start: var(--vesta-space-3); }
   :where([data-vesta="settings-panel-body"] > [data-vesta="server-callout"]) { margin: var(--vesta-space-3) var(--vesta-space-4); }
   :where([data-vesta="server-callout"]) p { margin: 0; flex-basis: 100%; }
   :where([data-vesta="server-callout"][data-tone="success"]) { --tone: var(--vesta-color-success-text); }

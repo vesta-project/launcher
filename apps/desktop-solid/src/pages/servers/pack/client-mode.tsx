@@ -69,7 +69,6 @@ export function ClientModePanel() {
         <Badge size="sm" variant="soft" tone="neutral">{t('server-pack.optional')}</Badge>
       </header>
       <div data-vesta="modpack-panel-body">
-        <p data-vesta="server-muted">{t('server-pack.client-description')}</p>
         <div data-vesta="modpack-modes" role="radiogroup" aria-label={t('server-pack.client-title')}>
           <For each={options()}>
             {(option) => {
@@ -109,7 +108,7 @@ export function ClientModePanel() {
           <Switch size="sm" checked={required()} onChange={setRequireUpdate} disabled={busy() || !area.gates().forceUpdate}
             label={t('server-pack.mode-require-update')} description={t('server-pack.mode-require-update-help')} />
         </Show>
-        <Switch size="sm" checked={allowCustom()} onChange={setCustom} disabled={busy()} label="Allow players to add mods" />
+        <Switch size="sm" checked={allowCustom()} onChange={setCustom} disabled={busy()} label={t('server-pack.mode-allow-custom')} />
         <Show when={dirty()}>
           <div data-vesta="modpack-mode-save" role="status">
             <span>{t(consequence(), { name: linkName() })}</span>

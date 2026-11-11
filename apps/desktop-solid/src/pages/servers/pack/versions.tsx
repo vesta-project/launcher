@@ -16,33 +16,29 @@ import { serverCommand } from '../../../features/servers/store';
 import { formatDate, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
-
-/** Versions: publish the draft (custom) or pick the provider release players get (provider). */
+/**
+ * Versions, drawn like a git history. The draft is a branch off the revision players get, and
+ * publishing commits it to the line. Published revisions run down one line, newest first, and the
+ * oldest revision players may still join with is marked. A provider pack picks the release players
+ * get instead of keeping a draft.
+ */
 export function ModpackVersions() {
   const area = useModpackArea();
   return (
     <div data-vesta="modpack-scroll">
       <div data-vesta="modpack-versions">
-        <ReleaseSummary />
-        <PublishedHistory />
-        <Show when={area.kind() === 'provider'} fallback={<DraftReview />}>
-          <ProviderVersions />
-        </Show>
+        <Show when={area.kind() === 'provider'}><ProviderVersions /></Show>
+        <section data-vesta="modpack-panel" data-panel="history">
+          <header data-vesta="modpack-panel-head"><h3>{t('server-pack.history-title')}</h3></header>
+          <div data-vesta="modpack-panel-body">
+            <ol data-vesta="pack-graph" aria-label={t('server-pack.history-title')}>
+              <Show when={area.kind() !== 'provider'}><DraftReview /></Show>
+              <PublishedHistory />
+            </ol>
+          </div>
+        </section>
       </div>
     </div>
-  );
-}
-
-function ReleaseSummary() {
-  const area = useModpackArea();
-  const workspace = () => area.workspace()!;
-  return (
-    <section data-vesta="modpack-release">
-      <div><small>{t('server-pack.published-revision')}</small><strong>{workspace().publishedRevision === '0' ? '—' : workspace().publishedRevision}</strong></div>
-      <div><small>{t('server-pack.minimum-revision')}</small><strong>{workspace().minimumRevision === '0' ? '—' : workspace().minimumRevision}</strong></div>
-      <div><small>{t('server-pack.draft-revision')}</small><strong>{workspace().draft.revision}</strong></div>
-      <p data-vesta="server-muted">{t('server-pack.minimum-help')}</p>
-    </section>
   );
 }
 
@@ -93,25 +89,30 @@ function DraftReview() {
   }, { name: 'modpack-publish:stale' });
 
   const pending = () => area.workspace()!.pendingPublication;
+  /** The revision players get, which the draft is based on; none before the first publish. */
+  const live = () => { const revision = area.workspace()!.publishedRevision; return revision === '0' ? null : revision; };
   const reviewing = () => { const current = state(); return current.step === 'review' || current.step === 'publishing' ? current.preview : current.step === 'failed' ? current.preview : undefined; };
 
   return (
-    <section data-vesta="modpack-panel">
-      <header data-vesta="modpack-panel-head">
-        <h3>{t('server-pack.draft-title')}</h3>
-        <Show when={pending()} fallback={<Badge size="sm" tone="success">{t('server-pack.up-to-date')}</Badge>}>
-          <Badge size="sm" tone="accent">{area.preview() ? t('server-pack.unpublished-count', { count: diffChangeCount(area.preview()!.diff) }) : t('server-pack.unpublished')}</Badge>
-        </Show>
-      </header>
-      <div data-vesta="modpack-panel-body">
+    <li data-vesta="pack-commit" data-kind="draft" data-state={pending() ? 'pending' : 'clean'}>
+      {/* The draft branches off the revision players get; publishing commits it to the line. */}
+      <span data-vesta="pack-graph-lane" data-fork={live() ? '' : undefined} aria-hidden="true"><span data-vesta="pack-graph-node" /></span>
+      <div data-vesta="pack-commit-body">
+        <header data-vesta="pack-commit-head">
+          <strong>{t('server-pack.draft-title')}</strong>
+          <Show when={pending()} fallback={<span data-vesta="server-muted">{live() ? t('server-pack.draft-matches', { revision: live()! }) : t('server-pack.draft-clean-help')}</span>}>
+            <Badge size="sm" tone="accent">{area.preview() ? t('server-pack.unpublished-count', { count: diffChangeCount(area.preview()!.diff) }) : t('server-pack.unpublished')}</Badge>
+            <Show when={live()}>{(revision) => <span data-vesta="server-muted">{t('server-pack.draft-based', { revision: revision() })}</span>}</Show>
+          </Show>
+          <span data-vesta="server-toolbar-spacer" />
+          <Show when={pending() && (state().step === 'idle' || (state().step === 'failed' && !reviewing()))}>
+            <Button size="sm" tone="accent" icon={<Icon name="icons/content/history" />} disabled={!area.gates().build} onClick={() => send({ type: 'review' })}>
+              {t('server-pack.review-publish')}
+            </Button>
+          </Show>
+        </header>
         <Show when={customizingProvider(area.workspace())}>
           <p data-vesta="server-callout" data-tone="warning">{t('server-pack.customizing-help')}</p>
-        </Show>
-        <Show when={state().step === 'idle' || (state().step === 'failed' && !reviewing())}>
-          <p data-vesta="server-muted">{t(pending() ? 'server-pack.draft-pending-help' : 'server-pack.draft-clean-help')}</p>
-          <Show when={pending()}><Button size="sm" tone="accent" icon={<Icon name="icons/content/history" />} disabled={!area.gates().build} onClick={() => send({ type: 'review' })}>
-            {t('server-pack.review-publish')}
-          </Button></Show>
         </Show>
         <Show when={state().step === 'reviewing'}><p role="status" data-vesta="server-muted">{t('server-pack.reviewing')}</p></Show>
         <Show when={reviewing()}>
@@ -177,7 +178,7 @@ function DraftReview() {
         </Show>
         <ServerErrorNote error={error()} />
       </div>
-    </section>
+    </li>
   );
 }
 
@@ -279,28 +280,51 @@ function ProviderVersions() {
 
 const historyResource = serverResource<PublishedRevision[], string>('pack-history', id => serverCommand(api => api.packHistory(id)));
 
+/** Published revisions as commits on one line: the live one is marked, older-than-minimum ones fade. */
 function PublishedHistory() {
   const area = useModpackArea();
   const history = useServerResource(area.id, historyResource, { args: () => area.workspace()?.publishedRevision ?? '0' });
   const rows = () => history.value() ?? [];
-  return <section data-vesta="modpack-panel"><header data-vesta="modpack-panel-head"><h3>{t('server-pack.history-title')}</h3></header>
-    <div data-vesta="modpack-panel-body"><ServerErrorNote error={history.error()} onRetry={() => void history.refresh()} />
-      <Show when={rows().length} fallback={<Show when={!history.error()}><p data-vesta="server-muted" role="status">{t(history.loading() ? 'server-pack.history-loading' : 'server-pack.history-empty')}</p></Show>}>
-        <ul data-vesta="modpack-version-list"><For each={rows()}>{row => <li data-vesta="modpack-version">
-          <Icon name="icons/content/history" size={16} />
-          <div data-vesta="modpack-version-copy">
-            <strong>{t('server-pack.published-revision')} {row.revision}</strong>
-            <span data-vesta="server-muted">
-              <Metadata parts={[
-                formatDate(new Date(row.publishedAt).toISOString()), row.publishedBy,
-                row.entryCount != null ? t('server-pack.history-entries', { count: row.entryCount }) : null,
-                row.overrideCount != null ? t('server-pack.history-overrides', { count: row.overrideCount }) : null,
-              ]} />
-            </span>
-          </div>
-          <Show when={row.providerVersion}><Badge size="sm" variant="outline">{row.providerVersion}</Badge></Show>
-          <Badge size="sm" tone={row.requiredUpdate ? 'warning' : 'neutral'}>{t(row.requiredUpdate ? 'server-pack.publish-required' : 'server-pack.publish-optional')}</Badge>
-        </li>}</For></ul>
-      </Show>
-    </div></section>;
+  const live = () => area.workspace()?.publishedRevision ?? '0';
+  const minimum = () => area.workspace()?.minimumRevision ?? '0';
+  const below = (revision: string) => minimum() !== '0' && BigInt(revision) < BigInt(minimum());
+  return (
+    <Show when={rows().length} fallback={
+      <li data-vesta="pack-commit" data-kind="empty">
+        <span data-vesta="pack-graph-lane" aria-hidden="true" />
+        <div data-vesta="pack-commit-body">
+          <ServerErrorNote error={history.error()} onRetry={() => void history.refresh()} />
+          <Show when={!history.error()}><p data-vesta="server-muted" role="status">{t(history.loading() ? 'server-pack.history-loading' : 'server-pack.history-empty')}</p></Show>
+        </div>
+      </li>
+    }>
+      <For each={rows()}>
+        {(row) => (
+          <li data-vesta="pack-commit" data-kind="published" data-live={row.revision === live() ? '' : undefined}
+            data-required={row.requiredUpdate ? '' : undefined} data-expired={below(row.revision) ? '' : undefined}>
+            <span data-vesta="pack-graph-lane" aria-hidden="true"><span data-vesta="pack-graph-node" /></span>
+            <div data-vesta="pack-commit-body">
+              <header data-vesta="pack-commit-head">
+                <strong>{t('server-pack.revision', { revision: row.revision })}</strong>
+                <Show when={row.revision === live()}><Badge size="sm" tone="accent" variant="soft">{t('server-pack.revision-live')}</Badge></Show>
+                <Show when={row.requiredUpdate}><Badge size="sm" tone="warning" variant="soft">{t('server-pack.publish-required')}</Badge></Show>
+                <Show when={row.providerVersion}><Badge size="sm" variant="outline">{row.providerVersion}</Badge></Show>
+              </header>
+              <span data-vesta="server-muted">
+                <Metadata parts={[
+                  formatDate(new Date(row.publishedAt).toISOString()), row.publishedBy,
+                  row.entryCount != null ? t('server-pack.history-entries', { count: row.entryCount }) : null,
+                  row.overrideCount != null ? t('server-pack.history-overrides', { count: row.overrideCount }) : null,
+                ]} />
+              </span>
+              {/* The line players can't fall below: everything older must update before joining. */}
+              <Show when={row.revision === minimum() && minimum() !== '0'}>
+                <p data-vesta="pack-commit-minimum"><Icon name="icons/security/lock" size={11} />{t('server-pack.revision-minimum')}</p>
+              </Show>
+            </div>
+          </li>
+        )}
+      </For>
+    </Show>
+  );
 }

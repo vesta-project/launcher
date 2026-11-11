@@ -24,7 +24,7 @@ import {
   type SoftwareChoice,
 } from '../../../features/servers/software-flow';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
-import { SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
+import { SettingsPage, SettingsPanel } from '../settings-parts';
 import { Hint, HostingError } from './parts';
 import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
 import { CustomJarPanel } from './custom-jar';
@@ -101,14 +101,18 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <Show when={state().recoveryRequired}>
               <p data-vesta="server-callout" data-tone="danger">{t(softwareRestoreKind(state()) === 'launch' ? 'server-hosting.recover-launch-banner' : 'server-hosting.recovery-banner')}</p>
             </Show>
-            <SettingsColumns aside={<Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
-              minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
-              onRefresh={() => void java.refresh()} /></Show>}>
-            {/* Linked to a modpack, the pack decides the software: its link replaces the pickers. */}
-            <SoftwareModpack snapshot={props.snapshot}>
+            {/* Linked to a modpack, the pack decides the software: its link replaces the pickers.
+                Java sits beside it; a custom JAR only while no modpack decides the software. */}
+            <SoftwareModpack snapshot={props.snapshot}
+              aside={<Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
+                minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
+                onRefresh={() => void java.refresh()} /></Show>}
+              unlinkedAside={<Show when={!props.snapshot.connection.role || roleKey(props.snapshot.connection.role) === 'owner'}>
+                <CustomJarPanel snapshot={props.snapshot} state={state()} java={java.value()} jobRunning={busy()} onAccepted={accepted} />
+              </Show>}>
             {/* A custom JAR has no managed family to preselect; it shows as itself until restored. */}
             <Show when={stopped() && launchKind(state()).kind !== 'custom'} fallback={
-              <SettingsPanel title={t('server-hosting.software-label')} name="software">
+              <SettingsPanel title={t('server-hosting.software-label')} name="software" action={<RestoreAction state={state()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />}>
                 <div data-vesta="server-software-installed">
                   <SoftwareMark software={state().current?.software} size="lg" />
                   <div><strong>{launchText(state().current)}</strong>
@@ -117,16 +121,12 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
                 </div>
               </SettingsPanel>
             }>
-            <SettingsPanel title={t('server-hosting.software-label')} name="software">
+            <SettingsPanel title={t('server-hosting.software-label')} name="software" action={<RestoreAction state={state()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />}>
               <For each={[state().current?.installationId ?? 'original']} keyed={(entry) => entry}>{() => <ChangeFlow snapshot={props.snapshot} state={state()} jobRunning={busy()} onAccepted={accepted} java={java.value()} javaActions={javaActions} />}</For>
             </SettingsPanel>
             </Show>
-            <Show when={!props.snapshot.connection.role || roleKey(props.snapshot.connection.role) === 'owner'}>
-              <CustomJarPanel snapshot={props.snapshot} state={state()} java={java.value()} jobRunning={busy()} onAccepted={accepted} />
-            </Show>
-            <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
+            <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} />
             </SoftwareModpack>
-            </SettingsColumns>
           </>
         )}
       </Show>
@@ -138,26 +138,22 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
   );
 }
 
-/** Job feedback and the quiet, secondary rollback action. */
-function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undefined; java: ServerJavaInventory | undefined; busy: boolean; stopped: boolean; onRestore: () => void }) {
-  const current = () => props.state.current;
+/** Job feedback under the Software card. */
+function SoftwareOutcome(props: { state: SoftwareState; job: SoftwareJob | undefined }) {
   return (
-    <Show when={props.job || softwareRestoreKind(props.state)}><section data-vesta="server-software-summary" data-server-software-current>
-      <Show when={props.job}>{(job) => <JobStatus job={job()} current={current()} />}</Show>
-      <Show when={softwareRestoreKind(props.state) ? props.state.previous : undefined}>
-        {(previous) => (
-          <footer data-vesta="server-software-previous">
-            <Icon name="icons/content/history" size={13} />
-            <Show when={props.state.available}>
-              <button type="button" data-vesta="server-software-restore" disabled={!props.stopped || props.busy}
-                title={!props.stopped ? t('server-hosting.stop-first') : undefined} onClick={() => props.onRestore()}>
-                {t(softwareRestoreKind(props.state) === 'software' ? 'server-hosting.restore-previous' : 'server-hosting.recover-launch')}
-              </button>
-            </Show>
-          </footer>
-        )}
-      </Show>
-    </section></Show>
+    <Show when={props.job}>{(job) => <section data-vesta="server-software-summary" data-server-software-current><JobStatus job={job()} current={props.state.current} /></section>}</Show>
+  );
+}
+
+/** Going back is quiet and secondary: a small action in the Software card's header. */
+function RestoreAction(props: { state: SoftwareState; busy: boolean; stopped: boolean; onRestore: () => void }) {
+  return (
+    <Show when={softwareRestoreKind(props.state) && props.state.previous && props.state.available}>
+      <Button size="sm" variant="ghost" icon={<Icon name="icons/content/history" />} disabled={!props.stopped || props.busy}
+        title={!props.stopped ? t('server-hosting.stop-first') : undefined} onClick={() => props.onRestore()}>
+        {t(softwareRestoreKind(props.state) === 'software' ? 'server-hosting.restore-previous' : 'server-hosting.recover-launch')}
+      </Button>
+    </Show>
   );
 }
 

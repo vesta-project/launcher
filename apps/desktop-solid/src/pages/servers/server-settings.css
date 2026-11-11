@@ -38,13 +38,17 @@
   :where([data-vesta="settings-columns"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); min-inline-size: 0; }
   :where([data-vesta="settings-columns-main"], [data-vesta="settings-columns-aside"]) { display: contents; }
   :where([data-vesta="settings-columns"][data-aside-first]) > :where([data-vesta="settings-columns-aside"]) > * { order: -1; }
-  @container pane (min-width: 1180px) {
+  @container pane (min-width: 860px) {
     [data-vesta="settings-columns"] {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, var(--content-max-width)));
+      grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
       align-items: start;
-      max-inline-size: calc(var(--content-max-width) * 2 + var(--vesta-space-6));
-      column-gap: var(--vesta-space-6);
+      max-inline-size: var(--content-wide-max-width, 1160px);
+      column-gap: var(--vesta-space-5, var(--vesta-space-4));
+    }
+    /* Nothing beside it: the main column keeps its readable width. */
+    [data-vesta="settings-columns"]:has(> [data-vesta="settings-columns-aside"]:empty) {
+      grid-template-columns: minmax(0, var(--content-max-width));
     }
     :where([data-vesta="settings-columns-main"], [data-vesta="settings-columns-aside"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); min-inline-size: 0; }
     :where([data-vesta="settings-columns-aside"]:empty) { display: none; }

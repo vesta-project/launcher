@@ -99,14 +99,23 @@
     min-block-size: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* A notice, the subject and its fields are spaced evenly, whatever the dialog puts here. */
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
     padding-inline: var(--dialog-padding);
-    /* Content never touches the dividers or the dialog edge. */
-    padding-block: var(--dialog-padding);
+    /* Content never touches the dividers; the dialog gap already spaces header and footer. */
+    padding-block: var(--vesta-space-1);
     background:
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) top / 100% 2px no-repeat local,
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) bottom / 100% 2px no-repeat local,
       linear-gradient(var(--overlay-border-color), var(--overlay-border-color)) top / 100% var(--vesta-border-width) no-repeat scroll,
       linear-gradient(var(--overlay-border-color), var(--overlay-border-color)) bottom / 100% var(--vesta-border-width) no-repeat scroll;
+  }
+
+  /* The body scrolls; its children keep their size instead of squeezing to fit. */
+  :where([data-vesta='dialog-body']) > * {
+    flex-shrink: 0;
   }
 
   :where([data-vesta='dialog-footer']) {

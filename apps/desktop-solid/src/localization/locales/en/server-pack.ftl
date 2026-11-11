@@ -33,8 +33,6 @@ server-pack-first-link-title = Use a modpack
 server-pack-first-link-hint = From Modrinth or CurseForge
 server-pack-first-file-title = Upload a file
 server-pack-first-file-hint = .mrpack or .zip, or drop it here
-server-pack-first-upload-hint = Or drop the file here.
-server-pack-first-upload-action = Choose a file
 server-pack-first-scratch-title = Start from scratch
 server-pack-first-scratch-hint = Begins with the mods the server needs
 server-pack-upload-bad-file = Choose a .mrpack or .zip modpack file.
@@ -234,7 +232,6 @@ server-pack-root-label = Which players get these files
 server-pack-root-all = All
 server-pack-root-client = Client only
 server-pack-root-server = Server only
-server-pack-root-all-hint = Files here go to players and to the server.
 server-pack-root-client-hint = Files here only go to players. They win over the same file in All.
 server-pack-root-server-hint = Files here only go to the server when the pack is installed there. Players never get them.
 server-pack-root-folder = { $name }
@@ -250,14 +247,13 @@ server-pack-upload-too-large = Files can be up to 16 MB.
 server-pack-upload-path-refused = Modpack files go in mods, config, resourcepacks, shaderpacks, datapacks, defaultconfigs, kubejs, scripts or resources, or are options.txt or servers.dat.
 
 # Versions
-server-pack-published-revision = Published revision
-server-pack-minimum-revision = Minimum revision
-server-pack-draft-revision = Draft revision
-server-pack-minimum-help = Players below the minimum must update before joining.
 server-pack-draft-title = Draft
-server-pack-up-to-date = Published
-server-pack-draft-pending-help = Review what changed since the last release, then publish it.
-server-pack-draft-clean-help = The draft matches the published release.
+server-pack-draft-matches = No changes since revision { $revision }
+server-pack-draft-based = from revision { $revision }
+server-pack-revision = Revision { $revision }
+server-pack-revision-live = Players get this
+server-pack-revision-minimum = Oldest revision players can join with
+server-pack-draft-clean-help = Nothing published yet.
 server-pack-reviewing = Building the review…
 server-pack-diff-added = { $count } added
 server-pack-diff-updated = { $count } updated
@@ -298,12 +294,17 @@ server-pack-switch-version = Switch to this version
 server-pack-switch-confirm = Switch
 server-pack-switched = Switched to { $version } (revision { $revision })
 
-server-pack-history-title = Published history
+server-pack-history-title = History
 server-pack-history-empty = No published revisions yet.
 server-pack-history-loading = Loading published versions…
-server-pack-history-counts = { $entries } entries, { $overrides } overrides
-server-pack-history-entries = { $count } entries
-server-pack-history-overrides = { $count } overrides
+server-pack-history-entries = { $count ->
+    [one] { $count } entry
+   *[other] { $count } entries
+}
+server-pack-history-overrides = { $count ->
+    [one] { $count } file
+   *[other] { $count } files
+}
 server-pack-no-loader-versions = No compatible versions found
 server-pack-provider-not-configured = CurseForge isn't configured on this server. Its API key must be set on the agent before linking this pack.
 server-pack-download-unavailable = CurseForge refused this file's download or no longer hosts it. Try another pack version or install its server files manually.
@@ -337,14 +338,11 @@ server-pack-optional = Optional
 server-pack-coming-soon = Coming soon
 
 # Server modpack: not linked
-server-pack-link-none-title = This server doesn't use a modpack
-server-pack-link-none-description = That's fine: a server runs without one. Link a modpack to install its server-side content and keep it up to date, like an instance linked to a modpack. Your own content stays separate.
 server-pack-link-no-permission = Only an owner or administrator who can install content can link a modpack.
-server-pack-link-browse-title = Browse modpacks
-server-pack-link-browse-description = Pick a Modrinth or CurseForge modpack. The server tracks its versions, so updates show up here.
 server-pack-link-browse-action = Browse modpacks
-server-pack-link-upload-title = Upload a modpack file
-server-pack-link-upload-description = Use a .mrpack, a CurseForge export or a zip. Vesta checks it and shows exactly what changes before anything is installed.
+server-pack-link-upload-action = Upload a file
+server-pack-link-section-title = Modpack
+server-pack-link-section-description = Link a modpack to install its server files and get its updates. Drop a .mrpack or zip here to use your own.
 server-pack-archive-link-file-help = This file isn't a published modpack Vesta can identify, so the server is linked to the file itself and won't find updates on its own.
 server-pack-link-review = Review link
 server-pack-link-wait-restart = A reviewed change is waiting for a restart. Restart the server first, then try again.
@@ -434,7 +432,7 @@ server-pack-pick-replaces = The server is linked to another modpack. Linking thi
 
 # Client pack: what players get
 server-pack-client-title = What players get
-server-pack-client-description = Optional, and separate from the server's own modpack. Players can always join with any compatible client.
+server-pack-mode-allow-custom = Allow players to add their own mods
 server-pack-mode-none = Nothing
 server-pack-mode-none-description = Players aren't offered a pack.
 server-pack-mode-server = Same as the server's modpack

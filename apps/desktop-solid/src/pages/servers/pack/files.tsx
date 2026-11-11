@@ -200,7 +200,7 @@ export function ModpackFiles() {
           onDragOver={(event) => { if (!draggingFiles(event)) return; event.preventDefault(); event.dataTransfer!.dropEffect = 'copy'; setDragging(true); }}
           onDragLeave={(event) => { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) setDragging(false); }}
           onDrop={(event) => { if (!draggingFiles(event)) return; event.preventDefault(); setDragging(false); void upload([...event.dataTransfer!.files]); }}>
-          <p data-vesta="server-muted" class="modpack-root-hint"><Icon name="icons/status/info" size={13} /> {t(rootLabel(root()).hint)}</p>
+          <Show when={rootLabel(root()).hint}>{(hint) => <p data-vesta="server-muted" class="modpack-root-hint"><Icon name="icons/status/info" size={13} /> {t(hint())}</p>}</Show>
           <ServerErrorNote error={error()} />
           <Show when={rows().length} fallback={
             <EmptyState variant="inline" icon="icons/content/folder" title={t('server-pack.files-empty')} description={t('server-pack.files-empty-hint')} />

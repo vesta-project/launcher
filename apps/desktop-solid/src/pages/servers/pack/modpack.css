@@ -12,6 +12,11 @@
  * Knobs: --modpack-panel-bg
  */
 @layer launcher {
+  /* The pack UI also renders inside Settings → Software, outside the Modpack page. */
+  :where([data-vesta="software-modpack"], [data-vesta="modpack-first"]) {
+    --modpack-panel-bg: var(--vesta-color-surface-raised);
+  }
+
   :where([data-vesta="modpack"]) {
     --modpack-panel-bg: var(--vesta-color-surface-raised);
 
@@ -138,66 +143,6 @@
     color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta="modpack-first-mark"]) {
-    display: grid;
-    flex: none;
-    place-items: center;
-    inline-size: 48px;
-    block-size: 48px;
-    border-radius: var(--vesta-radius-container);
-    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
-    color: var(--vesta-color-accent-text);
-  }
-
-  :where([data-vesta="modpack-choices"]) {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--vesta-space-3);
-  }
-
-  :where([data-vesta="modpack-choice"]) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-2);
-    padding: var(--vesta-space-4);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--modpack-panel-bg);
-    transition: border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
-  }
-
-  :where([data-vesta="modpack-choice"]):hover,
-  :where([data-vesta="modpack-choice"][data-drop-target="active"]) {
-    border-color: var(--vesta-color-accent-border, var(--vesta-color-accent));
-  }
-
-  :where([data-vesta="modpack-choice"][data-choice="provider"]) {
-    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-accent) 12%, var(--modpack-panel-bg)), var(--modpack-panel-bg) 60%);
-  }
-
-  :where([data-vesta="modpack-choice"] h3) {
-    margin: 0;
-    font-size: var(--vesta-text-md, var(--vesta-text-sm));
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  :where([data-vesta="modpack-choice"] p) {
-    flex: 1;
-    margin: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    line-height: 1.45;
-  }
-
-  :where([data-vesta="modpack-choice"]) > :where([data-vesta="modpack-choice-hint"]) {
-    flex: none;
-    color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
-    font-size: var(--vesta-text-xs);
-  }
-
-  :where([data-vesta="modpack-choice"]) > button {
-    align-self: flex-start;
-  }
 
   :where([data-vesta="modpack-choice-icon"]) {
     display: grid;
@@ -446,23 +391,22 @@
     background: var(--modpack-panel-bg);
   }
 
+  /* Panels read like the settings cards (Card): a plain title, then the body, no divider. */
   :where([data-vesta="modpack-panel-head"]) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--vesta-space-2);
-    min-block-size: 44px;
-    padding: 0 var(--vesta-space-4);
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    gap: var(--vesta-space-3);
+    min-block-size: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4) 0;
   }
 
   :where([data-vesta="modpack-panel-head"] h3) {
     margin: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta="modpack-panel-count"]) {
@@ -549,7 +493,7 @@
   :where([data-vesta="modpack-panel-body"]) {
     display: grid;
     gap: var(--vesta-space-3);
-    padding: var(--vesta-space-4);
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4);
   }
 
   :where([data-vesta="modpack-panel-body"]) > button {
@@ -749,7 +693,7 @@
     display: grid;
   }
 
-  :where([data-vesta="modpack-install-runtime"] small, [data-vesta="modpack-release"] small) {
+  :where([data-vesta="modpack-install-runtime"] small) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
@@ -827,30 +771,6 @@
   }
 
   /* ---- Versions ---- */
-  :where([data-vesta="modpack-release"]) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-3) var(--vesta-space-6, 32px);
-    padding: var(--vesta-space-4);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--modpack-panel-bg);
-  }
-
-  :where([data-vesta="modpack-release"]) > div {
-    display: grid;
-  }
-
-  :where([data-vesta="modpack-release"] strong) {
-    font-size: var(--vesta-text-xl);
-    font-variant-numeric: tabular-nums;
-  }
-
-  :where([data-vesta="modpack-release"]) > p {
-    flex-basis: 100%;
-  }
-
   :where([data-vesta="modpack-diff"]) {
     display: grid;
     gap: var(--vesta-space-3);
@@ -925,22 +845,48 @@
     max-inline-size: 1100px;
   }
 
-  /* An optional link: the empty state is calm, not a call to action. */
+  /* The server's modpack is optional: unlinked, it is one card like the settings around it,
+     with its two ways in at the end of the title row. The whole card takes a dropped pack. */
   :where([data-vesta="modpack-first"][data-section="server"]) {
+    gap: var(--vesta-space-3);
+    max-inline-size: none;
     margin-inline: 0;
-  }
-
-  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-mark"]) {
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text-muted);
-  }
-
-  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-choices"]) {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 360px));
-  }
-
-  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-choice"][data-choice="provider"]) {
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
     background: var(--modpack-panel-bg);
+    transition: border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"][data-drop-target="active"]) {
+    border-color: var(--vesta-color-accent-border, var(--vesta-color-accent));
+    background: color-mix(in oklab, var(--vesta-color-accent) 8%, var(--modpack-panel-bg));
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-head"]) {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-head"] > div) {
+    flex: 1 1 240px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-head"] h2) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="modpack-first"][data-section="server"]) :where([data-vesta="modpack-first-head"] p) {
+    margin-block-start: 2px;
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="modpack-first-actions"]) {
+    display: flex;
+    flex: none;
+    gap: var(--vesta-space-2);
   }
 
   :where([data-vesta="modpack-link-card"]) {
@@ -1694,5 +1640,169 @@
     flex: none;
     overflow: visible;
     padding: 0;
+  }
+}
+
+/* Client pack overview: the pack on the left, what players are offered on the right. */
+@layer launcher {
+  :where([data-vesta="modpack-overview"][data-wide]) {
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+    max-inline-size: var(--content-wide-max-width, 1160px);
+  }
+  :where([data-vesta="modpack-overview-side"] [data-vesta="modpack-modes"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* The section row's end: unpublished changes, then "Use a modpack". */
+  :where([data-vesta="modpack-tabbar"] > [data-vesta="button"]) {
+    flex: none;
+  }
+}
+@layer launcher {
+  @container pane (max-width: 760px) {
+    :where([data-vesta="modpack-overview"][data-wide]) { grid-template-columns: minmax(0, 1fr); }
+  }
+}
+
+/*
+ * Versions as a git history. One lane carries the published revisions, newest first; the draft
+ * sits in a second lane and curves into the revision it is based on. Nodes: live = filled
+ * accent, required = warning ring, older than the minimum = faded and dashed.
+ */
+@layer launcher {
+  :where([data-vesta="pack-graph"]) {
+    --graph-line: var(--vesta-color-border-strong, var(--vesta-color-border));
+    --graph-lane: 12px;
+    --graph-fork: 28px;
+    --graph-node: 12px;
+    --graph-node-top: 9px;
+
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="pack-commit"]) {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="pack-graph-lane"]) {
+    position: relative;
+  }
+
+  /* The main line, from the row above to the row below. */
+  :where([data-vesta="pack-graph-lane"])::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: calc(var(--graph-lane) - 1px);
+    inline-size: 2px;
+    background: var(--graph-line);
+    content: "";
+  }
+
+  :where([data-vesta="pack-graph"] > [data-vesta="pack-commit"]:first-child) > :where([data-vesta="pack-graph-lane"])::before {
+    inset-block-start: calc(var(--graph-node-top) + var(--graph-node) / 2);
+  }
+
+  :where([data-vesta="pack-graph"] > [data-vesta="pack-commit"]:last-child) > :where([data-vesta="pack-graph-lane"])::before {
+    inset-block-end: auto;
+    block-size: calc(var(--graph-node-top) + var(--graph-node) / 2);
+  }
+
+  :where([data-vesta="pack-graph"] > [data-vesta="pack-commit"]:only-child) > :where([data-vesta="pack-graph-lane"])::before,
+  :where([data-vesta="pack-commit"][data-kind="draft"], [data-vesta="pack-commit"][data-kind="empty"]) > :where([data-vesta="pack-graph-lane"])::before {
+    display: none;
+  }
+
+  :where([data-vesta="pack-graph-node"]) {
+    position: absolute;
+    inset-block-start: var(--graph-node-top);
+    inset-inline-start: calc(var(--graph-lane) - var(--graph-node) / 2);
+    box-sizing: border-box;
+    inline-size: var(--graph-node);
+    block-size: var(--graph-node);
+    border: 2px solid var(--graph-line);
+    border-radius: 50%;
+    background: var(--modpack-panel-bg, var(--vesta-color-surface-raised));
+  }
+
+  :where([data-vesta="pack-commit"][data-live]) :where([data-vesta="pack-graph-node"]) {
+    border-color: var(--vesta-color-accent);
+    background: var(--vesta-color-accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--vesta-color-accent) 25%, transparent);
+  }
+
+  :where([data-vesta="pack-commit"][data-required]:not([data-live])) :where([data-vesta="pack-graph-node"]) {
+    border-color: var(--vesta-color-warning, var(--graph-line));
+  }
+
+
+  :where([data-vesta="pack-commit"][data-expired]) > :where([data-vesta="pack-commit-body"]) {
+    opacity: 0.6;
+  }
+
+  /* The draft: its own lane, an accent ring while it holds unpublished changes. */
+  :where([data-vesta="pack-commit"][data-kind="draft"]) :where([data-vesta="pack-graph-node"]) {
+    inset-inline-start: calc(var(--graph-fork) - var(--graph-node) / 2);
+  }
+
+  :where([data-vesta="pack-commit"][data-kind="draft"][data-state="pending"]) :where([data-vesta="pack-graph-node"]) {
+    border-color: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta="pack-commit"][data-kind="draft"]:not(:has(> [data-fork]))) :where([data-vesta="pack-graph-node"]) {
+    inset-inline-start: calc(var(--graph-lane) - var(--graph-node) / 2);
+  }
+
+  /* Its branch: down from the draft, curving into the main line above the revision it is based on. */
+  :where([data-vesta="pack-graph-lane"][data-fork])::after {
+    position: absolute;
+    inset-block: calc(var(--graph-node-top) + var(--graph-node)) 0;
+    inset-inline-start: calc(var(--graph-lane) - 1px);
+    box-sizing: border-box;
+    inline-size: calc(var(--graph-fork) - var(--graph-lane) + 2px);
+    border-block-end: 2px dashed var(--graph-line);
+    border-inline-end: 2px dashed var(--graph-line);
+    border-end-end-radius: 10px;
+    content: "";
+  }
+
+  :where([data-vesta="pack-commit-body"]) {
+    display: grid;
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
+    padding-block: var(--vesta-space-1) var(--vesta-space-4);
+  }
+
+  :where([data-vesta="pack-commit-head"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    min-block-size: 28px;
+  }
+
+  :where([data-vesta="pack-commit-head"] strong) {
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="pack-commit-head"] [data-vesta="server-muted"]) {
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="pack-commit-minimum"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    margin: var(--vesta-space-1) 0 0;
+    color: var(--vesta-color-warning-text, var(--vesta-color-text-muted));
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta="pack-commit"][data-kind="draft"]) :where([data-vesta="modpack-diff"]) {
+    margin-block-start: var(--vesta-space-2);
   }
 }

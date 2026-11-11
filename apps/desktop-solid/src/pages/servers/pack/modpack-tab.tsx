@@ -13,6 +13,7 @@ import type { ServerSnapshot } from '../../../features/servers/native';
 import { formatNumber, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
 import { ModpackAreaContext, createModpackArea, useModpackArea } from './area';
+import { ClientLinkButton } from './client-link';
 import { ClientModePanel } from './client-mode';
 import { ModpackContent } from './content';
 import { ModpackFiles } from './files';
@@ -128,6 +129,7 @@ function ClientPack() {
               </For>
             </TabList>
             <ModpackDraftStatus />
+            <ClientLinkButton />
           </div>
           <For each={tabs()}>
             {(tab) => (

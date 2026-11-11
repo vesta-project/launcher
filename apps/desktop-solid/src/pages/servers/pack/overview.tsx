@@ -25,11 +25,10 @@ export function ModpackOverview() {
   const area = useModpackArea();
   return (
     <div data-vesta="modpack-scroll">
-      <div data-vesta="modpack-client">
-      <ClientModePanel />
-      <Show when={area.clientMode() === 'custom'}><ClientModpackPanel /></Show>
-      <div data-vesta="modpack-overview">
+      {/* The pack itself on the left; what players are offered beside it. */}
+      <div data-vesta="modpack-overview" data-wide="">
         <div data-vesta="modpack-overview-main">
+          <Show when={area.clientMode() === 'custom'}><ClientModpackPanel /></Show>
           <Show when={area.kind() === 'provider'} fallback={<IdentityPanel />}>
             <ProviderPanel />
           </Show>
@@ -37,7 +36,9 @@ export function ModpackOverview() {
             <p data-vesta="server-callout" data-tone="warning">{t('server-pack.customizing-help')}</p>
           </Show>
         </div>
-      </div>
+        <aside data-vesta="modpack-overview-side">
+          <ClientModePanel />
+        </aside>
       </div>
     </div>
   );

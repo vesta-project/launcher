@@ -14,6 +14,18 @@ import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 import { ModpackLinkCard } from './link-card';
 
+/** "Use a modpack" for a custom pack that isn't linked yet, beside the section tabs. */
+export function ClientLinkButton() {
+  const area = useModpackArea();
+  const unlinked = () => area.clientMode() === 'custom' && area.kind() !== 'provider' && !area.workspace()?.draft.manifest.modpackLink;
+  const browse = () => browseForServer({ id: area.id(), name: area.snapshot().connection.name, type: 'modpack', destination: 'modpack', minecraftVersion: area.workspace()!.serverMinecraftVersion, loader: null });
+  return (
+    <Show when={unlinked() && area.gates().edit}>
+      <Button size="sm" variant="outline" icon={<Icon name="icons/content/modpack" />} onClick={browse}>{t('server-pack.client-link-use')}</Button>
+    </Show>
+  );
+}
+
 export function ClientModpackPanel() {
   const area = useModpackArea();
   const link = createMemo(() => area.workspace()?.draft.manifest.modpackLink, {
@@ -40,9 +52,9 @@ export function ClientModpackPanel() {
     const rows = releases.filter(v => v.game_versions.includes(area.workspace()!.serverMinecraftVersion)).map(v => ({ value: v.id, label: v.version_number }));
     return rows.some(v => v.value === current.versionId) ? rows : [{ value: current.versionId, label: releases.find(v => v.id === current.versionId)?.version_number ?? current.versionId }, ...rows];
   };
-  const browse = () => browseForServer({ id: area.id(), name: area.snapshot().connection.name, type: 'modpack', destination: 'modpack', minecraftVersion: area.workspace()!.serverMinecraftVersion, loader: null });
   return <>
-      <Show when={link()} fallback={<Button size="sm" variant="outline" disabled={!area.gates().edit} onClick={browse}>{t('server-pack.client-link-use')}</Button>}>
+      {/* Unlinked, "Use a modpack" sits at the end of the section row (ClientLinkButton). */}
+      <Show when={link()}>
         {value => {
           const project = () => peekProject(value().provider, value().projectId);
           const name = () => project()?.name ?? value().projectId;

@@ -80,7 +80,12 @@ export function createPackFixtures(host: Host): typeof serversPackNative & { fix
     let s = states.get(id);
     if (!s) { const view = seedPackWorkspace(host.scenario ?? (host.software(id) === 'vanilla' ? 'vanilla' : host.software(id) === 'paper' ? 'paper' : 'fabric')); const pack = host.server(id).snapshot.pack; view.publishedRevision = pack?.hostedRevision ?? '0'; view.minimumRevision = pack?.minimumRevision ?? '0'; s = { view, published: clone(view.draft.manifest), publishedDraft: view.pendingPublication ? '2' : view.draft.revision };
       if (host.scenario === 'diff') { s.published.entries = s.published.entries.filter(e => e.kind !== 'resource_pack'); const old = s.published.entries[0]; if (old?.source.type === 'provider') old.source.versionId += '-old'; s.published.entries.push(entry('previous-mod')); }
-      history.set(id, view.publishedRevision === '0' ? [] : [{ revision: view.publishedRevision, publishedAt: 1793000000000, publishedBy: 'owner', requiredUpdate: view.minimumRevision === view.publishedRevision, entryCount: s.published.entries.length, overrideCount: (s.published.overrideFiles ?? []).filter(f => !f.trashed && f.sha256 !== null).length, providerVersion: view.providerPack?.versionId ?? null }]);
+      // A few weeks of releases, newest first, so the history reads like a real one: the minimum is the last required update.
+      history.set(id, view.publishedRevision === '0' ? [] : Array.from({ length: Math.min(5, Number(view.publishedRevision)) }, (_, back) => {
+        const revision = String(Number(view.publishedRevision) - back);
+        const files = (s!.published.overrideFiles ?? []).filter(f => !f.trashed && f.sha256 !== null).length;
+        return { revision, publishedAt: 1793000000000 - back * 4 * 86400000, publishedBy: back % 2 ? 'Alex' : 'owner', requiredUpdate: revision === view.minimumRevision, entryCount: Math.max(1, s!.published.entries.length + 2 - back), overrideCount: files, providerVersion: view.providerPack?.versionId && back === 0 ? view.providerPack.versionId : null };
+      }));
       states.set(id, s); }
     s.view.serverMinecraftVersion = host.minecraftVersion?.(id) ?? '1.21.4'; s.view.minecraftDrift = s.view.draft.manifest.minecraftVersion !== s.view.serverMinecraftVersion;
     const pack = host.server(id).snapshot.pack; s.view.publishedRevision = pack?.hostedRevision ?? s.view.publishedRevision; s.view.minimumRevision = pack?.minimumRevision ?? s.view.minimumRevision;
@@ -262,7 +267,7 @@ const rows = history.get(id) ?? []; rows.unshift({ revision: s.view.publishedRev
           const bytes = new TextEncoder().encode('linked pack config'); const sha256 = await bytesHash(bytes); blobs.set(id + ':' + sha256, bytes);
           m.overrideFiles = [...(m.overrideFiles ?? []), { root: 'overrides', path: 'config/linked-pack.txt', sha256, trashed: false }];
           m.modpackLink = { provider: request.provider, projectId: request.projectId, versionId: request.versionId, entries: entries.map(e => e.id), overrides: [['overrides', 'config/linked-pack.txt']] };
-          m.entries.push(...entries); m.loader = base.loader; m.loaderVersion = base.loaderVersion;
+          m.entries.push(...entries); m.loader = base.loader; m.loaderVersion = base.loaderVersion; m.minecraftVersion = s.view.serverMinecraftVersion;
         }
         return save(id, request.expectedRevision, m, true);
       }

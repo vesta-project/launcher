@@ -18,10 +18,11 @@ import type { MessageId } from '../../../localization/messages';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea } from './area';
 
-type ChoiceCopy = { icon: string; title: MessageId; description: MessageId; action: MessageId };
+/** The server's two ways in, as buttons on the Modpack card. */
+type ChoiceCopy = { icon: string; action: MessageId };
 const choiceCopy: Partial<Record<FirstRunChoice, ChoiceCopy>> = {
-  provider: { icon: 'icons/rail/browse', title: 'server-pack.link-browse-title', description: 'server-pack.link-browse-description', action: 'server-pack.link-browse-action' },
-  upload: { icon: 'icons/actions/upload', title: 'server-pack.link-upload-title', description: 'server-pack.link-upload-description', action: 'server-pack.first-upload-action' },
+  provider: { icon: 'icons/rail/browse', action: 'server-pack.link-browse-action' },
+  upload: { icon: 'icons/actions/upload', action: 'server-pack.link-upload-action' },
 };
 /** The client pack's starting points: one line each, the whole tile is the action. */
 const startCopy: Partial<Record<FirstRunChoice, { icon: string; title: MessageId; hint: MessageId }>> = {
@@ -112,18 +113,30 @@ export function FirstRun(props: { section: ModpackSection }) {
     else setScratch(true);
   };
 
+  const server = section === 'server';
+  const serverDrop = server ? fileDrop : {};
   return (
-    <section data-vesta="modpack-first" data-section={section} aria-labelledby="modpack-first-title">
+    <section data-vesta="modpack-first" data-section={section} aria-labelledby="modpack-first-title"
+      ref={(element) => { if (server) archiveElement = element; }} data-drop-target={server && dragging() ? 'active' : undefined} {...serverDrop}>
       <header data-vesta="modpack-first-head">
-        <Show when={section === 'server'}><span data-vesta="modpack-first-mark" aria-hidden="true"><Icon name="icons/content/server" size={22} /></span></Show>
         <div>
-          <h2 id="modpack-first-title">{section === 'server' ? t('server-pack.link-none-title') : t('server-pack.first-title')}</h2>
-          <Show when={section === 'server'}><p>{t('server-pack.link-none-description')}</p></Show>
+          <h2 id="modpack-first-title">{server ? t('server-pack.link-section-title') : t('server-pack.first-title')}</h2>
+          {/* The server's modpack is optional: one line on what linking does, or why it can't now. */}
+          <Show when={server}>
+            <p>{area.gates().installOnServer ? t('server-pack.link-section-description') : t(area.installBlocker() ?? 'server-pack.link-no-permission')}</p>
+          </Show>
         </div>
+        <Show when={server && !upload()}>
+          <span data-vesta="modpack-first-actions">
+            <For each={firstRunChoices(section, area.gates())}>
+              {(choice) => (
+                <Button size="sm" variant="outline" icon={<Icon name={choiceCopy[choice.id]!.icon} />}
+                  disabled={!choice.enabled} onClick={() => choose(choice.id)}>{t(choiceCopy[choice.id]!.action)}</Button>
+              )}
+            </For>
+          </span>
+        </Show>
       </header>
-      <Show when={section === 'server' && !area.gates().installOnServer}>
-        <p data-vesta="server-muted">{t(area.installBlocker() ?? 'server-pack.link-no-permission')}</p>
-      </Show>
       <ServerErrorNote error={error()} />
       <input ref={(element) => { picker = element; }} type="file" accept=".mrpack,.zip,application/zip" hidden
         onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void receive(file); }} />
@@ -146,28 +159,7 @@ export function FirstRun(props: { section: ModpackSection }) {
           )}
         </Show>
       }>
-        <Show when={section === 'client'} fallback={
-        <div data-vesta="modpack-choices">
-          <For each={firstRunChoices(section, area.gates())}>
-            {(choice) => {
-              const copy = choiceCopy[choice.id]!;
-              const dropProps = choice.id === 'upload' ? fileDrop : {};
-              return (
-                <article ref={element => { if (choice.id === 'upload') archiveElement = element; }} data-vesta="modpack-choice" data-choice={choice.id} data-drop-target={choice.id === 'upload' && dragging() ? 'active' : undefined} {...dropProps}>
-                  <span data-vesta="modpack-choice-icon" aria-hidden="true"><Icon name={copy.icon} size={18} /></span>
-                  <h3>{t(copy.title)}</h3>
-                  <p>{t(copy.description)}</p>
-                  <Show when={choice.id === 'upload'}>
-                    <p data-vesta="modpack-choice-hint">{t('server-pack.first-upload-hint')}</p>
-                  </Show>
-                  <Button size="sm" tone="neutral" variant="outline"
-                    disabled={!choice.enabled} onClick={() => choose(choice.id)}>{t(copy.action)}</Button>
-                </article>
-              );
-            }}
-          </For>
-        </div>
-        }>
+        <Show when={section === 'client'}>
           <div data-vesta="modpack-starts" role="group" aria-labelledby="modpack-first-title">
             <For each={firstRunChoices(section, area.gates())}>
               {(choice) => {
