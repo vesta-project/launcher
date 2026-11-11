@@ -340,6 +340,9 @@
   }
   :where([data-vesta="server-toolbar-spacer"]) { flex: 1; }
 
+  /* Scrolling column: children keep their height (see instance-settings-scroll). */
+  :where([data-vesta="server-pane-body"]) > * { flex-shrink: 0; }
+
   /* Activity: who did what, exactly */
   :where([data-vesta="server-activity-list"]) {
     display: flex;
@@ -394,6 +397,10 @@
     inline-size: 100%;
     max-inline-size: var(--content-max-width);
   }
+  /* Management tabs (backups, automation, activity) are lists and dashboards, not forms. */
+  :where(.servers-workspace [data-vesta="server-activity"] > [data-vesta="instance-settings-scroll"] > *, .servers-workspace [data-vesta="server-activity"] > [data-vesta="server-pane-body"] > *) {
+    max-inline-size: var(--content-wide-max-width);
+  }
 
   /* Management tabs: toolbar over a settings-style scroll */
   :where([data-vesta="server-activity"]) > [data-vesta="instance-settings-scroll"] { flex: 1; }
@@ -422,15 +429,11 @@
   :where([data-vesta="server-backup-storage"]) > div:not([data-vesta]) { display: flex; flex-direction: column; gap: 2px; }
   :where([data-vesta="server-backup-storage"]) strong { font-size: var(--vesta-text-lg); font-variant-numeric: tabular-nums; }
   :where([data-vesta="server-backup-storage"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
-  :where([data-vesta="server-backup-meter"]) {
-    grid-column: 1 / -1;
-    position: relative;
-    block-size: 6px;
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-fill);
-  }
-  :where([data-vesta="server-backup-meter"]) > span { display: block; block-size: 100%; border-radius: inherit; background: var(--vesta-color-accent); }
-  :where([data-vesta="server-backup-meter"]) > small { position: absolute; inset-block-start: 10px; inset-inline-end: 0; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
+  /* The bar, then its limit in normal flow (never positioned outside the card). */
+  :where([data-vesta="server-backup-meter"]) { display: grid; grid-column: 1 / -1; gap: var(--vesta-space-1); min-inline-size: 0; }
+  :where([data-vesta="server-backup-meter-track"]) { display: block; block-size: 6px; overflow: hidden; border-radius: var(--vesta-radius-sm); background: var(--vesta-color-fill); }
+  :where([data-vesta="server-backup-meter-track"]) > span { display: block; block-size: 100%; border-radius: inherit; background: var(--vesta-color-accent); }
+  :where([data-vesta="server-backup-meter"]) > small { justify-self: end; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-backup-profile"]) + :where([data-vesta="server-backup-profile"]) { border-block-start: var(--vesta-border-width) solid var(--vesta-color-border); }
   :where([data-vesta="server-backup-profile"]) [data-vesta="setting-row-control"] { flex-wrap: wrap; gap: var(--vesta-space-2); }
 

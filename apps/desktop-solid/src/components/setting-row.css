@@ -5,7 +5,11 @@
  * Knobs: --settings-max-width, --setting-row-gap
  */
 @layer launcher {
-  :root { --content-max-width: 680px; }
+  :root {
+    /* Forms read best narrow; lists and dashboards use the room. */
+    --content-max-width: 680px;
+    --content-wide-max-width: 1160px;
+  }
   :where([data-vesta='settings-section']) {
     display: flex;
     flex-direction: column;

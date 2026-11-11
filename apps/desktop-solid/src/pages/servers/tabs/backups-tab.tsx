@@ -17,7 +17,7 @@ import type { ServerCommandError, ServerSnapshot } from '../../../features/serve
 import type { BackupJob, BackupSnapshot } from '../../../features/servers/native-manage';
 import { ServerErrorNote } from '../parts';
 import { backupsConfigured } from '../../../features/servers/shell-model';
-import { BackupProfilesEditor, BackupSetup, BackupsEnabled, retentionText as retention } from './backup-profiles';
+import { BackupProfilesEditor, BackupSetup, BackupsEnabled, retentionSummary, retentionText as retention } from './backup-profiles';
 import '../../library/instance/settings-tab.css';
 
 const bytes = (value: number | null | undefined) => {
@@ -178,7 +178,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                           {profile.name}
                           <Badge size="sm" variant="soft" tone="neutral">{t(profile.mode === 'online' ? 'servers.backups.mode-online' : 'servers.backups.mode-stopped')}</Badge>
                         </span>
-                        <span data-vesta="setting-row-description">{retention(profile)}</span>
+                        <span data-vesta="setting-row-description" title={retention(profile)}>{retentionSummary(profile)}</span>
                       </div>
                       <div data-vesta="setting-row-control">{profileActions(profile.name)}</div>
                     </div>
@@ -205,7 +205,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                 <Show when={space().limits.maxRepositoryBytes}>
                   {(limit) => (
                     <div data-vesta="server-backup-meter" role="meter" aria-valuenow={space().repositoryBytes} aria-valuemax={limit()} aria-label={t('servers.backups.used')}>
-                      <span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} />
+                      <span data-vesta="server-backup-meter-track"><span style={{ 'inline-size': `${Math.min(100, (space().repositoryBytes / limit()) * 100)}%` }} /></span>
                       <small>{t('servers.backups.of-limit', { value: bytes(limit()) })}</small>
                     </div>
                   )}

@@ -401,6 +401,12 @@ servers-backups-mode-online = While running
 servers-backups-mode-stopped = Server stopped
 servers-backups-keep-all = Keeps every backup
 servers-backups-keeps = Keeps { $list }
+servers-backups-short-newest = Newest { $count }
+servers-backups-short-hourly = { $count } hourly
+servers-backups-short-daily = { $count } daily
+servers-backups-short-weekly = { $count } weekly
+servers-backups-short-monthly = { $count } monthly
+servers-backups-short-total = max { $count }
 servers-backups-keep-newest = { $count ->
     [one] the newest backup
    *[other] the newest { $count }

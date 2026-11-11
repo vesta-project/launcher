@@ -9,7 +9,12 @@
   :where([data-vesta="backups-layout"]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    align-items: start;
     gap: var(--vesta-space-4);
+  }
+  /* Wide panes: profiles beside storage and recent jobs instead of one long column. */
+  @container pane (min-width: 940px) {
+    :where([data-vesta="backups-layout"]) { grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); }
   }
 
   :where([data-vesta="backups-main"], [data-vesta="backups-side"]) {

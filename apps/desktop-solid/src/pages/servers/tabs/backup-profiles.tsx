@@ -423,6 +423,19 @@ export function BackupProfilesEditor(props: { snapshot: ServerSnapshot; actions:
 }
 
 /** Retention as one sentence, e.g. "Keeps the newest 7 and one per day for 14 days". */
+/** The retention policy at a glance ("Newest 7 · 7 daily · 4 weekly · max 30"); the sentence is its tooltip. */
+export function retentionSummary(profile: Retention) {
+  if (keepsEverything(profile)) return t('servers.backups.keep-all');
+  return ([
+    [profile.keepLast, 'servers.backups.short-newest'],
+    [profile.keepHourly ?? 0, 'servers.backups.short-hourly'],
+    [profile.keepDaily, 'servers.backups.short-daily'],
+    [profile.keepWeekly, 'servers.backups.short-weekly'],
+    [profile.keepMonthly, 'servers.backups.short-monthly'],
+    [profile.keepTotal ?? 0, 'servers.backups.short-total'],
+  ] as const).filter(([count]) => count > 0).map(([count, message]) => t(message, { count })).join(' · ');
+}
+
 export function retentionText(profile: Retention) {
   if (keepsEverything(profile)) return t('servers.backups.keep-all');
   const parts = ([
