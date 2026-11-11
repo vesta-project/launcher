@@ -9,7 +9,7 @@ import type {
 } from './native-manage';
 import { capabilitiesForRole } from './capabilities';
 import type { BackupConfiguration, BackupConfigDraft, BackupConfigOutcome, BackupProfileConfig } from './native-backups-config';
-import type { BackupHistory, BackupPoint } from './backup-graph-model';
+import type { BackupHistory, BackupPoint } from './native-backup-history';
 
 export interface ManageHost {
   /** Throws `not_found` for unknown connections. */
@@ -48,7 +48,7 @@ interface ManageState {
   /** Branches: which point each one descends from, its name and whether retention may drop it. */
   lineage: Map<string, { parentId: string | null; label: string | null; kept: boolean }>;
   /** Safety snapshots taken before a restore: the tips of branches left behind. */
-  safetyPoints: BackupSnapshot[];
+  safetyPoints: (BackupSnapshot & { profile: string })[];
   /** The point the live world descends from. */
   head: string | null;
   recoveryRequired: boolean;
@@ -91,7 +91,7 @@ function seed(): ManageState {
     ...(() => {
       const daily = Array.from({ length: 7 }, (_, index) => ({ id: hex(32), time: new Date(now - index * day - day / 3).toISOString(), safety: false }));
       const updates = { id: hex(32), time: new Date(now - 6 * day).toISOString(), safety: false };
-      const safety = { id: hex(32), time: new Date(now - 2.6 * day).toISOString(), safety: true };
+      const safety = { id: hex(32), time: new Date(now - 2.6 * day).toISOString(), safety: true, profile: 'daily' };
       const [d0, d1, d2, d3, d4, d5, d6] = daily.map((point) => point.id) as [string, string, string, string, string, string, string];
       const lineage = new Map<string, { parentId: string | null; label: string | null; kept: boolean }>([
         [d6, { parentId: null, label: null, kept: false }],
@@ -264,8 +264,8 @@ export function createManageFixtures(host: ManageHost) {
       host.requireOnline(target);
       host.requireCapability(target, 'backups.restore');
       if (target.snapshot.status?.state !== 'stopped') fail('stale_target');
-      // A safety snapshot has no profile; it restores like any other point.
-      if (![...(state(connectionId).snapshots[profile] ?? []), ...state(connectionId).safetyPoints].some((entry) => entry.id === snapshot)) fail('not_found');
+      // Like the agent: the profile's restore points, or the safety snapshots its own restores took.
+      if (![...(state(connectionId).snapshots[profile] ?? []), ...state(connectionId).safetyPoints.filter((entry) => entry.profile === profile)].some((entry) => entry.id === snapshot)) fail('not_found');
       const created = job(connectionId, profile, 'restore_in_place');
       created.state = 'awaiting_confirmation';
       created.snapshotId = snapshot;
@@ -291,7 +291,7 @@ export function createManageFixtures(host: ManageHost) {
         // The world now descends from the restored point; what it was before is kept as a branch tip.
         const safetyId = created.result.safetySnapshotId;
         if (safetyId) {
-          current.safetyPoints.unshift({ id: safetyId, time: new Date().toISOString(), safety: true });
+          current.safetyPoints.unshift({ id: safetyId, time: new Date().toISOString(), safety: true, profile: created.profile });
           current.lineage.set(safetyId, { parentId: current.head, label: null, kept: true });
         }
         current.head = created.snapshotId;
@@ -305,7 +305,7 @@ export function createManageFixtures(host: ManageHost) {
       const current = state(connectionId);
       const points: BackupPoint[] = [
         ...Object.entries(current.snapshots).flatMap(([profile, list]) => list.map((entry) => ({ ...entry, profile }))),
-        ...current.safetyPoints.map((entry) => ({ ...entry, profile: null })),
+        ...current.safetyPoints,
       ].map((entry) => { const line = current.lineage.get(entry.id); return { id: entry.id, time: entry.time, profile: entry.profile, safety: entry.safety, parentId: line?.parentId ?? null, label: line?.label ?? null, kept: line?.kept ?? false }; })
         .sort((a, b) => Date.parse(b.time) - Date.parse(a.time));
       return clone({ head: current.head, points });

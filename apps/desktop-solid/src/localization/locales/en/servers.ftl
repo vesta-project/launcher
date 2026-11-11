@@ -402,6 +402,7 @@ servers-backups-history-flat = This server doesn't track branches yet, so backup
 servers-backups-live = Your world now
 servers-backups-live-none = Nothing backed up yet.
 servers-backups-live-tip = Changed since the backup { $time }.
+servers-backups-live-tip-named = Changed since “{ $name }”.
 servers-backups-live-branch = Continued from { $name }. The next backup starts a new branch.
 servers-backups-rename = Rename
 servers-backups-label-placeholder = Name this backup

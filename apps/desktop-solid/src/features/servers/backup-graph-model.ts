@@ -2,10 +2,10 @@
 // (`parentId`), and the server knows which point the live world descends from now (`head`).
 // Restoring an old point and playing on grows a new branch; the old one stays.
 //
-// Types mirror the agent's `GET backups/history` (see native-backup-history.ts).
+// Types are the agent's `GET backups/history` (native-backup-history.ts).
 
-export interface BackupPoint { id: string; time: string; profile: string | null; safety: boolean; parentId: string | null; label: string | null; kept: boolean }
-export interface BackupHistory { head: string | null; points: BackupPoint[] }
+import type { BackupHistory, BackupPoint } from './native-backup-history';
+export type { BackupHistory, BackupPoint };
 
 /** The live world: a row above its point, in a branch of its own once it has left the tip. */
 export const LIVE = 'live';

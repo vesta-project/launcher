@@ -40,6 +40,25 @@ pub struct BackupResult {
     pub files_removed: Option<u64>,
     pub safety_snapshot_id: Option<String>,
 }
+dto!(BackupPoint { id: String, time: String, profile: Option<String>, safety: bool, parent_id: Option<String>, label: Option<String>, kept: bool });
+dto!(BackupHistory { head: Option<String>, points: Vec<BackupPoint> });
+fn present_backup_label<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<Option<String>>, D::Error> {
+    Option::<String>::deserialize(d).map(Some)
+}
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupPointUpdate {
+    #[serde(
+        default,
+        deserialize_with = "present_backup_label",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub label: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kept: Option<bool>,
+}
 dto!(BackupSnapshot {
     id: String,
     time: String,
@@ -310,6 +329,28 @@ impl Client {
             .as_ref()
             .and_then(|id| names.get(id).cloned());
         Ok(job)
+    }
+    pub async fn backup_history(&self) -> Result<BackupHistory> {
+        decode(self.get("backups/history", true, "backups.view").await?)
+    }
+    pub async fn backup_point_update(
+        &self,
+        id: &str,
+        request: BackupPointUpdate,
+        intent: &str,
+    ) -> Result<BackupPoint> {
+        let body =
+            serde_json::to_value(request).map_err(|_| Error::new(ErrorCode::InvalidInput))?;
+        decode(
+            self.management_mutate(
+                Method::PATCH,
+                &format!("backups/points/{}", segment(id)?),
+                Some(body),
+                intent,
+                "backups.restore",
+            )
+            .await?,
+        )
     }
     pub async fn backup_snapshots(&self, profile: &str) -> Result<Vec<BackupSnapshot>> {
         let mut snapshots = Vec::new();
@@ -807,4 +848,32 @@ fn device(row: &Value, own: &str, user: Option<&ServerUser>) -> Result<ServerDev
 }
 fn snapshot_time(text: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     chrono::DateTime::parse_from_rfc3339(text).ok()
+}
+#[cfg(test)]
+mod backup_history_tests {
+    use super::*;
+    #[test]
+    fn backup_history_dto_round_trip_and_unknown_fields() {
+        let value = serde_json::json!({"head":"abc","points":[{"id":"abc","time":"2026-11-11T00:00:00Z","profile":null,"safety":true,"parentId":null,"label":"Branch","kept":true,"future":42}],"future":true});
+        let history: BackupHistory = serde_json::from_value(value).unwrap();
+        let wire = serde_json::to_value(&history).unwrap();
+        assert_eq!(wire["points"][0]["parentId"], Value::Null);
+        assert!(wire.get("future").is_none());
+        assert!(wire["points"][0].get("future").is_none());
+        let again: BackupHistory = serde_json::from_value(wire).unwrap();
+        assert_eq!(again.points[0].label.as_deref(), Some("Branch"));
+        for (json, expected) in [
+            ("{}", None),
+            (r#"{"label":null}"#, Some(None)),
+            (r#"{"label":"x"}"#, Some(Some("x".into()))),
+        ] {
+            let request: BackupPointUpdate = serde_json::from_str(json).unwrap();
+            assert_eq!(request.label, expected);
+            assert_eq!(
+                serde_json::to_value(request).unwrap(),
+                serde_json::from_str::<Value>(json).unwrap()
+            );
+        }
+        assert!(serde_json::from_str::<BackupPointUpdate>(r#"{"future":true}"#).is_err());
+    }
 }

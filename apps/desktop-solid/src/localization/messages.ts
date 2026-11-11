@@ -2981,6 +2981,7 @@ export const messageIds = [
   "servers.backups.live",
   "servers.backups.live-none",
   "servers.backups.live-tip",
+  "servers.backups.live-tip-named",
   "servers.backups.live-branch",
   "servers.backups.rename",
   "servers.backups.label-placeholder",

@@ -9,7 +9,7 @@ import { age, newIntentId } from '../../../features/servers/model';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import type { BackupJob } from '../../../features/servers/native-manage';
 import { seedServerResource, useServerResource } from '../../../features/servers/resources';
-import { backupHistoryResource, historyApi } from '../../../features/servers/server-resources';
+import { backupHistoryResource } from '../../../features/servers/server-resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
@@ -76,13 +76,13 @@ function Row(props: { snapshot: ServerSnapshot; row: GraphRow; history: BackupHi
     if (!point) return t('servers.backups.live-none');
     return liveIsBranch(props.history)
       ? t('servers.backups.live-branch', { name: point.label ?? when(point.time) })
-      : t('servers.backups.live-tip', { time: when(point.time) });
+      : point.label ? t('servers.backups.live-tip-named', { name: point.label }) : t('servers.backups.live-tip', { time: when(point.time) });
   };
 
   const update = async (point: BackupPoint, request: { label?: string | null; kept?: boolean }) => {
     setBusy(true);
     try {
-      const next = await serverCommand((client) => historyApi(client).backupPointUpdate(connection(), point.id, request, newIntentId()));
+      const next = await serverCommand((client) => client.backupPointUpdate(connection(), point.id, request, newIntentId()));
       const current = props.history;
       props.onUpdated({ ...current, points: current.points.map((entry) => (entry.id === next.id ? next : entry)) });
       setNaming(null);

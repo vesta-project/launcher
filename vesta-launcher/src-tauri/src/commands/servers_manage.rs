@@ -471,3 +471,40 @@ pub async fn server_pack_minimum(
         )
         .await
 }
+
+#[tauri::command]
+pub async fn server_backup_history(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+) -> Result<BackupHistory> {
+    manager
+        .management_read(&app, &connection_id, |client| async move {
+            client.backup_history().await
+        })
+        .await
+}
+#[tauri::command]
+pub async fn server_backup_point_update(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+    id: String,
+    request: BackupPointUpdate,
+    intent_id: String,
+) -> Result<BackupPoint> {
+    let payload = json!({"id": id, "request": request});
+    let journal_intent = intent_id.clone();
+    manager
+        .inner()
+        .management_write(
+            &app,
+            &connection_id,
+            &journal_intent,
+            "backups/points/update",
+            payload,
+            false,
+            |client| async move { client.backup_point_update(&id, request, &intent_id).await },
+        )
+        .await
+}

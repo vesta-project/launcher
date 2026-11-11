@@ -442,6 +442,9 @@ impl Transport {
             || path.split('?').next() == Some("/api/v3/manage/content")
         {
             32 * 1024 * 1024
+        } else if path == "/api/v3/manage/backups/history" {
+            // Complete graph, bounded by the repository's 10,000 restore points.
+            8 * 1024 * 1024
         } else {
             1024 * 1024
         };
