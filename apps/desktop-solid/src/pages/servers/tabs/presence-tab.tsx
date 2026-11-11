@@ -211,7 +211,14 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
         disabled={sleepRevision.conflict() || motdRevision.conflict() || !canEdit() || (motdDirty() && problems().length > 0)} onDiscard={discard} onSave={() => void save()} />
     }>
       <SettingsColumns aside={statusPanel()}>
-        <SettingsPanel title={t('servers.presence.sleep')} name="sleep">
+        <SettingsPanel title={t('servers.presence.sleep')} name="sleep" action={
+          <Show when={sleepNow()}>{copy => (
+            <span data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
+              <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
+              <span>{t(copy().message, copy().args)}</span>
+            </span>
+          )}</Show>
+        }>
           <EditConflictNotice id={id()} resource="sleep-policy" show={sleepRevision.conflict()} current={sleep.value()} onReview={sleepRevision.review} />
           <ServerErrorNote error={sleepError() ?? sleep.error()} onRetry={() => void sleep.refresh()} />
           <Show when={policy()} fallback={<Show when={!sleep.error()}><Skeleton height={160} radius={0} /></Show>}>
@@ -222,14 +229,6 @@ export function PresenceTab(props: { snapshot: ServerSnapshot }) {
                 </SettingRow>
                 <Show when={current().enabled}>
                   <div data-vesta="settings-reveal">
-                    <Show when={sleepNow()}>
-                      {(copy) => (
-                        <p data-vesta="server-sleep-now" data-kind={copy().kind} role="status">
-                          <Icon name={copy().kind === 'asleep' ? 'icons/status/moon' : copy().kind === 'counting' ? 'icons/content/timer' : 'icons/status/info'} size={14} />
-                          <span>{t(copy().message, copy().args)}</span>
-                        </p>
-                      )}
-                    </Show>
                     <SettingRow label={t('servers.presence.idle')} description={t('servers.presence.idle-help')}>
                       <NumberField size="sm" aria-label={t('servers.presence.idle')} disabled={!canEdit()} value={minutes()} min={1} max={SLEEP_BOUNDS.idleSeconds[1] / 60}
                         onChange={(value: number) => patchSleep({ idleSeconds: Math.round(value) * 60 })} />

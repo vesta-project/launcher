@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vesta workflow comparison</title>
+<style>
+html,body{margin:0;background:transparent;color:var(--foreground);font-family:var(--font-sans)}
+#vesta-comparison{width:100%;font-size:14px;line-height:1.45}
+h2{font-size:18px;font-weight:500;margin:0 0 12px}
+table{border-collapse:collapse;width:100%;table-layout:fixed}
+th,td{padding:12px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+thead th{font-weight:500;font-size:12px;color:var(--muted-foreground)}
+thead th:first-child{width:23%;padding-left:0}
+tbody th{font-weight:500;padding-left:0}
+a{color:var(--foreground);text-decoration:underline;text-underline-offset:3px}
+.state{display:flex;align-items:baseline;gap:6px;font-size:12px}
+.state:before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;flex:0 0 7px;background:var(--border)}
+.documented:before{background:var(--chart-1)}
+.implemented:before{background:var(--chart-2)}
+.integration:before{background:var(--chart-3)}
+.planned:before{background:var(--chart-4)}
+.unassessed{color:var(--muted-foreground)}
+.context{display:block;font-size:12px;color:var(--muted-foreground);margin-top:4px;font-weight:400}
+.legend{display:flex;gap:10px 16px;flex-wrap:wrap;margin:14px 0 8px}
+.scope{font-size:12px;color:var(--muted-foreground);margin:8px 0 0}
+details{border-bottom:1px solid var(--border);padding:12px 0;font-size:12px}
+summary{cursor:pointer;font-size:14px}
+details ul{margin:10px 0 0;padding-left:20px}
+details li{margin:6px 0}
+@media(max-width:540px){
+thead{display:none}table,tbody,tr,th,td{display:block;width:auto}
+tr{padding:10px 0;border-bottom:1px solid var(--border)}
+tbody th{padding:0 0 8px;border:0}td{padding:5px 0;border:0;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+td:before{content:attr(data-label);font-size:12px;color:var(--muted-foreground)}
+.context{margin-top:2px}.legend{gap:8px 14px}
+td>.context{grid-column:2}
+}
+</style>
+</head>
+<body>
+<main id="vesta-comparison">
+<h2>Documented workflow coverage</h2>
+<table aria-label="Qualitative product comparison, checked 27 October 2026. Not assessed does not mean absent.">
+<thead><tr><th scope="col">Product</th><th scope="col">Local instances</th><th scope="col">Shared or linked instances</th><th scope="col">Own-machine server control</th><th scope="col">Browser management</th></tr></thead>
+<tbody>
+<tr><th scope="row"><a href="https://prismlauncher.org/about/" target="_blank" rel="noreferrer">Prism</a></th><td data-label="Local instances"><span class="state documented">Documented</span></td><td data-label="Shared / linked"><span class="state unassessed">Not assessed</span></td><td data-label="Own-machine control"><span class="state unassessed">Not assessed</span></td><td data-label="Browser management"><span class="state unassessed">Not assessed</span></td></tr>
+<tr><th scope="row"><a href="https://modrinth.com/news/article/introducing-server-projects/" target="_blank" rel="noreferrer">Modrinth</a></th><td data-label="Local instances"><span class="state documented">Documented</span></td><td data-label="Shared / linked"><span class="state documented">Documented</span></td><td data-label="Own-machine control"><span class="state unassessed">Not assessed</span></td><td data-label="Browser management"><span class="state unassessed">Not assessed</span></td></tr>
+<tr><th scope="row"><a href="https://docs.craftycontrol.com/" target="_blank" rel="noreferrer">AMP / Crafty</a><span class="context">Server-panel references</span></th><td data-label="Local instances"><span class="state unassessed">Not assessed</span></td><td data-label="Shared / linked"><span class="state unassessed">Not assessed</span></td><td data-label="Own-machine control"><span class="state documented">Documented</span></td><td data-label="Browser management"><span class="state documented">Documented</span></td></tr>
+<tr><th scope="row"><a href="https://pterodactyl.io/" target="_blank" rel="noreferrer">Pterodactyl</a><span class="context">Panel + node model</span></th><td data-label="Local instances"><span class="state unassessed">Not assessed</span></td><td data-label="Shared / linked"><span class="state unassessed">Not assessed</span></td><td data-label="Own-machine control"><span class="state documented">Documented</span></td><td data-label="Browser management"><span class="state documented">Documented</span></td></tr>
+<tr><th scope="row">Vesta<span class="context">Current source snapshot</span></th><td data-label="Local instances"><span class="state implemented">Implemented</span><span class="context">Release cutover pending</span></td><td data-label="Shared / linked"><span class="state integration">Integration</span><span class="context">Server client-pack path</span></td><td data-label="Own-machine control"><span class="state integration">Integration</span><span class="context">Onboarding / updates</span></td><td data-label="Browser management"><span class="state planned">Proposed</span><span class="context">Native protocol today</span></td></tr>
+</tbody>
+</table>
+<div class="legend" aria-label="Legend"><span class="state documented">Official documentation</span><span class="state implemented">Code present</span><span class="state integration">User journey incomplete</span><span class="state planned">Roadmap proposal</span></div>
+<p class="scope">Checked 27 Oct 2026. Not assessed means no conclusion about availability. This chart does not rank performance or certify stability.</p>
+<details><summary>Sources and scope</summary><ul>
+<li>Prism: <a href="https://prismlauncher.org/about/" target="_blank" rel="noreferrer">official feature overview</a>.</li>
+<li>Modrinth: <a href="https://modrinth.com/news/article/shared-instances/" target="_blank" rel="noreferrer">shared instances</a> and <a href="https://modrinth.com/news/article/introducing-server-projects/" target="_blank" rel="noreferrer">Server Projects</a>. Its hosted services are distinct from the own-machine-control column.</li>
+<li>Panels: <a href="https://www.cubecoders.com/AMP" target="_blank" rel="noreferrer">AMP</a>, <a href="https://docs.craftycontrol.com/" target="_blank" rel="noreferrer">Crafty docs</a> and <a href="https://pterodactyl.io/" target="_blank" rel="noreferrer">Pterodactyl</a>. Pterodactyl 2.0 beta extensions are not part of this comparison.</li>
+<li>Vesta: Launcher 52db3ead; Server cc1dd76. Implemented features still need release acceptance; general shared-instance subscriptions remain proposed.</li>
+</ul></details>
+</main>
+</body>
+</html>

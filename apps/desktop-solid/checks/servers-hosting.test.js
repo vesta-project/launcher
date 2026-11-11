@@ -33,7 +33,7 @@ async function stoppedOwner() {
 describe('[world] one world, no creation', () => {
   test('world details expose dimensions and datapacks without a world creation command', async () => {
     const servers = createFixtureServers({ latencyMs: 0 }); const world = await servers.world('fixture-survival');
-    expect(servers.worldNew).toBeUndefined(); expect(world.sizeComplete).toBe(true);
+    expect(typeof servers.newWorld).toBe('function'); expect(world.sizeComplete).toBe(true);
     expect(world.dimensions.find(d => d.id === 'nether').layout).toBe('split');
     expect(world.datapacks.some(p => p.kind === 'folder')).toBe(true); expect(world.datapacks.some(p => p.enabled === null)).toBe(true);
   });
@@ -172,4 +172,18 @@ describe('[software] explicit releases', () => {
     const loaderPlan = await servers.softwarePlan('fixture-survival',{software:'fabric',version:'1.21.1',loaderVersion:'0.16.8'});
     expect(loaderPlan.loaderVersion).toBe('0.16.8');
   });
+});
+
+test('fresh-world selection is stopped, owner-only, revision-bound and idempotent', async () => {
+ const running=createFixtureServers({latencyMs:0});
+ const initial=await running.world('fixture-survival');
+ await expect(running.newWorld('fixture-survival',initial.revision,initial.name,'running-reset')).rejects.toMatchObject({code:'conflict'});
+ await expect(running.newWorld('fixture-creative',initial.revision,initial.name,'viewer-reset')).rejects.toMatchObject({code:'forbidden'});
+ const api=await stoppedOwner();
+ const world=await api.world('fixture-survival');
+ await expect(api.newWorld('fixture-survival','stale',world.name,'world-stale')).rejects.toMatchObject({code:'conflict'});
+ const changed=await api.newWorld('fixture-survival',world.revision,world.name,'world-new');
+ expect(changed.exists).toBe(false);
+ expect(changed.name).not.toBe(world.name);
+ expect(await api.newWorld('fixture-survival',world.revision,world.name,'world-new')).toEqual(changed);
 });

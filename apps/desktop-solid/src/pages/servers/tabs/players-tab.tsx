@@ -142,9 +142,9 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const ask = (request: Request) => setDialog(request);
 
   return (
-    <SettingsPage>
+    <SettingsPage class="server-player-manager">
       <Show when={whitelistOn() !== null}>
-        <div data-vesta="server-callout" data-tone={whitelistOn() ? 'success' : 'neutral'} data-server-whitelist-status>
+        <div data-server-whitelist-status>
           <Icon name={whitelistOn() ? 'icons/security/shield-check' : 'icons/security/shield-off'} size={16} />
           <span>{whitelistOn() ? t('servers.people.whitelist-on') : t('servers.people.whitelist-off')}</span>
           <span data-vesta="server-toolbar-spacer" />
@@ -169,42 +169,44 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
           </Show>
         </div>
       </div>
-      <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
+      <section data-server-player-results>
+        <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
-      <Show when={!loading() || players().length > 0} fallback={<EmptyLine role="status">{t('servers.loading')}</EmptyLine>}>
-        <Show
-          when={players().length > 0}
-          fallback={
-            <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
-          }
-        >
-          <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
-            <ul data-vesta="server-player-list">
-              <For each={playerPage(shown(), page())}>
-                {(player) => (
-                  <PlayerRow
-                    player={player}
-                    open={expanded() === player.key}
-                    onToggle={() => setExpanded((current) => (current === player.key ? null : player.key))}
-                    chips={playerChips(player, dateText)}
-                    canAct={canAct}
-                    onAction={(action) => ask({ action, player: player.name })}
-                    date={dateText}
-                  />
-                )}
-              </For>
-            </ul>
-            <Show when={shown().length > PLAYER_PAGE_SIZE}>
-              <div data-vesta="server-settings-bar">
-                <Button disabled={currentPage() === 0} onClick={() => setPage(Math.max(0, currentPage() - 1))}>{t('servers.people.previous-page')}</Button>
-                <span role="status">{currentPage() + 1} / {Math.ceil(shown().length / PLAYER_PAGE_SIZE)}</span>
-                <Button disabled={(currentPage() + 1) * PLAYER_PAGE_SIZE >= shown().length} onClick={() => setPage(currentPage() + 1)}>{t('servers.people.next-page')}</Button>
-              </div>
+        <Show when={!loading() || players().length > 0} fallback={<EmptyLine role="status">{t('servers.loading')}</EmptyLine>}>
+          <Show
+            when={players().length > 0}
+            fallback={
+              <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
+            }
+          >
+            <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
+              <ul data-vesta="server-player-list">
+                <For each={playerPage(shown(), page())}>
+                  {(player) => (
+                    <PlayerRow
+                      player={player}
+                      open={expanded() === player.key}
+                      onToggle={() => setExpanded((current) => (current === player.key ? null : player.key))}
+                      chips={playerChips(player, dateText)}
+                      canAct={canAct}
+                      onAction={(action) => ask({ action, player: player.name })}
+                      date={dateText}
+                    />
+                  )}
+                </For>
+              </ul>
+              <Show when={shown().length > PLAYER_PAGE_SIZE}>
+                <div data-vesta="server-settings-bar">
+                  <Button disabled={currentPage() === 0} onClick={() => setPage(Math.max(0, currentPage() - 1))}>{t('servers.people.previous-page')}</Button>
+                  <span role="status">{currentPage() + 1} / {Math.ceil(shown().length / PLAYER_PAGE_SIZE)}</span>
+                  <Button disabled={(currentPage() + 1) * PLAYER_PAGE_SIZE >= shown().length} onClick={() => setPage(currentPage() + 1)}>{t('servers.people.next-page')}</Button>
+                </div>
+              </Show>
             </Show>
           </Show>
         </Show>
-      </Show>
 
+      </section>
       <Show when={dialog()} keyed>
         {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>

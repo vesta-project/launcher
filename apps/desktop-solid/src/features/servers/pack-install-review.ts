@@ -75,4 +75,12 @@ const softwareNames: Record<string, string> = {
   vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge', paper: 'Paper', purpur: 'Purpur', spigot: 'Spigot',
 };
 export const softwareName = (software: string) => softwareNames[software] ?? software;
-export const runtimeLabel = (runtime: PackRuntime) => `${softwareName(runtime.software)} ${runtime.minecraftVersion}`;
+export const runtimeLabel = (runtime: PackRuntime) => `${softwareName(runtime.software)} ${runtime.minecraftVersion}${runtime.loaderVersion ? ` (${runtime.loaderVersion})` : ''}`;
+
+/** Offer fresh-world selection only for an existing world and a pack/game change. */
+export function offerFreshWorld(exists: boolean, installed: import('./native-pack').PackInstallSource | null, target: import('./native-pack').PackInstallSource, currentMinecraft?: string | null, targetMinecraft?: string | null): boolean {
+  if (!exists) return false;
+  if (currentMinecraft && targetMinecraft && currentMinecraft !== targetMinecraft) return true;
+  if (installed?.source === 'provider' && target.source === 'provider') return installed.provider !== target.provider || installed.projectId !== target.projectId;
+  return JSON.stringify(installed) !== JSON.stringify(target);
+}

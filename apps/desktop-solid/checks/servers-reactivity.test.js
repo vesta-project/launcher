@@ -141,11 +141,16 @@ async function buildHarness() {
   const built = await Bun.build({
     entrypoints: ['vesta-server-reactivity-check'], target: 'bun', conditions: ['browser', 'development'],
     plugins: [{ name: 'server-reactivity-check', setup(build) {
+      build.onLoad({ filter: /features[\\/]accounts[\\/]accounts\.ts$/ }, () => ({ loader: 'js', contents: `
+        import { createSignal } from 'solid-js';
+        const [activeAccount, setActiveAccount] = createSignal({ uuid: 'account-one' });
+        export { activeAccount, setActiveAccount };
+      ` }));
       build.onLoad({ filter: /features[\\/]servers[\\/]service\.ts$/ }, () => ({ loader: 'js', contents: `
         export const counts = { opened: 0, closed: 0 };
         export const replies = [];
         export const refreshCalls = [];
-        const api = { subscribe: async () => { counts.opened++; return () => counts.closed++; }, snapshot: (id, refresh) => { refreshCalls.push({ id, refresh }); return new Promise((resolve, reject) => replies.push({ resolve, reject })); }, remove: async () => {} };
+        const api = { list: async () => [], onChanged: () => () => {}, subscribe: async () => { counts.opened++; return () => counts.closed++; }, snapshot: (id, refresh) => { refreshCalls.push({ id, refresh }); return new Promise((resolve, reject) => replies.push({ resolve, reject })); }, remove: async () => {} };
         export const serversApi = async () => api;
       ` }));
       build.onResolve({ filter: /^vesta-server-reactivity-check$/ }, () => ({ path: 'check', namespace: 'server-check' }));
@@ -158,7 +163,8 @@ async function buildHarness() {
         export { ConsoleBuffer, clearConsoleDisplay, consoleDisplayBoundary } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-model.ts', import.meta.url)))};
         export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
-        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations } from ${JSON.stringify(storePath)};
+        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations, serverCommand, useServerSync } from ${JSON.stringify(storePath)};
+        export { setActiveAccount } from ${JSON.stringify(fileURLToPath(new URL('../src/features/accounts/accounts.ts', import.meta.url)))};
         export { serverResource, readServerResource, useServerResource, applyResourceChanges, resourceEditor } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
         import { counts } from ${JSON.stringify(servicePath)};
         export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};
@@ -276,6 +282,47 @@ test('live snapshots do not reconnect subscriptions until server identity change
         : phase === 'different-server' ? { opened: 2, closed: 1 } : { opened: 2, closed: 2 });
     });
   }, { scenario: 'server-subscriptions-during-live-status' });
+  check.expectNoDiagnostics(artifact);
+});
+
+test('account switches reject in-flight data and close late subscriptions', async () => {
+  const check = await harness();
+  let resolve;
+  const pending = check.serverCommand(() => new Promise(done => { resolve = done; }));
+  const outcome = pending.catch(error => error);
+  await Promise.resolve(); await Promise.resolve();
+  check.setActiveAccount({ uuid: 'account-two' });
+  resolve({ privileged: true });
+  expect(await outcome).toMatchObject({ code: 'credentials_rejected' });
+
+  let closed = 0;
+  const subscription = check.serverCommand(() => new Promise(done => { resolve = done; }));
+  const subscriptionOutcome = subscription.catch(error => error);
+  await Promise.resolve(); await Promise.resolve();
+  check.setActiveAccount({ uuid: 'account-three' });
+  resolve(() => { closed++; });
+  expect(await subscriptionOutcome).toMatchObject({ code: 'credentials_rejected' });
+  expect(closed).toBe(1);
+  check.setActiveAccount({ uuid: 'account-one' });
+});
+
+test('account switches immediately discard cached privileged server content', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const owner = check.createRoot(dispose => { check.useServerSync(); return { dispose }; });
+    try {
+      check.flush(); await Promise.resolve(); await Promise.resolve(); check.flush();
+      const id = 'account-switch-server';
+      check.putSnapshot({ connection: { id, authRevision: 'owner' }, state: { phase: 'online', access: 'paired' }, status: null });
+      check.putOperations(id, [{ operationId: 'private-op', state: 'queued' }]);
+      check.flush();
+      expect(check.untrack(() => check.serverSnapshot(id))).toBeDefined();
+      check.setActiveAccount({ uuid: 'account-two' }); check.flush();
+      expect(check.untrack(() => check.serverSnapshot(id))).toBeUndefined();
+      expect(check.untrack(() => check.serverOperations(id))).toEqual([]);
+      await Promise.resolve(); await Promise.resolve(); check.flush();
+    } finally { owner.dispose(); check.setActiveAccount({ uuid: 'account-one' }); check.flush(); }
+  }, { scenario: 'server-cache-account-isolation' });
   check.expectNoDiagnostics(artifact);
 });
 

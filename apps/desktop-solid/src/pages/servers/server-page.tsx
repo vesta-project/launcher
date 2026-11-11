@@ -11,8 +11,9 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { anyVisible, gate } from '../../features/servers/capabilities';
 import { stableConnectionId } from '../../features/servers/connection-id';
+import { warmContentMetadata } from '../../features/servers/content-metadata';
 import { invalidateServerResources, useServerResource } from '../../features/servers/resources';
-import { backupsResource, operationsResource } from '../../features/servers/server-resources';
+import { backupsResource, contentResource, operationsResource } from '../../features/servers/server-resources';
 import {
   activeNavEntry, agentReachable, backupsConfigured, navEntryPath, paneState, resolveServerLocation, serverNavEntries, serverPath, visibleMainTabs,
   visibleSections, type MainTabId, type ServerNavEntry, type SettingsSectionId,
@@ -90,6 +91,20 @@ function ServerContent(props: { id: string }) {
   const snapshot = () => serverSnapshot(props.id)!;
   const id = stableConnectionId(snapshot);
   const reachable = createMemo(() => agentReachable(snapshot()), { name: 'server-workspace:reachable' });
+  // Warm this server's shared list after navigation, so opening Resources can
+  // reuse rows. Hashing waits for the cheap listing and stays off first paint.
+  const resourceSummary = useServerResource(id, contentResource, {
+    args: () => true,
+    enabled: () => reachable() && gate(snapshot().capabilities, 'files.list') === 'allowed',
+  });
+  const resourceContent = useServerResource(id, contentResource, {
+    enabled: () => reachable() && gate(snapshot().capabilities, 'files.list') === 'allowed' && !!resourceSummary.value(),
+  });
+  createEffect(resourceContent.value, inventory => {
+    let active = true;
+    if (inventory) void warmContentMetadata(inventory.items, () => active);
+    return () => { active = false; };
+  }, { name: 'server-workspace:resource-metadata' });
   const location = createMemo(() => resolveServerLocation(route().detail, route().item), { name: 'server-workspace:location' });
   const [previousTab, setPreviousTab] = createSignal<MainTabId>('overview', { name: 'server-workspace:previous-tab' });
   let layout: HTMLDivElement | undefined;
@@ -255,7 +270,7 @@ function CredentialsRejected(props: { snapshot: ServerSnapshot }) {
       <p>{t('servers.error.credentials-rejected')}</p>
       <footer>
         <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.remove')}</Button>
-        <Button onClick={() => transitionTo('/servers/add')}>{t('servers.rejected.pair-again')}</Button>
+        <Button onClick={() => transitionTo(`/servers/add/${props.snapshot.connection.id}`)}>{t('servers.rejected.pair-again')}</Button>
       </footer>
     </div>
   );

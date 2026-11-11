@@ -102,7 +102,7 @@ describe('[sleep] plain-language copy', () => {
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 40 }, 'online', 10_000, 10_000)).toEqual({ message: 'servers.sleep-blocker.counting-seconds', args: { count: 40 }, kind: 'counting' });
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 40 }, 'online', 10_000, 25_000).args).toEqual({ count: 25 });
     expect(sleepBlockerCopy({ reason: 'counting_down', remainingSeconds: 600 }, 'online', 0, 0)).toMatchObject({ message: 'servers.sleep-blocker.counting-minutes', args: { count: 10 } });
-    expect(sleepBlockerCopy({ reason: 'warning_sent', remainingSeconds: 20 }, 'online', 0, 0).message).toBe('servers.sleep-blocker.counting-seconds');
+    expect(sleepBlockerCopy({ reason: 'warning_sent', remainingSeconds: 20 }, 'online', 0, 0).message).toBe('servers.sleep-blocker.warned-seconds');
     expect(remainingSeconds(5, 0, 60_000)).toBe(0);
   });
 

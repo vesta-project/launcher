@@ -1,4 +1,5 @@
-@layer launcher {
+/* User accessibility preferences take precedence over normal author-theme rules. */
+@layer preferences {
   html[data-vesta-reduced-motion] {
     --vesta-duration-fast: 0ms;
     --vesta-duration-normal: 0ms;

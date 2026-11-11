@@ -348,11 +348,13 @@ export interface Discovery {
 }
 
 export interface SignInOptions {
+  /** Optional access grant redeemed only after proving the current account. */
+  invitationCode?: string;
   /**
    * Keep the device key and session in memory for this launcher session only. Chosen
    * explicitly by the user when secure storage is unavailable; never a silent fallback.
    * Without it, an unavailable store rejects with `credentials_unavailable` before the
-   * pairing code is redeemed.
+   * invitation is redeemed.
    */
   memoryOnly?: boolean;
 }
@@ -369,12 +371,12 @@ export const serversNative = {
   list: () => call<ServerSnapshot[]>('server_connections_list'),
   /** Unauthenticated first contact: TLS handshake, fingerprint, `/api/v3/status`. Accepts a pairing link. */
   discover: (address: string) => call<Discovery>('server_discover', { address }),
-  /** Redeem a pairing code. Never retried automatically; an uncertain outcome rejects with `pair_outcome_unknown`. */
+  /** Legacy accountless entry point; native refuses it. Use signInMinecraft with an invitation. */
   pair: (discoveryId: string, code: string, options: SignInOptions = {}) =>
     call<ServerSnapshot>('server_pair', { discoveryId, code, memoryOnly: options.memoryOnly ?? false }),
   /** Enroll with a launcher Minecraft account via the server's Mojang join challenge. */
   signInMinecraft: (discoveryId: string, accountUuid: string, options: SignInOptions = {}) =>
-    call<ServerSnapshot>('server_sign_in_minecraft', { discoveryId, accountUuid, memoryOnly: options.memoryOnly ?? false }),
+    call<ServerSnapshot>('server_sign_in_minecraft', { discoveryId, accountUuid, invitationCode: options.invitationCode ?? null, memoryOnly: options.memoryOnly ?? false }),
   /** Accept the currently presented fingerprint after the user compared it. */
   approveFingerprint: (connectionId: ConnectionId, fingerprint: string) =>
     call<ServerSnapshot>('server_trust_approve', { connectionId, fingerprint }),

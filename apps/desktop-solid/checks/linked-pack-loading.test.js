@@ -20,7 +20,7 @@ async function harness(run) {
       if (command === 'get_resource_versions') return c.versions;
       if (command === 'get_resource_project') { if (!args.id) throw Error('missing id'); if(c.failProject) throw Error('offline'); return {name: 'Provider pack'}; }
     };`,
-    '@tauri-apps/api/event': 'export const listen = async () => () => {};',
+    '@tauri-apps/api/event': 'export const listen = async (_event, callback) => { c.instanceUpdated = callback; return () => {}; };',
     'solid-js': `export const onSettled = fn => c.cleanups.push(fn());
       export const createSignal = initial => { let value = initial; return [() => value, next => value = typeof next === 'function' ? next(value) : next]; };`,
     './native-service': `export const nativeInstances = true, nativeRecord = () => c.record,
@@ -62,16 +62,30 @@ test('malformed old links do not invoke remote commands without a project id', (
   expect(c.calls).toEqual([]);
 }));
 test('server-sourced links are the same linked pack with the server as source, never a provider lookup', () => harness(async (api, c) => {
-  Object.assign(c.record, { modpackPlatform: 'server', modpackId: 'conn-1', modpackVersionId: '12' });
+  Object.assign(c.record, { modpackPlatform: 'server', modpackId: 'server-identity-uuid', modpackVersionId: '12' });
+  c.binding = { connectionId: 'conn-1' };
+  c.check = { current_version: '12', latest_version: null };
   api.useNativePack('7'); await settle();
   expect(api.versionStore('7').state().pack).toMatchObject({ source: 'Server', serverId: 'conn-1', installed: '12' });
   expect(api.versionStore('7').state().pack.projectId).toBeUndefined();
   expect(await api.releaseChangelog('Server', undefined, '12')).toBeUndefined();
   // Server links share the unified native update check; nothing reaches a provider.
-  expect(c.calls.map((call) => call.command)).toEqual(['check_modpack_update']);
+  expect(c.calls.map((call) => call.command)).toEqual(['server_pack_sync_link', 'check_modpack_update']);
   const pack = { ...api.versionStore('7').state().pack, releases: [{ id: '14', label: '14', channel: 'release' }, { id: '12', label: '12', channel: 'release' }] };
   expect(api.packUpdateTarget(pack)).toMatchObject({ id: '14' });
   expect(api.packUpdateTarget({ ...pack, installed: '14' })).toBeUndefined();
+}));
+
+test('server pack status waits for installation and checks once it completes', () => harness(async (api, c) => {
+  Object.assign(c.record, { modpackPlatform: 'server', modpackId: 'server-id', installationStatus: 'installing' });
+  c.binding = { connectionId: 'conn-1' };
+  c.check = { current_version: '12', latest_version: null };
+  api.useNativePack('7'); await settle();
+  expect(api.versionStore('7').state().pack).toMatchObject({ source: 'Server', serverId: 'conn-1' });
+  expect(c.calls.some(call => call.command === 'check_modpack_update')).toBe(false);
+  c.record.installationStatus = 'installed';
+  c.instanceUpdated({ payload: { id: 7 } }); await settle();
+  expect(c.calls.filter(call => call.command === 'check_modpack_update')).toHaveLength(1);
 }));
 
 test('provider-linked server instances keep their provider identity but only offer the server version', () => harness(async (api,c) => {

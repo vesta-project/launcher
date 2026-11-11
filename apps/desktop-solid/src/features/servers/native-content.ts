@@ -11,6 +11,8 @@ export interface ServerContentEntry {
   modpackOwned?: boolean;
   kind: ServerContentKind; path: string; filename: string; size: string; enabled: boolean | null;
   sha256: string | null; provider: ContentProvider | null; declared: ContentDeclared | null;
+  /** Last recorded identity, usable only for display until the current bytes are verified. */
+  displayProvider?: ContentProvider | null;
   pending: ContentPending | null; pendingId: string | null; pendingError: string | null;
 }
 export interface ContentCapabilities {
@@ -44,7 +46,7 @@ export interface ServerDependencyPreview {
 }
 const call = <T>(command: string, args: Record<string, unknown>) => invoke<T>(command, args);
 export const serversContentNative = {
-  content: (connectionId: ConnectionId) => call<ServerContentInventory>('server_content', { connectionId }),
+  content: (connectionId: ConnectionId, summary = false) => call<ServerContentInventory>('server_content', { connectionId, summary }),
   contentInstall: (connectionId: ConnectionId, request: ContentInstallRequest, intentId: string) => call<ContentChange>('server_content_install', { connectionId, request, intentId }),
   contentMutate: (connectionId: ConnectionId, request: ContentMutation, intentId: string) => call<ContentChange>('server_content_mutate', { connectionId, request, intentId }),
   contentCancel: (connectionId: ConnectionId, id: string, intentId: string) => call<ContentChange>('server_content_cancel', { connectionId, id, intentId }),

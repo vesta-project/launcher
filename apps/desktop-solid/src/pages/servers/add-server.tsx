@@ -1,20 +1,19 @@
-import { Button, Checkbox, SegmentedControl, Select, TextField } from '@vesta/ui';
-import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
+import { Button, Checkbox, TextField } from '@vesta/ui';
+import { For, Match, Show, Switch, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
 import { Icon } from '../../components/icon';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
-import { accounts } from '../../features/accounts/accounts';
+import { activeAccount } from '../../features/accounts/accounts';
 import { isPairingCode, normalizePairingCode, parseAddressInput, type AddressProblem } from '../../features/servers/address';
 import { differingGroups, sameFingerprint } from '../../features/servers/fingerprint';
-import { putSnapshot, serverCommand } from '../../features/servers/store';
+import { putSnapshot, serverCommand, serverSnapshot } from '../../features/servers/store';
 import type { Discovery, ServerCommandError, ServerSnapshot } from '../../features/servers/native';
 import type { MessageId } from '../../localization/messages';
 import { roleLabel } from '../../features/servers/model';
 import { FingerprintView, ServerErrorNote } from './parts';
 
 type Step = 'address' | 'verify' | 'sign-in' | 'done';
-type Method = 'code' | 'minecraft';
 
 const addressProblems: Record<AddressProblem, MessageId> = {
   empty: 'servers.address.problem-empty',
@@ -27,15 +26,15 @@ const addressProblems: Record<AddressProblem, MessageId> = {
 };
 
 /** Connect to an existing Vesta server: address → verify identity → sign in. */
-export function AddServer() {
-  const [step, setStep] = createSignal<Step>('address');
+export function AddServer(props: { connectionId?: string } = {}) {
+  const reconnectId = untrack(() => props.connectionId);
+  const [saved, setSaved] = createSignal<ServerSnapshot | null>(null);
+  const [step, setStep] = createSignal<Step>(reconnectId ? 'sign-in' : 'address');
   const [address, setAddress] = createSignal('');
   const [touched, setTouched] = createSignal(false);
   const [discovery, setDiscovery] = createSignal<Discovery | null>(null);
   const [compared, setCompared] = createSignal(false);
-  const [method, setMethod] = createSignal<Method>('code');
   const [code, setCode] = createSignal('');
-  const [account, setAccount] = createSignal<string | undefined>(undefined);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal<ServerCommandError | null>(null);
   const [result, setResult] = createSignal<ServerSnapshot | null>(null);
@@ -56,7 +55,10 @@ export function AddServer() {
     const found = discovery();
     return !!found?.expectedFingerprint && !sameFingerprint(found.expectedFingerprint, found.fingerprint);
   };
-  const usableAccounts = () => accounts().filter((entry) => entry.account_type.toLowerCase() === 'microsoft' && !entry.is_expired);
+  const account = () => {
+    const value = activeAccount();
+    return value?.account_type.toLowerCase() === 'microsoft' && !value.is_expired ? value : undefined;
+  };
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -72,21 +74,34 @@ export function AddServer() {
     if (parsed().kind === 'invalid') return;
     void run(async () => {
       const found = await serverCommand((client) => client.discover(address()));
-      setDiscovery(found);
+      const previous = saved()?.connection;
+      const reconnecting = previous?.endpoint === address();
+      setDiscovery(reconnecting ? { ...found, expectedFingerprint: previous.fingerprint } : found);
       setCompared(false);
       if (found.linkCode) setCode(found.linkCode);
-      setStep('verify');
+      setStep(reconnecting && found.existingConnectionId === previous.id
+        && found.serverId === previous.serverId && sameFingerprint(previous.fingerprint, found.fingerprint) ? 'sign-in' : 'verify');
     });
   };
+
+  onSettled(() => {
+    if (!reconnectId) return;
+    void run(async () => {
+      const snapshot = untrack(() => serverSnapshot(reconnectId))
+        ?? await serverCommand(client => client.snapshot(reconnectId, false));
+      setSaved(snapshot);
+      setAddress(snapshot.connection.endpoint);
+    }).then(() => { if (untrack(saved)) discover(); });
+  });
 
   const signIn = (event?: Event) => {
     event?.preventDefault();
     const found = discovery();
     if (!found) return;
     void run(async () => {
-      const snapshot = method() === 'code'
-        ? await serverCommand((client) => client.pair(found.discoveryId, normalizePairingCode(code()), { memoryOnly: memoryOnly() }))
-        : await serverCommand((client) => client.signInMinecraft(found.discoveryId, account() ?? usableAccounts()[0]!.uuid, { memoryOnly: memoryOnly() }));
+      const selected = account();
+      if (!selected || (code().trim() && !isPairingCode(code()))) return;
+      const snapshot = await serverCommand(client => client.signInMinecraft(found.discoveryId, selected.uuid, { memoryOnly: memoryOnly(), invitationCode: code().trim() ? normalizePairingCode(code()) : undefined }));
       putSnapshot(snapshot);
       setResult(snapshot);
       setStep('done');
@@ -95,6 +110,7 @@ export function AddServer() {
 
   const back = () => {
     setError(null);
+    if (reconnectId) { transitionTo(`/servers/${reconnectId}`); return; }
     if (step() === 'sign-in') setStep('verify');
     else if (step() === 'verify') setStep('address');
     else transitionTo('/servers');
@@ -172,53 +188,30 @@ export function AddServer() {
           <Match when={step() === 'sign-in'}>
             <form data-vesta="server-add-panel" onSubmit={signIn}>
               <h1>{t('servers.sign-in.title')}</h1>
-              <SegmentedControl
-                aria-label={t('servers.sign-in.method')}
-                value={method()}
-                onChange={(value) => { setMethod(value as Method); setError(null); }}
-                options={[
-                  { value: 'code', label: t('servers.sign-in.code') },
-                  { value: 'minecraft', label: t('servers.sign-in.minecraft') },
-                ]}
-              />
-              <Show
-                when={method() === 'code'}
-                fallback={
-                  <>
-                    <p>{t('servers.sign-in.minecraft-help')}</p>
-                    <Show when={usableAccounts().length > 0} fallback={<p data-vesta="server-callout" data-tone="warning">{t('servers.sign-in.no-account')}</p>}>
-                      <Select
-                        aria-label={t('servers.sign-in.account')}
-                        value={account() ?? usableAccounts()[0]?.uuid}
-                        options={usableAccounts().map((entry) => ({ value: entry.uuid, label: entry.username }))}
-                        onChange={(value) => setAccount(value)}
-                      />
-                    </Show>
-                  </>
-                }
-              >
-                <p>{t('servers.sign-in.code-help')}</p>
-                <TextField
-                  label={t('servers.sign-in.code-label')}
-                  value={code()}
-                  onChange={(value) => { setCode(value); setError(null); }}
-                  spellcheck={false}
-                  autocomplete="off"
-                  error={code().trim() && !isPairingCode(code()) ? t('servers.sign-in.code-format') : undefined}
-                />
+              <Show when={account()} fallback={<p data-vesta="server-callout" data-tone="warning">{t('servers.sign-in.no-account')}</p>}>
+                {selected => <div data-vesta="server-auth-account"><Icon name="icons/content/people" size={22} /><div><span>{t('servers.sign-in.account')}</span><strong>{selected().username}</strong></div></div>}
               </Show>
+              <TextField
+                label={t('servers.sign-in.invitation')}
+                description={t('servers.sign-in.invitation-help')}
+                value={code()}
+                onChange={(value) => { setCode(value); setError(null); }}
+                spellcheck={false}
+                autocomplete="off"
+                error={code().trim() && !isPairingCode(code()) ? t('servers.sign-in.code-format') : undefined}
+              />
               <Show when={discovery()?.secureStorageAvailable === false}>
                 <div data-vesta="server-callout" data-tone="warning">
                   <p>{t('servers.sign-in.storage-unavailable')}</p>
                   <Checkbox checked={memoryOnly()} onChange={setMemoryOnly} label={t('servers.sign-in.memory-only')} />
                 </div>
               </Show>
-              <ServerErrorNote error={error()} />
+              <ServerErrorNote error={error()} onRetry={discover} />
               <footer>
                 <Button variant="ghost" onClick={back}>{t('common.back')}</Button>
                 <Button tone="accent"
                   type="submit"
-                  disabled={busy() || storageBlocked() || (method() === 'code' ? !isPairingCode(code()) : usableAccounts().length === 0)}
+                  disabled={busy() || !discovery() || storageBlocked() || (!account() || (!!code().trim() && !isPairingCode(code())))}
                 >{busy() ? t('servers.sign-in.working') : t('servers.sign-in.submit')}</Button>
               </footer>
             </form>

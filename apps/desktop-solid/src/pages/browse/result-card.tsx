@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../components/resource-image';
 import { createMemo, Show, untrack } from 'solid-js';
 import { transitionTo } from '../../app/transition';
 import { Icon } from '../../components/icon';
@@ -132,11 +133,11 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
             when={banner()}
             fallback={
               <Show when={project().icon_url}>
-                {(url) => <img data-backdrop="" src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+                {(url) => <ResourceImage background data-backdrop="" src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
               </Show>
             }
           >
-            {(url) => <img src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+            {(url) => <ResourceImage background src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
           </Show>
         </div>
       </Show>
@@ -144,7 +145,7 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
         <span data-vesta="browse-card-icon" aria-hidden="true">
           <span data-vesta="browse-card-initial">{initialOf(project().name)}</span>
           <Show when={project().icon_url}>
-            {(url) => <img src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+            {(url) => <ResourceImage src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
           </Show>
         </span>
         <div data-vesta="browse-card-title">

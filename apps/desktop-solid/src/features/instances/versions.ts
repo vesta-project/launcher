@@ -239,7 +239,7 @@ function nativePack(id: string, versions: NativeVersion[] = [], name?: string, b
   // Newer revisions come from the signed server check, not a provider version list.
   if (record.modpackPlatform === 'server' || binding) {
     const installed = binding?.installed ?? record.modpackVersionId ?? '';
-    return { instanceId: record.id, name: name || record.name, icon: displayImage(record), projectId: binding ? record.modpackId : undefined, source: record.modpackPlatform === 'modrinth' ? 'Modrinth' : record.modpackPlatform === 'curseforge' ? 'CurseForge' : 'Server', serverId: binding?.connectionId ?? record.modpackId, installed,
+    return { instanceId: record.id, name: name || record.name, icon: displayImage(record), projectId: binding && record.modpackPlatform !== 'server' ? record.modpackId : undefined, source: record.modpackPlatform === 'modrinth' ? 'Modrinth' : record.modpackPlatform === 'curseforge' ? 'CurseForge' : 'Server', serverId: binding?.connectionId, installed,
       releases: [{ ...engine, id: installed, label: installed, experimental: false, channel: 'release', changes: '' }] };
   }
   const releases: PackRelease[] = releaseOrder(versions).map((version) => ({ ...engine, minecraft: version.game_versions[0] ?? engine.minecraft,
@@ -260,10 +260,14 @@ export function useNativePack(id: string) {
       const projectId = record?.modpackId?.trim();
       const platform = record?.modpackPlatform;
       if (!projectId || !platform) return;
-      const binding = platform === 'server' ? null : await invoke<{ connectionId: string } | null>('server_pack_sync_link', { instanceId: record.id }).catch(() => null);
+      const binding = await invoke<{ connectionId: string } | null>('server_pack_sync_link', { instanceId: record.id }).catch(() => null);
       if (disposed) return;
       if (platform === 'server' || binding) {
+        versionStore(id).setState(state => ({ ...state, pack: nativePack(id, [], undefined, binding ? { connectionId: binding.connectionId, installed: record.modpackVersionId ?? '' } : undefined) }));
         const current = ++revision;
+        // The server link exists before the install receipt. Checking for an
+        // update during installation would report that expected gap as damage.
+        if (record.installationStatus === 'installing' || record.installationStatus === 'pending') return;
         try {
           const check = await invoke<{ current_version: string | null; latest_version: {id:string;release_type:string} | null }>('check_modpack_update', { instanceId: record.id });
           if (disposed || current !== revision || nativeRecord(id)?.modpackVersionId !== record.modpackVersionId || nativeRecord(id)?.modpackPlatform !== platform || nativeRecord(id)?.modpackId !== projectId) return;
@@ -272,7 +276,7 @@ export function useNativePack(id: string) {
             pack.releases.unshift({ ...pack.releases[0], id: check.latest_version.id, label: check.latest_version.id, changes: check.latest_version.release_type });
           }
           versionStore(id).setState(state => ({ ...state, pack }));
-        } catch (error) { if (!disposed && current === revision) reportInstanceError(error); }
+        } catch (error) { if (!disposed && current === revision && nativeRecord(id)?.installationStatus !== 'installing') reportInstanceError(error); }
         return;
       }
       if (!['modrinth', 'curseforge'].includes(platform)) return;

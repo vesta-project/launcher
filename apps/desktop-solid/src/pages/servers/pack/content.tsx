@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { Badge, Button, Checkbox, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
@@ -183,7 +184,7 @@ export function ModpackContent() {
             <Show when={project(entry())?.icon_url} fallback={
               <span data-vesta="server-content-placeholder" data-kind={entry().kind} aria-hidden="true"><Icon name={kindIcon[entry().kind]} size={14} /></span>
             }>
-              {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={28} height={28} draggable="false" />}
+              {(src) => <ResourceImage src={src()} alt="" loading="lazy" decoding="async" width={28} height={28} draggable="false" />}
             </Show>
             <span data-vesta="resource-copy">
               <span data-vesta="resource-title">{nameOf(entry())}</span>
@@ -304,7 +305,7 @@ export function ModpackContent() {
 
       <Show when={bundled().length}>
         <section data-vesta="modpack-panel"><header data-vesta="modpack-panel-head"><h3>{t('server-pack.client-link-from')}</h3></header>
-          <ul data-vesta="modpack-owned"><For each={bundled()}>{entry => <li><div data-vesta="modpack-owned-item"><Show when={project(entry)?.icon_url} fallback={<span data-vesta="modpack-owned-placeholder"><Icon name={kindIcon[entry.kind]} size={14} /></span>}>{src => <img src={src()} alt="" width={24} height={24} />}</Show><span data-vesta="modpack-owned-name">{nameOf(entry)}</span></div></li>}</For></ul>
+          <ul data-vesta="modpack-owned"><For each={bundled()}>{entry => <li><div data-vesta="modpack-owned-item"><Show when={project(entry)?.icon_url} fallback={<span data-vesta="modpack-owned-placeholder"><Icon name={kindIcon[entry.kind]} size={14} /></span>}>{src => <ResourceImage src={src()} alt="" width={24} height={24} />}</Show><span data-vesta="modpack-owned-name">{nameOf(entry)}</span></div></li>}</For></ul>
         </section>
         <h3>{t('server-pack.client-link-custom')}</h3>
       </Show>

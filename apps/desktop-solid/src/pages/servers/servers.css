@@ -72,6 +72,17 @@
     background: var(--vesta-color-surface);
   }
   :where([data-vesta="server-add-panel"]) h1 { margin: 0; font-size: var(--vesta-text-lg); }
+  :where([data-vesta="server-auth-account"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta="server-auth-account"]) > div { display: grid; gap: var(--vesta-space-1); }
+  :where([data-vesta="server-auth-account"]) span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-add-panel"]) h2 { margin: 0; font-size: var(--vesta-text-sm); color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-add-panel"]) p { margin: 0; color: var(--vesta-color-text-muted); line-height: 1.5; }
   :where([data-vesta="server-add-panel"]) footer,
@@ -638,13 +649,13 @@
   :where([data-server-header] [data-vesta="server-dot"]) { --dot: var(--vesta-color-media-text); }
 }
 @layer launcher {
-  /* Sleep & status: the live reason sleep hasn't happened yet, under its toggle. */
+  /* Sleep & status: current state sits beside the panel title. */
   :where([data-vesta="server-sleep-now"]) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
-    margin: 0 0 var(--vesta-space-3);
-    padding: var(--vesta-space-2) 0;
+    margin: 0;
+    padding: 0;
     line-height: var(--vesta-leading-normal);
     border-radius: var(--vesta-radius-md);
     background: transparent;

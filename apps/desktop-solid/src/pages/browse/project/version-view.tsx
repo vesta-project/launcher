@@ -450,7 +450,6 @@ export function PackContentsList(props: { entries: { key: string; name: string; 
             {t('browse.pack-contents')}
             <span data-vesta="project-tab-count">{formatNumber(props.entries.length)}</span>
           </h2>
-          <p data-vesta="project-muted">{t('browse.pack-contents-exact')}</p>
         </div>
         <TextField
           size="sm"

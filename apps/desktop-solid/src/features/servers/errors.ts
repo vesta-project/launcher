@@ -38,6 +38,8 @@ export function toServerError(reason: unknown): ServerCommandError {
 }
 
 const packReasons: Record<string, { message: MessageId; action: RecoveryAction }> = {
+  local_intent_not_saved: { message: 'servers.error.local-intent-not-saved', action: 'retry' },
+  local_state_not_saved: { message: 'servers.error.local-intent-not-saved', action: 'retry' },
   pack_invalid_index: { message: 'server-pack.archive-invalid', action: 'none' },
   pack_invalid_source: { message: 'server-pack.archive-invalid', action: 'none' },
   pack_unsafe_archive: { message: 'server-pack.archive-invalid', action: 'none' },

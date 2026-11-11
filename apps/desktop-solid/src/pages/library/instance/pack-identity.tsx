@@ -1,5 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { navigate } from '../../../app/router';
+import { Show } from 'solid-js';
 import { projectPath } from '../../../features/browse/browse-model';
 import { prefetchProject } from '../../../features/browse/browse-projects';
 import type { LinkedPack } from '../../../features/instances/versions';
@@ -55,9 +56,11 @@ export function PackIdentity(props: { pack: LinkedPack; meta: JSX.Element; listi
       <div data-vesta="pack-title">
         <span data-vesta="pack-name">
           <strong>{props.listing?.name ?? props.pack.name}</strong>
-          <span data-vesta="source-tag" data-source={props.listing ? 'server' : props.pack.source.toLowerCase()}>
-            {props.listing ? t('instance-pack.source-server') : packSourceLabel(props.pack)}
-          </span>
+          <Show when={props.listing || packSourceLabel(props.pack).trim().toLowerCase() !== props.pack.name.trim().toLowerCase()}>
+            <span data-vesta="source-tag" data-source={props.listing ? 'server' : props.pack.source.toLowerCase()}>
+              {props.listing ? t('instance-pack.source-server') : packSourceLabel(props.pack)}
+            </span>
+          </Show>
         </span>
         <span data-vesta="pack-meta">{props.meta}</span>
       </div>

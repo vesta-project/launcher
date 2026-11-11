@@ -9,6 +9,7 @@ import { isTerminal, mergeOperations } from './operations-model';
 import { applyResourceChanges, invalidateServerResources, releaseServerResources } from './resources';
 import { serversApi, type ServersApi } from './service';
 import { forgetServerContact, withContact } from './contact';
+import { activeAccount } from '../accounts/accounts';
 import type { ConnectionId, MetricsSample, ServerCommandError, ServerOperation, ServerSnapshot, ServerTopic } from './native';
 
 /** One lazily created signal per connection id. */
@@ -80,7 +81,12 @@ export function refreshServer(id: ConnectionId): Promise<void> {
   if (pending) return pending;
   const request = serverCommand((client) => client.snapshot(id, true))
     .then((snapshot) => { if (untrack(() => snapshots.get(id))) putSnapshot(snapshot); })
-    .finally(() => { refreshes.delete(id); refreshing.update(id, () => false); });
+    .finally(() => {
+      if (refreshes.get(id) === request) {
+        refreshes.delete(id);
+        refreshing.update(id, () => false);
+      }
+    });
   refreshes.set(id, request);
   refreshing.update(id, () => true);
   return request;
@@ -138,6 +144,7 @@ function forget(id: ConnectionId) {
   consoleVersions.delete(id);
   consoles.delete(id);
   players.delete(id);
+  refreshing.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
   forgetServerContact(id);
@@ -164,7 +171,18 @@ const ready = () => (api ? Promise.resolve(api) : serversApi().then((resolved) =
 
 /** Run a command, normalizing rejections into the closed error model. */
 export async function serverCommand<T>(run: (api: ServersApi) => Promise<T>): Promise<T> {
-  try { return await run(await ready()); }
+  const account = untrack(activeAccount)?.uuid;
+  try {
+    const client = await ready();
+    if (untrack(activeAccount)?.uuid !== account) throw { code: 'credentials_rejected' };
+    const result = await run(client);
+    if (untrack(activeAccount)?.uuid !== account) {
+      // A subscription may finish opening after the account was changed.
+      if (typeof result === 'function') (result as () => void)();
+      throw { code: 'credentials_rejected' };
+    }
+    return result;
+  }
   catch (reason) { throw toServerError(reason); }
 }
 
@@ -236,7 +254,17 @@ export function useServerSync() {
   let stop: (() => void) | undefined;
   let closed = false;
   let pending: ReturnType<typeof setTimeout> | undefined;
-  void refreshServers();
+  createEffect(() => activeAccount()?.uuid, () => {
+    // Drop privileged content immediately, before the new account's list arrives.
+    ++listSequence;
+    for (const id of untrack(order)) forget(id);
+    refreshes.clear();
+    consoleLoads.clear();
+    consoleRecoveryAt.clear();
+    setLoaded(false);
+    setListError(null);
+    void refreshServers();
+  }, { name: 'servers:account-access' });
   void ready().then((client) => {
     if (closed) return;
     // Bursts of change notifications collapse into one list read.
@@ -253,13 +281,16 @@ export function useServerSync() {
  * Native code shares the underlying stream across windows and subscribers.
  */
 export function useServerTopic(id: () => ConnectionId | undefined, topic: ServerTopic) {
-  const connection = createMemo(id, { name: `server-topic:${topic}:connection-id` });
-  createEffect(connection, (connectionId) => {
+  const connection = createMemo(() => ({ id: id(), account: activeAccount()?.uuid }), {
+    name: `server-topic:${topic}:connection-id`,
+    equals: (previous, next) => previous.id === next.id && previous.account === next.account,
+  });
+  createEffect(connection, ({ id: connectionId, account }) => {
     if (!connectionId) return;
     let unsubscribe: (() => void) | undefined;
     let closed = false;
     void serverCommand((client) => client.subscribe(connectionId, topic, (event) => {
-      if (closed) return;
+      if (closed || untrack(activeAccount)?.uuid !== account) return;
       switch (event.kind) {
         case 'snapshot': putSnapshot(event.snapshot); break;
         case 'players': putPlayers(connectionId, event.players); break;

@@ -231,7 +231,6 @@ browse-dependency-incompatible = Incompatible
 browse-dependency-pinned = Exact version
 browse-dependency-unknown = Unknown project
 browse-pack-contents = Included in this pack
-browse-pack-contents-exact = Each item is the exact version this release ships.
 browse-pack-contents-search = Search pack contents
 browse-pack-contents-none = Nothing in this pack matches “{ $value }”.
 browse-pack-contents-other = Other

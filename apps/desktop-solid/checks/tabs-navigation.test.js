@@ -71,7 +71,9 @@ async function harness() {
     const built = await Bun.build({
       entrypoints: [entrypoint], target: 'browser', conditions: ['browser', 'development'],
       plugins: [{name: 'state-only-host', setup(build) {
-        build.onResolve({filter: /^\.\.\/features\/settings\/config$/}, () => ({path: 'settings', namespace: 'fixture'}));
+        // Settings config is stubbed however it is reached (directly or through reduced-motion).
+        build.onResolve({filter: /^(?:\.\.\/features\/settings|\.)\/config$/}, ({path, importer}) =>
+          path.startsWith('../') || /[\\/]features[\\/]settings[\\/]/.test(importer) ? {path: 'settings', namespace: 'fixture'} : undefined);
         build.onLoad({filter: /.*/, namespace: 'fixture'}, () => ({loader: 'js', contents: 'export const setting = () => false;'}));
         build.onLoad({filter: /polymorphic[\\/]index\.js$/}, () => ({loader: 'js', contents: `
           import {children} from '${app}node_modules/solid-js/dist/solid.dev.js';

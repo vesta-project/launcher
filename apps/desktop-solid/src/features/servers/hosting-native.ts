@@ -174,6 +174,7 @@ export const serversHostingNative = {
   eula: (connectionId: ConnectionId) => call<EulaState>('server_eula', { connectionId }),
   eulaUpdate: (connectionId: ConnectionId, accepted: boolean, intentId: string) => call<EulaState>('server_eula_update', { connectionId, accepted, intentId }),
   /** GET world. */
+  newWorld: (connectionId: ConnectionId, expectedRevision: string, confirmWorld: string, intentId: string) => call<ServerWorld>('server_world_new', { connectionId, expectedRevision, confirmWorld, intentId }),
   world: (connectionId: ConnectionId) => call<ServerWorld>('server_world', { connectionId }),
   worldDatapackOffline: (connectionId: ConnectionId, packId: string, enabled: boolean, expectedRevision: string, intentId: string) =>
     call<ServerWorld>('server_world_datapack_offline', { connectionId, packId, enabled, expectedRevision, intentId }),

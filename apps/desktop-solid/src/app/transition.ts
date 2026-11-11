@@ -1,11 +1,9 @@
 import { flush } from 'solid-js';
-import { setting } from '../features/settings/config';
+import { reducedMotion } from '../features/settings/reduced-motion';
 import { canGoBack, navigate, parseRoute, previousPath, route } from './router';
 
 let ticket = 0;
 let active: { transition: ViewTransition; cleanup: () => void } | undefined;
-const reducedMotion = () => setting('reduced_motion') ||
-  (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 function stopTransition() {
   active?.transition.skipTransition();

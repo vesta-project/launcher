@@ -1,6 +1,6 @@
 import { Metadata } from '../../../components/metadata';
 import { sameReviewedPlan } from '../../../features/servers/review-plan';
-import { Badge, Button, Checkbox, Dialog, Progress, SegmentedControl, Select, toast } from '@vesta/ui';
+import { Badge, Button, Checkbox, Progress, Select, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
@@ -11,40 +11,23 @@ import { backupJobTerminal } from '../../../features/servers/backup-jobs';
 import { gate } from '../../../features/servers/capabilities';
 import { IntentMemo, lifecycleControls, newIntentId } from '../../../features/servers/model';
 import {
-  defaultInstallChoices, installConflicts, installWarning, installDecision, linkProvider, linkSourceKind, linkSourceLabel, offerToPlayers,
+  defaultInstallChoices, installWarning, installDecision, linkProvider, linkSourceKind, linkSourceLabel, offerToPlayers,
   type ConflictChoice,
 } from '../../../features/servers/modpack-area-model';
 import {
-  backupProfileFor, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewCounts, reviewEmpty, reviewWarnings, reviewNeedsWarningConsent, runtimeLabel, softwareName,
-  type PackRuntime, type ReviewCountKey, type ReviewPlan,
+  backupProfileFor, offerFreshWorld, planSoftwareSwitch, reviewApplyRequest, reviewBlocker, reviewEmpty, reviewWarnings, reviewNeedsWarningConsent, runtimeLabel, softwareName,
+  type PackRuntime, type ReviewPlan,
 } from '../../../features/servers/pack-install-review';
 import type { ServerCommandError } from '../../../features/servers/native';
 import type { PackInstallOutcome, PackInstallProgress, PackInstallSource } from '../../../features/servers/native-pack';
 import { useServerResource, invalidateServerResources } from '../../../features/servers/resources';
-import { backupsResource, softwareResource, CONTENT_RESOURCES } from '../../../features/servers/server-resources';
+import { backupsResource, softwareResource, worldResource, CONTENT_RESOURCES } from '../../../features/servers/server-resources';
 import { serverCommand, useServersClock } from '../../../features/servers/store';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { useLifecycle } from '../lifecycle';
 import { ServerErrorNote } from '../parts';
 import { useModpackArea, type InstallRequestSource } from './area';
-
-const conflictLabel: Record<NonNullable<ReviewPlan['files'][number]['conflict']>, MessageId> = {
-  project_version: 'server-pack.conflict-project-version',
-  same_filename: 'server-pack.conflict-same-filename',
-  unidentified_jar: 'server-pack.conflict-unidentified',
-};
-
-const countLabel: Record<ReviewCountKey, MessageId> = {
-  added: 'server-pack.review-count-added',
-  updated: 'server-pack.review-count-updated',
-  removed: 'server-pack.review-count-removed',
-  overrides: 'server-pack.review-count-overrides',
-  skipped: 'server-pack.review-count-skipped',
-};
-const countIcon: Record<ReviewCountKey, string> = {
-  added: 'icons/actions/add', updated: 'icons/actions/refresh', removed: 'icons/actions/delete', overrides: 'icons/content/file', skipped: 'icons/actions/close',
-};
 
 const stageLabel: Record<PackInstallProgress['stage'], MessageId> = {
   archive: 'server-pack.review-stage-archive',
@@ -62,7 +45,7 @@ const sourceKey = (source: PackInstallSource) => JSON.stringify(source);
 /**
  * Link or update the stopped server inline on its modpack page.
  * A required software switch is part of the install and needs one acknowledgement; changes are
- * counted with expandable lists, conflicts decided inline, and a backup is a small option.
+ * reviewed without downloading payloads; backup and fresh-world selection are optional.
  */
 export function InstallOnServerDialog(props: { request: InstallRequestSource }) {
   const area = useModpackArea();
@@ -79,8 +62,12 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const [backedUp, setBackedUp] = createSignal(false, { name: 'pack-review:backed-up' });
   const [backupFailed, setBackupFailed] = createSignal(false, { name: 'pack-review:backup-failed' });
   const [planning, setPlanning] = createSignal(false, { name: 'pack-review:planning' });
-  const [changesOpen, setChangesOpen] = createSignal(false, { name: 'pack-review:changes-open' });
-  const [stage, setStage] = createSignal<'backup' | 'install' | null>(null, { name: 'pack-review:stage' });
+  const world = useServerResource(() => area.id(), worldResource, { enabled: () => gate(caps(), 'config.view') === 'allowed' });
+  const [resetWorld, setResetWorld] = createSignal<{name: string; revision: string} | null>(null, { name: 'pack-review:reset-world' });
+  const [installedResult, setInstalledResult] = createSignal<ReviewOutcome | null>(null, { name: 'pack-review:installed-result' });
+  const resetIntents = new IntentMemo();
+  const canResetWorld = () => area.snapshot().connection.role === 'owner' && !!plan() && offerFreshWorld(!!world.value()?.exists, area.link().installed?.source ?? null, source(), current()?.minecraftVersion, plan()?.minecraftVersion);
+  const [stage, setStage] = createSignal<'backup' | 'install' | 'world' | null>(null, { name: 'pack-review:stage' });
   const [preparation, setPreparation] = createSignal<PackInstallProgress | null>(null, { name: 'pack-review:preparation' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'pack-review:error' });
   const [outcome, setOutcome] = createSignal<ReviewOutcome | null>(null, { name: 'pack-review:outcome' });
@@ -93,7 +80,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
   const stopped = () => area.snapshot().status?.state === 'stopped' && !['starting', 'waking'].includes(area.snapshot().status?.lifecycle ?? '');
 
   // While the agent downloads and verifies, show its stage and progress.
-  createEffect(() => planning() || stage() === 'install', active => {
+  createEffect(() => planning() || stage() === 'install' && !installedResult(), active => {
     if (!active) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -108,13 +95,13 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     onCleanup(() => { stopped = true; clearTimeout(timer); setPreparation(null); });
   }, { name: 'pack-review:progress' });
 
-  const planNow = async (analyze = false): Promise<void> => {
+  const planNow = async (): Promise<void> => {
     const request = ++sequence;
     const target = untrack(source);
     const startedRevision = untrack(() => software.value()?.revision);
     setPlanning(true); setError(null); setPlan(null); setAcknowledged(false);
     try {
-      const value: ReviewPlan = await serverCommand((api) => api.packInstallPlan(area.id(), { source: target, analyze }));
+      const value: ReviewPlan = await serverCommand((api) => api.packInstallPlan(area.id(), { source: target }));
       if (disposed || request !== sequence) return;
       if (startedRevision !== undefined && startedRevision !== untrack(() => software.value()?.revision)) return planNow();
       setPlan(value); setWarningsAcknowledged(false);
@@ -123,7 +110,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     finally { if (!disposed && request === sequence) setPlanning(false); }
   };
   // Selecting a version reads runtime metadata; archive analysis waits for Install.
-  createEffect(() => sourceKey(source()), () => { setPlan(null); setAcknowledged(false); setChangesOpen(false); void planNow(); }, { name: 'pack-review:plan-source' });
+  createEffect(() => sourceKey(source()), () => { setPlan(null); setAcknowledged(false); setResetWorld(null); void planNow(); }, { name: 'pack-review:plan-source' });
   let softwareRevision: string | undefined;
   createEffect(() => software.value()?.revision, revision => {
     const previous = softwareRevision; softwareRevision = revision;
@@ -156,8 +143,24 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
     return job.state === 'succeeded';
   };
 
+  const finish = async (result: ReviewOutcome) => {
+    const reset = untrack(resetWorld);
+    if (reset) {
+      setStage('world');
+      try {
+        await serverCommand(api => api.newWorld(area.id(), reset.revision, reset.name, resetIntents.idFor(reset)));
+        resetIntents.settle();
+      } catch (reason) { resetIntents.settle(reason as ServerCommandError); invalidateServerResources(area.id(), ['world']); throw reason; }
+    }
+    if (disposed) return;
+    setOutcome(result);
+    invalidateServerResources(area.id(), [...CONTENT_RESOURCES, 'world', 'software', 'software-jobs']);
+    void area.reload();
+  };
   const apply = async () => {
     if (!stopped() || busy()) return;
+    const installed = untrack(installedResult);
+    if (installed) { setStage('install'); setError(null); try { await finish(installed); } catch (reason) { if (!disposed) setError(reason as ServerCommandError); } finally { if (!disposed) setStage(null); } return; }
     if (!plan()) {
       await planNow();
       if (disposed || !plan()) return;
@@ -201,9 +204,9 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
         if (disposed) return;
       }
       const finalWorkspace = result.softwareJobId ? await serverCommand(api => api.packDraft(area.id())) : null;
-      setOutcome({ ...result, softwareJobId: null, decisions: finalWorkspace?.installJob?.decisions ?? result.decisions });
-      invalidateServerResources(area.id(), switchTo() ? [...CONTENT_RESOURCES, 'software', 'software-jobs'] : CONTENT_RESOURCES);
-      void area.reload();
+      const installed = { ...result, softwareJobId: null, decisions: finalWorkspace?.installJob?.decisions ?? result.decisions };
+      setInstalledResult(installed);
+      await finish(installed);
     } catch (reason) {
       intents.settle(reason as ServerCommandError);
       setUncertain(intents.uncertain);
@@ -221,6 +224,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
 
   // The button keeps its label while working; progress shows in the body, not the footer.
   const actionLabel = (): string => {
+    if (installedResult()) return t('server-pack.reset-world-action');
     if (uncertain() && !stage()) return t('server-pack.retry');
     return t(update() ? 'server-pack.review-update' : 'server-pack.review-install');
   };
@@ -251,7 +255,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
       }>
       <Show when={outcome()} fallback={
         <div data-vesta="pack-review">
-          <VersionCard source={source()} onSource={setSource} plan={plan()} disabled={busy() || !stopped()} />
+          <VersionCard source={source()} onSource={setSource} plan={plan()} disabled={busy() || !stopped() || !!installedResult()} />
           <Show when={plan()} fallback={
             <div data-vesta="pack-review-loading">
               <Show when={planning() && !error()}>
@@ -277,9 +281,10 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                   )}
                 </Show>
                 <Show when={!value().valid}><p data-vesta="server-callout" data-tone="danger" role="alert">{t('server-pack.install-invalid')}</p></Show>
-                <Show when={value().deferred}><p data-vesta="server-muted">{t('server-pack.install-deferred')}</p></Show>
-                <details data-vesta="pack-review-notes" open={changesOpen()} onToggle={(event) => { const open = event.currentTarget.open; setChangesOpen(open); if (open && value().deferred && !busy()) void planNow(true); }}><summary>{t('server-pack.show-changes')}</summary><ChangeSummary automatic={source().source === 'provider'} plan={value()} picks={picks()} disabled={busy()}
-                  onPick={(path, choice) => setPicks((currentPicks) => ({ ...currentPicks, [path]: choice }))} /></details>
+                <Show when={canResetWorld() || resetWorld()}>
+                  <Checkbox size="sm" checked={!!resetWorld()} disabled={busy()} onChange={checked => setResetWorld(checked && world.value() ? {name: world.value()!.name, revision: world.value()!.revision} : null)} label={t('server-pack.reset-world')} />
+                  <Show when={resetWorld()}><p data-vesta="server-muted">{t('server-pack.reset-world-description')}</p></Show>
+                </Show>
                 <Show when={reviewWarnings(value()).length}>
                   <details data-vesta="pack-review-notes">
                     <summary>{t('server-pack.install-notes', { count: reviewWarnings(value()).length })}</summary>
@@ -291,7 +296,8 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
                   <Checkbox size="sm" checked={backupFirst()} disabled={busy()} onChange={setBackupFirst} label={t('server-pack.review-backup-first')} />
                 </Show>
                 <Show when={backupFailed()}><p data-vesta="server-callout" data-tone="warning" role="alert">{t('server-pack.review-backup-failed')}</p></Show>
-                <Show when={stage()}>{(current) => <Progress size="sm" value={preparation()?.total ? Math.round(preparation()!.completed / preparation()!.total * 100) : undefined} label={(current() === 'backup' ? t('server-pack.review-backing-up') : t(preparation() ? stageLabel[preparation()!.stage] : 'server-pack.review-installing')) + (preparation()?.total ? ` ${preparation()!.completed}/${preparation()!.total}` : '') + (preparation()?.bytesCompleted ? ` ? ${(preparation()!.bytesCompleted! / 1048576).toFixed(1)} MB` : '')} />}</Show>
+                <Show when={installedResult() && !outcome()}><p data-vesta="server-muted">{t('server-pack.reset-world-pending')}</p></Show>
+                <Show when={stage()}>{(current) => <Progress size="sm" value={preparation()?.total ? Math.round(preparation()!.completed / preparation()!.total * 100) : undefined} label={(current() === 'backup' ? t('server-pack.review-backing-up') : current() === 'world' ? t('server-pack.reset-world-action') : t(preparation() ? stageLabel[preparation()!.stage] : 'server-pack.review-installing')) + (preparation()?.total ? ` ${preparation()!.completed}/${preparation()!.total}` : '') + (preparation()?.bytesCompleted ? ` ? ${(preparation()!.bytesCompleted! / 1048576).toFixed(1)} MB` : '')} />}</Show>
                 <Show when={uncertain()}><p data-vesta="server-callout" data-tone="warning">{t('server-pack.install-uncertain')}</p></Show>
                 <ServerErrorNote error={error()} />
               </>
@@ -402,62 +408,6 @@ function VersionCard(props: { source: PackInstallSource; onSource: (source: Pack
         )}
       </Show>
     </div>
-  );
-}
-
-/** Counts as chips that expand into their lists; conflicts are listed inline with replace / keep. */
-function ChangeSummary(props: { automatic?: boolean; plan: ReviewPlan; picks: Record<string, ConflictChoice>; disabled: boolean; onPick: (path: string, choice: ConflictChoice) => void }) {
-  const [open, setOpen] = createSignal<ReviewCountKey | null>(null, { name: 'pack-review:open-group' });
-  const groups = () => reviewCounts(props.plan);
-  const conflicts = () => installConflicts(props.plan);
-  const opened = () => groups().find((group) => group.key === open());
-  const unchanged = () => props.plan.files.filter((file) => file.operation === 'unchanged').length;
-  return (
-    <section data-vesta="pack-review-changes" aria-label={t('server-pack.review-changes')}>
-      <div data-vesta="pack-review-counts">
-        <Show when={!reviewEmpty(props.plan)} fallback={<span data-vesta="server-muted">{t('server-pack.review-nothing')}</span>}>
-          <For each={groups()}>
-            {(group) => (
-              <button type="button" data-vesta="pack-review-count" data-kind={group.key} aria-expanded={open() === group.key ? 'true' : 'false'}
-                onClick={() => setOpen(open() === group.key ? null : group.key)}>
-                <Icon name={countIcon[group.key]} size={12} />
-                {t(countLabel[group.key], { count: group.paths.length })}
-                <Icon name="icons/controls/chevron-down" size={12} />
-              </button>
-            )}
-          </For>
-          <Show when={unchanged()}>
-            <span data-vesta="pack-review-unchanged">{t('server-pack.review-unchanged', { count: unchanged() })}</span>
-          </Show>
-        </Show>
-      </div>
-      <Show when={opened()}>
-        {(group) => (
-          <ul data-vesta="modpack-install-list" data-kind={group().key}>
-            <For each={group().paths}>{(path) => <li><code>{path}</code></li>}</For>
-          </ul>
-        )}
-      </Show>
-      <Show when={conflicts().length}>
-        <div data-vesta="pack-review-conflicts">
-          <h4><Icon name="icons/controls/warning" size={12} />{t('server-pack.review-conflicts', { count: conflicts().length })}</h4>
-          <ul>
-            <For each={conflicts()}>
-              {(file) => (
-                <li data-vesta="modpack-conflict">
-                  <span><code>{file.path}</code><small>{t(conflictLabel[file.conflict!])}</small></span>
-                  <Show when={!props.automatic} fallback={<span>{t('server-pack.install-keep')}</span>}>
-                  <SegmentedControl size="sm" aria-label={t('server-pack.install-conflict-choice', { path: file.path })} value={props.picks[file.path]} disabled={props.disabled}
-                    onChange={(choice) => props.onPick(file.path, choice as ConflictChoice)}
-                    options={[{ value: 'replace', label: t('server-pack.install-replace') }, { value: 'keep', label: t('server-pack.install-keep') }]} />
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-        </div>
-      </Show>
-    </section>
   );
 }
 

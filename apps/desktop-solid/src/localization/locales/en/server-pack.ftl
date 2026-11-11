@@ -315,7 +315,7 @@ server-pack-client-download-unavailable = A file in this pack couldn't be downlo
 server-pack-client-consent-required = Confirm the executable changes to continue.
 server-pack-client-format-unsupported = This launcher can't read the server's pack format. Update Vesta and try again.
 server-pack-client-incompatible = A file in this pack doesn't support the pack's mod loader.
-server-pack-client-instance-damaged = This instance's server pack records are missing or damaged. Create a new instance from the server instead.
+server-pack-client-instance-damaged = The server pack installation needs repair. Open instance settings and choose Repair.
 server-pack-client-local-files = Files in this instance block the change: a pack file was edited, or a file of yours or a link is in the way. Move them aside and try again.
 server-pack-client-preview-limit = Too many pack reviews are open. Close one, wait a moment, and try again.
 server-pack-client-recovery-required = An earlier update of this instance needs recovery first. Open the instance to recover it.
@@ -572,3 +572,8 @@ server-pack-install-deferred = Install downloads and checks the server pack. You
 
 server-pack-install-kept-file = Kept your file: { $path }
 server-pack-install-skipped-file = Skipped incoming file: { $path }
+
+server-pack-reset-world = Start with a new world
+server-pack-reset-world-description = The existing world is kept on disk. A new world will generate after installation.
+server-pack-reset-world-action = Create new world
+server-pack-reset-world-pending = The pack is installed. Finishing the new world setup.

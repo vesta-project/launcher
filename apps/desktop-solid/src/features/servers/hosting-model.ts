@@ -80,7 +80,7 @@ const reasons: Record<string, MessageId> = {
   software_idempotency_conflict: 'server-hosting.reason-changed',
   software_previous_unavailable: 'server-hosting.reason-no-previous',
   software_recovery_required: 'server-hosting.reason-recovery',
-  software_state_unavailable: 'server-hosting.reason-not-stopped',
+  software_state_unavailable: 'server-hosting.reason-state-unavailable',
   'server_install.unavailable': 'server-hosting.reason-version-unavailable',
   'server_install.invalid_metadata': 'server-hosting.reason-source-failed',
   'server_install.source_refused': 'server-hosting.reason-source-failed',

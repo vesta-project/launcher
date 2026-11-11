@@ -28,7 +28,7 @@ export function LinkedPack(props: { instanceId: string }) {
   const store = untrack(() => versionStore(id));
   const pack = () => store.state().pack;
   const listing = useModrinthServer(id);
-  const sync = useServerStatus(() => (pack()?.source === 'Server' ? id : undefined));
+  const sync = useServerStatus(() => (pack()?.source === 'Server' && findInstance(id)?.state.kind !== 'installing' ? id : undefined));
   const [unlinking, setUnlinking] = createSignal(false, { name: 'instance:server-unlinking' });
   const target = () => {
     const value = pack();
@@ -38,6 +38,9 @@ export function LinkedPack(props: { instanceId: string }) {
   const required = () => sync.status()?.status === 'update_required' || !!listing.status()?.updateRequired;
   const available = () =>
     !!target() || sync.status()?.status === 'update_available' || !!listing.status()?.updateAvailable;
+  const verifiedCurrent = () => !['installing', 'interrupted', 'failed'].includes(findInstance(id)?.state.kind ?? '')
+    && (pack()?.source !== 'Server'
+    || (sync.status()?.availability === 'online' && sync.status()?.status === 'current' && !sync.status()?.error && !sync.error()));
   /** The card's subject: the pack, or for a vanilla listing the link itself. */
   const shown = (): Pack | undefined => {
     const value = pack();
@@ -79,11 +82,11 @@ export function LinkedPack(props: { instanceId: string }) {
             <PackIdentity pack={linked()} listing={listing.identity()} meta={
               <>
                 <span>
-                  {pack()
+                  {pack() && linked().source !== 'Server'
                     ? packVersionLabel(linked())
                     : t('instance-pack.minecraft', { version: findInstance(id)?.instance.minecraftVersion ?? '' })}
                 </span>
-                <span>{t(fromServer() ? 'instance-pack.from-server' : 'instance-pack.from-provider')}</span>
+                <Show when={!fromServer()}><span>{t('instance-pack.from-provider')}</span></Show>
                 <Show when={listing.identity()}>
                   <ServerPlayers ping={listing.ping()} hook="pack-players" />
                 </Show>
@@ -94,7 +97,7 @@ export function LinkedPack(props: { instanceId: string }) {
                 <Badge size="sm" variant="soft" tone="warning">{t('server-pack.unavailable')}</Badge>
               </Show>
               <Show when={available()} fallback={
-                <span data-vesta="pack-current"><Icon name="icons/controls/check" size={12} />{t('versions.up-to-date')}</span>
+                <Show when={verifiedCurrent()}><span data-vesta="pack-current"><Icon name="icons/controls/check" size={12} />{t('versions.up-to-date')}</span></Show>
               }>
                 <Button size="sm" tone={required() ? 'danger' : 'accent'} icon={<Icon name="icons/actions/download" size={14} />}
                   disabled={updating()} onClick={() => void update()}>
@@ -121,7 +124,7 @@ export function LinkedPack(props: { instanceId: string }) {
               </Show>
             </div>
           </header>
-          <Show when={sync.error()}>{(reason) => <div data-vesta="version-warning"><Notice variant="inline" cause={noticeCause(reason())}>{t(errorMessage(reason()))}</Notice></div>}</Show>
+          <Show when={sync.error() ?? sync.status()?.error}>{(reason) => <div data-vesta="version-warning"><Notice variant="inline" cause={noticeCause(reason())}>{t(errorMessage(reason()))}</Notice></div>}</Show>
           <Show when={listing.error()}>
             {(reason) => (
               <div data-vesta="version-warning">
@@ -152,12 +155,12 @@ function useServerStatus(instanceId: () => string | undefined) {
     const load = async () => {
       try {
         const check = await serverCommand((api) => api.packSyncCheck(Number(id)));
-        if (!disposed) setStatus(check ?? undefined);
+        if (!disposed) { setStatus(check ?? undefined); setError(undefined); }
       } catch (reason) { if (!disposed) setError(reason); }
     };
     void load();
     void listen<PackSyncCheck>(PACK_SYNC_STATUS_EVENT, (event) => {
-      if (!disposed && event.payload.instanceId === Number(id)) setStatus(event.payload);
+      if (!disposed && event.payload.instanceId === Number(id)) { setStatus(event.payload); setError(undefined); }
     }).then(keep).catch((reason) => { if (!disposed) setError(reason); });
     void listen<number>(PACK_SYNC_CHANGED_EVENT, (event) => {
       if (!disposed && event.payload === Number(id)) void load();

@@ -279,6 +279,16 @@ describe('[console] bounded history with visible gaps', () => {
 });
 
 describe('[idempotency] retries never create a second intent', () => {
+  test('a local journal failure is not an unknown server outcome', () => {
+    const memo = new IntentMemo(() => 'intent');
+    memo.idFor({ action: 'start' });
+    memo.settle({ code: 'internal', reason: 'local_intent_not_saved' });
+    expect(memo.uncertain).toBe(false);
+    expect(memo.idFor({ action: 'start' })).toBe('intent');
+    memo.settle({ code: 'outcome_unknown' });
+    memo.settle({ code: 'internal', reason: 'local_intent_not_saved' });
+    expect(memo.uncertain).toBe(true);
+  });
   test('an uncertain outcome keeps the intent for an identical retry', () => {
     let next = 0;
     const memo = new IntentMemo(() => `id-${++next}`);

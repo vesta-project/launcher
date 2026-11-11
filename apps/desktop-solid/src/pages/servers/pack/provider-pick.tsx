@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { Metadata } from '../../../components/metadata';
 import { Button, Dialog, Select } from '@vesta/ui';
 import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
@@ -81,7 +82,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
       <ServerErrorNote error={error()} /><div data-vesta="modpack-pick">
         <div data-vesta="modpack-card-head">
           <Show when={props.pick.iconUrl} fallback={<span data-vesta="modpack-choice-icon"><Icon name="icons/content/modpack" size={18} /></span>}>
-            {(src) => <img src={src()} alt="" width={40} height={40} />}
+            {(src) => <ResourceImage src={src()} alt="" width={40} height={40} />}
           </Show>
           <div>
             <p data-vesta="modpack-eyebrow"><Icon name={sourceById(props.pick.provider).icon} size={11} /> {sourceById(props.pick.provider).label}</p>

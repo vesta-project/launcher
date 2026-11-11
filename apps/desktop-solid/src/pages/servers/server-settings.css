@@ -5,6 +5,30 @@
  *        server-settings-search|server-copy-value|server-motd*|server-player*]
  */
 @layer launcher {
+  .server-player-manager > :where([data-vesta="instance-settings-scroll"]) > * {
+    max-inline-size: 1100px;
+  }
+  .server-player-manager :where([data-server-whitelist-status]) {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  .server-player-manager :where([data-vesta="server-settings-bar"]) {
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+  .server-player-manager :where([data-server-player-results]) {
+    min-block-size: 220px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    padding: var(--vesta-space-4);
+  }
   /* ---- Page: fills the pane; room for the save bar is always reserved ---- */
   :where([data-server-settings-page]) { block-size: 100%; }
   :where([data-server-settings-page]) > :where([data-vesta="instance-settings-scroll"]) { padding-block-end: 76px; }

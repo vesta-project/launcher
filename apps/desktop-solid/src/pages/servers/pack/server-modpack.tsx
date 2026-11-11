@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { contentPathKind, isContentEntry } from '../../../features/servers/content-kind';
 import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Progress, toast } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
@@ -33,7 +34,7 @@ import { ModpackLinkCard } from './link-card';
 export function ServerModpack() {
   const area = useModpackArea();
   return (
-    <div data-vesta="modpack-scroll"><Show when={area.snapshot().status?.state !== 'stopped'}><p data-vesta="server-muted">{t('server-pack.stop-to-install')}</p></Show>
+    <div data-vesta="modpack-scroll">
       <Show when={area.link().phase !== 'unlinked'} fallback={<FirstRun section="server" />}>
         <div data-vesta="modpack-server">
           <LinkCard />
@@ -229,7 +230,7 @@ function OwnedPanel() {
                 <Show when={project()?.icon_url} fallback={
                   <span data-vesta="modpack-owned-placeholder" aria-hidden="true"><Icon name={ownedKindIcon[item().kind]} size={14} /></span>
                 }>
-                  {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
+                  {(src) => <ResourceImage src={src()} alt="" loading="lazy" decoding="async" width={24} height={24} draggable="false" />}
                 </Show>
               );
               return (

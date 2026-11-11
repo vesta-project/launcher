@@ -196,3 +196,5 @@ servers-eula-accept-start = Accept and start
 servers-eula-setting-description = Accept the Minecraft End User License Agreement for this server.
 server-pack-create-no-pack = This server has no published client pack. Create an instance using its Minecraft version.
 server-pack-create-failed = Could not prepare an instance from this server. { $message }
+
+server-hosting-reason-state-unavailable = The server?s software state could not be read. Refresh and try again.

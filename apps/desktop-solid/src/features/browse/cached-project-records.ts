@@ -13,6 +13,7 @@ const key = (source: string, id: string) => `${source.toLowerCase()}:${id}`;
 const [records, setRecords] = createSignal<ReadonlyMap<string, CachedProjectRecord>>(new Map(), { name: 'browse:cached-project-records' });
 /** Asked once per session; the host table only grows while the app runs. */
 const asked = new Set<string>();
+const pending = new Map<string, Promise<void>>();
 
 export const peekCachedProject = (source: string, id: string): CachedProjectRecord | undefined => records().get(key(source, id));
 
@@ -29,13 +30,20 @@ export function mergeCachedRecords(current: ReadonlyMap<string, CachedProjectRec
 /** One local query for every id not asked before. Never throws; a miss just waits for the provider. */
 export async function loadCachedProjects(lookups: ReadonlyMap<SourceId, readonly string[]>): Promise<void> {
   if (!nativeInstances) return;
-  const refs = [...lookups].flatMap(([platform, ids]) => ids.filter((id) => !asked.has(key(platform, id))).map((id) => ({ platform, id })));
-  if (!refs.length) return;
-  for (const ref of refs) asked.add(key(ref.platform, ref.id));
-  try {
-    const rows = await invoke<HostRecord[]>('get_cached_resource_projects', { refs });
-    setRecords((current) => mergeCachedRecords(current, rows));
-  } catch {
-    for (const ref of refs) asked.delete(key(ref.platform, ref.id));
+  const all = [...lookups].flatMap(([platform, ids]) => [...new Set(ids)].map(id => ({ platform, id })));
+  const waits = new Set(all.flatMap(ref => { const work = pending.get(key(ref.platform, ref.id)); return work ? [work] : []; }));
+  const refs = all.filter(ref => !asked.has(key(ref.platform, ref.id)) && !pending.has(key(ref.platform, ref.id)));
+  if (refs.length) {
+    const work = Promise.resolve().then(async () => {
+      try {
+        const rows = await invoke<HostRecord[]>('get_cached_resource_projects', { refs });
+        setRecords(current => mergeCachedRecords(current, rows));
+        for (const ref of refs) asked.add(key(ref.platform, ref.id));
+      } catch { /* A failed local query stays retryable. */ }
+      finally { for (const ref of refs) pending.delete(key(ref.platform, ref.id)); }
+    });
+    for (const ref of refs) pending.set(key(ref.platform, ref.id), work);
+    waits.add(work);
   }
+  await Promise.all(waits);
 }

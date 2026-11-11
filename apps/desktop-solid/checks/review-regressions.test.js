@@ -85,7 +85,8 @@ test("skin mutations cannot publish across account changes or after disposal", a
     const mounted = module.mount("A");
     await tick(module);
     expect(mounted.controller.profile().capes[0].url).toBe("https://textures.minecraft.net/texture/example");
-    const mutation = mounted.controller.setVariant("slim");
+    mounted.controller.setVariant("slim");
+    const mutation = mounted.controller.flush();
     await tick(module);
     mounted.setAccount({ uuid: "B", account_type: "Microsoft" });
     await tick(module);
@@ -95,7 +96,8 @@ test("skin mutations cannot publish across account changes or after disposal", a
     await tick(module);
     expect(reads).toEqual(["A", "B"]);
     expect(mounted.controller.profile().skin).toEndWith(",B");
-    const afterDispose = mounted.controller.setVariant("slim");
+    mounted.controller.setVariant("slim");
+    const afterDispose = mounted.controller.flush();
     await tick(module);
     mounted.dispose();
     finishMutation();

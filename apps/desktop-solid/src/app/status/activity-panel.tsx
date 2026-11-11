@@ -1,6 +1,7 @@
 import { Button, IconButton, Progress } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
 import {
+  clearFinishedActivities,
   activities,
   activityError,
   backgroundActivities,
@@ -219,7 +220,7 @@ function FailedRow(props: { activity: Activity; onNavigate: () => void }) {
           size="sm"
           label={t('activity.inbox-dismiss')}
           icon={<Icon name="icons/actions/close" size={12} />}
-          onClick={() => dismissActivity(props.activity.id)}
+          onClick={() => clearFinishedActivities([props.activity.id])}
         />
       </div>
       <div data-vesta="activity-row-status">

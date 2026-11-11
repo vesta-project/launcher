@@ -264,8 +264,9 @@ export class IntentMemo {
   }
 
   /** Record the outcome of the attempt made with `idFor`. */
-  settle(error?: { code: ServerErrorCode } | null) {
+  settle(error?: { code: ServerErrorCode; reason?: string | null } | null) {
     if (!this.last) return;
+    if (error?.reason === 'local_intent_not_saved') return;
     if (error && outcomeUncertain(error.code)) this.last.uncertain = true;
     else this.last = null;
   }

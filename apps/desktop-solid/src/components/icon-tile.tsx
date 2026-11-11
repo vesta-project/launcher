@@ -1,3 +1,4 @@
+import { ResourceImage } from './resource-image';
 import type { JSX } from '@solidjs/web';
 import { Show } from 'solid-js';
 import './icon-tile.css';
@@ -6,6 +7,6 @@ import './icon-tile.css';
 export function IconTile(props: { hook?: string; class?: string; size?: number; tone?: 'neutral' | 'accent'; image?: string; children?: JSX.Element }) {
   return <span data-vesta={props.hook ?? 'icon-tile'} data-vesta-icon-tile="" data-tone={props.tone ?? 'neutral'}
     aria-hidden="true" class={props.class} style={props.size ? { '--icon-tile-size': `${props.size}px` } as JSX.CSSProperties : undefined}>
-    <Show when={props.image} fallback={props.children}>{(src) => <img src={src()} alt="" draggable="false" />}</Show>
+    <Show when={props.image} fallback={props.children}>{(src) => <ResourceImage src={src()} alt="" draggable="false" />}</Show>
   </span>;
 }

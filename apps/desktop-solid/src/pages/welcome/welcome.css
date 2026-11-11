@@ -900,7 +900,7 @@
     position: absolute;
     border-radius: 50%;
     background: color-mix(in oklab, var(--vesta-color-accent-text) 70%, transparent);
-    animation: welcome-speck linear infinite;
+    animation: welcome-speck var(--welcome-speck-duration, 3.5s) linear infinite;
   }
 
   :where([data-vesta='welcome-light']) {

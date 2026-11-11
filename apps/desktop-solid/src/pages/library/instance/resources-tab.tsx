@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { useNativeDropZone } from '../../../features/file-drop/zone';
 import { importNativePaths } from '../../../features/instances/native-import-dialog';
 import { resourceScope } from '../../../features/instances/native-details-model';
@@ -273,7 +274,7 @@ function ResourceList(props: {
             navigate(projectPath(project.source, project.id));
           }}
         >
-          <img
+          <ResourceImage
             src={item().icon}
             alt=""
             loading="lazy"
@@ -652,7 +653,7 @@ function ResourceList(props: {
                                 size={12}
                                 class="resource-group-chevron"
                               />
-                              <img
+                              <ResourceImage
                                 src={props.entry.instance.image}
                                 alt=""
                                 loading="lazy"

@@ -1,3 +1,4 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { Badge } from '@vesta/ui';
 import { For, Show } from 'solid-js';
 import { Icon } from '../../../components/icon';
@@ -56,7 +57,7 @@ export function ProjectIcon(props: { project: Pick<ResourceProject, 'name' | 'ic
     <span data-vesta={props.hook ?? 'project-icon'} aria-hidden="true">
       <span data-vesta="project-icon-initial">{initialOf(props.project.name)}</span>
       <Show when={props.project.icon_url}>
-        {(url) => <img src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
+        {(url) => <ResourceImage src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
       </Show>
     </span>
   );

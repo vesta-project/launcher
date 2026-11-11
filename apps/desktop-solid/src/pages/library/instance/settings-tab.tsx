@@ -1,4 +1,5 @@
 import { GameOptionsDialog } from './game-options-dialog';
+import { reducedMotion } from '../../../features/settings/reduced-motion';
 import { requestNativeExport } from "../../../features/instances/native-export-dialog";
 import { nativeInstances, saveNativeInstance, duplicateNativeInstance, repairNativeInstance, resetNativeInstance, deleteNativeInstance, instancePending, systemMemoryMb as nativeMemory, loadSystemMemory } from "../../../features/instances/native-service";
 import {
@@ -257,7 +258,7 @@ export function InstanceSettingsTab(props: {
     setCurrent(section);
     scroller
       ?.querySelector(`#settings-${section}`)
-      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      ?.scrollIntoView({ block: "start", behavior: reducedMotion() ? "instant" : "smooth" });
   };
 
   /**

@@ -29,6 +29,21 @@
     color: var(--vesta-color-warning-text);
     font-size: var(--vesta-text-sm);
   }
+  :where([data-vesta='pack-view'][data-overview] > [data-vesta='version-warning']) {
+    margin: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta='pack-view'])[data-overview] {
+    gap: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+  :where([data-vesta='pack-view'])[data-overview] > :where([data-vesta='pack-head']) {
+    border: 0;
+    background: transparent;
+  }
 
   :where([data-vesta='version-muted']) {
     margin: 0;

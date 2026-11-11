@@ -2,6 +2,16 @@ import { expect, test } from 'bun:test';
 import { ActivityLedger, backgroundList, readyList, selectPill, visibleTaskList, weightedProgress } from '../src/features/activity/activity-model';
 const task = (id, patch = {}) => ({ id, kind: 'task', title: id, state: 'running', startedAt: 0, cancellable: true, ...patch });
 
+test('dismissing one failed row removes it without clearing active or other failed work', () => {
+  const ledger = new ActivityLedger();
+  ledger.upsert(task('failed', { state: 'failed', error: 'access denied' }), 0);
+  ledger.upsert(task('other', { state: 'failed', error: 'offline' }), 0);
+  ledger.upsert(task('running'), 0);
+  ledger.clearFinished(['failed']);
+  expect(ledger.rows.map((row) => row.id).sort()).toEqual(['other', 'running']);
+  expect(selectPill(ledger.rows, 0).state).toBe('running');
+});
+
 test('aggregate weights progress by remaining work and propagates unknown work', () => {
   const rows = [task('large', { progress: 0.2, weight: 900 }), task('small', { progress: 0.9, weight: 100 })];
   expect(weightedProgress(rows)).toBeCloseTo(0.27);

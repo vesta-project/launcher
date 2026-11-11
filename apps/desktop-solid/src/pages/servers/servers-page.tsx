@@ -26,7 +26,7 @@ export function ServersPage() {
         </Show>
       }
     >
-      <AddServer />
+      <AddServer connectionId={route().detail} />
     </Show>
   );
 }

@@ -286,13 +286,14 @@ export function updateRequest(entry: ServerContentEntry, version: Pick<ResourceV
 export const datapackId = (entry: Pick<ServerContentEntry, 'filename'>) => `file/${entry.filename}`;
 
 /** Providers to look projects up on, with the ids each needs. */
-export function providerLookups(items: readonly Pick<ServerContentEntry, 'provider'>[]): Map<ContentProvider['provider'], string[]> {
+export function providerLookups(items: readonly Pick<ServerContentEntry, 'provider' | 'displayProvider'>[]): Map<ContentProvider['provider'], string[]> {
   const lookups = new Map<ContentProvider['provider'], string[]>();
   for (const item of items) {
-    if (!item.provider) continue;
-    const ids = lookups.get(item.provider.provider) ?? [];
-    if (!ids.includes(item.provider.projectId)) ids.push(item.provider.projectId);
-    lookups.set(item.provider.provider, ids);
+    const provider = item.provider ?? item.displayProvider;
+    if (!provider) continue;
+    const ids = lookups.get(provider.provider) ?? [];
+    if (!ids.includes(provider.projectId)) ids.push(provider.projectId);
+    lookups.set(provider.provider, ids);
   }
   return lookups;
 }

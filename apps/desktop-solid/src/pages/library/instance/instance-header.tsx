@@ -172,12 +172,6 @@ export function InstanceHeader(props: {
         </HeaderIdentity>
 
         <div data-vesta="instance-header-actions">
-          <Show when={props.entry.state.kind === "running"}>
-            <span data-vesta="instance-header-status" data-tone="success" role="status">
-              <span data-vesta="instance-header-dot" />
-              <span>{t("instance.running")}</span>
-            </span>
-          </Show>
           <IconButton
             variant="ghost"
             label={t("instance.settings")}

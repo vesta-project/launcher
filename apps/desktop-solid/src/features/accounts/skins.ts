@@ -1,6 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { Account } from './account-bootstrap';
+import { loadSkinTexture as loadImage } from './skin-textures';
 
 export type SkinVariant = 'classic' | 'slim';
 
@@ -340,6 +341,12 @@ export function createSkinController(account: () => Account | undefined) {
     return chain;
   };
 
+  onCleanup(() => {
+    currentUuid = undefined;
+    if (savedTimer) clearTimeout(savedTimer);
+    void flush();
+  });
+
   const schedule = () => {
     clearTimer();
     timer = setTimeout(() => void flush(), SAVE_IDLE_MS);
@@ -488,15 +495,6 @@ export function createSkinController(account: () => Account | undefined) {
       }
     },
   };
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('image'));
-    image.src = src;
-  });
 }
 
 /** Gap between the two figures, in skin pixels. */

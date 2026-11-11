@@ -3,6 +3,7 @@ import { Show, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
+import { transitionTo } from '../../../app/transition';
 import { connectionFact, roleLabel } from '../../../features/servers/model';
 import { updateServer, useServersClock } from '../../../features/servers/store';
 import type { ServerSnapshot } from '../../../features/servers/native';
@@ -42,6 +43,11 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
           <Panel title={t('servers.connection.identity')}>
             <SettingRow label={t('servers.connection.sign-in')}>
               <span data-vesta="server-setting-value">{signIn()}</span>
+            </SettingRow>
+            <SettingRow label={t('servers.connection.invitation')}>
+              <Button size="sm" variant="outline" onClick={() => transitionTo(`/servers/add/${id()}`)}>
+                {t('servers.connection.redeem')}
+              </Button>
             </SettingRow>
             <SettingRow label={t('servers.connection.storage')}>
               <span data-vesta="server-setting-value">

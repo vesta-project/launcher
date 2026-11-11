@@ -179,6 +179,16 @@ export function createHostingFixtures(host: HostingHost) {
       host.requireCapability(host.server(connectionId), 'config.edit');
       await host.wait(); return once(state(connectionId), intentId, { accepted }, () => { state(connectionId).eula = accepted; return { accepted }; });
     },
+    async newWorld(connectionId: ConnectionId, expectedRevision: string, confirmWorld: string, intentId: string): Promise<ServerWorld> {
+      owner(connectionId); stopped(connectionId, 'runtime_not_stopped');
+      host.requireCapability(host.server(connectionId), 'config.edit');
+      const current = state(connectionId);
+      return once(current, intentId, { expectedRevision, confirmWorld }, () => {
+        if (current.world.revision !== expectedRevision || current.world.name !== confirmWorld) fail('conflict');
+        current.world = {...current.world, name: 'world-' + hex(16), revision: hex(64), exists: false, sizeBytes: '0', seed: null, configuredSeed: '', dimensions: [], datapacks: []};
+        return clone(current.world);
+      });
+    },
     async world(connectionId: ConnectionId): Promise<ServerWorld> {
       await host.wait();
       host.requireCapability(host.server(connectionId), 'config.view');

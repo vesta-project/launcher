@@ -1,14 +1,16 @@
+import { ResourceImage } from '../../../components/resource-image';
 import { Button, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Switch, TextField, toast } from '@vesta/ui';
 import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import { contentProject, warmContentMetadata } from '../../../features/servers/content-metadata';
+import { displayIdentity, recoverBundledIdentities } from '../../../features/servers/content-recovery';
 import { createSearchQuery } from '../../../components/search-query';
 import { VirtualList } from '../../../components/virtual-list';
 import { browseForServer } from '../../../features/browse/browse-store';
 import { projectPath, type ResourceVersion } from '../../../features/browse/browse-model';
-import { loadProject, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
+import { loadProject, loadVersionDetails, loadVersionLists, peekProject, peekVersions, prefetchProject } from '../../../features/browse/browse-projects';
 import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
@@ -43,7 +45,8 @@ const kindIcon: Record<ServerContentEntry['kind'], string> = {
  */
 export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const id = stableConnectionId(() => props.snapshot);
-  const content = useServerResource(id, contentResource);
+  const summaryContent = useServerResource(id, contentResource, { args: () => true });
+  const content = useServerResource(id, contentResource, { enabled: () => !!summaryContent.value() || !!summaryContent.error() });
   // The server modpack link names the files it owns; reading it needs pack.edit.
   const pack = useServerResource(id, packWorkspaceResource, { enabled: () => gate(props.snapshot.capabilities, 'pack.edit') === 'allowed' });
   const owned = createMemo(() => new Set(Object.keys(pack.value()?.serverModpack?.files ?? {})), { name: 'server-content:owned' });
@@ -72,7 +75,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   onCleanup(() => { disposed = true; });
   createEffect(id, () => { checkSequence++; setChecking(false); setCheckFailed(false); }, { name: 'server-content:check-scope' });
 
-  const inventory = () => content.value();
+  const inventory = () => content.value() ?? summaryContent.value();
   const gates = createMemo(() => {
     const value = inventory();
     return value ? contentGates(value, props.snapshot) : undefined;
@@ -82,7 +85,37 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
 
   // Provider names and icons: local records first, then the providers (shared with Browse and the
   // nav hover prefetch). Listing itself does no provider IO.
-  createEffect(inventory, (value) => { if (value) warmContentMetadata(value.items); }, { name: 'server-content:providers' });
+  createEffect(inventory, (value) => {
+    let active = true;
+    if (value) void warmContentMetadata(value.items, () => active);
+    return () => { active = false; };
+  }, { name: 'server-content:providers' });
+  // A version list is loaded only by an explicit update scan. Fetch the installed
+  // version itself for rows whose JAR did not declare one, with bounded concurrency.
+  const [installedVersions, setInstalledVersions] = createSignal<ReadonlyMap<string, ResourceVersion>>(new Map(), { name: 'server-content:installed-versions' });
+  const versionKey = (provider: NonNullable<ServerContentEntry['provider']>) => JSON.stringify([provider.provider, provider.projectId, provider.versionId]);
+  createEffect(id, () => { setInstalledVersions(new Map()); }, { name: 'server-content:version-scope' });
+  createEffect(inventory, (value) => {
+    let active = true;
+    const known = untrack(installedVersions);
+    const pending = [...new Map((value?.items ?? []).flatMap(item => {
+      const provider = displayIdentity(item);
+      return provider && !item.declared?.version && !known.has(versionKey(provider))
+        ? [[versionKey(provider), provider] as const] : [];
+    })).entries()];
+    let cursor = 0;
+    const worker = async () => {
+      while (active && cursor < pending.length) {
+        const [key, provider] = pending[cursor++];
+        try {
+          const details = await loadVersionDetails(provider.provider, provider.projectId, provider.versionId);
+          if (active) setInstalledVersions(current => new Map(current).set(key, details.version));
+        } catch { /* A missing catalogue version does not block the inventory. */ }
+      }
+    };
+    void Promise.all([worker(), worker()]);
+    return () => { active = false; };
+  }, { name: 'server-content:installed-version-metadata' });
   const checkUpdates = async () => {
     if (untrack(checking)) return;
     const serverId = id();
@@ -106,7 +139,11 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const models = createMemo<ContentRowModel[]>((previous) => reuseContentModels(previous, contentModels(inventory()?.items ?? [], {
     filter: activeFilter(),
     project: projectOf,
-    version: (entry) => versionsOf(entry)?.find((version) => version.id === entry.provider?.versionId),
+    version: (entry) => {
+      const provider = displayIdentity(entry);
+      return versionsOf(entry)?.find((version) => version.id === entry.provider?.versionId)
+        ?? (provider ? installedVersions().get(versionKey(provider)) : undefined);
+    },
   })), { name: 'server-content:models' });
   const listed = createMemo<ContentListRow[]>(() => groupContentRows(searchContentRows(models(), query()), activeFilter()), { name: 'server-content:rows' });
   const rows = createMemo<ListRow[]>(() => {
@@ -142,6 +179,20 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     return next;
   });
   const refresh = () => invalidateServerResources(id(), CONTENT_RESOURCES);
+
+  // Recover catalogue identities for bundled JARs that arrived as uploads.
+  // Identification hashes the current bytes on the server; it never trusts a filename.
+  const attemptedIdentification = new Map<string, Set<string>>();
+  createEffect(() => ({ server: id(), value: content.value(), allowed: gates()?.identify }), ({ server, value, allowed }) => {
+    let active = true;
+    if (!value || !allowed) return () => { active = false; };
+    let attempted = attemptedIdentification.get(server);
+    if (!attempted) { attempted = new Set(); attemptedIdentification.set(server, attempted); }
+    void recoverBundledIdentities(value.items, attempted, () => active,
+      item => serverCommand(client => client.contentIdentify(server, item.path, newIntentId())))
+      .then(found => { if (active && found && server === untrack(id)) refresh(); });
+    return () => { active = false; };
+  }, { name: 'server-content:identify-bundled' });
 
   const run = async (row: ContentRowModel, action: string, send: (intentId: string) => Promise<ContentChange | void>, done?: (change: ContentChange | void) => void) => {
     const key = `${action}:${row.key}`;
@@ -244,7 +295,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
     const actions = () => rowActions(entry(), gates()!, !!available(), managed());
     const working = () => busy().has(row().key);
     const link = () => {
-      const provider = entry().provider;
+      const provider = entry().provider ?? entry().displayProvider;
       return provider ? projectPath(provider.provider, provider.projectId) : undefined;
     };
     return (
@@ -256,8 +307,8 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
         }}>
         <div data-vesta="table-cell" role="cell" class="col-name">
           <a data-vesta="resource-identity" href={link() ? `#${link()}` : undefined}
-            onPointerEnter={() => { const provider = entry().provider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
-            onFocusIn={() => { const provider = entry().provider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
+            onPointerEnter={() => { const provider = entry().provider ?? entry().displayProvider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
+            onFocusIn={() => { const provider = entry().provider ?? entry().displayProvider; if (provider) prefetchProject(provider.provider, provider.projectId); }}
             onClick={(event) => {
               const path = link();
               if (!path || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -267,7 +318,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
             <Show when={project()?.icon_url} fallback={
               <span data-vesta="server-content-placeholder" data-kind={entry().kind} aria-hidden="true"><Icon name={kindIcon[entry().kind]} size={14} /></span>
             }>
-              {(src) => <img src={src()} alt="" loading="lazy" decoding="async" width={28} height={28} draggable="false" />}
+              {(src) => <ResourceImage src={src()} alt="" loading="lazy" decoding="async" width={28} height={28} draggable="false" />}
             </Show>
             <span data-vesta="resource-copy">
               <span data-vesta="resource-title">{row().name}</span>
@@ -363,7 +414,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
           <button type="button" data-vesta="resource-group" aria-expanded={expanded() ? 'true' : 'false'} onClick={() => setExpanded(!expanded())}>
             <Icon name="icons/controls/chevron-down" size={12} class="resource-group-chevron" />
             <Show when={(() => { const source = linkProvider(modpackSource()); return source ? peekProject(source.provider, source.projectId)?.icon_url : null; })()}>
-              {(icon) => <img src={icon()} alt="" loading="lazy" decoding="async" width={32} height={32} />}
+              {(icon) => <ResourceImage src={icon()} alt="" loading="lazy" decoding="async" width={32} height={32} />}
             </Show>
             <strong>{modpackName()}</strong>
             <span data-vesta="resource-group-meta">{t('resources.modpack-group', {version:pack.value()?.serverModpack?.displayVersion ?? ''})}</span>

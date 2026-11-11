@@ -351,16 +351,19 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
       await wait(900);
       const discovery = discoveries.get(discoveryId) ?? fail('not_found');
       if (!discovery.secureStorageAvailable && !options.memoryOnly) fail('credentials_unavailable');
+      const invitation = options.invitationCode?.trim();
+      if (invitation && (!isPairingCode(invitation) || invitation.startsWith('bad'))) fail('pair_code_invalid');
+      const role = invitation ? 'owner' : null;
       const existing = discovery.existingConnectionId ? server(discovery.existingConnectionId).snapshot.connection : undefined;
       if (existing && existing.fingerprint !== discovery.fingerprint) fail('fingerprint_mismatch');
       const id = existing?.id ?? `fixture-${hex(6)}`;
       const name = discovery.endpoint.split(':')[0];
       const entry: FixtureServer = {
         snapshot: {
-          connection: { ...connection(id, name, discovery.endpoint, null), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly, authRevision: hex(16), ...(existing ? { name: existing.name, pinned: existing.pinned, addedAtMs: existing.addedAtMs } : {}) },
+          connection: { ...connection(id, name, discovery.endpoint, role), serverId: discovery.serverId, fingerprint: discovery.fingerprint, signInMethod: 'minecraft', memoryOnly: !!options.memoryOnly, authRevision: hex(16), ...(existing ? { name: existing.name, pinned: existing.pinned, addedAtMs: existing.addedAtMs } : {}) },
           state: { phase: 'online', access: 'paired', retryAtMs: null, rateLimitedUntilMs: null, lastError: null },
           info: null, status: null, publicLifecycle: 'offline', statusObservedAtMs: Date.now(), pack: null,
-          capabilities: { source: 'session', granted: ['public.info', 'pack.download', 'pack.realtime'], refused: [] },
+          capabilities: { source: 'session', granted: role ? capabilitiesForRole(role) ?? [] : ['public.info', 'pack.download', 'pack.realtime'], refused: [] },
           restartRequired: false,
         },
         online: [], operations: [], console: [], cursor: 0, whitelist: [], ops: [], bans: [], pending: new Map(), intents: new Map(),

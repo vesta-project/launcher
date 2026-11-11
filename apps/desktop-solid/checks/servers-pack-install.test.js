@@ -33,7 +33,7 @@ test('a software switch is part of the install and needs one acknowledgement', (
  const current={software:'paper',minecraftVersion:'1.21.4',loaderVersion:null};
  expect(planSoftwareSwitch(p,current)).toEqual({from:current,to:{software:'fabric',minecraftVersion:'1.21.5',loaderVersion:'0.16.10'}});
  expect(planSoftwareSwitch({...p,softwareSwitch:{from:current,to:{software:'forge',minecraftVersion:'1.20.1',loaderVersion:'47'}}})?.to.software).toBe('forge');
- expect(runtimeLabel(planSoftwareSwitch(p).to)).toBe('Fabric 1.21.5');
+ expect(runtimeLabel(planSoftwareSwitch(p).to)).toBe('Fabric 1.21.5 (0.16.10)');
  const picks=Object.fromEntries(p.files.filter(f=>f.conflict).map(f=>[f.path,'keep']));
  expect(reviewBlocker(p,false)).toBe('server-pack.review-switch-needs-ack');
  expect(reviewApplyRequest(p,picks,false)).toBeNull();
@@ -111,4 +111,14 @@ test('ordinary sizes and obsolete buffer thresholds do not require an override',
  expect(reviewApplyRequest(risk,{},false,true)?.acknowledgeWarnings).toBe(true);
  const checksum={...plan,warnings:['software_legacy_checksum_review']};
  expect(reviewNeedsWarningConsent(checksum)).toBe(true);
+});
+
+import {offerFreshWorld} from '../src/features/servers/pack-install-review.ts';
+test('fresh worlds are offered only for a nonempty world and a changed pack or game', () => {
+ const pack={source:'provider',provider:'modrinth',projectId:'one',versionId:'v1'};
+ expect(offerFreshWorld(false,pack,{...pack,projectId:'two'},'1.21','1.22')).toBe(false);
+ expect(offerFreshWorld(true,pack,{...pack,versionId:'v2'},'1.21','1.21')).toBe(false);
+ expect(offerFreshWorld(true,pack,{...pack,versionId:'v2'},'1.21','1.22')).toBe(true);
+ expect(offerFreshWorld(true,pack,{...pack,projectId:'two'},'1.21','1.21')).toBe(true);
+ expect(offerFreshWorld(true,null,pack,'1.21','1.21')).toBe(true);
 });
