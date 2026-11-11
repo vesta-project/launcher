@@ -12,6 +12,7 @@ import type { Discovery, ServerCommandError, ServerSnapshot } from '../../featur
 import type { MessageId } from '../../localization/messages';
 import { roleLabel } from '../../features/servers/model';
 import { FingerprintView, ServerErrorNote } from './parts';
+import { initialAddress, type HostMode } from '../../features/servers/onboarding-model';
 
 type Step = 'address' | 'verify' | 'sign-in' | 'done';
 
@@ -25,12 +26,16 @@ const addressProblems: Record<AddressProblem, MessageId> = {
   link: 'servers.address.problem-link',
 };
 
-/** Connect to an existing Vesta server: address → verify identity → sign in. */
-export function AddServer(props: { connectionId?: string } = {}) {
+/**
+ * Connect to an existing Vesta server: address → verify identity → sign in. A host guide embeds
+ * it after the install step, with the address prefilled for this computer.
+ */
+export function AddServer(props: { connectionId?: string; guide?: { mode: HostMode; onBack: () => void } } = {}) {
   const reconnectId = untrack(() => props.connectionId);
+  const guide = untrack(() => props.guide);
   const [saved, setSaved] = createSignal<ServerSnapshot | null>(null);
   const [step, setStep] = createSignal<Step>(reconnectId ? 'sign-in' : 'address');
-  const [address, setAddress] = createSignal('');
+  const [address, setAddress] = createSignal(initialAddress(guide?.mode));
   const [touched, setTouched] = createSignal(false);
   const [discovery, setDiscovery] = createSignal<Discovery | null>(null);
   const [compared, setCompared] = createSignal(false);
@@ -113,14 +118,15 @@ export function AddServer(props: { connectionId?: string } = {}) {
     if (reconnectId) { transitionTo(`/servers/${reconnectId}`); return; }
     if (step() === 'sign-in') setStep('verify');
     else if (step() === 'verify') setStep('address');
-    else transitionTo('/servers');
+    else if (guide) guide.onBack();
+    else transitionTo('/servers/add');
   };
 
   return (
     <Board class="servers-board">
       <div data-vesta="server-add">
         <nav data-vesta="server-add-steps" aria-label={t('servers.add-steps')}>
-          <StepIndicator current={step()} />
+          <StepIndicator current={step()} guided={!!guide} />
         </nav>
         <Switch>
           <Match when={step() === 'address'}>
@@ -193,7 +199,7 @@ export function AddServer(props: { connectionId?: string } = {}) {
               </Show>
               <TextField
                 label={t('servers.sign-in.invitation')}
-                description={t('servers.sign-in.invitation-help')}
+                description={t(guide ? 'servers.host.code-field-help' : 'servers.sign-in.invitation-help')}
                 value={code()}
                 onChange={(value) => { setCode(value); setError(null); }}
                 spellcheck={false}
@@ -248,11 +254,13 @@ const steps: { id: Step; label: MessageId }[] = [
   { id: 'sign-in', label: 'servers.step.sign-in' },
 ];
 
-function StepIndicator(props: { current: Step }) {
-  const index = () => (props.current === 'done' ? steps.length : steps.findIndex((entry) => entry.id === props.current));
+/** A host guide shows its finished Install step first, so the row reads as one journey. */
+function StepIndicator(props: { current: Step; guided?: boolean }) {
+  const all = () => (props.guided ? [{ id: 'install' as const, label: 'servers.step.install' as MessageId }, ...steps] : steps);
+  const index = () => (props.current === 'done' ? all().length : all().findIndex((entry) => entry.id === props.current));
   return (
     <ol>
-      <For each={steps}>
+      <For each={all()}>
         {(entry, at) => (
           <li data-state={at() < index() ? 'done' : at() === index() ? 'current' : 'next'} aria-current={at() === index() ? 'step' : undefined}>
             <span>{at() + 1}</span>{t(entry.label)}

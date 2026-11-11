@@ -1,5 +1,4 @@
-import { Button } from '@vesta/ui';
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import { Board } from '../../components/board';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
@@ -9,6 +8,8 @@ import { t } from '../../localization';
 import { usingFixtures } from '../../features/servers/service';
 import { refreshServers, serverSnapshots, serversListError, serversLoaded, useServersClock } from '../../features/servers/store';
 import { AddServer } from './add-server';
+import { HostGuide, ServerStart, serverStartChoices } from './onboarding';
+import { addRoute } from '../../features/servers/onboarding-model';
 import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
 import { ServerErrorNote } from './parts';
@@ -26,8 +27,25 @@ export function ServersPage() {
         </Show>
       }
     >
-      <AddServer connectionId={route().detail} />
+      <AddPage />
     </Show>
+  );
+}
+
+/** `/servers/add` and its guides; a saved connection id re-pairs that server. */
+function AddPage() {
+  const target = () => addRoute(route().detail);
+  return (
+    <Switch>
+      <Match when={target().kind === 'start'}><ServerStart /></Match>
+      <Match when={target().kind === 'connect'}><AddServer /></Match>
+      <Match when={(() => { const value = target(); return value.kind === 'host' ? value.mode : undefined; })()} keyed>
+        {(mode) => <HostGuide mode={mode} />}
+      </Match>
+      <Match when={(() => { const value = target(); return value.kind === 'reconnect' ? value.connectionId : undefined; })()} keyed>
+        {(id) => <AddServer connectionId={id} />}
+      </Match>
+    </Switch>
   );
 }
 
@@ -44,9 +62,8 @@ function ServerList() {
         when={serverSnapshots().length > 0}
         fallback={
           <Show when={serversLoaded()}>
-            <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('servers.empty-description')}>
-              <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/add')}>{t('servers.add')}</Button>
-            </EmptyState>
+            <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('servers.empty-description')}
+              suggestionsLabel={t('servers.start.label')} suggestions={serverStartChoices()} />
           </Show>
         }
       >

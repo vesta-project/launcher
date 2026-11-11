@@ -61,6 +61,7 @@ const args = {
   list: "the newest 7 and one per day for 14 days",
   server: "Survival",
   time: "1:24",
+  address: "localhost:8443",
 };
 
 describe("localization catalogs", () => {
