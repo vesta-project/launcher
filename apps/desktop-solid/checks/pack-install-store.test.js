@@ -265,7 +265,7 @@ test('the install appears in the activity panel and cancels through it while can
   store.openInstallReview(id, request);
   const prepared = store.preparePlan(id, source).catch(() => {});
   const row = [...activities.values()].find((entry) => entry.id.startsWith(`server-pack:${id}:`));
-  expect(row).toMatchObject({ kind: 'modpack_install', state: 'running', cancellable: true, target: { route: `/servers/${id}/pack` } });
+  expect(row).toMatchObject({ kind: 'modpack_install', state: 'running', cancellable: true, target: { route: `/servers/${id}/settings/software` } });
   expect(row.title).toContain('All the Mods');
   expect(row.title).toContain('Survival');
   // Progress uses the activity panel's 0-1 scale, matching the in-page bar.

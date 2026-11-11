@@ -6,10 +6,9 @@ import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import {
-  clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
+  clientSubTabs, resolveSubTab, type ModpackSubTab,
 } from '../../../features/servers/modpack-area-model';
 import { modpackPick } from '../../../features/servers/modpack-handoff';
-import { packJobPhase } from '../../../features/servers/pack-install-store';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { formatNumber, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
@@ -20,11 +19,9 @@ import { ModpackFiles } from './files';
 import { FirstRun } from './first-run';
 import { PlayOnServerCard, offersClientPack } from './get-modpack';
 import { ModpackDraftStatus } from './header';
-import { InstallOnServerDialog } from './install-on-server';
-import { InstallJobBanner, InstallJobPanel, showsJobPanel } from './install-job';
+import { InstallJobBanner } from './install-job';
 import { ModpackOverview } from './overview';
 import { ProviderPickDialog } from './provider-pick';
-import { ServerModpack } from './server-modpack';
 import { ModpackVersions } from './versions';
 import './modpack.css';
 
@@ -36,27 +33,20 @@ const views: Record<ModpackSubTab, Component> = {
 };
 
 /**
- * Server → Modpack: two independent, optional parts, each its own sidebar entry. **Server
- * modpack** is the server installation's own link (like an instance linked to a modpack).
- * **Client pack** is what players get: nothing, the server's modpack, or a custom pack laid out
- * like an instance (header, then Overview, Content, Files and Versions).
+ * Server → Modpack: what players get. Nothing, the server's own modpack, or a custom pack laid
+ * out like an instance (header, then Overview, Content, Files and Versions). The server's own
+ * modpack link lives in Settings → Software (see SoftwareModpack), like an instance's linked pack
+ * replaces its Versions page.
  */
 export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   const area = createModpackArea(() => props.snapshot);
-  const section = (): ModpackSection => modpackSection(route().detail === 'pack' ? route().item : undefined);
-  // One job per server, read from the store: reopening, switching servers or restarting the
-  // launcher shows the same live install instead of an idle or fresh review screen.
-  const phase = () => packJobPhase(area.id());
   return (
     <ModpackAreaContext value={area}>
       <div data-vesta="modpack">
         <Show when={area.gates().edit} fallback={<PlayerView />}>
-          <Show when={section() === 'client'}><InstallJobBanner /></Show>
-          <Show when={section() === 'server' && showsJobPanel(phase())} fallback={
-            <Show when={section() === 'server' ? area.install() : null} keyed fallback={<EditorView />}>{request => <InstallOnServerDialog request={request} />}</Show>
-          }>
-            <InstallJobPanel />
-          </Show>
+          {/* A server modpack install keeps running elsewhere; say so and link to it. */}
+          <InstallJobBanner />
+          <EditorView />
         </Show>
 
         <Show when={area.gates().edit && area.workspace() ? modpackPick(area.id()) : undefined} keyed>
@@ -81,10 +71,9 @@ function PlayerView() {
   );
 }
 
-/** Server modpack and Client pack are sidebar entries; the URL says which one this pane shows. */
+/** The client pack editor once the workspace is read. */
 function EditorView() {
   const area = useModpackArea();
-  const section = (): ModpackSection => modpackSection(route().detail === 'pack' ? route().item : undefined);
   return (
     <Show when={area.workspace()} fallback={
       <div data-vesta="modpack-scroll">
@@ -92,10 +81,8 @@ function EditorView() {
         <Show when={!area.error()}><EmptyState variant="inline" icon="icons/content/modpack" title={t('server-pack.loading')} /></Show>
       </div>
     }>
-      <div data-vesta="modpack-section" data-section={section()}>
-        <Show when={section() === 'client'} fallback={<ServerModpack />}>
-          <ClientPack />
-        </Show>
+      <div data-vesta="modpack-section" data-section="client">
+        <ClientPack />
       </div>
     </Show>
   );

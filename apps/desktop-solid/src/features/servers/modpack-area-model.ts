@@ -27,18 +27,18 @@ export const SERVER_MODPACK_DELIVERY_LIVE = true;
 
 /* ---- Sections ---- */
 
-/** Server modpack (the installation link) and Client pack (what players get) are separate. */
+/**
+ * Server modpack (the installation link) and Client pack (what players get) are separate. The
+ * Modpack tab (`/pack` and its sections) is the client pack; the server modpack lives in
+ * Settings → Software, in place of the version pickers, like an instance's linked pack.
+ */
 export type ModpackSection = 'server' | 'client';
 
-/**
- * `/servers/:id/pack` is the server modpack; `/pack/client` the client pack, whose custom
- * workspace sections keep their own segments (`/pack/content`, `/pack/files`, `/pack/versions`).
- */
-export function modpackSection(item: string | undefined): ModpackSection {
-  return item === 'client' || item === 'content' || item === 'files' || item === 'versions' ? 'client' : 'server';
+export function modpackSection(_item: string | undefined): ModpackSection {
+  return 'client';
 }
 
-export const serverModpackPath = (id: string) => `/servers/${id}/pack`;
+export const serverModpackPath = (id: string) => `/servers/${id}/settings/software`;
 
 /* ---- Server modpack link ---- */
 

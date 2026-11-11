@@ -7,7 +7,7 @@ import type { ResourceProject } from '../../../features/browse/browse-model';
 import { initials, serverArt } from '../../../features/servers/art';
 import { IntentMemo } from '../../../features/servers/model';
 import {
-  clientModeRequest, clientPackMode, linkProvider, modpackGates, modpackPath, modpackSection, packSourceKind, serverLinkView, serverModpackPath,
+  clientModeRequest, clientPackMode, linkProvider, modpackGates, modpackPath, packSourceKind, serverLinkView, serverModpackPath,
   type ClientPackMode, type ModpackGates, type ModpackSubTab, type PackSourceKind, type ServerLinkView,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
@@ -257,7 +257,8 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
       : !gates().installOnServer ? 'server-pack.link-no-permission' : null,
     startInstall: (request) => {
       openInstallReview(untrack(id), request);
-      if (request && modpackSection(route().detail === 'pack' ? route().item : undefined) !== 'server') transitionTo(serverModpackPath(untrack(id)));
+      // The review and its job live with the server's software settings.
+      if (request && !(route().detail === 'settings' && route().item === 'software')) transitionTo(serverModpackPath(untrack(id)));
     },
   };
 }

@@ -5,7 +5,6 @@ import type { MessageId } from '../../localization/messages';
 import { backupsTabVisible } from './backup-setup-model';
 import { anyVisible, gate, roleKey } from './capabilities';
 import { age, connectionFact, lastSeenAt, lifecycleControls, readinessReasonMessage, supervisorWarnings } from './model';
-import { modpackPath, modpackSection } from './modpack-area-model';
 import type { ServerErrorCode, ServerSnapshot } from './native';
 
 export type MainTabId = 'overview' | 'console' | 'resources' | 'pack' | 'files' | 'automation' | 'backups' | 'activity';
@@ -89,6 +88,9 @@ export function resolveServerLocation(detail: string | undefined, item: string |
     const section = legacyTabs[detail]!;
     return { mode: 'settings', section, redirect: `settings/${section}` };
   }
+  // The server's own modpack lives with its software, like an instance's linked pack replaces
+  // its versions; the old Server modpack location redirects there.
+  if (detail === 'pack' && item === 'server') return { mode: 'settings', section: 'software', redirect: 'settings/software' };
   if (isMainTab(detail)) return { mode: 'main', tab: detail };
   return { mode: 'main', tab: 'overview' };
 }
@@ -120,33 +122,28 @@ export function visibleMainTabs(input: VisibleTabsInput): ShellTab<MainTabId>[] 
 }
 
 /**
- * One sidebar entry. For pack editors the Modpack tab becomes two entries in a "Modpack" group
- * at the end of the list, Server modpack (`/pack`) and Client pack (`/pack/client` and its
- * sections); everyone else keeps the single Modpack entry in place. `value` identifies the entry.
+ * One sidebar entry. The Modpack tab is what players get; pack editors see it named
+ * "Player modpack" (the server's own modpack is under Settings → Software).
+ * `value` identifies the entry.
  */
 export interface ServerNavEntry { value: string; tab: ShellTab<MainTabId>; label: MessageId; icon: string; group?: 'modpack' }
 
-export const CLIENT_PACK_ENTRY = 'pack/client';
 
 export function serverNavEntries(tabs: readonly ShellTab<MainTabId>[], editsPack: boolean): ServerNavEntry[] {
-  const pack = editsPack ? tabs.find((tab) => tab.id === 'pack') : undefined;
-  const flat = tabs.filter((tab) => tab !== pack).map((tab): ServerNavEntry => ({ value: tab.id, tab, label: tab.label, icon: tab.icon }));
-  if (!pack) return flat;
-  return [
-    ...flat,
-    { value: 'pack', tab: pack, label: 'server-pack.section-server', icon: 'icons/content/server', group: 'modpack' },
-    { value: CLIENT_PACK_ENTRY, tab: pack, label: 'server-pack.section-client', icon: 'icons/content/modpack', group: 'modpack' },
-  ];
+  return tabs.map((tab): ServerNavEntry => ({
+    value: tab.id, tab, icon: tab.icon,
+    label: tab.id === 'pack' && editsPack ? 'server-pack.section-client' : tab.label,
+  }));
 }
 
-/** The selected entry for a main tab and the URL's item segment. */
-export function activeNavEntry(tab: MainTabId, item: string | undefined, editsPack: boolean): string {
-  return tab === 'pack' && editsPack && modpackSection(item) === 'client' ? CLIENT_PACK_ENTRY : tab;
+/** The selected entry for a main tab. */
+export function activeNavEntry(tab: MainTabId, _item?: string, _editsPack?: boolean): string {
+  return tab;
 }
 
 /** Where a sidebar entry leads. */
 export function navEntryPath(id: string, value: string): string {
-  return value === CLIENT_PACK_ENTRY ? modpackPath(id, 'overview') : serverPath(id, { mode: 'main', tab: value as MainTabId });
+  return serverPath(id, { mode: 'main', tab: value as MainTabId });
 }
 
 export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'> & { connection?: { role: string | null } }): ShellSection[] {

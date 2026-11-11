@@ -331,7 +331,7 @@ server-pack-provider-unavailable = Couldn't download or verify the pack from its
 
 # Sections: the server's own modpack link and the client pack are independent
 server-pack-section-server = Server modpack
-server-pack-section-client = Client pack
+server-pack-section-client = Player modpack
 server-pack-client-sections = Client pack sections
 server-pack-optional = Optional
 server-pack-coming-soon = Coming soon

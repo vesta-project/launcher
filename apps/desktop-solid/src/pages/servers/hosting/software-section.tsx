@@ -30,6 +30,7 @@ import { JavaPanel, useJavaActions, type JavaActions } from './java-panel';
 import { CustomJarPanel } from './custom-jar';
 import { roleKey } from '../../../features/servers/capabilities';
 import { launchKind } from '../../../features/servers/content-model';
+import { SoftwareModpack } from '../pack/software-modpack';
 import './hosting.css';
 
 /** A custom JAR is shown as itself, never as a managed family. */
@@ -103,6 +104,8 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
             <SettingsColumns aside={<Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
               minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
               onRefresh={() => void java.refresh()} /></Show>}>
+            {/* Linked to a modpack, the pack decides the software: its link replaces the pickers. */}
+            <SoftwareModpack snapshot={props.snapshot}>
             {/* A custom JAR has no managed family to preselect; it shows as itself until restored. */}
             <Show when={stopped() && launchKind(state()).kind !== 'custom'} fallback={
               <SettingsPanel title={t('server-hosting.software-label')} name="software">
@@ -122,6 +125,7 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
               <CustomJarPanel snapshot={props.snapshot} state={state()} java={java.value()} jobRunning={busy()} onAccepted={accepted} />
             </Show>
             <SoftwareOutcome state={state()} job={isJavaJob(outcome()) ? undefined : outcome()} java={java.value()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
+            </SoftwareModpack>
             </SettingsColumns>
           </>
         )}

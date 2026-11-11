@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { capabilitiesForRole } from '../src/features/servers/capabilities';
 import {
-  CLIENT_PACK_ENTRY, activeNavEntry, agentReachable, backupsConfigured, extraWarnings, headerExplains, headerNotice, isQuietError, joinAddress,
+  activeNavEntry, agentReachable, backupsConfigured, extraWarnings, headerExplains, headerNotice, isQuietError, joinAddress,
   knownPlayerCount, legacyTabs, navEntryPath, paneState, resolveServerLocation, restartPending, serverNavEntries, serverPath, visibleMainTabs,
   visibleSections,
 } from '../src/features/servers/shell-model';
@@ -65,26 +65,27 @@ describe('[shell] routing', () => {
     expect(ids).toEqual(['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity']);
   });
 
-  test('pack editors get Server modpack and Client pack as a Modpack group at the end of the sidebar', () => {
+  test('the Modpack entry is what players get; editors see it as Player modpack, in place', () => {
     const tabs = visibleMainTabs({ snapshot: snapshot(), backupsConfigured: true });
+    const order = ['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity'];
     const editor = serverNavEntries(tabs, true);
-    expect(editor.map((entry) => entry.value)).toEqual(['overview', 'console', 'resources', 'files', 'automation', 'backups', 'activity', 'pack', CLIENT_PACK_ENTRY]);
-    expect(editor.filter((entry) => entry.group === 'modpack').map((entry) => entry.label)).toEqual(['server-pack.section-server', 'server-pack.section-client']);
-    expect(editor.filter((entry) => entry.group).every((entry) => entry.tab.id === 'pack')).toBe(true);
-    // Players keep the single Modpack entry in place.
+    expect(editor.map((entry) => entry.value)).toEqual(order);
+    expect(editor.find((entry) => entry.value === 'pack')?.label).toBe('server-pack.section-client');
+    expect(editor.some((entry) => entry.group)).toBe(false);
     const player = serverNavEntries(tabs, false);
-    expect(player.map((entry) => entry.value)).toEqual(['overview', 'console', 'resources', 'pack', 'files', 'automation', 'backups', 'activity']);
-    expect(player.some((entry) => entry.group)).toBe(false);
+    expect(player.map((entry) => entry.value)).toEqual(order);
+    expect(player.find((entry) => entry.value === 'pack')?.label).toBe('server-pack.title');
   });
 
-  test('client pack paths select the Client pack entry; the server modpack is /pack', () => {
-    expect(activeNavEntry('pack', undefined, true)).toBe('pack');
-    for (const item of ['client', 'content', 'files', 'versions']) expect(activeNavEntry('pack', item, true)).toBe(CLIENT_PACK_ENTRY);
-    expect(activeNavEntry('pack', 'client', false)).toBe('pack');
+  test('client pack sections select the Modpack entry; the server modpack lives in Settings → Software', () => {
+    for (const item of [undefined, 'client', 'content', 'files', 'versions']) expect(activeNavEntry('pack', item, true)).toBe('pack');
     expect(activeNavEntry('files', 'world', true)).toBe('files');
-    expect(navEntryPath('c1', CLIENT_PACK_ENTRY)).toBe('/servers/c1/pack/client');
     expect(navEntryPath('c1', 'pack')).toBe('/servers/c1/pack');
     expect(navEntryPath('c1', 'overview')).toBe('/servers/c1');
+    // The old Server modpack location redirects to the software settings.
+    expect(resolveServerLocation('pack', 'server')).toEqual({ mode: 'settings', section: 'software', redirect: 'settings/software' });
+    expect(resolveServerLocation('pack', undefined)).toEqual({ mode: 'main', tab: 'pack' });
+    expect(resolveServerLocation('pack', 'content')).toEqual({ mode: 'main', tab: 'pack' });
   });
 
   test('backups show when set up, or while the user can set them up', () => {

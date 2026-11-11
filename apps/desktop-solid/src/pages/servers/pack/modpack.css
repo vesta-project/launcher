@@ -1677,3 +1677,22 @@
   }
   :where([data-vesta="pack-job-banner-stage"]) { color: var(--vesta-color-text-muted); }
 }
+
+/*
+ * Settings → Software with the server's modpack: the modpack panels sit in the settings column,
+ * which already scrolls and pads, so their own scroll wrapper is flattened here.
+ * Hooks: [data-vesta=software-modpack]; States: data-linked
+ */
+@layer launcher {
+  :where([data-vesta="software-modpack"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    min-inline-size: 0;
+  }
+  :where([data-vesta="software-modpack"] [data-vesta="modpack-scroll"]) {
+    flex: none;
+    overflow: visible;
+    padding: 0;
+  }
+}

@@ -340,11 +340,11 @@ describe('client pack mode (optional, independent of the server link)', () => {
     expect(offerToPlayers(seedServerModpackModel('linked-custom'), { publish: false }, true)).toBeNull();
   });
 
-  test('routes: /pack is the server modpack; client sections live under the client pack', () => {
-    expect(modpackSection(undefined)).toBe('server');
+  test('routes: /pack is the client pack; the server modpack lives in Settings → Software', () => {
+    expect(modpackSection(undefined)).toBe('client');
+    expect(serverModpackPath('c1')).toBe('/servers/c1/settings/software');
     expect(modpackSection('client')).toBe('client');
     expect(modpackSection('files')).toBe('client');
-    expect(serverModpackPath('s')).toBe('/servers/s/pack');
     expect(modpackPath('s', 'overview')).toBe('/servers/s/pack/client');
     expect(modpackPath('s', 'versions')).toBe('/servers/s/pack/versions');
   });
