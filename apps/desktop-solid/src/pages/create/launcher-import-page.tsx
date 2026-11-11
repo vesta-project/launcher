@@ -204,7 +204,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
         value: item.resourcepacksCount,
         icon: "icons/content/resource-pack",
       },
-      { label: t("import.shaders"), value: item.shaderpacksCount, icon: "icons/content/layers" },
+      { label: t("import.shaders"), value: item.shaderpacksCount, icon: "icons/content/shader" },
       { label: t("instance.worlds"), value: item.worldsCount, icon: "icons/content/globe" },
       { label: t("import.screenshots"), value: item.screenshotsCount, icon: "icons/content/file" },
     ].filter(

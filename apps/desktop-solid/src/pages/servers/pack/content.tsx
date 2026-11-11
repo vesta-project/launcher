@@ -25,9 +25,9 @@ import '../../library/instance/resources-tab.css';
 const kindIcon: Record<PackEntry['kind'], string> = {
   mod: 'icons/content/cube',
   resource_pack: 'icons/content/resource-pack',
-  shader: 'icons/content/monitor',
-  datapack: 'icons/content/layers',
-  config_override: 'icons/content/file',
+  shader: 'icons/content/shader',
+  datapack: 'icons/content/datapack',
+  config_override: 'icons/content/config',
 };
 
 const suggestionCopy: Record<PackSuggestion['kind'], { message: MessageId; action: MessageId | null }> = {

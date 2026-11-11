@@ -33,10 +33,10 @@ import './resources-tab.css';
 
 const kindIcon: Record<ServerContentEntry['kind'], string> = {
   mod: 'icons/content/cube',
-  plugin: 'icons/content/dependencies',
-  datapack: 'icons/content/layers',
-  resource_pack: 'icons/content/layers',
-  shader: 'icons/content/layers',
+  plugin: 'icons/content/plugin',
+  datapack: 'icons/content/datapack',
+  resource_pack: 'icons/content/resource-pack',
+  shader: 'icons/content/shader',
 };
 
 /**

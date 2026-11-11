@@ -261,7 +261,7 @@ function Datapacks(props: { snapshot: ServerSnapshot; world: ServerWorld; onChan
       description={!stopped() && props.world.datapackStateSource === 'saved_level_dat' ? t('server-world.datapacks-saved-help') : undefined}
       action={<Button size="sm" variant="ghost" icon={<Icon name="icons/content/folder" />} onClick={openFolder}>{t('server-world.open-datapacks')}</Button>}>
       <Show when={views().length} fallback={
-        <EmptyState variant="inline" icon="icons/content/layers" title={t('server-world.no-datapacks')} description={t('server-world.no-datapacks-help')} />
+        <EmptyState variant="inline" icon="icons/content/datapack" title={t('server-world.no-datapacks')} description={t('server-world.no-datapacks-help')} />
       }>
         <Show when={blocker()}>{(message) => <p data-vesta="server-world-note" data-server-world-blocker><Icon name="icons/status/info" size={13} />{t(message())}</p>}</Show>
         <ul data-vesta="server-world-packs" data-expanded={expanded() ? '' : undefined}>
