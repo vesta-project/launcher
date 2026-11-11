@@ -1,3 +1,4 @@
+import { settleReactive, waitForReactive } from './async-conditions.js';
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -336,7 +337,7 @@ test('read state keeps the latest response and ignores disposed completions', as
         read: (key, signal) => new Promise((resolve, reject) => pending.push({ key, signal, resolve, reject })) });
       return { dispose, setSnapshot, read };
     });
-    const settle = async () => { await Promise.resolve(); check.flush(); };
+    const settle = () => settleReactive(check);
     const state = () => check.untrack(() => ({ value: owner.read.value(), error: owner.read.error() }));
     try {
       check.flush();
@@ -347,7 +348,7 @@ test('read state keeps the latest response and ignores disposed completions', as
       owner.setSnapshot({ id: 'two', observation: 61 }); check.flush();
       expect(pending.map(item => item.key)).toEqual(['one', 'two']);
       expect(pending[0].signal.aborted).toBe(true);
-      pending[1].resolve('new result'); await settle();
+      pending[1].resolve('new result'); await waitForReactive(check, () => state().value === 'new result', 'latest read response');
       pending[0].reject({ code: 'unreachable' }); await settle();
       expect(state()).toEqual({ value: 'new result', error: null });
       const refresh = owner.read.refresh();

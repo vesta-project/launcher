@@ -1,3 +1,4 @@
+import { settleReactive as settle, waitForReactive as waitFor } from './async-conditions.js';
 import { expect, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -45,7 +46,7 @@ async function harness(run) {
     await rm(directory, { recursive: true, force: true });
   }
 }
-const settle = async api => { for (let i = 0; i < 8; i++) await Promise.resolve(); api.flush(); };
+
 const snapshot = (api, id) => ({ connection: { id, role: 'owner' }, capabilities: { granted: api.capabilitiesForRole('owner'), refused: [], hidden: [] } });
 
 test('warm pack navigation is synchronous, confirmed draft edits survive remount, and viewing does no review IO', () => harness(async (api, c) => {
@@ -54,23 +55,23 @@ test('warm pack navigation is synchronous, confirmed draft edits survive remount
   let owner = api.createRoot(dispose => ({ dispose, area: api.createModpackArea(() => snapshot(api, 'warm')) }));
   try {
     expect(api.untrack(owner.area.workspace)).toEqual(initial);
-    await settle(api);
+    await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     expect(c.reads).toHaveLength(0); expect(c.previews).toHaveLength(0);
     const next = { revision: '4', manifest: { ...initial.draft.manifest, name: 'Confirmed' } };
     const write = owner.area.writeManifest(next.manifest);
-    await settle(api);
+    await waitFor(api, () => c.writes.length === 1, 'first draft write');
     expect(api.untrack(owner.area.workspace).draft.revision).toBe('3');
     c.writes[0].resolve(next); await write;
     expect(api.peekServerResource('warm', api.packWorkspaceResource).draft).toEqual(next);
     owner.dispose();
     owner = api.createRoot(dispose => ({ dispose, area: api.createModpackArea(() => snapshot(api, 'warm')) }));
     expect(api.untrack(owner.area.workspace).draft).toEqual(next);
-    await settle(api);
+    await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     expect(c.reads).toHaveLength(0); expect(c.previews).toHaveLength(0);
     const one = owner.area.refreshPreview(), two = owner.area.refreshPreview();
-    expect(one).toBe(two); await settle(api); expect(c.previews).toHaveLength(1);
+    expect(one).toBe(two); await waitFor(api, () => c.previews.length === 1, 'shared preview request'); expect(c.previews).toHaveLength(1);
     c.previews[0].resolve({ draftRevision: '4' }); await one;
-    const retry = owner.area.refreshPreview(); await settle(api);
+    const retry = owner.area.refreshPreview(); await waitFor(api, () => c.previews.length === 2, 'retried preview request');
     expect(c.previews).toHaveLength(2);
     c.previews[1].reject({ code: 'unreachable' }); await expect(retry).rejects.toMatchObject({ code: 'unreachable' });
   } finally { owner.dispose(); api.releaseServerResources('warm'); }
@@ -84,19 +85,19 @@ test('late writes, reads and uploaded icons cannot cross server identity or disp
     return { dispose, setState, area: api.createModpackArea(state) };
   });
   try {
-    await settle(api);
+    await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     const write = owner.area.writeManifest({ ...initial.draft.manifest, name: 'Late old write' });
-    await settle(api);
-    owner.setState(snapshot(api, 'two')); await settle(api);
+    await waitFor(api, () => c.writes.length === 1 && c.icons.length === 1, 'write and icon requests before switching servers');
+    owner.setState(snapshot(api, 'two')); await waitFor(api, () => c.reads.length === 1, 'new server workspace request');
     expect(api.untrack(owner.area.workspace)).toBeUndefined();
     c.writes[0].resolve({ revision: '4', manifest: initial.draft.manifest }); await write;
     expect(api.untrack(owner.area.workspace)).toBeUndefined();
     const second = api.seedPackWorkspace('vanilla');
-    c.reads[0].resolve(second); await settle(api);
+    c.reads[0].resolve(second); await waitFor(api, () => api.untrack(owner.area.workspace)?.draft === second.draft, 'new server workspace');
     c.icons[0].resolve({ mimeType: 'image/png', contentBase64: 'old-image' }); await settle(api);
     expect(api.untrack(owner.area.icon)).not.toContain('old-image');
     expect(api.peekServerResource('two', api.packWorkspaceResource).draft).toEqual(second.draft);
-    const refresh = owner.area.reload(); await settle(api); owner.dispose();
+    const refresh = owner.area.reload(); await waitFor(api, () => c.reads.length === 2, 'refresh before disposal'); owner.dispose();
     c.reads[1].resolve({ ...second, draft: { ...second.draft, revision: '99' } }); await refresh;
     expect(api.peekServerResource('two', api.packWorkspaceResource).draft.revision).toBe('3');
   } finally { owner.dispose(); for (const id of ['one', 'two']) api.releaseServerResources(id); }
@@ -113,7 +114,7 @@ test('live status snapshots do not flash loading or restart workspace reads', ()
     return { dispose, setState, area };
   });
   try {
-    await settle(api);
+    await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     const before = loadingRuns;
     // Status events preserve the capability projection; a full refresh can replace it.
     for (let tick = 0; tick < 60; tick++) { owner.setState({ ...initial, tick }); await settle(api); }
@@ -131,14 +132,14 @@ test('failed draft saves keep confirmed data and reuse the uncertain intent; old
   api.seedServerResource('retry', api.packWorkspaceResource, initial);
   const owner = api.createRoot(dispose => ({ dispose, area: api.createModpackArea(() => snapshot(api, 'retry')) }));
   try {
-    await settle(api);
+    await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     const manifest = { ...initial.draft.manifest, name: 'New name' };
     const first = owner.area.writeManifest(manifest);
-    await settle(api); c.writes[0].reject({ code: 'unreachable' });
+    await waitFor(api, () => c.writes.length === 1, 'failed draft request'); c.writes[0].reject({ code: 'unreachable' });
     await expect(first).rejects.toMatchObject({ code: 'unreachable' });
     expect(api.peekServerResource('retry', api.packWorkspaceResource)).toEqual(initial);
-    const refresh = owner.area.reload(); await settle(api);
-    const retry = owner.area.writeManifest(manifest); await settle(api);
+    const refresh = owner.area.reload(); await waitFor(api, () => c.reads.length === 1, 'stale workspace refresh');
+    const retry = owner.area.writeManifest(manifest); await waitFor(api, () => c.writes.length === 2, 'retried draft request');
     expect(c.writes[1].args[2]).toBe(c.writes[0].args[2]);
     c.writes[1].resolve({ revision: '4', manifest }); await retry;
     c.reads[0].resolve(initial); await refresh; await settle(api);
