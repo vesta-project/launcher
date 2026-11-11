@@ -42,7 +42,7 @@ export function ProviderPickDialog(props: { pick: ModpackPick }) {
   const current = () => client() ? area.workspace()?.draft.manifest.modpackLink : linkProvider(area.link().source);
   const sameProject = () => current()?.provider === props.pick.provider && current()?.projectId === props.pick.projectId;
   const replacing = () => (client() ? !!current() : area.link().phase !== 'unlinked') && !sameProject();
-  const blocked = () => client() ? (!area.gates().edit ? 'server-pack.link-no-permission' as const : null) : !area.gates().installOnServer ? 'server-pack.stop-to-install' as const : !area.link().canChange ? 'server-pack.link-wait-restart' as const : null;
+  const blocked = () => client() ? (!area.gates().edit ? 'server-pack.link-no-permission' as const : null) : !area.gates().installOnServer ? area.installBlocker() ?? 'server-pack.stop-to-install' : !area.link().canChange ? 'server-pack.link-wait-restart' as const : null;
   const close = () => clearModpackPick(props.pick.serverId);
 
   const go = async () => {

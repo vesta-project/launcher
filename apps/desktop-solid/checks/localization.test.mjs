@@ -59,6 +59,8 @@ const args = {
   revision: "15",
   version: "1.2.3",
   list: "the newest 7 and one per day for 14 days",
+  server: "Survival",
+  time: "1:24",
 };
 
 describe("localization catalogs", () => {

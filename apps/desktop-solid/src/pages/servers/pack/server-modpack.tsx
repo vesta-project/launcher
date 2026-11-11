@@ -133,7 +133,7 @@ function LinkCard() {
             </Show>
           }>
             {(next) => (
-              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" size={14} />} disabled={!canManage()} title={!canManage() ? t('server-pack.stop-to-install') : undefined} onClick={() => reviewUpdate(next)}>
+              <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" size={14} />} disabled={!canManage()} title={!canManage() ? t(area.installBlocker() ?? 'server-pack.stop-to-install') : undefined} onClick={() => reviewUpdate(next)}>
                 {t('server-pack.link-update-to', { version: label(next) })}
               </Button>
             )}
@@ -344,7 +344,7 @@ function UnlinkDialog(props: { name: string; onClose: () => void }) {
       title={t('server-pack.unlink-title', { name: props.name })} description={t('server-pack.unlink-description')}
       footer={<>
         <Button variant="ghost" disabled={busy()} onClick={props.onClose}>{t('common.cancel')}</Button>
-        <Button tone="danger" disabled={busy() || !area.gates().installOnServer} title={!area.gates().installOnServer ? t('server-pack.stop-to-install') : undefined} onClick={() => void unlink()}>{t('server-pack.unlink')}</Button>
+        <Button tone="danger" disabled={busy() || !area.gates().installOnServer} title={!area.gates().installOnServer ? t(area.installBlocker() ?? 'server-pack.stop-to-install') : undefined} onClick={() => void unlink()}>{t('server-pack.unlink')}</Button>
       </>}>
       <div data-vesta="modpack-modes" role="radiogroup" aria-label={t('server-pack.unlink-title', { name: props.name })}>
         <For each={options}>

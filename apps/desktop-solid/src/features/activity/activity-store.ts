@@ -61,6 +61,9 @@ export function receiveActivity(patch: ActivityPatch, coalesce = false) {
   publish();
 }
 export function configureActivityCancellation(handler: typeof cancel) { cancel = handler; }
+/** Frontend-owned activities (e.g. server modpack installs) cancel themselves, not through the host. */
+const localCancels = new Map<string, (id: string) => void>();
+export function registerActivityCancel(prefix: string, handler: (id: string) => void) { localCancels.set(prefix, handler); }
 export async function cancelActivity(id: string) {
   const activity = ledger.rows.find((a) => a.id === id);
   if (!activity?.cancellable || !active(activity)) return;
@@ -68,6 +71,7 @@ export async function cancelActivity(id: string) {
     receiveActivity({ id, state: 'cancelled' });
     return;
   }
+  for (const [prefix, handler] of localCancels) if (id.startsWith(prefix)) { handler(id); return; }
   try { await cancel(id); }
   catch (error) { setActivityError(String(error)); throw error; }
   // Host acknowledges cancellation through lifecycle events, not the command return.

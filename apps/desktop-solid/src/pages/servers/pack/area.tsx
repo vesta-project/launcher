@@ -1,28 +1,23 @@
 import { createContext, createEffect, createMemo, createSignal, onCleanup, untrack, useContext, type Accessor } from 'solid-js';
+import { route } from '../../../app/router';
+import type { MessageId } from '../../../localization/messages';
 import { transitionTo } from '../../../app/transition';
 import { loadProject, peekProject } from '../../../features/browse/browse-projects';
 import type { ResourceProject } from '../../../features/browse/browse-model';
 import { initials, serverArt } from '../../../features/servers/art';
 import { IntentMemo } from '../../../features/servers/model';
 import {
-  clientModeRequest, clientPackMode, linkProvider, modpackGates, modpackPath, packSourceKind, serverLinkView, serverModpackPath,
-  type ClientPackMode, type LinkReviewMode, type ModpackGates, type ModpackSubTab, type PackSourceKind, type ServerLinkView,
+  clientModeRequest, clientPackMode, linkProvider, modpackGates, modpackPath, modpackSection, packSourceKind, serverLinkView, serverModpackPath,
+  type ClientPackMode, type ModpackGates, type ModpackSubTab, type PackSourceKind, type ServerLinkView,
 } from '../../../features/servers/modpack-area-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
-import type { PackDraft, PackInstallSource, PackManifest, PackPreview, PackPublishOutcome, PackWorkspace } from '../../../features/servers/native-pack';
+import type { PackDraft, PackManifest, PackPreview, PackPublishOutcome, PackWorkspace } from '../../../features/servers/native-pack';
 import { peekServerResource, readServerResource, seedServerResource } from '../../../features/servers/resources';
 import { packWorkspaceResource } from '../../../features/servers/server-resources';
 import { serverCommand } from '../../../features/servers/store';
+import { observeWorkspace, openInstallReview, packInstallBusy, packInstallJob, type InstallRequestSource } from '../../../features/servers/pack-install-store';
 
-/** A link or update review of the server's own modpack. */
-export interface InstallRequestSource {
-  source: PackInstallSource;
-  /** What the review calls the pack. */
-  name: string;
-  mode: LinkReviewMode;
-  /** An archive upload to cancel if the review is abandoned. */
-  uploadId?: string;
-}
+export type { InstallRequestSource };
 
 export interface ModpackAreaValue {
   snapshot: Accessor<ServerSnapshot>;
@@ -58,6 +53,8 @@ export interface ModpackAreaValue {
   open: (tab: ModpackSubTab) => void;
   openServer: () => void;
   install: Accessor<InstallRequestSource | null>;
+  /** Why installing on the server is unavailable right now, or null. */
+  installBlocker: Accessor<MessageId | null>;
   startInstall: (request: InstallRequestSource | null) => void;
 }
 
@@ -78,7 +75,7 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     name: 'modpack:access', equals: (a, b) => a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
   });
   const minecraftStopped = createMemo(() => snapshot().status?.state === 'stopped' && !['starting', 'waking'].includes(snapshot().status?.lifecycle ?? ''), { name: 'modpack:minecraft-stopped' });
-  const gates = createMemo(() => ({ ...modpackGates(access().capabilities, access().role), installOnServer: modpackGates(access().capabilities, access().role).installOnServer && minecraftStopped() }), {
+  const gates = createMemo(() => ({ ...modpackGates(access().capabilities, access().role), installOnServer: modpackGates(access().capabilities, access().role).installOnServer && minecraftStopped() && !packInstallBusy(id()) }), {
     name: 'modpack:gates', equals: (a, b) => (Object.keys(a) as (keyof ModpackGates)[]).every(key => a[key] === b[key]),
   });
   const [workspaceData, setWorkspaceData] = createSignal(untrack(() => ({ serverId: id(), value: peekServerResource(id(), packWorkspaceResource) })), { name: 'modpack:workspace-data' });
@@ -94,7 +91,8 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
   const [started, setStarted] = createSignal(false, { name: 'modpack:started' });
   const [iconData, setIconData] = createSignal<string | undefined>(undefined, { name: 'modpack:icon' });
   const [preview, setPreview] = createSignal<PackPreview | undefined>(undefined, { name: 'modpack:preview' });
-  const [install, setInstall] = createSignal<InstallRequestSource | null>(null, { name: 'modpack:install' });
+  // The open review is per server and outlives this view, like the install it starts.
+  const install = () => packInstallJob(id()).request;
   const kind = createMemo(() => packSourceKind(workspace(), started()), { name: 'modpack:kind' });
   const link = createMemo(() => serverLinkView(workspace()), { name: 'modpack:link' });
   const clientMode = createMemo(() => clientPackMode(workspace()), { name: 'modpack:client-mode' });
@@ -133,11 +131,20 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     if (serverId !== loadedId || !edit) {
       loadedId = serverId;
       sequence++;
-      setPreview(undefined); setInstall(null); setStarted(false); setIconData(undefined);
+      setPreview(undefined); setStarted(false); setIconData(undefined);
       setLoading(false); setError(null);
     }
     if (edit) void reload(true);
   }, { name: 'modpack:load' });
+
+  // Any workspace read can reveal an install running on the agent (started elsewhere or before
+  // a restart) or one that was interrupted; the job store takes it from there.
+  createEffect(() => [id(), workspace()] as const, ([serverId, value]) => { observeWorkspace(serverId, value); }, { name: 'modpack:observe-install' });
+  // A finished install changed the server: show what it is now.
+  let installRevision = untrack(() => packInstallJob(id()).revision);
+  createEffect(() => packInstallJob(id()).revision, (revision) => {
+    if (revision !== installRevision) { installRevision = revision; void reload(); }
+  }, { name: 'modpack:install-finished' });
 
   const applyDraft = (draft: PackDraft) => {
     // A read begun before this acknowledged edit must not replace it on landing.
@@ -244,6 +251,13 @@ export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAr
     markStarted: () => setStarted(true),
     open: (tab) => transitionTo(modpackPath(untrack(id), tab)),
     openServer: () => transitionTo(serverModpackPath(untrack(id))),
-    install, startInstall: setInstall,
+    install,
+    installBlocker: () => packInstallBusy(id()) ? 'server-pack.job-busy'
+      : !minecraftStopped() ? 'server-pack.stop-to-install'
+      : !gates().installOnServer ? 'server-pack.link-no-permission' : null,
+    startInstall: (request) => {
+      openInstallReview(untrack(id), request);
+      if (request && modpackSection(route().detail === 'pack' ? route().item : undefined) !== 'server') transitionTo(serverModpackPath(untrack(id)));
+    },
   };
 }

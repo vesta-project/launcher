@@ -1522,3 +1522,158 @@
     margin-inline-start: auto;
   }
 }
+
+/*
+ * Install job: one panel for a modpack install wherever it is opened from, plus the shared live
+ * progress line (also used by the review while preparing) and a one-line banner elsewhere.
+ * Hooks: [data-vesta=pack-job] -head -heading -sub -mark -steps -step-mark -progress(-line)
+ *        -stage -counter -elapsed -hint -help -actions -spacer -inline-actions -banner(-stage)
+ * States: pack-job: data-phase; steps li: data-state (done current upcoming failed);
+ *         pack-job-mark: data-tone
+ */
+@layer launcher {
+  :where([data-vesta="pack-job"]) {
+    display: grid;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--modpack-panel-bg);
+  }
+
+  :where([data-vesta="pack-job-head"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta="pack-job-head"] img) {
+    flex: none;
+    border-radius: var(--vesta-radius-control);
+    object-fit: cover;
+  }
+
+  :where([data-vesta="pack-job-heading"]) {
+    display: grid;
+    flex: 1;
+    min-inline-size: 0;
+    gap: 2px;
+  }
+
+  :where([data-vesta="pack-job-heading"] h3) {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta="pack-job-sub"]) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="pack-job-mark"]) {
+    --tone: var(--vesta-color-danger);
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--tone) 18%, transparent);
+    color: var(--tone);
+  }
+  :where([data-vesta="pack-job-mark"][data-tone="success"]) { --tone: var(--vesta-color-success); }
+  :where([data-vesta="pack-job-mark"][data-tone="warning"]) { --tone: var(--vesta-color-warning); }
+
+  /* Steps read left to right like a short journey, wrapping on narrow panes. */
+  :where([data-vesta="pack-job-steps"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2) var(--vesta-space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta="pack-job-steps"] li) {
+    --step: var(--vesta-color-border-strong);
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="pack-job-steps"] li[data-state="done"]) { --step: var(--vesta-color-success); color: var(--vesta-color-text-muted); }
+  :where([data-vesta="pack-job-steps"] li[data-state="current"]) { --step: var(--vesta-color-accent); color: var(--vesta-color-text); font-weight: var(--vesta-weight-medium); }
+  :where([data-vesta="pack-job-steps"] li[data-state="failed"]) { --step: var(--vesta-color-danger); color: var(--vesta-color-danger-text); }
+
+  :where([data-vesta="pack-job-step-mark"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 18px;
+    block-size: 18px;
+    border: 2px solid var(--step);
+    border-radius: 50%;
+    color: var(--vesta-color-surface);
+  }
+  :where([data-vesta="pack-job-steps"] li:is([data-state="done"], [data-state="failed"]) [data-vesta="pack-job-step-mark"]) { background: var(--step); }
+  :where([data-vesta="pack-job-steps"] li[data-state="current"] [data-vesta="pack-job-step-mark"]) {
+    background: color-mix(in oklab, var(--step) 25%, transparent);
+    animation: pack-job-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes pack-job-pulse {
+    50% { box-shadow: 0 0 0 4px color-mix(in oklab, var(--vesta-color-accent) 20%, transparent); }
+  }
+
+  :where([data-vesta="pack-job-progress"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="pack-job-progress-line"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta="pack-job-stage"]) { color: var(--vesta-color-text); }
+  :where([data-vesta="pack-job-counter"], [data-vesta="pack-job-elapsed"]) {
+    color: var(--vesta-color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="pack-job-spacer"]) { flex: 1; }
+
+  :where([data-vesta="pack-job-hint"], [data-vesta="pack-job-help"]) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="pack-job-help"]) { color: var(--vesta-color-text); }
+
+  :where([data-vesta="pack-job-actions"], [data-vesta="pack-job-inline-actions"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="pack-job-inline-actions"]) { justify-content: flex-end; }
+
+  :where([data-vesta="pack-job-banner"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin-block-end: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-accent-border);
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-accent) 8%, var(--modpack-panel-bg));
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="pack-job-banner-stage"]) { color: var(--vesta-color-text-muted); }
+}

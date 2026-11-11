@@ -26,7 +26,7 @@ async function harness(run) {
         ` }));
         build.onLoad({ filter: /app[\\/]transition\.ts$/ }, () => ({ loader: 'js', contents: 'export const transitionTo = () => {};' }));
         build.onLoad({ filter: /browse[\\/]browse-projects\.ts$/ }, () => ({ loader: 'js', contents: 'export const loadProject = async () => {}; export const peekProject = () => undefined;' }));
-        build.onLoad({ filter: /servers[\\/]server-resources\.ts$/ }, args => ({ loader: 'js', resolveDir: dirname(args.path), contents: `import { serverResource } from './resources'; import { serverCommand } from './store'; export const packWorkspaceResource = serverResource('pack-workspace', id => serverCommand(api => api.packDraft(id)));` }));
+        build.onLoad({ filter: /servers[\\/]server-resources\.ts$/ }, args => ({ loader: 'js', resolveDir: dirname(args.path), contents: `import { serverResource } from './resources'; import { serverCommand } from './store'; export const CONTENT_RESOURCES = []; export const packWorkspaceResource = serverResource('pack-workspace', id => serverCommand(api => api.packDraft(id)));` }));
         build.onLoad({ filter: /servers[\\/]store\.ts$/ }, () => ({ loader: 'js', contents: `
           const c = globalThis[${JSON.stringify(key)}];
           const defer = (list, args) => new Promise((resolve, reject) => list.push({args, resolve, reject}));

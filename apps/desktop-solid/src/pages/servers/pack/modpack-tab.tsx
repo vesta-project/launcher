@@ -1,16 +1,15 @@
-import { serverCommand } from '../../../features/servers/store';
-import type { PackWorkspace } from '../../../features/servers/native-pack';
 import { isContentEntry } from '../../../features/servers/content-kind';
-import { Badge, Button, Progress, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, createEffect, onCleanup, type Component } from 'solid-js';
+import { Badge, Button, Tab, TabList, TabPanel, Tabs } from '@vesta/ui';
+import { For, Show, createMemo, type Component } from 'solid-js';
 import { Dynamic } from '@solidjs/web';
 import { route } from '../../../app/router';
 import { EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
 import {
-  installDecision, clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
+  clientSubTabs, modpackSection, resolveSubTab, type ModpackSection, type ModpackSubTab,
 } from '../../../features/servers/modpack-area-model';
 import { modpackPick } from '../../../features/servers/modpack-handoff';
+import { packJobPhase } from '../../../features/servers/pack-install-store';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { formatNumber, t } from '../../../localization';
 import { ServerErrorNote } from '../parts';
@@ -22,6 +21,7 @@ import { FirstRun } from './first-run';
 import { PlayOnServerCard, offersClientPack } from './get-modpack';
 import { ModpackDraftStatus } from './header';
 import { InstallOnServerDialog } from './install-on-server';
+import { InstallJobBanner, InstallJobPanel, showsJobPanel } from './install-job';
 import { ModpackOverview } from './overview';
 import { ProviderPickDialog } from './provider-pick';
 import { ServerModpack } from './server-modpack';
@@ -43,12 +43,20 @@ const views: Record<ModpackSubTab, Component> = {
  */
 export function ModpackTab(props: { snapshot: ServerSnapshot }) {
   const area = createModpackArea(() => props.snapshot);
+  const section = (): ModpackSection => modpackSection(route().detail === 'pack' ? route().item : undefined);
+  // One job per server, read from the store: reopening, switching servers or restarting the
+  // launcher shows the same live install instead of an idle or fresh review screen.
+  const phase = () => packJobPhase(area.id());
   return (
     <ModpackAreaContext value={area}>
       <div data-vesta="modpack">
-        <Show when={area.gates().edit}><InstallJobStatus /></Show>
         <Show when={area.gates().edit} fallback={<PlayerView />}>
-          <Show when={area.install()} keyed fallback={<EditorView />}>{request => <InstallOnServerDialog request={request} />}</Show>
+          <Show when={section() === 'client'}><InstallJobBanner /></Show>
+          <Show when={section() === 'server' && showsJobPanel(phase())} fallback={
+            <Show when={section() === 'server' ? area.install() : null} keyed fallback={<EditorView />}>{request => <InstallOnServerDialog request={request} />}</Show>
+          }>
+            <InstallJobPanel />
+          </Show>
         </Show>
 
         <Show when={area.gates().edit && area.workspace() ? modpackPick(area.id()) : undefined} keyed>
@@ -160,40 +168,4 @@ function CustomizeFirst() {
       </EmptyState>
     </div>
   );
-}
-
-/** Agent-owned job status is read afresh when the launcher reconnects. */
-function InstallJobStatus() {
-  const area = useModpackArea();
-  const [value, setValue] = createSignal<PackWorkspace | null>(null);
-  createEffect(() => area.id(), id => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try { const next = await serverCommand(api => api.packDraft(id)); if (!disposed) setValue(next); } catch { /* Reconnect polling retries without changing the job. */ }
-      if (!disposed) timer = setTimeout(() => void poll(), 2000);
-    };
-    void poll();
-    onCleanup(() => { disposed = true; clearTimeout(timer); });
-  });
-  const job = () => value()?.installJob;
-  const progress = () => value()?.installProgress;
-  const stage = () => {
-    switch (progress()?.stage) {
-      case 'writing': return t('server-pack.install-writing');
-      case 'metadata': return t('server-pack.install-metadata');
-      case 'review': return t('server-pack.review-stage-review');
-      case 'extract_hash': return t('server-pack.install-extracting');
-      case 'archive': return t('server-pack.install-archive');
-      default: return t('server-pack.install-planning');
-    }
-  };
-  const active = () => ['queued','staging','activating'].includes(job()?.state ?? '');
-  return <Show when={job()}><div data-vesta="pack-install-job" role="status">
-    <Show when={active()} fallback={<span>{job()?.state === 'succeeded' ? t('server-pack.done') : t('server-pack.download-failed')}</span>}>
-      <Progress value={progress()?.total ? progress()!.completed / progress()!.total * 100 : undefined}
-        label={`${stage()}${progress()?.total ? ` ${progress()!.completed}/${progress()!.total}` : ''}${progress()?.bytesCompleted ? ` · ${(progress()!.bytesCompleted! / 1048576).toFixed(1)} MB` : ''}`} />
-    </Show>
-    <Show when={!active() && job()?.decisions?.length}><details><summary>{t('server-pack.show-changes')}</summary><ul><For each={job()?.decisions}>{decision => <li>{installDecision(decision, t)}</li>}</For></ul></details></Show>
-  </div></Show>;
 }
