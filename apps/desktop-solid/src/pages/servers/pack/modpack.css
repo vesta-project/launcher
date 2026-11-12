@@ -1610,18 +1610,6 @@
   }
   :where([data-vesta="pack-job-inline-actions"]) { justify-content: flex-end; }
 
-  :where([data-vesta="pack-job-banner"]) {
-    display: flex;
-    align-items: center;
-    gap: var(--vesta-space-2);
-    margin-block-end: var(--vesta-space-3);
-    padding: var(--vesta-space-2) var(--vesta-space-3);
-    border: var(--vesta-border-width) solid var(--vesta-color-accent-border);
-    border-radius: var(--vesta-radius-container);
-    background: color-mix(in oklab, var(--vesta-color-accent) 8%, var(--modpack-panel-bg));
-    font-size: var(--vesta-text-sm);
-  }
-  :where([data-vesta="pack-job-banner-stage"]) { color: var(--vesta-color-text-muted); }
 }
 
 /*
@@ -1831,5 +1819,21 @@
     color: var(--vesta-color-warning-text, var(--vesta-color-text-muted));
     font-size: var(--vesta-text-sm);
     white-space: nowrap;
+  }
+}
+
+@layer launcher {
+  /* A server modpack install running elsewhere: the header's notice strip, in the accent, at the
+     top of the pane. Edge to edge like the strips above it, so no corners of its own. */
+  :where([data-vesta="instance-notice"][data-notice="pack-job"]) {
+    flex: none;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: color-mix(in oklab, var(--vesta-color-accent) 12%, var(--vesta-color-surface));
+  }
+  :where([data-vesta="instance-notice"][data-notice="pack-job"]) > :where([data-vesta="icon"]) {
+    color: var(--vesta-color-accent-text);
+  }
+  :where([data-vesta="instance-notice"][data-notice="pack-job"]) > p > span {
+    color: var(--vesta-color-text-muted);
   }
 }

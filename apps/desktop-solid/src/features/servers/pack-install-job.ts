@@ -44,7 +44,7 @@ export function agentPhase(job: AgentInstallJob | null | undefined): PackJobPhas
 export function effectivePhase(local: PackJobPhase | null, agent: AgentInstallJob | null | undefined, acceptedJobId: string | null): PackJobPhase | null {
   const remote = agentPhase(agent);
   // While installing, a stale (previous) agent job must not end the phase early.
-  if (local === 'installing' && acceptedJobId && agent?.id !== acceptedJobId) return 'installing';
+  if (local === 'installing' && (!acceptedJobId || agent?.id !== acceptedJobId)) return 'installing';
   if (local === 'installing' && remote) return remote;
   if (local) return local;
   return remote;
@@ -91,7 +91,7 @@ export interface JobProgressView {
  * download) stay indeterminate rather than sitting at 0%.
  */
 export function progressView(phase: PackJobPhase, progress: PackInstallProgress | null | undefined): JobProgressView {
-  const stageless = phase === 'backing-up' || phase === 'switching' || phase === 'resetting-world';
+  const stageless = phase === 'backing-up' || phase === 'resetting-world';
   const usable = !stageless && progress && Object.hasOwn(STAGE_LABELS, progress.stage) ? progress : null;
   const total = usable && usable.total > 0 ? usable.total : 0;
   const completed = usable ? Math.min(usable.completed, total || usable.completed) : 0;
@@ -153,7 +153,7 @@ export function jobSteps(shape: JobPlanShape, phase: PackJobPhase | null, failed
     ...(shape.adopted ? [] : ['prepare' as const]),
     ...(shape.backup ? ['backup' as const] : []),
     'install',
-    ...(shape.softwareSwitch || phase === 'switching' ? ['switch' as const] : []),
+    ...(shape.softwareSwitch || phase === 'switching' || phase === 'recovery' ? ['switch' as const] : []),
     ...(shape.resetWorld ? ['world' as const] : []),
   ];
   const finished = phase === 'succeeded';

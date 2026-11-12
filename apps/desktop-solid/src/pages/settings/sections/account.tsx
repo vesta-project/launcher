@@ -1,6 +1,6 @@
 import { Button, Dialog, IconButton, SegmentedControl } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
-import { EmptyLine } from '../../../components/empty-state';
+import type { JSX } from '@solidjs/web';
 import { Icon } from '../../../components/icon';
 import { SkinViewer } from '../../../components/skin-viewer';
 import {
@@ -24,7 +24,6 @@ import {
 } from '../../../features/accounts/skins';
 import { cachedSkinThumb, skinThumb } from '../../../features/accounts/skin-thumbs';
 import { t } from '../../../localization';
-import { Card } from '../parts';
 import './account.css';
 
 function Head(props: { uuid: string; size: number }) {
@@ -118,7 +117,11 @@ function SaveIndicator(props: { status: SaveState }) {
   );
 }
 
-function SkinPanel(props: { account: Account }) {
+/**
+ * The wardrobe: the character on a stage at the left, under its name like in game; who you are
+ * playing as, then skins and capes at the right. Uses the page's full width.
+ */
+function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
   const skins = createSkinController(() => props.account);
   const [shelf, setShelf] = createSignal<'library' | 'presets'>('library');
   const [hover, setHover] = createSignal<{ skin: string; variant: SkinVariant }>();
@@ -146,15 +149,7 @@ function SkinPanel(props: { account: Account }) {
     },
   );
   return (
-    <Card
-      title={t('skins.title')}
-      description={t('skins.description')}
-      action={
-        <div data-vesta="skin-actions">
-          <SaveIndicator status={skins.status()} />
-        </div>
-      }
-    >
+    <>
       <div data-vesta="skin-panel" id="skin-panel" data-disabled={supported() ? undefined : ''}>
         <Show when={!supported()}>
           <p data-vesta="skin-note" role="note">
@@ -171,6 +166,8 @@ function SkinPanel(props: { account: Account }) {
         <div data-vesta="skin-layout">
           <div data-vesta="skin-stage">
             <div data-vesta="skin-stage-view">
+              {/* A nametag over the character, like other players see it in game. */}
+              <span data-vesta="skin-nameplate">{props.account.username}</span>
               <SkinViewer
                 skin={hover()?.skin ?? currentSkin()}
                 model={hover()?.variant ?? variant()}
@@ -201,8 +198,10 @@ function SkinPanel(props: { account: Account }) {
             >
               {t('skins.add')}
             </Button>
+            <SaveIndicator status={skins.status()} />
           </div>
           <div data-vesta="skin-side">
+            {props.switcher}
             <section data-vesta="skin-group">
               <SegmentedControl
                 aria-label={t('skins.shelf')}
@@ -331,54 +330,63 @@ function SkinPanel(props: { account: Account }) {
           </div>
         </div>
       </div>
-    </Card>
+    </>
+  );
+}
+
+/**
+ * Who you play as: every added account as a profile tile with its head, the active one first.
+ * Picking another switches to it; the last tile adds one.
+ */
+function AccountSwitcher(props: { onRemove: (account: Account) => void }) {
+  const ordered = () => {
+    const active = activeAccount();
+    return [...accounts()].sort((a, b) => Number(b.uuid === active?.uuid) - Number(a.uuid === active?.uuid));
+  };
+  return (
+    <section data-vesta="account-switcher" aria-label={t('prefs.account.accounts')}>
+      <ul>
+        <For each={ordered()}>
+          {(account) => {
+            const active = () => account.uuid === activeAccount()?.uuid;
+            return (
+              <li data-active={active() ? '' : undefined}>
+                <button type="button" data-vesta="account-tile" aria-pressed={active() ? 'true' : 'false'}
+                  aria-label={active() ? account.username : t('prefs.account.switch-to', { name: account.username })}
+                  onClick={() => { if (!active()) void switchAccount(account.uuid); }}>
+                  <Head uuid={account.uuid} size={36} />
+                  <span data-vesta="account-tile-copy">
+                    <strong>{account.username}</strong>
+                    <small>{active() ? t('prefs.account.playing-as') : account.is_expired ? t('prefs.account.expired') : t('prefs.account.switch')}</small>
+                  </span>
+                </button>
+                <Show when={!active()}>
+                  <IconButton size="sm" variant="ghost" tone="danger" label={t('prefs.account.remove-title', { name: account.username })}
+                    icon={<Icon name="icons/actions/close" size={12} />} onClick={() => props.onRemove(account)} />
+                </Show>
+              </li>
+            );
+          }}
+        </For>
+        <li>
+          <button type="button" data-vesta="account-tile" data-add="" onClick={() => void addAccount()}>
+            <span data-vesta="account-tile-add" aria-hidden="true"><Icon name="icons/actions/add" size={16} /></span>
+            <span data-vesta="account-tile-copy"><strong>{t('prefs.account.add-short')}</strong><small>Microsoft</small></span>
+          </button>
+        </li>
+      </ul>
+    </section>
   );
 }
 
 export function AccountSettings() {
   const [removing, setRemoving] = createSignal<Account>();
   const current = () => activeAccount();
-  const others = () => accounts().filter((account) => account.uuid !== current()?.uuid);
   return (
     <>
-      <Show when={current()}>{(account) => <SkinPanel account={account()} />}</Show>
-
-      <Card
-        title={t('prefs.account.accounts')}
-        description={t('prefs.account.accounts-description')}
-        action={
-          <Button
-            size="sm"
-            tone="accent"
-            icon={<Icon name="icons/actions/add" size={14} />}
-            onClick={() => void addAccount()}
-          >
-            {t('prefs.account.add')}
-          </Button>
-        }
-      >
-        <Show when={others().length} fallback={<EmptyLine>{t('prefs.account.only-one')}</EmptyLine>}>
-          <ul data-vesta="prefs-accounts">
-            <For each={others()}>
-              {(account) => (
-                <li>
-                  <Head uuid={account.uuid} size={32} />
-                  <div>
-                    <strong>{account.username}</strong>
-                    <span style={{ display: 'flex', gap: 'var(--vesta-space-2)' }}><span>{account.account_type}</span><Show when={account.is_expired}><span>{t('prefs.account.expired')}</span></Show></span>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => void switchAccount(account.uuid)}>
-                    {t('prefs.account.make-active')}
-                  </Button>
-                  <Button size="sm" variant="ghost" tone="danger" onClick={() => setRemoving(account)}>
-                    {t('common.remove')}
-                  </Button>
-                </li>
-              )}
-            </For>
-          </ul>
-        </Show>
-      </Card>
+      <Show when={current()} keyed fallback={<AccountSwitcher onRemove={setRemoving} />}>
+        {(account) => <SkinPanel account={account} switcher={<AccountSwitcher onRemove={setRemoving} />} />}
+      </Show>
 
       <Dialog
         closeLabel={t('nav.close')}

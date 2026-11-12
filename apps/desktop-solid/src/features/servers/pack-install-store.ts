@@ -127,11 +127,16 @@ const sourceKey = (source: PackInstallSource) => JSON.stringify(source);
 export const PREPARATION_CANCELLED = 'pack_install_preparation_cancelled';
 
 export function preparePlan(id: ConnectionId, source: PackInstallSource, options: { fresh?: boolean } = {}): Promise<ReviewPlan> {
+  if (busyNow(id) && read(id).local !== 'preparing') return Promise.reject({ code: 'conflict', reason: PREPARATION_CANCELLED, retryAfterMs: null });
   const key = sourceKey(source);
   const existing = plans.get(id);
   if (existing?.key === key && !options.fresh && (!existing.plan || existing.plan.expiresAtMs > Date.now())) return existing.promise;
   const token = ++tokens;
-  const promise = serverCommand((api) => api.packInstallPlan(id, { source })).then((plan: ReviewPlan) => {
+  const promise = serverCommand((api) => api.packDraft(id)).then((workspace) => {
+    if (plans.get(id)?.token !== token) throw { code: 'conflict', reason: PREPARATION_CANCELLED, retryAfterMs: null };
+    if (adoptBlockingJob(id, workspace)) throw { code: 'conflict', reason: PREPARATION_CANCELLED, retryAfterMs: null };
+    return serverCommand((api) => api.packInstallPlan(id, { source }));
+  }).then((plan: ReviewPlan) => {
     const live = plans.get(id);
     if (live?.token !== token) throw { code: 'conflict', reason: PREPARATION_CANCELLED, retryAfterMs: null } satisfies ServerCommandError;
     live.plan = plan;
@@ -195,9 +200,12 @@ export async function runInstall(id: ConnectionId, run: InstallRun): Promise<voi
   runs.set(id, ticket);
   const live = () => runs.get(id) === ticket;
   const shape: JobPlanShape = { backup: !!run.backupProfile, softwareSwitch: run.softwareSwitch, resetWorld: !!run.resetWorld, adopted: false };
-  patch(id, { shape, startedAt: Date.now(), error: null, failedAt: null, outcome: null, progress: null, uncertain: false });
+  patch(id, { local: 'installing', acceptedJobId: null, shape, startedAt: Date.now(), error: null, failedAt: null, outcome: null, progress: null, uncertain: false });
   let step: JobStepId = 'install';
   try {
+    // Reconcile after reload before sending any mutation or new intent.
+    if (!run.installed && adoptBlockingJob(id, await serverCommand((api) => api.packDraft(id)))) return;
+    if (!live()) return;
     let installed = run.installed ?? null;
     if (!installed) {
       if (run.backupProfile) {
@@ -245,6 +253,12 @@ export async function runInstall(id: ConnectionId, run: InstallRun): Promise<voi
     patch(id, { local: 'succeeded', outcome: installed, revision: read(id).revision + 1 });
   } catch (reason) {
     if (!live()) return;
+    const failure = reason as ServerCommandError;
+    if (step === 'install' && (failure.reason === 'software_busy' || failure.reason === 'software_recovery_required')) {
+      const workspace = await serverCommand((api) => api.packDraft(id)).catch(() => null);
+      if (!live()) return;
+      if (workspace && adoptBlockingJob(id, workspace)) return;
+    }
     const intents = memo(applyIntents, id);
     if (step === 'install') intents.settle(reason as ServerCommandError);
     patch(id, { local: 'failed', failedAt: step, error: reason as ServerCommandError, uncertain: step === 'install' && intents.uncertain });
@@ -309,6 +323,15 @@ export function dismissInstallResult(id: ConnectionId) {
   patch(id, { local: null, outcome: null, error: null, failedAt: null, request: null, startedAt: null, progress: null, agent: null, acceptedJobId: null });
 }
 
+/** Reconcile agent ownership before submitting another plan or apply. */
+function adoptBlockingJob(id: ConnectionId, workspace: PackWorkspace): boolean {
+  const job = workspace.installJob as AgentInstallJob | null;
+  if (!job || (!agentJobActive(job) && agentPhase(job) !== 'recovery')) return false;
+  patch(id, { local: null, request: null, acceptedJobId: job.id, uncertain: false, error: null, failedAt: null, shape: { ...EMPTY_SHAPE, adopted: true } });
+  observeWorkspace(id, workspace);
+  return true;
+}
+
 /**
  * A workspace read from anywhere: picks up an install that is running on the agent (started
  * elsewhere, or before the launcher restarted) and a recent unseen failure or interruption.
@@ -317,15 +340,18 @@ export function observeWorkspace(id: ConnectionId, workspace: PackWorkspace | un
   if (!workspace) return;
   const job = (workspace.installJob ?? null) as AgentInstallJob | null;
   const state = read(id);
-  if (state.local !== null && state.local !== 'installing') return;
+  if (state.local !== null && state.local !== 'installing' && !(state.local === 'failed' && (state.uncertain || state.error?.reason === 'software_busy'))) return;
   if (!job) return;
   const phase = agentPhase(job);
   const known = state.agent?.id === job.id;
   if (agentJobActive(job)) {
-    patch(id, { agent: job, progress: workspace.installProgress ?? null, ...(known || state.local ? {} : { shape: { ...EMPTY_SHAPE, adopted: true }, startedAt: Date.now() }) });
+    patch(id, { agent: job, progress: workspace.installProgress ?? null, error: null, failedAt: null, uncertain: false, ...(known || state.local === 'installing' ? {} : { local: null, acceptedJobId: job.id, shape: { ...EMPTY_SHAPE, adopted: true }, startedAt: Date.now() }) });
     return;
   }
-  if (known) { patch(id, { agent: job }); return; }
+  if (known) {
+    patch(id, { agent: job, ...(state.local === 'failed' ? { local: null, uncertain: false } : {}), ...(phase === 'recovery' || phase === 'interrupted' || phase === 'failed' ? { error: jobError(job), failedAt: phase === 'recovery' ? 'switch' : 'install' } : {}) });
+    return;
+  }
   // A finished job nobody here watched: only surface problems, and only once.
   if ((phase === 'failed' || phase === 'interrupted' || phase === 'recovery') && dismissed()[id] !== job.id && !state.request) {
     patch(id, { agent: job, shape: { ...EMPTY_SHAPE, adopted: true }, error: jobError(job), failedAt: phase === 'recovery' ? 'switch' : 'install' });

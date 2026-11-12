@@ -10,6 +10,7 @@ import {
   clearInstanceCrash,
   type InstanceEntry,
 } from "../../../features/instances/catalog";
+import { Icon } from "../../../components/icon";
 import { t } from "../../../localization";
 import "./crash-tab.css";
 
@@ -60,85 +61,59 @@ export function CrashTab(props: { entry: InstanceEntry }) {
       setCopyStatus(t("crash.report-copy-failed"));
     }
   };
+  /** Report lines, with the error itself (and its stack) picked out like the console does. */
+  const lines = () => report().split('\n').map((text) => ({
+    text,
+    tone: /^-{2,}|^Description:/.test(text) ? 'head' : /(Exception|Error|Caused by)/.test(text) ? 'error' : /^\s+(at |\.\.\. \d+ more)/.test(text) ? 'trace' : undefined,
+  }));
   return (
     <div data-vesta="crash">
-      <header data-vesta="crash-summary">
-        <div>
+      {/* What happened, and the one thing most likely to fix it. */}
+      <header data-vesta="crash-summary" data-kind={memory() ? 'memory' : 'game'}>
+        <span data-vesta="crash-mark" aria-hidden="true"><Icon name={memory() ? 'icons/content/storage' : 'icons/status/bug'} size={26} /></span>
+        <div data-vesta="crash-copy">
           <p data-vesta="crash-category">
             <Metadata parts={[t(memory() ? "crash.memory-category" : "crash.game-category"), !nativeInstances ? t("crash.last-launch-exit-code", { code: 1 }) : null]} />
           </p>
-          <h2>
-            {memory()
-              ? t("crash.out-of-memory-title")
-              : t("crash.unexpected-stop-title")}
-          </h2>
-          <p>{summary()}</p>
+          <h2>{memory() ? t("crash.out-of-memory-title") : t("crash.unexpected-stop-title")}</h2>
+          <Show when={summary()}><code>{summary()}</code></Show>
         </div>
         <div data-vesta="crash-actions">
-          <Button size="sm" variant="outline" disabled={!nativeInstances} onClick={() => void share()}>
-            {t("crash.share-log")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => void clear()}
-          >
-            {t("crash.clear")}
-          </Button>
+          <Button variant="ghost" onClick={() => void clear()}>{t("crash.clear")}</Button>
+          <Button variant="outline" disabled={!nativeInstances} icon={<Icon name="icons/actions/external-link" />} onClick={() => void share()}>{t("crash.share-log")}</Button>
+          <Show when={memory()}>
+            <Button tone="accent" icon={<Icon name="icons/content/sliders" />} onClick={() => navigate(`/library/${id()}/settings`)}>{t("crash.open-instance-settings")}</Button>
+          </Show>
         </div>
       </header>
+
       <div data-vesta="crash-grid">
-        <section data-vesta="crash-fixes">
-          <h3>{t("crash.suggested-fixes")}</h3>
-          <ol>
-            <Show when={nativeInstances && details().suggested_fixes?.length} fallback={<Show
-              when={memory()}
-              fallback={
-                <li>
-                  {t("crash.inspect-console")}
-                </li>
-              }
-            >
-              <li>
-                {t("crash.increase-memory")}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => navigate(`/library/${id()}/settings`)}
-                >
-                  {t("crash.open-instance-settings")}
-                </Button>
-              </li>
-              <li>{t("crash.close-applications")}</li>
-            </Show>}>
+        <section data-vesta="crash-panel" data-panel="fixes">
+          <header data-vesta="crash-panel-head"><h3>{t("crash.suggested-fixes")}</h3></header>
+          <ol data-vesta="crash-steps">
+            <Show when={nativeInstances && details().suggested_fixes?.length} fallback={
+              <Show when={memory()} fallback={<li>{t("crash.inspect-console")}</li>}>
+                <li>{t("crash.increase-memory")}</li>
+                <li>{t("crash.close-applications")}</li>
+              </Show>
+            }>
               <For each={details().suggested_fixes ?? []}>{(fix) => <li>{fix}</li>}</For>
             </Show>
           </ol>
-          <p data-vesta="crash-note">
-            {t("crash.analysis-note")}
-          </p>
+          <p data-vesta="crash-note">{t("crash.analysis-note")}</p>
         </section>
-        <section data-vesta="crash-evidence">
-          <header>
+
+        <section data-vesta="crash-panel" data-panel="evidence">
+          <header data-vesta="crash-panel-head">
             <h3>{t("crash.log-excerpt")}</h3>
-            <Button size="sm" variant="ghost" onClick={() => void copy()}>
-              {t("crash.copy-report")}
-            </Button>
+            <span data-vesta="crash-panel-actions">
+              <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/copy" />} onClick={() => void copy()}>{t("crash.copy-report")}</Button>
+              <Button size="sm" variant="ghost" disabled={!nativeInstances || !details().report_path} onClick={() => void openReport()}>{t("crash.open-file")}</Button>
+              <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/navigation/arrow-forward" />} onClick={() => navigate(`/library/${id()}/console`, { replace: true })}>{t("crash.view-full-log")}</Button>
+            </span>
           </header>
-          <pre data-vesta="crash-report">{report()}</pre>
-          <div data-vesta="crash-actions">
-            <Button size="sm" variant="outline" disabled={!nativeInstances || !details().report_path} onClick={() => void openReport()}>
-              {t("crash.open-file")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => navigate(`/library/${id()}/console`, { replace: true })}
-            >
-              {t("crash.view-full-log")}
-            </Button>
-            <span role="status">{copyStatus()}</span>
-          </div>
+          <pre data-vesta="crash-report"><For each={lines()}>{(line) => <span data-tone={line.tone}>{line.text}{'\n'}</span>}</For></pre>
+          <p data-vesta="crash-status" role="status">{copyStatus()}</p>
         </section>
       </div>
     </div>

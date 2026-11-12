@@ -1,98 +1,193 @@
+/*
+ * Crash: the diagnosis as a card with the likely fix, then what to try and the evidence.
+ * Hooks: [data-vesta=crash] -summary -mark -copy -category -actions -grid -panel -panel-head
+ *        -panel-actions -steps -note -report -status
+ * States: crash-summary: data-kind=memory|game; report lines: data-tone=error|trace|head
+ */
 @layer launcher {
   :where([data-vesta="crash"]) {
     display: flex;
     flex-direction: column;
-    gap: var(--vesta-space-6);
+    gap: var(--vesta-space-4);
   }
+
   :where([data-vesta="crash-summary"]) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--vesta-space-3);
-    padding-block: var(--vesta-space-2) var(--vesta-space-4);
-    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--vesta-space-4);
+    padding: var(--vesta-space-4) var(--vesta-space-5);
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-danger) 40%, var(--vesta-color-border));
+    border-radius: var(--vesta-radius-container);
+    background:
+      radial-gradient(70% 140% at 0% 0%, color-mix(in oklab, var(--vesta-color-danger) 16%, transparent), transparent 70%),
+      var(--vesta-color-surface-raised);
   }
-  :where([data-vesta="crash-summary"] > div:first-child) {
-    min-inline-size: 0;
-    flex: 1;
-  }
-  :where([data-vesta="crash-summary"] h2) {
-    margin: var(--vesta-space-2) 0;
-    font-size: var(--vesta-text-xl);
-  }
-  :where([data-vesta="crash-summary"] p) {
-    margin: 0;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-    overflow-wrap: anywhere;
-  }
-  :where([data-vesta="crash-category"]) {
+
+  :where([data-vesta="crash-mark"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 56px;
+    block-size: 56px;
+    border-radius: var(--vesta-radius-container);
+    background: color-mix(in oklab, var(--vesta-color-danger) 20%, transparent);
     color: var(--vesta-color-danger-text);
   }
-  :where([data-vesta="crash-actions"]) {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--vesta-space-2);
-  }
-  :where([data-vesta="crash-grid"]) {
+
+  :where([data-vesta="crash-copy"]) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    gap: var(--vesta-space-6);
+    gap: var(--vesta-space-1);
+    min-inline-size: 0;
   }
-  :where([data-vesta="crash"] h3) {
-    margin: 0 0 var(--vesta-space-3);
-    font-size: var(--vesta-text-md);
-  }
-  :where([data-vesta="crash-fixes"] ol) {
+
+  :where([data-vesta="crash-category"]) {
     margin: 0;
-    padding-inline-start: var(--vesta-space-5);
-  }
-  :where([data-vesta="crash-fixes"] li) {
-    padding: 0 0 var(--vesta-space-4) var(--vesta-space-1);
-    font-size: var(--vesta-text-sm);
-    line-height: var(--vesta-leading-normal);
-  }
-  :where([data-vesta="crash-fixes"] li button) {
-    display: flex;
-    margin-block-start: var(--vesta-space-3);
-  }
-  :where(
-    [data-vesta="crash-note"],
-    [data-vesta="crash-actions"] [role="status"]
-  ) {
-    color: var(--vesta-color-text-muted);
+    color: var(--vesta-color-danger-text);
     font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
   }
-  :where([data-vesta="crash-evidence"] > header) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--vesta-space-2);
-    margin-block-end: var(--vesta-space-2);
-  }
-  :where([data-vesta="crash-evidence"] h3) {
+
+  :where([data-vesta="crash-copy"] h2) {
     margin: 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: 800;
   }
-  :where([data-vesta="crash-report"]) {
-    margin: 0 0 var(--vesta-space-3);
-    padding: var(--vesta-space-3);
-    max-block-size: 280px;
-    overflow: auto;
-    background: var(--vesta-color-surface-sunken);
-    border-radius: var(--vesta-radius-sm);
+
+  :where([data-vesta="crash-copy"] code) {
+    overflow: hidden;
     color: var(--vesta-color-text-muted);
     font-family: var(--vesta-font-mono);
     font-size: var(--vesta-text-xs);
-    line-height: 1.6;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  @container pane (max-width:650px) {
+
+  :where([data-vesta="crash-actions"], [data-vesta="crash-panel-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="crash-grid"]) {
+    display: grid;
+    grid-template-columns: minmax(240px, 2fr) minmax(0, 3fr);
+    align-items: start;
+    gap: var(--vesta-space-4);
+  }
+
+  :where([data-vesta="crash-panel"]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+    padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta="crash-panel-head"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    min-block-size: var(--vesta-size-control-sm);
+  }
+
+  :where([data-vesta="crash-panel-head"] h3) {
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  /* Steps as numbered tiles, the first is the one to try. */
+  :where([data-vesta="crash-steps"]) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: crash-step;
+  }
+
+  :where([data-vesta="crash-steps"] > li) {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.45;
+    counter-increment: crash-step;
+  }
+
+  :where([data-vesta="crash-steps"] > li)::before {
+    display: grid;
+    place-items: center;
+    inline-size: 24px;
+    block-size: 24px;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: 700;
+    content: counter(crash-step);
+  }
+
+  :where([data-vesta="crash-note"], [data-vesta="crash-status"]) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  :where([data-vesta="crash-status"]:empty) {
+    display: none;
+  }
+
+  /* The excerpt reads like the console: the error stands out, its stack follows it. */
+  :where([data-vesta="crash-report"]) {
+    max-block-size: 22rem;
+    margin: 0;
+    padding: var(--vesta-space-3);
+    overflow: auto;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    line-height: 1.6;
+    white-space: pre;
+    scrollbar-width: thin;
+  }
+
+  :where([data-vesta="crash-report"] > span[data-tone="head"]) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta="crash-report"] > span[data-tone="error"]) {
+    color: var(--vesta-color-danger-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta="crash-report"] > span[data-tone="trace"]) {
+    color: color-mix(in oklab, var(--vesta-color-danger-text) 70%, var(--vesta-color-text-muted));
+  }
+
+  @container pane (max-width: 820px) {
+    :where([data-vesta="crash-summary"]) {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    :where([data-vesta="crash-actions"]) {
+      grid-column: 1 / -1;
+    }
+
     :where([data-vesta="crash-grid"]) {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

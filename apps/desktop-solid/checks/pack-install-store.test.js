@@ -20,7 +20,8 @@ async function harness() {
         export * as store from ${storePath};
         export * as activity from ${activityPath};
         export { state } from 'harness-state';
-        export { untrack, flush } from 'solid-js';
+        export { untrack, flush, createRoot, createMemo, createEffect } from 'solid-js';
+        export { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
       ` }));
       build.onResolve({ filter: /^harness-state$/ }, () => ({ path: 'state', namespace: 'harness-state' }));
       build.onLoad({ filter: /.*/, namespace: 'harness-state' }, () => ({ loader: 'js', contents:
@@ -97,6 +98,7 @@ test('reopening the review attaches to the running preparation instead of restar
   const first = store.preparePlan(id, source);
   const second = store.preparePlan(id, source);
   expect(second).toBe(first);
+  await until(() => calls.some(([name]) => name === 'packInstallPlan'));
   expect(calls.filter(([name]) => name === 'packInstallPlan')).toHaveLength(1);
   expect(phase(id)).toBe('preparing');
   pending.resolve(plan());
@@ -278,4 +280,78 @@ test('the install appears in the activity panel and cancels through it while can
   expect(phase(id)).toBeNull();
   pending.resolve(plan());
   await prepared;
+});
+
+for (const remoteState of ['queued', 'staging', 'activating', 'recovery_required']) {
+  test(`reload reconciles ${remoteState} before a new plan or apply`, async () => {
+    const id = freshId();
+    let agent = { id: 'existing', state: remoteState, error: remoteState === 'recovery_required' ? 'software_activation_interrupted' : null };
+    handlers.packDraft = () => Promise.resolve(workspace(agent));
+    await expect(store.preparePlan(id, source)).rejects.toMatchObject({ reason: store.PREPARATION_CANCELLED });
+    expect(phase(id)).toBe(remoteState === 'recovery_required' ? 'recovery' : remoteState === 'activating' ? 'switching' : 'installing');
+    expect(state(id).shape.adopted).toBe(true);
+    await store.runInstall(id, { body: { planId: 'other' }, backupProfile: null, resetWorld: null, softwareSwitch: true });
+    expect(calls.some(([name]) => name === 'packInstallPlan' || name === 'packInstallApply')).toBe(false);
+    agent = { ...agent, state: 'recovery_required', error: 'software_activation_interrupted' };
+    store.observeWorkspace(id, workspace(agent));
+    expect(phase(id)).toBe('recovery');
+    expect(busy(id)).toBe(false);
+  });
+}
+
+test('software_busy from an apply race adopts the job instead of leaving a failed local overlay', async () => {
+  const id = freshId();
+  let agent = null;
+  handlers.packDraft = () => Promise.resolve(workspace(agent));
+  handlers.packInstallApply = () => {
+    agent = { id: 'racing-job', state: 'activating', error: null };
+    return Promise.reject({ code: 'server_busy', reason: 'software_busy' });
+  };
+  await store.runInstall(id, { body: { planId: 'p' }, backupProfile: null, resetWorld: null, softwareSwitch: true });
+  expect(phase(id)).toBe('switching');
+  expect(state(id).acceptedJobId).toBe('racing-job');
+  expect(state(id).error).toBeNull();
+  store.observeWorkspace(id, workspace({ ...agent, state: 'recovery_required', error: 'software_activation_failed' }));
+  expect(phase(id)).toBe('recovery');
+  expect(busy(id)).toBe(false);
+});
+
+test('an uncertain apply adopts the real job on a later workspace read', async () => {
+  const id = freshId();
+  handlers.packInstallApply = () => Promise.reject({ code: 'timeout' });
+  await store.runInstall(id, { body: { planId: 'p' }, backupProfile: null, resetWorld: null, softwareSwitch: true });
+  expect(phase(id)).toBe('failed');
+  store.observeWorkspace(id, workspace({ id: 'late-job', state: 'activating', error: null }));
+  expect(phase(id)).toBe('switching');
+  store.observeWorkspace(id, workspace({ id: 'late-job', state: 'recovery_required', error: 'software_activation_interrupted' }));
+  expect(phase(id)).toBe('recovery');
+  expect(state(id).failedAt).toBe('switch');
+});
+
+test('progress notifications patch the job without rerunning unchanged phase consumers', async () => {
+  const id = freshId();
+  let phaseRuns = 0;
+  let dispose;
+  const { artifact } = await check.captureArtifact(async () => {
+    check.createRoot(stop => {
+      dispose = stop;
+      const phase = check.createMemo(() => store.packJobPhase(id), { name: 'check:install-phase' });
+      check.createEffect(phase, () => { phaseRuns++; }, { name: 'check:install-phase-consumer' });
+    });
+    flush();
+    const agent = { id: 'progress-job', state: 'activating', error: null };
+    store.observeWorkspace(id, workspace(agent, { stage: 'writing', completed: 1, total: 664 }));
+    flush();
+    const before = phaseRuns;
+    for (let completed = 2; completed < 10; completed++) {
+      store.observeWorkspace(id, workspace(agent, { stage: 'writing', completed, total: 664 }));
+      flush();
+    }
+    expect(phaseRuns).toBe(before);
+    store.observeWorkspace(id, workspace({ ...agent, state: 'recovery_required', error: 'software_activation_interrupted' }));
+    flush();
+    expect(phaseRuns).toBe(before + 1);
+    dispose();
+  }, { scenario: 'pack-install-progress-patching' });
+  check.expectNoDiagnostics(artifact);
 });

@@ -157,7 +157,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
       ...(own.length ? [{id:'group:own',kind:'group' as const,group:'own' as const,count:own.length},...own] : [])];
   }, {name:'server-content:grouped'});
   const visibleCount = () => listed().filter((row) => row.kind === 'entry').length;
-  const summary = createMemo(() => ({...pendingSummary(inventory()?.items ?? [], props.snapshot), count: inventory()?.deferredWrites ?? 0, running: !!inventory()?.needsRestart}), { name: 'server-content:pending' });
+  const summary = createMemo(() => ({...pendingSummary(inventory()?.items ?? [], props.snapshot), count: inventory()?.deferredWrites ?? 0, running: pendingSummary([], props.snapshot).running && !!inventory()?.needsRestart}), { name: 'server-content:pending' });
   const canRestart = () => lifecycleControls(props.snapshot).restart;
 
   const filterOptions = createMemo(() => [
@@ -324,7 +324,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
             <span data-vesta="resource-copy">
               <span data-vesta="resource-title">{row().name}</span>
               <span data-vesta="resource-sub">
-                {t(kindLabel[entry().kind])}
+                <span data-vesta="resource-kind" data-kind={entry().kind}>{t(kindLabel[entry().kind])}</span>
                 <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
                 <Show when={entry().pendingError}><span data-tone="danger">{t('server-content.pending-failed')}</span></Show>
               </span>

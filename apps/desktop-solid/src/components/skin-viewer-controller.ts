@@ -132,7 +132,7 @@ export class SkinViewerController {
         if (this.disposed || !this.visible || !this.appearance.skin) return;
         this.viewer = new module.SkinViewer({
           canvas: this.canvas, width: this.width, height: this.height,
-          pixelRatio: this.ratio, zoom: 0.7, renderPaused: true,
+          pixelRatio: this.ratio, zoom: 0.62, renderPaused: true,
         });
         this.idle = new module.IdleAnimation();
         // Rest at a three-quarter view so the character reads as a figure, not a flat sprite.

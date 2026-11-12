@@ -170,7 +170,7 @@ export const pendingLabel: Record<ContentPending, MessageId> = {
 /** Changes waiting for the next start or restart, and whether a restart would apply them now. */
 export function pendingSummary(items: readonly Pick<ServerContentEntry, 'pending' | 'pendingError'>[], snapshot: Pick<ServerSnapshot, 'status'>) {
   const pending = items.filter((item) => item.pending);
-  const running = !!snapshot.status && snapshot.status.state !== 'stopped';
+  const running = !!snapshot.status && snapshot.status.state !== 'stopped' && snapshot.status.lifecycle !== 'sleeping';
   return { count: pending.length, failed: pending.filter((item) => item.pendingError).length, running };
 }
 
@@ -199,7 +199,7 @@ export function contentGates(
 ): ContentGates {
   const caps = inventory.capabilities;
   const allowed = gate(snapshot.capabilities, 'content.install') === 'allowed';
-  const running = !!snapshot.status && snapshot.status.state !== 'stopped';
+  const running = !!snapshot.status && snapshot.status.state !== 'stopped' && snapshot.status.lifecycle !== 'sleeping';
   const generation = snapshot.status?.generation ?? null;
   const datapack = running ? (caps.datapackToggleRunning ?? caps.toggle) && generation !== null : caps.datapackToggleOffline ?? caps.toggle;
   return {

@@ -22,12 +22,12 @@ import './modpack.css';
  * `aside` (Java) is always beside the main column; `unlinkedAside` (custom JAR) only while no
  * modpack decides the software.
  */
-export function SoftwareModpack(props: { snapshot: ServerSnapshot; aside: JSX.Element; unlinkedAside: JSX.Element; children: JSX.Element }) {
+export function SoftwareModpack(props: { snapshot: ServerSnapshot; aside: JSX.Element; unlinkedAside: JSX.Element; notice?: JSX.Element; children: JSX.Element }) {
   const area = createModpackArea(() => props.snapshot);
   return (
     <ModpackAreaContext value={area}>
-      <Show when={area.gates().edit} fallback={<SettingsColumns aside={<>{props.aside}{props.unlinkedAside}</>}>{props.children}</SettingsColumns>}>
-        <SoftwareModpackBody aside={props.aside} unlinkedAside={props.unlinkedAside}>{props.children}</SoftwareModpackBody>
+      <Show when={area.gates().edit} fallback={<SettingsColumns aside={<>{props.aside}{props.unlinkedAside}</>}>{props.notice}{props.children}</SettingsColumns>}>
+        <SoftwareModpackBody aside={props.aside} unlinkedAside={props.unlinkedAside} notice={props.notice}>{props.children}</SoftwareModpackBody>
         <Show when={area.workspace() ? modpackPick(area.id()) : undefined} keyed>
           {(pick) => <ProviderPickDialog pick={pick} />}
         </Show>
@@ -36,14 +36,18 @@ export function SoftwareModpack(props: { snapshot: ServerSnapshot; aside: JSX.El
   );
 }
 
-function SoftwareModpackBody(props: { aside: JSX.Element; unlinkedAside: JSX.Element; children: JSX.Element }) {
+function SoftwareModpackBody(props: { aside: JSX.Element; unlinkedAside: JSX.Element; notice?: JSX.Element; children: JSX.Element }) {
   const area = useModpackArea();
   const phase = () => packJobPhase(area.id());
   const linked = () => area.link().phase !== 'unlinked';
   const view = () => showsJobPanel(phase()) ? 'job' : area.install() ? 'review' : area.workspace() && linked() ? 'linked' : 'unlinked';
   return (
-    <Show when={view() === 'unlinked'} fallback={
-      <SettingsColumns aside={props.aside}>
+    <SettingsColumns aside={<>{props.aside}<Show when={view() === 'unlinked'}>{props.unlinkedAside}</Show></>}>
+      {props.notice}
+      <Show when={view() !== 'unlinked'} fallback={<>
+        <Show when={!!area.workspace()}><FirstRun section="server" /></Show>
+        {props.children}
+      </>}>
         <div data-vesta="software-modpack" data-linked={linked() ? '' : undefined}>
           <Show when={view() === 'job'} fallback={
             <Show when={area.install()} keyed fallback={<ServerModpack />}>
@@ -53,12 +57,7 @@ function SoftwareModpackBody(props: { aside: JSX.Element; unlinkedAside: JSX.Ele
             <InstallJobPanel />
           </Show>
         </div>
-      </SettingsColumns>
-    }>
-      <SettingsColumns aside={<>{props.aside}{props.unlinkedAside}</>}>
-        <Show when={area.workspace()}><FirstRun section="server" /></Show>
-        {props.children}
-      </SettingsColumns>
-    </Show>
+      </Show>
+    </SettingsColumns>
   );
 }

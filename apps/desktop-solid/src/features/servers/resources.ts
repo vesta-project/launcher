@@ -124,7 +124,15 @@ function track<T, A>(id: ConnectionId, def: ServerResourceDef<T, A>, args?: A) {
       // here too, because the retired request can fail after that replacement queued.
       if (next.error && next.retryAt > Date.now()) throw next.error;
       const revision = next.revision;
-      try { return await def.load(id, args as A); }
+      try {
+        const value = await def.load(id, args as A);
+        // Clear request metadata before the cache publishes successful data.
+        if (knownKeys.get(key) === next && next.revision === revision) {
+          next.error = null; next.failures = 0; next.retryAt = 0; next.pressure = undefined;
+          publishPressure(id); scheduleRetry(key, next);
+        }
+        return value;
+      }
       catch (reason) {
         // Count the actual request once, even if invalidation retires its response.
         if (knownKeys.get(key) === next && next.revision === revision && !(reason instanceof CacheInvalidatedError)) {

@@ -1,5 +1,3 @@
-skins-title = Skin and cape
-skins-description = Change how your character looks in game. Hover a skin to preview it. Changes save to your Minecraft profile automatically.
 skins-unsupported = Skins and capes can only be changed on Microsoft accounts. Sign in with Microsoft to manage them.
 skins-model = Arm model
 skins-model-classic = Classic

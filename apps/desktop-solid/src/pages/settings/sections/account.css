@@ -1,6 +1,6 @@
 /*
  * Account page.
- * Hooks: [data-vesta=prefs-head] [data-vesta=prefs-accounts]
+ * Hooks: [data-vesta=prefs-head] [data-vesta=account-switcher] -tile -tile-copy -tile-add
  * Knobs: --head-size
  */
 @layer launcher {
@@ -16,38 +16,6 @@
     image-rendering: pixelated;
   }
 
-  :where([data-vesta='prefs-accounts']) {
-    display: flex;
-    flex-direction: column;
-    margin: 0;
-    padding: 0 0 var(--vesta-space-2);
-    list-style: none;
-  }
-
-  :where([data-vesta='prefs-accounts'] li) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-3);
-    padding: var(--vesta-space-2) var(--vesta-space-4);
-  }
-
-  :where([data-vesta='prefs-accounts'] li + li) {
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
-
-  /* Narrow rows wrap the account buttons under the name. */
-  :where([data-vesta='prefs-accounts'] li > div:not([data-vesta])) {
-    display: flex;
-    flex: 1 1 160px;
-    flex-direction: column;
-    min-inline-size: 0;
-  }
-
-  :where([data-vesta='prefs-accounts'] li > div:not([data-vesta]) > span:not([data-vesta])) {
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-  }
 }
 
 /*
@@ -329,8 +297,8 @@
 }
 
 /*
- * The character gets a stage: a spotlight in the theme's accent, a soft shadow to stand on and a
- * faint block floor. Skin and cape tiles lift when pointed at, and the worn one pops into place.
+ * The character gets a stage: a spotlight in the theme's accent and a soft shadow to stand on.
+ * Skin and cape tiles lift when pointed at, and the worn one pops into place.
  */
 @layer launcher {
   :where([data-vesta='skin-stage-view']) {
@@ -341,18 +309,6 @@
     background:
       radial-gradient(60% 55% at 50% 62%, color-mix(in oklab, var(--vesta-color-accent) 28%, transparent), transparent 70%),
       linear-gradient(180deg, color-mix(in oklab, var(--vesta-color-accent) 6%, var(--vesta-color-surface-raised)), var(--vesta-color-surface));
-  }
-
-  /* A floor of blocks, fading out towards the back. */
-  :where([data-vesta='skin-stage-view'])::before {
-    position: absolute;
-    inset: 62% 0 0;
-    z-index: -1;
-    background: repeating-conic-gradient(color-mix(in oklab, var(--vesta-color-text) 7%, transparent) 0 25%, transparent 0 50%) 0 0 / 24px 24px;
-    mask-image: linear-gradient(180deg, transparent, var(--vesta-color-text) 70%);
-    transform: perspective(240px) rotateX(48deg);
-    transform-origin: bottom;
-    content: '';
   }
 
   /* The shadow the character stands in. */
@@ -409,5 +365,185 @@
   :where([data-vesta='skin-group']) > :where([data-vesta='segmented-field']) {
     align-self: flex-start;
     inline-size: auto;
+  }
+}
+
+/*
+ * The wardrobe uses the page's full width: a tall stage on the left that stays in view while the
+ * closet on the right scrolls; who you are playing as heads the closet.
+ */
+@layer launcher {
+  [data-vesta='prefs-page'][data-section='account'] {
+    max-inline-size: min(1240px, 100%);
+  }
+
+  :where([data-vesta='skin-panel']) {
+    padding: 0;
+  }
+
+  :where([data-vesta='skin-layout']) {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    gap: var(--vesta-space-6, 32px);
+  }
+
+  :where([data-vesta='skin-stage']) {
+    position: sticky;
+    inset-block-start: var(--vesta-space-4);
+    gap: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='skin-stage-view']) {
+    min-block-size: clamp(22rem, 58vh, 34rem);
+  }
+
+  /* Model toggle and upload share one row under the stage. */
+  :where([data-vesta='skin-stage']) > :where([data-vesta='segmented-field']) {
+    align-self: center;
+  }
+
+  :where([data-vesta='skin-stage']) > :where([data-vesta='skin-status']) {
+    align-self: center;
+  }
+
+  /* The nametag: dark, translucent, floating over the head like in game. */
+  :where([data-vesta='skin-nameplate']) {
+    position: absolute;
+    inset-block-start: var(--vesta-space-4);
+    inset-inline-start: 50%;
+    z-index: 1;
+    max-inline-size: calc(100% - var(--vesta-space-6, 32px));
+    padding: 2px var(--vesta-space-2);
+    overflow: hidden;
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 55%, transparent);
+    color: var(--vesta-color-media-text);
+    font-weight: var(--vesta-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='skin-side']) {
+    gap: var(--vesta-space-5);
+  }
+
+  :where([data-vesta='skin-library']) {
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  }
+
+  :where([data-vesta='skin-packs']) {
+    max-block-size: none;
+    overflow: visible;
+  }
+
+  /* ---- Who you play as ---- */
+  :where([data-vesta='account-switcher'] > ul) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='account-switcher'] li) {
+    position: relative;
+  }
+
+  :where([data-vesta='account-tile']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-inline-size: 11rem;
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-2) var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition:
+      transform var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
+      border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta='account-tile']):hover:not([aria-pressed='true']) {
+    border-color: var(--vesta-color-border-strong);
+    transform: translateY(-2px);
+  }
+
+  :where([data-vesta='account-tile']):focus-visible {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  :where([data-vesta='account-tile'][aria-pressed='true']) {
+    border-color: var(--vesta-color-accent);
+    background:
+      radial-gradient(90% 140% at 0% 50%, color-mix(in oklab, var(--vesta-color-accent) 20%, transparent), transparent 70%),
+      var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='account-tile'][data-add]) {
+    border-style: dashed;
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='account-tile-copy']) {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='account-tile-copy'] strong) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='account-tile-copy'] small) {
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='account-tile'][aria-pressed='true']) :where([data-vesta='account-tile-copy'] small) {
+    color: var(--vesta-color-accent-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='account-tile-add']) {
+    display: grid;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+  }
+
+  /* Remove sits on the tile's corner, shown when the tile is pointed at. */
+  :where([data-vesta='account-switcher'] li) > :where([data-vesta='button']) {
+    position: absolute;
+    inset-block-start: -6px;
+    inset-inline-end: -6px;
+    border-radius: 50%;
+    background: var(--vesta-color-surface-raised);
+    box-shadow: 0 0 0 1px var(--vesta-color-border);
+    opacity: 0;
+  }
+
+  :where([data-vesta='account-switcher'] li):hover > :where([data-vesta='button']),
+  :where([data-vesta='account-switcher'] li):focus-within > :where([data-vesta='button']) {
+    opacity: 1;
+  }
+
+  @container pane (max-width: 760px) {
+    :where([data-vesta='skin-layout']) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    :where([data-vesta='skin-stage']) {
+      position: static;
+    }
   }
 }

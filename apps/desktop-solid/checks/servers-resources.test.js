@@ -187,3 +187,10 @@ describe('browse server adapters', () => {
     ]);
   });
 });
+
+test('restart prompts require a running game, including stale inventory while sleeping', () => {
+  for (const status of [{ state: 'stopped' }, { state: 'stopped', lifecycle: 'sleeping' }, { state: 'running', lifecycle: 'sleeping' }]) {
+    expect(pendingSummary([{ pending: 'install' }], { status }).running).toBe(false);
+  }
+  expect(pendingSummary([{ pending: 'install' }], running).running).toBe(true);
+});

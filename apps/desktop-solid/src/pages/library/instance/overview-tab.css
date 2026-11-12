@@ -1,8 +1,8 @@
 /*
- * Overview: the last world as a hero scene, the instance's statistics as tiles, the other worlds
+ * Overview: the last world as a hero scene, one strip with the linked pack and the numbers, the other worlds
  * as square cards (the way the game lists them), then a screenshot mosaic.
  * Hooks: [data-vesta=overview] -hero -hero-art -hero-icon -hero-copy -hero-meta -hero-actions
- *        -eyebrow -stats -stat-icon -stat-pill -world-grid -world-card -world-name -world-meta
+ *        -eyebrow -about -facts -facts-link -world-grid -world-card -world-name -world-meta
  *        -panel -panel-header -quiet; [data-vesta=shot-grid] [data-vesta=shot]
  * Knobs: --overview-panel-bg; --hero-art (the world icon, set inline)
  *
@@ -145,77 +145,71 @@
     color: inherit;
   }
 
-  /* ---- Statistics ---- */
-  :where([data-vesta="overview-stats"]) {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--vesta-space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  :where([data-vesta="overview-stats"] > li) {
-    position: relative;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
+  /* ---- About: the linked pack and the instance's numbers, one strip ---- */
+  :where([data-vesta="overview-about"]) {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    column-gap: var(--vesta-space-3);
+    gap: var(--vesta-space-3) var(--vesta-space-6, 32px);
     padding: var(--vesta-space-3) var(--vesta-space-4);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
     background: var(--overview-panel-bg);
   }
 
-  :where([data-vesta="overview-stat-icon"]) {
+  /* The pack sits in the strip as its first item, not as a card of its own. */
+  [data-vesta="overview-about"] > [data-vesta="pack-view"][data-overview] {
+    flex: 1 1 320px;
+    min-inline-size: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-vesta="overview-about"] > [data-vesta="pack-view"][data-overview] > [data-vesta="pack-head"] {
+    padding: 0;
+  }
+
+  :where([data-vesta="overview-facts"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2) var(--vesta-space-6, 32px);
+    margin: 0 0 0 auto;
+  }
+
+  :where([data-vesta="overview-facts"] > div) {
     display: grid;
-    grid-row: 1 / span 2;
-    place-items: center;
-    inline-size: 40px;
-    block-size: 40px;
-    border-radius: var(--vesta-radius-md);
-    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
-    color: var(--vesta-color-accent-text);
+    gap: 2px;
   }
 
-  :where([data-vesta="overview-stats"] > li > strong) {
-    overflow: hidden;
-    font-size: var(--vesta-text-xl);
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.15;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  :where([data-vesta="overview-stats"] > li > span:not([data-vesta])) {
-    overflow: hidden;
+  :where([data-vesta="overview-facts"] dt) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  :where([data-vesta="overview-stat-pill"]) {
-    position: absolute;
-    inset-block-start: var(--vesta-space-2);
-    inset-inline-end: var(--vesta-space-2);
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px var(--vesta-space-2);
+  :where([data-vesta="overview-facts"] dd) {
+    display: flex;
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    font-size: var(--vesta-text-md, var(--vesta-text-sm));
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta="overview-facts-link"]) {
+    padding: 0;
     border: 0;
-    border-radius: var(--vesta-radius-pill, 999px);
-    background: var(--vesta-color-accent);
-    color: var(--vesta-color-on-accent);
+    background: none;
+    color: var(--vesta-color-accent-text);
     font: inherit;
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
     cursor: default;
   }
 
-  :where([data-vesta="overview-stat-pill"]):focus-visible {
+  :where([data-vesta="overview-facts-link"]):hover { text-decoration: underline; }
+  :where([data-vesta="overview-facts-link"]):focus-visible {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
     outline-offset: 2px;
   }
@@ -384,10 +378,6 @@
   }
 
   @container pane (max-width: 820px) {
-    :where([data-vesta="overview-stats"]) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     :where([data-vesta="overview-hero"]) {
       grid-template-columns: 96px minmax(0, 1fr);
     }
@@ -404,9 +394,6 @@
   }
 
   @container pane (max-width: 480px) {
-    :where([data-vesta="overview-stats"]) {
-      grid-template-columns: minmax(0, 1fr);
-    }
 
     :where([data-vesta="shot-grid"]) {
       grid-template-columns: repeat(2, minmax(0, 1fr));

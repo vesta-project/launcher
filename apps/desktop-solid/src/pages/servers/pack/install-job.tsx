@@ -71,7 +71,7 @@ export function InstallJobPanel() {
   const area = useModpackArea();
   const job = () => packInstallJob(area.id());
   const phase = () => packJobPhase(area.id());
-  const steps = createMemo(() => jobSteps(job().shape, phase(), job().failedAt), { name: 'pack-job:steps' });
+  const steps = createMemo(() => jobSteps(job().shape, phase(), job().failedAt), { name: 'pack-job:steps', equals: (a, b) => a.length === b.length && a.every((step, index) => step.id === b[index].id && step.state === b[index].state) });
   const active = () => isActivePhase(phase());
   const adopted = () => job().shape.adopted && !job().request;
   const name = () => job().request?.name;
@@ -159,14 +159,16 @@ export function InstallJobPanel() {
 export function InstallJobBanner() {
   const area = useModpackArea();
   const phase = () => packJobPhase(area.id());
+  // The same strip as the header's notices (restart, offline), not a card of its own.
   return (
     <Show when={isActivePhase(phase())}>
-      <div data-vesta="pack-job-banner" role="status">
+      <div data-vesta="instance-notice" data-tone="neutral" data-notice="pack-job" role="status">
         <Icon name="icons/content/modpack" size={14} />
-        <span>{t('server-pack.job-banner')}</span>
-        <span data-vesta="pack-job-banner-stage">{phase() ? t(phaseLabel(phase()!)) : ''}</span>
-        <span data-vesta="pack-job-spacer" />
-        <Button size="sm" variant="ghost" onClick={() => area.openServer()}>{t('server-pack.job-banner-open')}</Button>
+        <p>
+          <strong>{t('server-pack.job-banner')}</strong>
+          <span>{phase() ? t(phaseLabel(phase()!)) : ''}</span>
+        </p>
+        <Button size="sm" variant="outline" onClick={() => area.openServer()}>{t('server-pack.job-banner-open')}</Button>
       </div>
     </Show>
   );

@@ -93,17 +93,22 @@ export function SoftwareSection(props: { snapshot: ServerSnapshot }) {
       <Show when={software.value()} fallback={<Show when={!software.error()}><Skeleton height={132} radius={12} /></Show>}>
         {(state) => (
           <>
+            {/* Linked to a modpack, the pack decides the software: its link replaces the pickers.
+                Java sits beside it; a custom JAR only while no modpack decides the software. */}
+            <SoftwareModpack snapshot={props.snapshot}
+              notice={<>
             <Show when={!state().available}>
               <p data-vesta="server-callout" data-tone="warning">
                 {t(reasonMessage(state().unavailableReason) ?? 'server-hosting.software-unavailable')}
               </p>
             </Show>
-            <Show when={state().recoveryRequired}>
-              <p data-vesta="server-callout" data-tone="danger">{t(softwareRestoreKind(state()) === 'launch' ? 'server-hosting.recover-launch-banner' : 'server-hosting.recovery-banner')}</p>
+            <Show when={state().recoveryRequired && !busy()}>
+              <div data-vesta="server-callout" data-tone="danger">
+                <p>{t(softwareRestoreKind(state()) === 'launch' ? 'server-hosting.recover-launch-banner' : 'server-hosting.recovery-banner')}</p>
+                <RestoreAction state={state()} busy={busy()} stopped={stopped()} onRestore={() => setRestoring(true)} />
+              </div>
             </Show>
-            {/* Linked to a modpack, the pack decides the software: its link replaces the pickers.
-                Java sits beside it; a custom JAR only while no modpack decides the software. */}
-            <SoftwareModpack snapshot={props.snapshot}
+              </>}
               aside={<Show when={stopped()}><JavaPanel snapshot={props.snapshot} inventory={java.value()} error={java.error()} loading={java.loading()} requiredMajor={state().current?.javaMajor ?? null}
                 minecraft={state().current?.version ?? null} job={isJavaJob(outcome()) ? outcome() : undefined} jobRunning={busy()} actions={javaActions}
                 onRefresh={() => void java.refresh()} /></Show>}

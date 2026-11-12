@@ -42,7 +42,6 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
   const others = () => worlds().slice(1, 5);
   const resources = () => resourcesFor(id());
   const updates = () => resources().filter((item) => item.update).length;
-  const disabled = () => resources().filter((item) => !item.enabled).length;
   const stats = () => statsFor(id());
   const shots = () => screenshotsFor(id());
   const idle = () => props.entry.state.kind === "idle";
@@ -70,7 +69,6 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
 
   return (
     <div data-vesta="overview">
-      <LinkedPack instanceId={id()} />
       <Show
         when={latest()}
         fallback={
@@ -120,38 +118,35 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         )}
       </Show>
 
-      {/* The instance at a glance, like the game's own statistics screen. */}
-      <ul data-vesta="overview-stats">
-        <li data-stat="played">
-          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/timer" size={18} /></span>
-          <strong>{formatPlaytime(stats().playtimeMinutes)}</strong>
-          <span>{t("overview.played")}<Show when={stats().lastPlayed}> · {stats().lastPlayed}</Show></span>
-        </li>
-        <li data-stat="worlds">
-          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/globe" size={18} /></span>
-          <strong>{worlds().length}</strong>
-          <span>{t("overview.worlds")}</span>
-        </li>
-        <li data-stat="resources">
-          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/layers" size={18} /></span>
-          <strong>{resources().length}</strong>
-          <span>
-            {t("overview.resources")}
-            <Show when={disabled()}> · {t("overview.off-count", { count: disabled() })}</Show>
-          </span>
-          <Show when={updates()}>
-            <button type="button" data-vesta="overview-stat-pill" onClick={() => goto("resources")}>
-              <Icon name="icons/actions/download" size={12} />
-              {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
-            </button>
-          </Show>
-        </li>
-        <li data-stat="memory">
-          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/storage" size={18} /></span>
-          <strong>{(stats().memoryMb / 1024).toFixed(1)} GB</strong>
-          <span>{t("overview.memory")}</span>
-        </li>
-      </ul>
+      {/* The instance at a glance in one strip: where it comes from, then plain numbers. */}
+      <section data-vesta="overview-about" aria-label={t("overview.about")}>
+        <LinkedPack instanceId={id()} />
+        <dl data-vesta="overview-facts">
+          <div>
+            <dt>{t("overview.played")}</dt>
+            <dd title={stats().lastPlayed || undefined}>{formatPlaytime(stats().playtimeMinutes)}</dd>
+          </div>
+          <div>
+            <dt>{t("overview.worlds")}</dt>
+            <dd>{worlds().length}</dd>
+          </div>
+          <div>
+            <dt>{t("overview.resources")}</dt>
+            <dd>
+              {resources().length}
+              <Show when={updates()}>
+                <button type="button" data-vesta="overview-facts-link" onClick={() => goto("resources")}>
+                  {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
+                </button>
+              </Show>
+            </dd>
+          </div>
+          <div>
+            <dt>{t("overview.memory")}</dt>
+            <dd>{(stats().memoryMb / 1024).toFixed(1)} GB</dd>
+          </div>
+        </dl>
+      </section>
 
       <Show when={others().length}>
         <section aria-labelledby="overview-worlds">

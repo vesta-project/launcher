@@ -26,6 +26,7 @@ test('only queued, staging and activating hold the server against a second insta
 });
 
 test('a previous finished agent job never ends a new install early', () => {
+  expect(effectivePhase('installing', job('succeeded'), null)).toBe('installing');
   // Apply accepted job-2, but the workspace still reports the old job-1.
   expect(effectivePhase('installing', job('succeeded', null, 'job-1'), 'job-2')).toBe('installing');
   expect(effectivePhase('installing', job('failed', 'x', 'job-1'), 'job-2')).toBe('installing');
@@ -118,4 +119,9 @@ test('agent job errors reach the shared error presentation as reasons', () => {
   expect(jobError(job('failed', 'software_staging_interrupted'))).toEqual({ code: 'conflict', reason: 'software_staging_interrupted', retryAfterMs: null });
   expect(jobError(job('succeeded'))).toBeNull();
   expect(jobError(null)).toBeNull();
+});
+
+test('activation shows file writing progress and adopted recovery marks the switch failed', () => {
+  expect(progressView('switching', { stage: 'writing', completed: 146, total: 664 })).toMatchObject({ stage: 'server-pack.job-stage-writing', items: { completed: 146, total: 664 } });
+  expect(jobSteps({ adopted: true, backup: false, softwareSwitch: false, resetWorld: false }, 'recovery').map(s => `${s.id}:${s.state}`)).toEqual(['install:done', 'switch:failed']);
 });

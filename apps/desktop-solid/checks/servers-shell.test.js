@@ -478,3 +478,17 @@ test('[shell] backup polling follows long jobs through terminal, refreshes proje
   expect(projections).toBe(1);
   expect(c.timers.size).toBe(0);
 }));
+
+test('[shell] successful reload clears a previous timeout in every mounted reader', () => resourceHarness(async (api, c) => {
+  let fail = true;
+  const def = api.serverResource('timeout-reload', async () => { if (fail) throw { code: 'timeout' }; return { items: ['Aged'] }; });
+  const owner = api.createRoot(dispose => ({ dispose, read: api.useServerResource(() => 'timeout-server', def) }));
+  await c.settle();
+  expect(api.untrack(owner.read.error)).toMatchObject({ code: 'timeout' });
+  fail = false;
+  await c.advance(60000);
+  await owner.read.refresh(); await c.settle();
+  expect(api.untrack(owner.read.value)).toEqual({ items: ['Aged'] });
+  expect(api.untrack(owner.read.error)).toBeNull();
+  owner.dispose();
+}));
