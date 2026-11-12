@@ -73,7 +73,11 @@ export function LinkedPack(props: { instanceId: string }) {
       else await apply(result, false);
     } catch (error) { reportInstanceError(error); }
     finally { setUpdating(false); }
-  };  const fromServer = () => pack()?.source === 'Server' || !!listing.identity();
+  };
+  const fromServer = () => pack()?.source === 'Server' || !!listing.identity();
+  // An install that stopped partway is said once, by the header's Resume bar. Until it finishes,
+  // the pack's own checks (release unverifiable, repair needed) only repeat that, so they wait.
+  const unfinished = () => ['installing', 'interrupted', 'failed'].includes(findInstance(id)?.state.kind ?? '');
   return (
     <Show when={shown()}>
       {(linked) => (
@@ -93,10 +97,10 @@ export function LinkedPack(props: { instanceId: string }) {
               </>
             } />
             <div data-vesta="pack-status">
-              <Show when={sync.status()?.availability !== undefined && sync.status()!.availability !== 'online'}>
-                <Badge size="sm" variant="soft" tone="warning">{t('server-pack.unavailable')}</Badge>
+              <Show when={!unfinished() && sync.status()?.availability !== undefined && sync.status()!.availability !== 'online'}>
+                <Badge size="sm" variant="soft" tone="warning" title={t('server-pack.unavailable')}>{t('server-pack.unavailable-short')}</Badge>
               </Show>
-              <Show when={available()} fallback={
+              <Show when={!unfinished() && available()} fallback={
                 <Show when={verifiedCurrent()}><span data-vesta="pack-current"><Icon name="icons/controls/check" size={12} />{t('versions.up-to-date')}</span></Show>
               }>
                 <Button size="sm" tone={required() ? 'danger' : 'accent'} icon={<Icon name="icons/actions/download" size={14} />}
@@ -124,7 +128,7 @@ export function LinkedPack(props: { instanceId: string }) {
               </Show>
             </div>
           </header>
-          <Show when={sync.error() ?? sync.status()?.error}>{(reason) => <div data-vesta="version-warning"><Notice variant="inline" cause={noticeCause(reason())}>{t(errorMessage(reason()))}</Notice></div>}</Show>
+          <Show when={!unfinished() && (sync.error() ?? sync.status()?.error)}>{(reason) => <div data-vesta="version-warning"><Notice variant="inline" cause={noticeCause(reason())}>{t(errorMessage(reason()))}</Notice></div>}</Show>
           <Show when={listing.error()}>
             {(reason) => (
               <div data-vesta="version-warning">

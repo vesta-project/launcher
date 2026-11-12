@@ -17,6 +17,7 @@ server-pack-review-again = Review again
 server-pack-update-available = An optional update is available.
 server-pack-update-required = Update this linked pack before playing.
 server-pack-unavailable = The server's release could not be verified. Check again when it is available.
+server-pack-unavailable-short = Can't check the server
 
 # Header
 server-pack-minecraft = Minecraft { $version }

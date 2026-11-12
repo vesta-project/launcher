@@ -158,6 +158,7 @@ export const messageIds = [
   "server-pack.update-available",
   "server-pack.update-required",
   "server-pack.unavailable",
+  "server-pack.unavailable-short",
   "server-pack.minecraft",
   "server-pack.unpublished",
   "server-pack.unpublished-count",
