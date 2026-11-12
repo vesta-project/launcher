@@ -2,7 +2,6 @@ import { Button, Dialog, IconButton, ImageViewer } from "@vesta/ui";
 import { invoke } from '@tauri-apps/api/core';
 import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { navigate } from "../../../app/router";
-import { EmptyState } from "../../../components/empty-state";
 import { Icon } from "../../../components/icon";
 import {
   formatPlaytime,
@@ -38,8 +37,9 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
       .then(supported => { if (!stale) setDirectWorld(supported); }).catch(() => {});
   }, { name: 'overview.directWorldSupport' });
   const worlds = () => worldsFor(id());
-  const latest = () => worlds()[0];
-  const others = () => worlds().slice(1, 5);
+
+  /** Enough worlds to fill a row or two; the rest are on the Worlds tab. */
+  const shownWorlds = () => worlds().slice(0, 6);
   const resources = () => resourcesFor(id());
   const updates = () => resources().filter((item) => item.update).length;
   const stats = () => statsFor(id());
@@ -67,153 +67,113 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
     }
   };
 
+  const play = (worldId: string) => nativeInstances && directWorld() ? void launchNativeTarget(id(), { kind: 'world', folder: worldId }) : playInstance(id());
   return (
     <div data-vesta="overview">
-      <Show
-        when={latest()}
-        fallback={
-          <section data-vesta="overview-panel" class="overview-empty">
-            <EmptyState
-              variant="inline"
-              icon="icons/content/globe"
-              title={t("overview.no-worlds")}
-              description={t("overview.create-or-import-world")}
-            >
-              <Button size="sm" variant="outline" onClick={() => goto("worlds")}>
-                {t("overview.go-to-worlds")}
-              </Button>
-            </EmptyState>
-          </section>
-        }
-      >
-        {(world) => (
-          // The world you were last in, as a scene: its icon washed across the card, crisp in front.
-          <section data-vesta="overview-hero" aria-label={t("overview.continue-playing")} style={{ "--hero-art": `url("${world().image}")` }}>
-            <span data-vesta="overview-hero-art" aria-hidden="true" />
-            <img data-vesta="overview-hero-icon" src={world().image} alt="" draggable="false" />
-            <div data-vesta="overview-hero-copy">
-              <span data-vesta="overview-eyebrow">{t("overview.continue-playing")}</span>
-              <strong>{world().name}</strong>
-              <span data-vesta="overview-hero-meta">
-                <span data-vesta="mode-tag" data-mode={world().mode.toLowerCase()}>{world().mode}</span>
-                <Show when={world().days !== undefined}><span>{t("worlds.day-count", { count: world().days ?? 0 })}</span></Show>
-                <span>{world().lastPlayed}</span>
-              </span>
+      <div data-vesta="overview-main">
+        {/* Worlds lead, the same card for every one; the newest is marked. Nothing to show, no section. */}
+        <Show when={worlds().length} fallback={
+          <section data-vesta="overview-start">
+            <Icon name="icons/content/globe" size={20} />
+            <div>
+              <strong>{t("overview.no-worlds")}</strong>
+              <span>{t("overview.create-or-import-world")}</span>
             </div>
-            <div data-vesta="overview-hero-actions">
-              <Button variant="ghost" onClick={() => goto(`worlds/${encodeURIComponent(world().id)}`)}>
-                {t("overview.manage")}
-              </Button>
-              <Button
-                size="lg"
-                tone="accent"
-                disabled={!idle()}
-                icon={<Icon name="icons/actions/play" />}
-                onClick={() => nativeInstances && directWorld() ? void launchNativeTarget(id(), { kind: 'world', folder: world().id }) : playInstance(id())}
-              >
-                {t(nativeInstances && !directWorld() ? "worlds.play" : "overview.play-world")}
-              </Button>
-            </div>
+            <Button tone="accent" disabled={!idle()} icon={<Icon name="icons/actions/play" />} onClick={() => playInstance(id())}>{t("worlds.play")}</Button>
           </section>
-        )}
-      </Show>
-
-      {/* The instance at a glance in one strip: where it comes from, then plain numbers. */}
-      <section data-vesta="overview-about" aria-label={t("overview.about")}>
-        <LinkedPack instanceId={id()} />
-        <dl data-vesta="overview-facts">
-          <div>
-            <dt>{t("overview.played")}</dt>
-            <dd title={stats().lastPlayed || undefined}>{formatPlaytime(stats().playtimeMinutes)}</dd>
-          </div>
-          <div>
-            <dt>{t("overview.worlds")}</dt>
-            <dd>{worlds().length}</dd>
-          </div>
-          <div>
-            <dt>{t("overview.resources")}</dt>
-            <dd>
-              {resources().length}
-              <Show when={updates()}>
-                <button type="button" data-vesta="overview-facts-link" onClick={() => goto("resources")}>
-                  {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
-                </button>
+        }>
+          <section aria-labelledby="overview-worlds">
+            <header data-vesta="overview-panel-header">
+              <h2 id="overview-worlds">{t("overview.worlds")}</h2>
+              <Show when={worlds().length > shownWorlds().length}>
+                <Button size="sm" variant="ghost" onClick={() => goto("worlds")}>{t("overview.view-all-count", { count: worlds().length })}</Button>
               </Show>
-            </dd>
-          </div>
-          <div>
-            <dt>{t("overview.memory")}</dt>
-            <dd>{(stats().memoryMb / 1024).toFixed(1)} GB</dd>
-          </div>
-        </dl>
-      </section>
+            </header>
+            <ul data-vesta="overview-world-grid">
+              <For each={shownWorlds()}>
+                {(world, index) => (
+                  <li data-latest={index() === 0 ? "" : undefined}>
+                    <button type="button" data-vesta="overview-world-card" onClick={() => goto(`worlds/${encodeURIComponent(world.id)}`)}>
+                      <img src={world.image} alt="" draggable="false" />
+                      <span data-vesta="overview-world-name">{world.name}</span>
+                      <span data-vesta="overview-world-meta">
+                        <span data-vesta="mode-tag" data-mode={world.mode.toLowerCase()}>{world.mode}</span>
+                        <span>{world.lastPlayed}</span>
+                      </span>
+                    </button>
+                    <IconButton size="sm" tone="accent" variant={index() === 0 ? "solid" : "ghost"} class="overview-world-play" disabled={!idle()}
+                      label={t("overview.play-named", { name: world.name })} icon={<Icon name="icons/actions/play" />} onClick={() => play(world.id)} />
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        </Show>
 
-      <Show when={others().length}>
-        <section aria-labelledby="overview-worlds">
-          <header data-vesta="overview-panel-header">
-            <h2 id="overview-worlds">{t("overview.other-worlds")}</h2>
-            <Button size="sm" variant="ghost" onClick={() => goto("worlds")}>
-              {t("overview.view-all-count", { count: worlds().length })}
-            </Button>
-          </header>
-          {/* Worlds as square cards, like the game's world list, newest first. */}
-          <ul data-vesta="overview-world-grid">
-            <For each={others()}>
-              {(world) => (
-                <li>
-                  <button type="button" data-vesta="overview-world-card" onClick={() => goto(`worlds/${encodeURIComponent(world.id)}`)}>
-                    <img src={world.image} alt="" draggable="false" />
-                    <span data-vesta="overview-world-name">{world.name}</span>
-                    <span data-vesta="overview-world-meta">
-                      <span data-vesta="mode-tag" data-mode={world.mode.toLowerCase()}>{world.mode}</span>
-                      <span>{world.lastPlayed}</span>
-                    </span>
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
-        </section>
-      </Show>
-
-      <Show when={shots().length}>
-        <section aria-labelledby="overview-shots">
-          <header data-vesta="overview-panel-header">
-            <h2 id="overview-shots">{t("overview.screenshots")}</h2>
-            <span data-vesta="overview-quiet">{shots().length}</span>
-          </header>
-          <ul data-vesta="shot-grid">
-            <For each={shots().slice(0, 5)}>
-              {(shot, index) => (
-                <li data-vesta="shot-item">
-                  <button
-                    type="button"
-                    data-vesta="shot"
-                      aria-label={t("overview.open-screenshot", { title: shot.title })}
-                    onClick={() => setViewer(index())}
-                  >
-                    <img
-                      src={shot.src}
-                      alt=""
-                      loading="lazy"
-                      draggable="false"
+        <Show when={shots().length}>
+          <section aria-labelledby="overview-shots">
+            <header data-vesta="overview-panel-header">
+              <h2 id="overview-shots">{t("overview.screenshots")}</h2>
+              <span data-vesta="overview-quiet">{shots().length}</span>
+            </header>
+            <ul data-vesta="shot-grid">
+              <For each={shots().slice(0, 5)}>
+                {(shot, index) => (
+                  <li data-vesta="shot-item">
+                    <button
+                      type="button"
+                      data-vesta="shot"
+                        aria-label={t("overview.open-screenshot", { title: shot.title })}
+                      onClick={() => setViewer(index())}
+                    >
+                      <img
+                        src={shot.src}
+                        alt=""
+                        loading="lazy"
+                        draggable="false"
+                      />
+                      <span>{shot.date}</span>
+                    </button>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      class="shot-copy"
+                      label={t("overview.copy-screenshot", { title: shot.title })}
+                      icon={<Icon name="icons/actions/copy" />}
+                      onClick={() => void copy(shot.src)}
                     />
-                    <span>{shot.date}</span>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        </Show>
+  
+      </div>
+
+      {/* Beside the worlds: where the instance comes from, then a few plain facts. */}
+      <aside data-vesta="overview-side">
+        <LinkedPack instanceId={id()} />
+        <section data-vesta="overview-panel" aria-labelledby="overview-details">
+          <header data-vesta="overview-panel-header"><h2 id="overview-details">{t("overview.details")}</h2></header>
+          <dl data-vesta="overview-facts">
+            <div><dt>{t("overview.played")}</dt><dd>{formatPlaytime(stats().playtimeMinutes)}</dd></div>
+            <Show when={stats().lastPlayed}><div><dt>{t("overview.last-launched")}</dt><dd>{stats().lastPlayed}</dd></div></Show>
+            <div>
+              <dt>{t("overview.resources")}</dt>
+              <dd>
+                <Show when={updates()}>
+                  <button type="button" data-vesta="overview-facts-link" onClick={() => goto("resources")}>
+                    {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
                   </button>
-                  <IconButton
-                    size="sm"
-                    variant="ghost"
-                    class="shot-copy"
-                    label={t("overview.copy-screenshot", { title: shot.title })}
-                    icon={<Icon name="icons/actions/copy" />}
-                    onClick={() => void copy(shot.src)}
-                  />
-                </li>
-              )}
-            </For>
-          </ul>
+                </Show>
+                {resources().length}
+              </dd>
+            </div>
+            <div><dt>{t("overview.memory")}</dt><dd>{(stats().memoryMb / 1024).toFixed(1)} GB</dd></div>
+          </dl>
         </section>
-      </Show>
+      </aside>
 
       <span data-vesta="screenshot-copy-status" role="status">
         {copyStatus()}

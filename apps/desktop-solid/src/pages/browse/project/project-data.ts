@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, untrack, type Accessor } from 'solid-js';
 import { activateVersionFilter } from '../../../features/browse/version-filter';
 import { projectKey, sortVersions, type ResourceProject, type ResourceVersion, type SourceId } from '../../../features/browse/browse-model';
-import { loadProject, loadVersions, peekProject, peekVersions, watchProject } from '../../../features/browse/browse-projects';
+import { hasCompleteProject, loadProject, loadVersions, peekProject, peekVersions, watchProject } from '../../../features/browse/browse-projects';
 
 export interface ProjectData {
   source: SourceId;
@@ -25,7 +25,7 @@ export function useProjectData(source: SourceId, id: string): ProjectData {
   const [project, setProject] = createSignal<ResourceProject | undefined>(untrack(() => peekProject(source, id)), {
     name: 'projectPageProject',
   });
-  const [complete, setComplete] = createSignal(false, { name: 'projectPageComplete' });
+  const [complete, setComplete] = createSignal(untrack(() => hasCompleteProject(source, id)), { name: 'projectPageComplete' });
   const [error, setError] = createSignal<string | undefined>(undefined, { name: 'projectPageError' });
   const [raw, setRaw] = createSignal<ResourceVersion[] | undefined>(untrack(() => peekVersions(source, id)), {
     name: 'projectPageVersionsRaw',

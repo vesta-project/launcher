@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CacheInvalidatedError, RequestCache } from '../src/platform/cache/request-cache.ts';
+import { CacheInvalidatedError, RequestCache, retainEqual } from '../src/platform/cache/request-cache.ts';
 
 function setup(overrides = {}) {
   let now = 0;
@@ -174,4 +174,13 @@ test('startup account snapshot is consumed once, including an empty account list
   expect(takeAccountBootstrap(snapshot, storage)).toBeUndefined();
   expect(takeAccountBootstrap({ ...snapshot, snapshot_id: 'window-two' }, storage)).toEqual([]);
   expect(takeAccountBootstrap(snapshot, { getItem() { throw new Error('denied'); }, setItem() {} })).toBeUndefined();
+});
+
+
+test('refreshed records retain unchanged identities even when reordered', () => {
+  const before = [{ id: 'a', count: 1 }, { id: 'b', count: 2 }];
+  const after = retainEqual(before, [{ id: 'b', count: 2 }, { id: 'a', count: 3 }]);
+  expect(after[0]).toBe(before[1]);
+  expect(after[1].count).toBe(3);
+  expect(retainEqual({ a: undefined }, { b: undefined })).toEqual({ b: undefined });
 });

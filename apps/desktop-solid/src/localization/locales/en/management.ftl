@@ -100,5 +100,7 @@ software-hint-spigot = Plugins, built locally
 
 worlds-play = Play
 worlds-play-target = Play { $name }
-worlds-saved-servers = Saved servers
-worlds-no-saved-servers = No saved servers in this instance.
+worlds-saved-servers = Servers
+worlds-title = Worlds
+worlds-saved-servers-hint = Servers you add in Minecraft's multiplayer menu show up here.
+worlds-no-saved-servers = No servers yet

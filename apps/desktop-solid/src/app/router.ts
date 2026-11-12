@@ -102,9 +102,9 @@ export function navigate(to: string, options?: { replace?: boolean }) {
   if (!mayLeave(to)) return;
   // The History API writes the entry and its depth in one step. Assigning location.hash and
   // then stamping it races WebKit's own entry bookkeeping, which left back with a dead step.
-  if (replace) history.replaceState({ ...history.state, vesta: historyDepth() }, '', `#${to}`);
+  if (replace) history.replaceState({ ...history.state, vesta: depth() }, '', `#${to}`);
   else {
-    const next = historyDepth() + 1;
+    const next = depth() + 1;
     history.pushState({ vesta: next, from: read() }, '', `#${to}`);
     setHistoryDepth(next);
   }

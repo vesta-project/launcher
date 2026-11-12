@@ -25,6 +25,8 @@ export class SkinViewerController {
   private viewer?: Viewer;
   private idle?: InstanceType<Library['IdleAnimation']>;
   private motion = new SkinIdleMotion();
+  /** The name floating over the head, drawn in the scene like in game. */
+  private nameTag?: string;
   private orbit?: SkinOrbitReturn;
   private loading = false;
   private disposed = false;
@@ -59,10 +61,16 @@ export class SkinViewerController {
     this.sync();
   }
 
-  /** A small jump to greet a newly applied skin (skipped with reduced motion). */
-  hop() {
-    if (this.reduced) return;
-    this.motion.hop();
+  /** Shows a name over the character's head in the 3D scene (skinview3d's in-game style tag). */
+  setNameTag(name: string | undefined) {
+    if (this.disposed || name === this.nameTag) return;
+    this.nameTag = name;
+    this.applyNameTag();
+  }
+
+  private applyNameTag() {
+    if (!this.viewer) return;
+    this.viewer.nameTag = this.nameTag ?? null;
     this.invalidate();
   }
 
@@ -152,6 +160,7 @@ export class SkinViewerController {
           player.rotation.z = pose.roll;
           this.orbit?.tick(delta);
         });
+        this.applyNameTag();
         this.viewer.controls.enableZoom = false;
         this.viewer.controls.enablePan = false;
         this.viewer.controls.addEventListener('change', this.invalidate);

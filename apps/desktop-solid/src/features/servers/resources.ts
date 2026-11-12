@@ -44,7 +44,7 @@ const MAX_ENTRIES = 256;
 
 /** Connection signals are bounded too, including lookups before any resource is read. */
 function keyedSignal<T>(name: string, initial: T) {
-  const cells = new Map<ConnectionId, [Accessor<T>, (value: T) => void]>();
+  const cells = new Map<ConnectionId, [Accessor<T>, (value: T) => void, T]>();
   const trim = () => {
     for (const id of cells.keys()) {
       if (cells.size <= MAX_ENTRIES) break;
@@ -55,15 +55,15 @@ function keyedSignal<T>(name: string, initial: T) {
     let entry = cells.get(id);
     if (!entry) {
       const [read, write] = createSignal<T>(initial as Exclude<T, Function>, { name: `${name}:${id}` });
-      entry = [read, (value: T) => write(() => value as Exclude<T, Function>)];
+      entry = [read, (value: T) => write(() => value as Exclude<T, Function>), initial];
       cells.set(id, entry);
       trim();
     }
     return entry;
   };
   return {
-    get: (id: ConnectionId) => cell(id)[0](),
-    set: (id: ConnectionId, value: T) => cell(id)[1](value),
+    get: (id: ConnectionId) => { const entry = cell(id); entry[0](); return entry[2]; },
+    set: (id: ConnectionId, value: T) => { const entry = cell(id); entry[2] = value; entry[1](value); },
     delete: (id: ConnectionId) => { cells.get(id)?.[1](initial); cells.delete(id); },
     size: () => cells.size,
   };
@@ -248,6 +248,7 @@ export function useServerResource<T, A = undefined>(
   const enabled = createMemo(() => options.enabled?.() ?? true, { name: `server-resource:${def.name}:enabled` });
   const initial = untrack(() => serverResourceCache.peek(key()));
   const [snapshot, setSnapshot] = createSignal<CacheSnapshot<unknown> | undefined>(initial, { name: `server-resource:${def.name}:snapshot` });
+  const value = createMemo(() => { const current = snapshot(); return current?.hasData ? (current.data as T) : undefined; }, { name: `server-resource:${def.name}:value` });
   const error = () => snapshot()?.error ? toServerError(snapshot()!.error) : null;
   let disposed = false;
   onCleanup(() => { disposed = true; });
@@ -297,7 +298,7 @@ export function useServerResource<T, A = undefined>(
   }
 
   return {
-    value: () => { const current = snapshot(); return current?.hasData ? (current.data as T) : undefined; },
+    value,
     error,
     loading: () => { const current = snapshot(); return !current?.hasData && (current?.refreshing ?? enabled()); },
     refreshing: () => !!snapshot()?.refreshing,

@@ -325,38 +325,29 @@
     content: '';
   }
 
+  /* Tiles answer with colour, not movement: the glow behind the figure warms on hover and holds
+     in the accent while worn. */
   :where([data-vesta='skin-tile-apply'], [data-vesta='cape-option']) {
     transition:
-      transform var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
-      box-shadow var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
-      border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
-  }
-
-  :where([data-vesta='skin-tile-apply']:hover:not(:disabled), [data-vesta='cape-option']:hover:not(:disabled)) {
-    box-shadow: 0 6px 14px -8px color-mix(in oklab, var(--vesta-color-media-shade) 60%, transparent);
-    transform: translateY(-2px);
+      border-color var(--vesta-duration-normal, 180ms) var(--vesta-ease-standard, ease),
+      background-color var(--vesta-duration-normal, 180ms) var(--vesta-ease-standard, ease),
+      box-shadow var(--vesta-duration-normal, 180ms) var(--vesta-ease-standard, ease);
   }
 
   :where([data-vesta='skin-tile-apply']) {
+    --tile-glow: 8%;
+
     background:
-      radial-gradient(70% 60% at 50% 70%, color-mix(in oklab, var(--vesta-color-accent) 10%, transparent), transparent),
+      radial-gradient(70% 60% at 50% 70%, color-mix(in oklab, var(--vesta-color-accent) var(--tile-glow), transparent), transparent),
       var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='skin-tile-apply']:hover:not(:disabled)) {
+    --tile-glow: 16%;
   }
 
   :where([data-vesta='skin-tile-apply'][aria-pressed='true']) {
-    background:
-      radial-gradient(70% 60% at 50% 70%, color-mix(in oklab, var(--vesta-color-accent) 26%, transparent), transparent),
-      var(--vesta-color-surface-raised);
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    :where([data-vesta='skin-tile-apply'][aria-pressed='true'], [data-vesta='cape-option'][aria-checked='true']) {
-      animation: skin-worn 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-  }
-
-  @keyframes skin-worn {
-    from { transform: scale(0.92); }
+    --tile-glow: 26%;
   }
 }
 
@@ -405,23 +396,6 @@
     align-self: center;
   }
 
-  /* The nametag: dark, translucent, floating over the head like in game. */
-  :where([data-vesta='skin-nameplate']) {
-    position: absolute;
-    inset-block-start: var(--vesta-space-4);
-    inset-inline-start: 50%;
-    z-index: 1;
-    max-inline-size: calc(100% - var(--vesta-space-6, 32px));
-    padding: 2px var(--vesta-space-2);
-    overflow: hidden;
-    background: color-mix(in oklab, var(--vesta-color-media-shade) 55%, transparent);
-    color: var(--vesta-color-media-text);
-    font-weight: var(--vesta-weight-semibold);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
 
   :where([data-vesta='skin-side']) {
     gap: var(--vesta-space-5);
@@ -436,105 +410,105 @@
     overflow: visible;
   }
 
-  /* ---- Who you play as ---- */
-  :where([data-vesta='account-switcher'] > ul) {
+  /* ---- The stage's toolbar, joined to its bottom edge ---- */
+  :where([data-vesta='skin-stage']) {
+    gap: 0;
+  }
+
+  :where([data-vesta='skin-stage']) > :where([data-vesta='skin-stage-view']) {
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  :where([data-vesta='skin-stage-bar']) {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
     gap: var(--vesta-space-2);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    padding: var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-block-start: 0;
+    border-end-start-radius: var(--vesta-radius-container);
+    border-end-end-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface-raised);
   }
 
-  :where([data-vesta='account-switcher'] li) {
-    position: relative;
+  :where([data-vesta='skin-stage-bar']) > :where([data-vesta='skin-status']) {
+    order: 1;
+    margin-inline-start: auto;
   }
 
-  :where([data-vesta='account-tile']) {
+  :where([data-vesta='skin-stage-bar']) > :where([data-vesta='button']) {
+    order: 2;
+  }
+
+  /* ---- Who you play as: one row, the rest in its menu ---- */
+  :where([data-vesta='account-current']) {
     display: flex;
     align-items: center;
     gap: var(--vesta-space-3);
-    min-inline-size: 11rem;
-    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-2) var(--vesta-space-2);
+    padding: var(--vesta-space-3);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-surface-raised);
-    color: var(--vesta-color-text);
-    font: inherit;
-    text-align: start;
-    cursor: default;
-    transition:
-      transform var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
-      border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
-  }
-
-  :where([data-vesta='account-tile']):hover:not([aria-pressed='true']) {
-    border-color: var(--vesta-color-border-strong);
-    transform: translateY(-2px);
-  }
-
-  :where([data-vesta='account-tile']):focus-visible {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: 2px;
-  }
-
-  :where([data-vesta='account-tile'][aria-pressed='true']) {
-    border-color: var(--vesta-color-accent);
     background:
-      radial-gradient(90% 140% at 0% 50%, color-mix(in oklab, var(--vesta-color-accent) 20%, transparent), transparent 70%),
+      radial-gradient(80% 160% at 0% 50%, color-mix(in oklab, var(--vesta-color-accent) 14%, transparent), transparent 70%),
       var(--vesta-color-surface-raised);
   }
 
-  :where([data-vesta='account-tile'][data-add]) {
-    border-style: dashed;
-    background: transparent;
-    color: var(--vesta-color-text-muted);
+  :where([data-vesta='account-current']) > :where([data-vesta='button']) {
+    margin-inline-start: auto;
   }
 
-  :where([data-vesta='account-tile-copy']) {
+  :where([data-vesta='account-current-copy']) {
     display: grid;
     min-inline-size: 0;
   }
 
-  :where([data-vesta='account-tile-copy'] strong) {
+  :where([data-vesta='account-current-copy'] strong) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  :where([data-vesta='account-tile-copy'] small) {
+  :where([data-vesta='account-current-copy'] small) {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta='account-tile'][aria-pressed='true']) :where([data-vesta='account-tile-copy'] small) {
+  :where([data-vesta='account-current']) :where([data-vesta='account-current-copy'] small) {
     color: var(--vesta-color-accent-text);
     font-weight: var(--vesta-weight-semibold);
   }
 
-  :where([data-vesta='account-tile-add']) {
+  :where([data-vesta='account-menu-note']) {
+    color: var(--vesta-color-text-muted);
+  }
+
+  /* Manage accounts: a plain list, the one in use marked. */
+  :where([data-vesta='account-list']) {
     display: grid;
-    place-items: center;
-    inline-size: 36px;
-    block-size: 36px;
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-fill);
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
-  /* Remove sits on the tile's corner, shown when the tile is pointed at. */
-  :where([data-vesta='account-switcher'] li) > :where([data-vesta='button']) {
-    position: absolute;
-    inset-block-start: -6px;
-    inset-inline-end: -6px;
-    border-radius: 50%;
-    background: var(--vesta-color-surface-raised);
-    box-shadow: 0 0 0 1px var(--vesta-color-border);
-    opacity: 0;
+  :where([data-vesta='account-list'] > li) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding-block: var(--vesta-space-2);
+    transition: background-color var(--vesta-duration-normal, 180ms) var(--vesta-ease-standard, ease);
   }
 
-  :where([data-vesta='account-switcher'] li):hover > :where([data-vesta='button']),
-  :where([data-vesta='account-switcher'] li):focus-within > :where([data-vesta='button']) {
-    opacity: 1;
+  :where([data-vesta='account-list'] > li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='account-list'] > li) > :where([data-vesta='account-current-copy']) {
+    flex: 1;
+  }
+
+  :where([data-vesta='account-list'] > li[data-active]) :where(small) {
+    color: var(--vesta-color-accent-text);
   }
 
   @container pane (max-width: 760px) {

@@ -544,11 +544,11 @@ export async function loadResults(q: BrowseQuery, force = false) {
   updateSequence++;
   const cached = searchCache.peek(key);
   if (force) searchCache.invalidate(key);
-  if (cached?.hasData && !force) {
+  if (cached?.hasData) {
     publish(cached.data!);
     setWarning(false);
   }
-  setPending(!searchCache.isFresh(key));
+  setPending(!cached?.hasData);
   setFailure(undefined);
   try {
     const set = await searchCache.read(key, fetchPage(q, key));

@@ -15,7 +15,7 @@ import {
 } from '../../features/browse/browse-targets';
 import { chooseServerDestination, chooseTarget, serverDestinationHint, serverTarget, targetRef, type } from '../../features/browse/browse-store';
 import { serverPermissions } from '../../features/browse/install-targets';
-import { serverSoftware } from '../../features/browse/server-install';
+import { cachedServerSoftware, serverSoftware } from '../../features/browse/server-install';
 import { instances } from '../../features/instances/catalog';
 import { peekServerResource } from '../../features/servers/resources';
 import { contentResource } from '../../features/servers/server-resources';
@@ -69,7 +69,7 @@ export function TargetSelect(props: {
     if (id in known) return known[id];
     const current = serverTarget();
     if (current?.id === id && current.software !== undefined) return current.software;
-    return peekServerResource(id, contentResource)?.software;
+    return cachedServerSoftware(id);
   };
   const versionOf = (id: string) => {
     const current = serverTarget();

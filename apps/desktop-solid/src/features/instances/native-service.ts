@@ -1,8 +1,10 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { createEffect, createSignal, onSettled, untrack } from 'solid-js';
+import { toast } from '@vesta/ui';
+import { createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { activeAccount } from '../accounts/accounts';
-import { CacheInvalidatedError, RequestCache } from '../../platform/cache/request-cache';
+import { t } from '../../localization';
+import { CacheInvalidatedError, RequestCache, retainEqual } from '../../platform/cache/request-cache';
 import { resolveInstanceIcon, stableIconId } from './icon-catalog';
 import { instanceSlug, instanceState, preferencesPatch, type NativeInstance } from './native-model';
 import type { InstancePreferences } from './preferences';
@@ -19,7 +21,21 @@ let scopeGeneration = 0;
 let runtimeRevision = 0;
 export const instanceCacheMetrics = () => ({ ...catalog.metrics });
 export { records as nativeRecords, loaded as instancesLoaded, error as instanceError };
-export const reportInstanceError = (reason: unknown) => setError(String(reason));
+/**
+ * Errors are a passing notice, not a bar that follows you around: a toast that clears itself,
+ * once per message even if several reads fail together. Installs report in Activity instead.
+ */
+const surfaced = new Map<string, number>();
+function surfaceError(message: string, retry?: () => void) {
+  const now = Date.now();
+  if ((surfaced.get(message) ?? 0) > now - 8000) return;
+  surfaced.set(message, now);
+  toast.show({
+    title: t('management.error'), description: message, tone: 'danger', duration: retry ? 9000 : 6000,
+    actions: retry ? [{ label: t('common.retry'), onClick: retry }] : undefined,
+  });
+}
+export const reportInstanceError = (reason: unknown) => { const message = String(reason); setError(message); surfaceError(message); };
 export const clearInstanceError = () => setError(undefined);
 export const nativeRecord = (id: string) => records().find((record) => String(record.id) === id);
 export const instancePending = (id: string) => pending().has(Number(id)) || deleting().has(Number(id));
@@ -30,18 +46,24 @@ export function displayImage(record: NativeInstance) {
   if (/^(\/|[A-Za-z]:[\\/])/.test(path)) return convertFileSrc(path);
   return resolveInstanceIcon(path);
 }
-export const nativeEntries = () => records().map((record) => ({
+const buildNativeEntries = () => records().map((record) => ({
   instance: { id: String(record.id), name: record.name, minecraftVersion: record.minecraftVersion,
     modloader: record.modloader || 'vanilla', image: displayImage(record) },
   state: deleting().has(record.id) ? { kind: 'installing' as const, label: 'Deleting' } : instanceState(record, runtime()[instanceSlug(record.name)]),
 }));
+
+let previousEntries: ReturnType<typeof buildNativeEntries> = [];
+export const nativeEntries = createMemo(() => {
+  previousEntries = retainEqual(previousEntries, buildNativeEntries());
+  return previousEntries;
+}, { name: 'nativeLibraryEntries' });
 
 export async function refreshNativeInstances(force = false) {
   if (!nativeInstances) return;
   const generation = scopeGeneration;
   if (force) catalog.invalidate('library');
   try { await catalog.read('library', () => invoke<NativeInstance[]>('list_instances').then((list) => list.map((record) => ({ ...record, iconData: null })))); }
-  catch (reason) { if (!(reason instanceof CacheInvalidatedError) && generation === scopeGeneration) setError(String(reason)); }
+  catch (reason) { if (!(reason instanceof CacheInvalidatedError) && generation === scopeGeneration) { setError(String(reason)); surfaceError(String(reason), () => void refreshNativeInstances(true)); } }
   finally { if (generation === scopeGeneration) setLoaded(true); }
 }
 
@@ -89,7 +111,7 @@ export function useInstanceSync() {
         const context = JSON.parse(notice.metadata).context;
         if (context?.kind === 'instance' && records().some((record)=>String(record.id) === context.id)) {
           setDeleting((current)=>{const next = new Set(current); next.delete(Number(context.id)); return next;});
-          setError(notice.description || notice.title);
+          // The failed install already shows in Activity and the titlebar; no second notice.
           void refreshNativeInstances(true);
         }
       } catch { /* unrelated/malformed notification metadata */ }
@@ -108,8 +130,8 @@ export function useInstanceSync() {
       ...['core://instance-killed', 'core://instance-exited'].map((event) => register<{instance_id:string}>(event, ({instance_id}) => {
         updateRuntime(instance_id); void refreshNativeInstances(true);
       })),
-    ]).catch((reason) => setError(String(reason))).finally(() => { if (!disposed) setReady(true); });
-    const focus = () => { if (!initialized) return; void refreshNativeInstances(); void refreshRuntime().catch((reason) => setError(String(reason))); };
+    ]).catch(reportInstanceError).finally(() => { if (!disposed) setReady(true); });
+    const focus = () => { if (!initialized) return; void refreshNativeInstances(); void refreshRuntime().catch(reportInstanceError); };
     window.addEventListener('focus', focus);
     return () => { disposed = true; unsubscribeCatalog?.(); stops.forEach((stop) => stop()); window.removeEventListener('focus', focus); };
   });
@@ -126,12 +148,12 @@ export function useInstanceSync() {
     setLoaded(false);
     unsubscribeCatalog = catalog.subscribe('library', (snapshot) => {
       if (snapshot.hasData) setRecords(snapshot.data!);
-      if (snapshot.error) setError(String(snapshot.error));
+      if (snapshot.error) reportInstanceError(snapshot.error);
     });
     // The refreshes read current state as a snapshot; only the account switch drives this.
     untrack(() => {
       void refreshNativeInstances();
-      void refreshRuntime().catch((reason) => setError(String(reason)));
+      void refreshRuntime().catch(reportInstanceError);
     });
   });
 }

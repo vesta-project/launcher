@@ -23,8 +23,10 @@ async function nativeHarness() {
     entrypoints: [fileURLToPath(new URL('../src/features/instances/native-service.ts', import.meta.url))],
     target: 'bun', conditions: ['browser', 'development'],
     plugins: [{ name: 'shortcut-host', setup(build) {
-      build.onResolve({ filter: /^(@tauri-apps\/api\/(core|event)|\.\.\/accounts\/accounts|\.\/icon-catalog)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
+      build.onResolve({ filter: /^((?:\.\.\/){2}localization|@vesta\/ui|@tauri-apps\/api\/(core|event)|\.\.\/accounts\/accounts|\.\/icon-catalog)$/ }, ({ path }) => ({ path, namespace: 'fixture' }));
       build.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ loader: 'js', contents:
+        path.endsWith('/localization') ? 'export const t = id => id;' :
+        path === '@vesta/ui' ? 'export const toast = { show() {} };' :
         path.endsWith('/core') ? `
           export const calls = []; let running = false;
           export const setRunning = value => { running = value; calls.length = 0; };

@@ -143,3 +143,19 @@ test('installed-content update scans deduplicate and admit only two catalogues a
   expect(await api.loadVersionLists([{ provider: 'modrinth', projectId: 'a' }, { provider: 'modrinth', projectId: 'b' }])).toEqual({ failed: 0 });
   expect(c.versionReads).toHaveLength(4);
 }));
+
+
+test('full cached projects stay complete and unrelated loads do not wake their readers', () => harness(async (api, c) => {
+  await api.loadProject('modrinth', 'p');
+  expect(api.hasCompleteProject('modrinth', 'p')).toBe(true);
+  let runs = 0, dispose;
+  api.createRoot(stop => {
+    dispose = stop;
+    api.createEffect(() => api.peekProject('modrinth', 'p'), () => { runs++; }, { name: 'cachedProjectReader' });
+  });
+  api.flush(); const before = runs;
+  await api.loadProject('modrinth', 'p'); api.flush();
+  await api.loadProject('modrinth', 'other'); api.flush();
+  expect(runs).toBe(before);
+  dispose();
+}));

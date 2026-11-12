@@ -42,6 +42,8 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
   const busy = () => nativeInstances && (instancePending(props.entry.instance.id) || ["running", "warming", "installing"].includes(props.entry.state.kind));
   const id = () => props.entry.instance.id;
   const [destinations, setDestinations] = createSignal<{ instanceId: string; supported: boolean; servers: { name: string; address: string; icon: string | null; target: LaunchTarget | null }[] }>({ instanceId: "", supported: false, servers: [] }, { name: "worlds.destinations" });
+  /** Servers saved in this instance (servers.dat), for the list under the worlds. */
+  const servers = () => (destinations().instanceId === id() ? destinations().servers : []);
   createEffect(() => [id(), props.entry.state.kind] as const, ([instanceId]) => {
     if (!nativeInstances) return;
     let stale = false;
@@ -154,6 +156,11 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 }}
               />
             </header>
+            <section data-vesta="world-section" aria-labelledby="world-section-worlds">
+              <header data-vesta="world-section-head">
+                <h3 id="world-section-worlds">{t("worlds.title")}</h3>
+                <Show when={worlds().length}><span>{worlds().length}</span></Show>
+              </header>
             <Show
               when={worlds().length}
               fallback={
@@ -237,15 +244,30 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 </For>
               </ul>
             </Show>
-            <section data-vesta="saved-servers">
-              <h3>{t("worlds.saved-servers")}</h3>
-              <Show when={(destinations().instanceId === id() && destinations().servers.length)} fallback={<p>{t("worlds.no-saved-servers")}</p>}>
+            </section>
+            {/* Servers saved in this instance read exactly like worlds: same row, same Play. */}
+            <section data-vesta="world-section" aria-labelledby="world-section-servers">
+              <header data-vesta="world-section-head">
+                <h3 id="world-section-servers">{t("worlds.saved-servers")}</h3>
+                <Show when={servers().length}><span>{servers().length}</span></Show>
+              </header>
+              <Show when={servers().length} fallback={
+                <EmptyState variant="inline" icon="icons/content/server" title={t("worlds.no-saved-servers")} description={t("worlds.saved-servers-hint")} />
+              }>
                 <ul data-vesta="world-list">
-                  <For each={destinations().instanceId === id() ? destinations().servers : []}>{(server) => (
-                    <li data-vesta="world-row">
-                      <Show when={server.icon} fallback={<Icon name="icons/content/globe" />}><img data-vesta="world-thumb" src={server.icon ?? ''} alt="" loading="lazy" /></Show>
-                      <span data-vesta="saved-server-copy"><strong>{server.name}</strong><span>{server.address}</span></span>
-                      <Show when={(destinations().instanceId === id() && destinations().supported) && server.target}>
+                  <For each={servers()}>{(server) => (
+                    <li data-vesta="world-row" data-kind="server">
+                      <span data-vesta="world-open">
+                        <Show when={server.icon} fallback={<span data-vesta="world-thumb" data-placeholder=""><Icon name="icons/content/server" size={18} /></span>}>
+                          <img data-vesta="world-thumb" src={server.icon ?? ''} alt="" loading="lazy" />
+                        </Show>
+                        <span data-vesta="world-copy">
+                          <strong>{server.name}</strong>
+                          <span><span data-vesta="world-address">{server.address}</span></span>
+                        </span>
+                      </span>
+                      <span data-vesta="world-meta" />
+                      <Show when={destinations().supported && server.target}>
                         <Button size="sm" variant="outline" disabled={busy()} aria-label={t("worlds.play-target", { name: server.name })} onClick={() => { const target = server.target; if (target) void launchNativeTarget(id(), target); }}>{t("worlds.play")}</Button>
                       </Show>
                     </li>

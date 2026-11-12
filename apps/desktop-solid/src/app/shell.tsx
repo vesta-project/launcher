@@ -7,16 +7,15 @@ import { useNativeDropZone, watchFileDrag } from '../features/file-drop/zone';
 import { FileDragHint } from '../features/file-drop/drag-hint';
 import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
 import { startNativeFileDrop } from '../features/file-drop/native-bridge';
-import { onSettled } from 'solid-js';
+import { createMemo, onSettled } from 'solid-js';
 import { Match, Switch, Show, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/catalog';
 import { AccountLoginDialog } from '../features/accounts/account-login-dialog';
 import { ExternalLinkDialog } from '../features/links/external-link-dialog';
 import { LinkPreview } from '../features/links/link-preview';
-import { Button, TooltipHints, ToastRegion } from '@vesta/ui';
-import { t } from '../localization';
-import { instanceError, clearInstanceError, refreshNativeInstances, useInstanceSync } from '../features/instances/native-service';
+import { TooltipHints, ToastRegion } from '@vesta/ui';
+import { useInstanceSync } from '../features/instances/native-service';
 import { useAccountSync } from '../features/accounts/accounts';
 import { prefetchSettingsWhenIdle, useSettingsResourceSync } from '../features/settings/resources';
 import { BrowsePage } from '../pages/browse/browse-page';
@@ -35,7 +34,6 @@ import './shell.css';
 import '../styles/reduced-motion.css';
 import { useInstanceShortcutRuntime } from '../features/instances/shortcut-runtime';
 import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
-import { Notice } from '../components/notice';
 
 const platform = detectPlatform();
 
@@ -56,6 +54,8 @@ export function Shell() {
   useServerSync();
   useInstanceShortcutRuntime();
   useMouseBack();
+  let visitedCreate = false;
+  const keepCreate = createMemo(() => { visitedCreate ||= route().page === 'create'; return visitedCreate; }, { name: 'createSessionMounted' });
   let shellElement!: HTMLDivElement;
   onSettled(() => watchFrameSplit(shellElement));
   let dropElement: HTMLElement | undefined;
@@ -80,15 +80,13 @@ export function Shell() {
       <div data-vesta="shell-body">
         <Rail />
         <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>
+          <Show when={keepCreate()}><div style={{ display: route().page === 'create' ? 'contents' : 'none' }}><CreatePage /></div></Show>
           <Switch>
             <Match when={route().page === 'library'}>
               <LibraryPage />
             </Match>
             <Match when={route().page === 'browse'}>
               <BrowsePage />
-            </Match>
-            <Match when={route().page === 'create'}>
-              <CreatePage />
             </Match>
             <Match when={route().page === 'servers'}>
               <ServersPage />
@@ -99,15 +97,6 @@ export function Shell() {
           </Switch>
         </main>
       </div>
-      {/* A tray that slides up from the window's bottom edge, outside the board frame (shell.css). */}
-      <Show when={instanceError()}>{(message) => <div data-vesta="instance-service-error">
-        <Notice
-          action={{ label: t('common.retry'), onClick: () => { clearInstanceError(); void refreshNativeInstances(true); } }}
-          actions={<Button size="sm" variant="ghost" onClick={clearInstanceError}>{t('nav.close')}</Button>}
-        >
-          {message()}
-        </Notice>
-      </div>}</Show>
     </div>
   );
 }

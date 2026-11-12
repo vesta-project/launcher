@@ -7,7 +7,7 @@ import { fetchProjects } from './browse-api';
 import type { ResourceProject, ResourceVersion } from './browse-model';
 import { clientPackState, isContentProvider, previewCandidates, type ClientPackState, type DependencyCandidate, type Destination, type ServerTarget } from './install-targets';
 export { isContentProvider, isServerContentKind, previewCandidates, serverInstallPlan, type ServerInstallItem } from './install-targets';
-import { invalidateServerResources, readServerResource } from '../servers/resources';
+import { invalidateServerResources, peekServerResource, readServerResource } from '../servers/resources';
 import { CONTENT_RESOURCES, contentResource, softwareResource } from '../servers/server-resources';
 import { serverCommand } from '../servers/store';
 import type { ConnectionId } from '../servers/native';
@@ -17,11 +17,17 @@ import type { ConnectionId } from '../servers/native';
  * inventory reports the authoritative family to anyone who may list content; the owner-only
  * software state is the fallback when the inventory cannot be read.
  */
+export const cachedServerSoftware = (id: ConnectionId) =>
+  peekServerResource(id, contentResource)?.software
+    ?? peekServerResource(id, contentResource, true)?.software
+    ?? peekServerResource(id, contentResource, false)?.software
+    ?? peekServerResource(id, softwareResource)?.current?.software;
+
 export async function serverSoftware(id: ConnectionId): Promise<string | null> {
   const inventory = await readServerResource(id, contentResource).catch(() => undefined);
   if (inventory) return inventory.software;
   const state = await readServerResource(id, softwareResource).catch(() => undefined);
-  return state?.current?.software ?? null;
+  return state?.current?.software ?? cachedServerSoftware(id) ?? null;
 }
 
 /** Observation only: a saved draft qualifies even before its first publication. */

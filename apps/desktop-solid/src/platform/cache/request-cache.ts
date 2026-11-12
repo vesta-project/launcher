@@ -1,3 +1,18 @@
+/** Keep unchanged IPC records stable across silent refreshes. */
+export function retainEqual<T>(previous: T, next: T): T {
+  if (Object.is(previous, next)) return previous;
+  if (!previous || !next || typeof previous !== 'object' || typeof next !== 'object') return next;
+  if (Array.isArray(previous) && Array.isArray(next)) {
+    const keyed = new Map(previous.filter(v => v && typeof v === 'object' && 'id' in v).map(v => [v.id, v]));
+    const rows = next.map((v, i) => retainEqual(v && typeof v === 'object' && 'id' in v ? keyed.get(v.id) : previous[i], v));
+    return (rows.length === previous.length && rows.every((v, i) => v === previous[i]) ? previous : rows) as T;
+  }
+  if (Array.isArray(previous) || Array.isArray(next) || Object.getPrototypeOf(next) !== Object.prototype || Object.getPrototypeOf(previous) !== Object.prototype) return next;
+  const before = previous as Record<string, unknown>, after = next as Record<string, unknown>;
+  const result = Object.fromEntries(Object.keys(after).map(key => [key, retainEqual(before[key], after[key])]));
+  return (Object.keys(before).length === Object.keys(after).length && Object.keys(after).every(key => Object.hasOwn(before, key) && Object.is(result[key], before[key])) ? previous : result) as T;
+}
+
 export interface CacheSnapshot<T> {
   data: T | undefined;
   hasData: boolean;
@@ -112,7 +127,7 @@ export class RequestCache<T> {
   seed(key: string, data: T, fresh = true) {
     const entry = this.entry(key);
     entry.generation++;
-    Object.assign(entry, { data, hasData: true, updatedAt: this.now(), refreshing: !!entry.pending, error: undefined,
+    Object.assign(entry, { data: retainEqual(entry.data, data), hasData: true, updatedAt: this.now(), refreshing: !!entry.pending, error: undefined,
       freshUntil: fresh ? this.now() + this.policy.staleTimeMs : -Infinity });
     this.publish(entry);
   }
@@ -175,9 +190,9 @@ export class RequestCache<T> {
         this.metrics.discarded++;
         throw new CacheInvalidatedError();
       }
-      Object.assign(entry, { data, hasData: true, updatedAt: this.now(),
+      Object.assign(entry, { data: retainEqual(entry.data, data), hasData: true, updatedAt: this.now(),
         freshUntil: this.now() + staleTimeMs });
-      return data;
+      return entry.data as T;
     }).catch((error: unknown) => {
       if (generation !== entry.generation) {
         if (!(error instanceof CacheInvalidatedError)) this.metrics.discarded++;

@@ -16,12 +16,15 @@ import {
  */
 
 const minute = 60_000;
+const completeProjects = new Set<string>();
 const projectCache = new RequestCache<ResourceProject>({
+  onEvict: key => { cells.delete(key); completeProjects.delete(key); },
   maxEntries: 200,
   staleTimeMs: 10 * minute,
   retentionMs: 60 * minute,
 });
 const versionsCache = new RequestCache<ResourceVersion[]>({
+  onEvict: key => { cells.delete(`versions:${key}`); },
   maxEntries: 120,
   staleTimeMs: 10 * minute,
   retentionMs: 60 * minute,
@@ -41,27 +44,38 @@ const peerCache = new RequestCache<ResourceProject | null>({
 const versionKey = (platform: string, projectId: string, versionId: string) =>
   `${projectKey(platform, projectId)}:${versionId}`;
 
-/**
- * Bumped whenever a project or version list lands, so the peeks below are reactive where it
- * matters (the titlebar names a project as soon as it is known) without subscribing to keys.
- */
-const [revision, setRevision] = createSignal(0, { name: 'browseProjectsRevision' });
-const landed = <T,>(value: T) => {
-  setRevision((count) => count + 1);
+// Notify only readers of the entry that changed, and never on a cache hit.
+const cells = new Map<string, { read: () => unknown; write: (value: unknown) => void; value: unknown }>();
+function cell(key: string) {
+  let found = cells.get(key);
+  if (!found) {
+    const [read, write] = createSignal<unknown>(undefined, { name: `browseProject:${key}` });
+    found = { read, write: value => write(() => value), value: undefined };
+    cells.set(key, found);
+  }
+  return found;
+}
+function landed<T>(key: string, value: T): T {
+  const current = cell(key);
+  if (current.value !== value) { current.value = value; current.write(value); }
   return value;
+}
+export const loadProject = (platform: SourceId, id: string) => {
+  const key = projectKey(platform, id);
+  return projectCache.read(key, () => fetchProject(platform, id)).then(value => { completeProjects.add(key); return landed(key, value); });
 };
-
-export const loadProject = (platform: SourceId, id: string) =>
-  projectCache.read(projectKey(platform, id), () => fetchProject(platform, id)).then(landed);
-export const loadVersions = (platform: SourceId, id: string) =>
-  versionsCache.read(projectKey(platform, id), () => fetchVersions(platform, id)).then(landed);
+export const loadVersions = (platform: SourceId, id: string) => {
+  const key = projectKey(platform, id);
+  return versionsCache.read(key, () => fetchVersions(platform, id)).then(value => landed(`versions:${key}`, value));
+};
+export const hasCompleteProject = (platform: string, id: string) => completeProjects.has(projectKey(platform, id));
 export const peekProject = (platform: string, id: string): ResourceProject | undefined => {
-  revision();
-  return projectCache.peek(projectKey(platform, id))?.data;
+  const key = projectKey(platform, id); cell(key).read();
+  return projectCache.peek(key)?.data;
 };
 export const peekVersions = (platform: string, id: string): ResourceVersion[] | undefined => {
-  revision();
-  return versionsCache.peek(projectKey(platform, id))?.data;
+  const key = projectKey(platform, id); cell(`versions:${key}`).read();
+  return versionsCache.peek(key)?.data;
 };
 
 /** An explicit installed-content update scan. Keep slow connections usable: only two
@@ -137,12 +151,13 @@ export async function loadProjects(platform: SourceId, ids: readonly string[]): 
       const key = projectKey(platform, project.id);
       const cached = projectCache.peek(key);
       if (!cached?.hasData && !cached?.refreshing) projectCache.seed(key, project, false);
+      landed(key, projectCache.peek(key)?.data);
       found.set(project.id, project);
       // Slug lookups answer with the canonical id; keep the requested key too.
       const asked = missing.find((id) => id.toLowerCase() === project.id.toLowerCase());
       if (asked) found.set(asked, project);
     }
-    landed(undefined);
+
   }
   return found;
 }
@@ -152,9 +167,9 @@ export function seedProjects(hits: readonly ResourceProject[]) {
   for (const hit of hits) {
     const key = projectKey(hit.source, hit.id);
     const snapshot = projectCache.peek(key);
-    if (!snapshot?.hasData && !snapshot?.refreshing) projectCache.seed(key, hit, false);
+    if (!snapshot?.hasData && !snapshot?.refreshing) { projectCache.seed(key, hit, false); landed(key, projectCache.peek(key)?.data); }
   }
-  landed(undefined);
+
 }
 
 /* ---- Hover prefetch: at most 2 in flight, at most 6 waiting (the oldest is dropped) ---- */

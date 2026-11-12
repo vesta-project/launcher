@@ -15,7 +15,7 @@ import { SoftwareMark } from "../../components/software-mark";
 import { Notice } from "../../components/notice";
 import { softwareIcon } from "../../features/servers/software-flow";
 import type { MessageId } from "../../localization/messages";
-import { Show, createMemo, createSignal, onCleanup, onSettled, untrack } from "solid-js";
+import { Show, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from "solid-js";
 import { Board } from "../../components/board";
 import { Icon } from "../../components/icon";
 import { t } from "../../localization";
@@ -89,11 +89,14 @@ const loaderCards = () => Object.entries(loaderNames).map(([value, label]) => ({
 export function CreatePage() {
   onSettled(() => { void preloadLaunchers().catch(() => {}); });
   const selected = () =>
-    route().section === "import" ? findLauncher(route().detail)?.value : undefined;
+    route().page === "create" && route().section === "import" ? findLauncher(route().detail)?.value : undefined;
   return (
-    <Show when={selected()} keyed fallback={<Show when={createActionKey()} keyed>{(_key) => <InstanceInstallForm />}</Show>}>
-      {(kind) => <LauncherImportPage kind={kind} />}
-    </Show>
+    <>
+      <div style={{ display: selected() ? 'none' : 'contents' }}>
+        <Show when={createActionKey()} keyed>{(_key) => <InstanceInstallForm />}</Show>
+      </div>
+      <Show when={selected()} keyed>{kind => <LauncherImportPage kind={kind} />}</Show>
+    </>
   );
 }
 
@@ -133,6 +136,9 @@ function InstanceInstallForm() {
     createAction === 'file' || createAction === 'launchers' ? createAction : 'methods',
   );
   const [createdId, setCreatedId] = createSignal<number>();
+  createEffect(() => ({ id: createdId(), active: route().page === 'create', busy: busy() }), ({ id, active, busy }) => {
+    if (id && active && !busy) navigate(`/library/${id}`, { replace: true });
+  }, { name: 'installReturnToProgress' });
   const [defaults, setDefaults] = createSignal<{
     default_min_memory: number;
     default_max_memory: number;
@@ -382,7 +388,7 @@ function InstanceInstallForm() {
           const id = await invoke<number>('server_pack_sync_install', { connectionId: serverId, revision: details.revision, sha256: details.artifactSha256, consent: serverConsent(), instanceData });
           setCreatedId(id);
           await refreshNativeInstances(true);
-          if (!disposed) navigate('/library');
+          if (!disposed && route().page === "create") navigate('/library');
           return;
         }
         const details = serverReview();
@@ -403,7 +409,7 @@ function InstanceInstallForm() {
           await invoke('update_instance', { instanceData: { ...record, minMemory: memory()[0], maxMemory: memory()[1], iconPath: iconEdited ? icon() : record.iconPath } });
           await refreshNativeInstances(true);
         }
-        navigate(`/library/${id}`); return;
+        if (route().page === "create") navigate(`/library/${id}`); return;
       }
       const selected = releases().find((item) => item.id === pack()?.modpackVersionId);
       const packSource = source();
@@ -421,17 +427,22 @@ function InstanceInstallForm() {
         memory: memory(),
       };
       const initialPack = pack();
-      const start = () => startInstallation(initialDraft, resolved, initialPack);
+      const start = async () => {
+        const id = await startInstallation(initialDraft, resolved, initialPack);
+        setCreatedId(id);
+        return id;
+      };
       const pending = untrack(pendingResource);
       if (pending) await startPendingResourceInstallation(pending, start);
       else if (listing && followsListing(initialPack)) {
         const id = String(await invoke<number>('install_server_pack', { projectId: listing.id, instanceData: installationRecord(initialDraft, initialPack) }));
+        setCreatedId(Number(id));
         await refreshNativeInstances(true);
-        if (!disposed) navigate(`/library/${encodeURIComponent(id)}`);
+        if (!disposed && route().page === "create") navigate(`/library/${encodeURIComponent(id)}`);
         return;
       }
       else await start();
-      if (!disposed) navigate("/library");
+      if (!disposed && route().page === "create") navigate("/library");
     } catch (reason) {
       if (!disposed) {
         if (reason instanceof InstallationStartError) setCreatedId(reason.instanceId);
@@ -445,7 +456,7 @@ function InstanceInstallForm() {
     }
   };
   let dropElement: HTMLFormElement | undefined;
-  useNativeDropZone({ element: () => dropElement, accept: 'files', extensions: ['.zip', '.mrpack'], disabled: () => busy() || !!serverId,
+  useNativeDropZone({ element: () => dropElement, accept: 'files', extensions: ['.zip', '.mrpack'], disabled: () => route().page !== "create" || route().section === "import" || busy() || !!serverId,
     drop: (paths) => { if (paths.length === 1) void loadSource({ kind: 'file', value: paths[0]! }); else setError(t('drop.single-pack')); },
   });
   return (
@@ -675,7 +686,7 @@ function InstanceInstallForm() {
           </Button>
         </footer>
       </form>
-      <Show when={importOpen()}>
+      <Show when={importOpen() && route().page === "create"}>
         <ImportDialog
           initialStep={importStep()}
           initialUrl={source()?.kind === "url" ? source()?.value : undefined}

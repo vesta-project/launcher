@@ -1,4 +1,4 @@
-import { Button, Dialog, IconButton, SegmentedControl } from '@vesta/ui';
+import { Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl } from '@vesta/ui';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '../../../components/icon';
@@ -166,19 +166,19 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
         <div data-vesta="skin-layout">
           <div data-vesta="skin-stage">
             <div data-vesta="skin-stage-view">
-              {/* A nametag over the character, like other players see it in game. */}
-              <span data-vesta="skin-nameplate">{props.account.username}</span>
               <SkinViewer
                 skin={hover()?.skin ?? currentSkin()}
                 model={hover()?.variant ?? variant()}
                 cape={view()?.capeId ? view()?.cape : undefined}
                 label={t('skins.current')}
-                greet={currentSkin() ? `${currentSkin()}:${variant()}` : undefined}
+                nameTag={props.account.username}
               />
               <Show when={supported() && !profile() && !skins.error()}>
                 <span data-vesta="skin-stage-status">{t('skins.loading')}</span>
               </Show>
             </div>
+            {/* The stage's own toolbar, joined to its bottom edge: arm model, save state, upload. */}
+            <div data-vesta="skin-stage-bar">
             <SegmentedControl
               aria-label={t('skins.model')}
               value={variant()}
@@ -191,7 +191,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
             />
             <Button
               size="sm"
-              variant="outline"
+              variant="ghost"
               disabled={locked()}
               icon={<Icon name="icons/actions/upload" size={14} />}
               onClick={() => void skins.upload()}
@@ -199,6 +199,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
               {t('skins.add')}
             </Button>
             <SaveIndicator status={skins.status()} />
+            </div>
           </div>
           <div data-vesta="skin-side">
             {props.switcher}
@@ -335,59 +336,85 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
 }
 
 /**
- * Who you play as: every added account as a profile tile with its head, the active one first.
- * Picking another switches to it; the last tile adds one.
+ * Who you play as: one row with the active profile. Switching, adding and managing live in its
+ * menu, so the page reads the same with two accounts or twenty.
  */
-function AccountSwitcher(props: { onRemove: (account: Account) => void }) {
-  const ordered = () => {
-    const active = activeAccount();
-    return [...accounts()].sort((a, b) => Number(b.uuid === active?.uuid) - Number(a.uuid === active?.uuid));
-  };
+function AccountSwitcher(props: { onManage: () => void }) {
+  const current = () => activeAccount();
+  const others = () => accounts().filter((account) => account.uuid !== current()?.uuid);
   return (
-    <section data-vesta="account-switcher" aria-label={t('prefs.account.accounts')}>
-      <ul>
-        <For each={ordered()}>
-          {(account) => {
-            const active = () => account.uuid === activeAccount()?.uuid;
-            return (
-              <li data-active={active() ? '' : undefined}>
-                <button type="button" data-vesta="account-tile" aria-pressed={active() ? 'true' : 'false'}
-                  aria-label={active() ? account.username : t('prefs.account.switch-to', { name: account.username })}
-                  onClick={() => { if (!active()) void switchAccount(account.uuid); }}>
-                  <Head uuid={account.uuid} size={36} />
-                  <span data-vesta="account-tile-copy">
-                    <strong>{account.username}</strong>
-                    <small>{active() ? t('prefs.account.playing-as') : account.is_expired ? t('prefs.account.expired') : t('prefs.account.switch')}</small>
-                  </span>
-                </button>
-                <Show when={!active()}>
-                  <IconButton size="sm" variant="ghost" tone="danger" label={t('prefs.account.remove-title', { name: account.username })}
-                    icon={<Icon name="icons/actions/close" size={12} />} onClick={() => props.onRemove(account)} />
-                </Show>
-              </li>
-            );
-          }}
+    <section data-vesta="account-current" aria-label={t('prefs.account.accounts')}>
+      <Show when={current()} fallback={<span data-vesta="account-current-copy"><strong>{t('prefs.account.none')}</strong></span>}>
+        {(account) => (
+          <>
+            <Head uuid={account().uuid} size={44} />
+            <span data-vesta="account-current-copy">
+              <small>{t('prefs.account.playing-as')}</small>
+              <strong>{account().username}</strong>
+            </span>
+          </>
+        )}
+      </Show>
+      <Menu placement="bottom-end" trigger={(menuProps) => (
+        <Button {...menuProps} size="sm" variant="outline" iconEnd={<Icon name="icons/controls/chevron-down" size={14} />}>
+          {t(others().length ? 'prefs.account.switch' : 'prefs.account.add-short')}
+        </Button>
+      )}>
+        <For each={others()}>
+          {(account) => (
+            <MenuItem icon={<Head uuid={account.uuid} size={20} />} onSelect={() => void switchAccount(account.uuid)}>
+              {account.username}
+              <Show when={account.is_expired}><span data-vesta="account-menu-note"> · {t('prefs.account.expired')}</span></Show>
+            </MenuItem>
+          )}
         </For>
-        <li>
-          <button type="button" data-vesta="account-tile" data-add="" onClick={() => void addAccount()}>
-            <span data-vesta="account-tile-add" aria-hidden="true"><Icon name="icons/actions/add" size={16} /></span>
-            <span data-vesta="account-tile-copy"><strong>{t('prefs.account.add-short')}</strong><small>Microsoft</small></span>
-          </button>
-        </li>
-      </ul>
+        <Show when={others().length}><MenuSeparator /></Show>
+        <MenuItem icon={<Icon name="icons/actions/add" />} onSelect={() => void addAccount()}>{t('prefs.account.add-microsoft')}</MenuItem>
+        <Show when={accounts().length}>
+          <MenuItem icon={<Icon name="icons/content/people" />} onSelect={props.onManage}>{t('prefs.account.manage')}</MenuItem>
+        </Show>
+      </Menu>
     </section>
+  );
+}
+
+/** Every account in one list: which one is in use, and removing the ones you no longer need. */
+function ManageAccounts(props: { open: boolean; onClose: () => void; onRemove: (account: Account) => void }) {
+  return (
+    <Dialog closeLabel={t('nav.close')} open={props.open} onOpenChange={(open) => !open && props.onClose()} title={t('prefs.account.accounts')}
+      footer={<Button tone="accent" icon={<Icon name="icons/actions/add" size={14} />} onClick={() => void addAccount()}>{t('prefs.account.add-microsoft')}</Button>}>
+      <ul data-vesta="account-list">
+        <For each={accounts()}>
+          {(account) => (
+            <li data-active={account.uuid === activeAccount()?.uuid ? '' : undefined}>
+              <Head uuid={account.uuid} size={32} />
+              <span data-vesta="account-current-copy">
+                <strong>{account.username}</strong>
+                <small>{account.uuid === activeAccount()?.uuid ? t('prefs.account.playing-as') : account.is_expired ? t('prefs.account.expired') : account.account_type}</small>
+              </span>
+              <Show when={account.uuid !== activeAccount()?.uuid}>
+                <Button size="sm" variant="ghost" onClick={() => void switchAccount(account.uuid)}>{t('prefs.account.use')}</Button>
+              </Show>
+              <Button size="sm" variant="ghost" tone="danger" onClick={() => props.onRemove(account)}>{t('common.remove')}</Button>
+            </li>
+          )}
+        </For>
+      </ul>
+    </Dialog>
   );
 }
 
 export function AccountSettings() {
   const [removing, setRemoving] = createSignal<Account>();
+  const [managing, setManaging] = createSignal(false, { name: 'accounts:managing' });
   const current = () => activeAccount();
   return (
     <>
-      <Show when={current()} keyed fallback={<AccountSwitcher onRemove={setRemoving} />}>
-        {(account) => <SkinPanel account={account} switcher={<AccountSwitcher onRemove={setRemoving} />} />}
+      <Show when={current()} keyed fallback={<AccountSwitcher onManage={() => setManaging(true)} />}>
+        {(account) => <SkinPanel account={account} switcher={<AccountSwitcher onManage={() => setManaging(true)} />} />}
       </Show>
 
+      <ManageAccounts open={managing()} onClose={() => setManaging(false)} onRemove={setRemoving} />
       <Dialog
         closeLabel={t('nav.close')}
         size="sm"

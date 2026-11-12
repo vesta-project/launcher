@@ -2,6 +2,13 @@ import { createEffect, createSignal, onSettled } from 'solid-js';
 import { reducedMotion } from '../features/settings/reduced-motion';
 import { SkinViewerController } from './skin-viewer-controller';
 import './skin-viewer.css';
+import minecraftFont from 'skinview3d/assets/minecraft.woff2?url';
+
+/** The game's font for the name tag, registered once; the tag repaints when it arrives. */
+let nameFont: Promise<unknown> | undefined;
+const loadNameFont = () => (nameFont ??= typeof FontFace === 'undefined' || typeof document === 'undefined'
+  ? Promise.resolve()
+  : new FontFace('Minecraft', `url(${minecraftFont})`).load().then((face) => { document.fonts.add(face); }).catch(() => {}));
 
 export interface SkinViewerProps {
   /** Skin texture URL or data URL. */
@@ -9,8 +16,8 @@ export interface SkinViewerProps {
   model: 'classic' | 'slim';
   cape?: string;
   label: string;
-  /** Changes when a skin is applied (not previewed): the character hops to greet it. */
-  greet?: string;
+  /** Drawn over the head in the scene, like other players see it in game. */
+  nameTag?: string;
 }
 
 /** Draggable 3D character. Transparent background; idles gently unless motion is reduced. */
@@ -61,10 +68,11 @@ export function SkinViewer(props: SkinViewerProps) {
     { name: 'skinViewerMotion' },
   );
 
+
   createEffect(
-    () => ({ controller: controller(), greet: props.greet }),
-    ({ controller: preview, greet }) => { if (preview && greet) preview.hop(); },
-    { name: 'skinViewerGreet' },
+    () => ({ controller: controller(), name: props.nameTag }),
+    ({ controller: preview, name }) => { if (preview) void loadNameFont().then(() => preview.setNameTag(name)); },
+    { name: 'skinViewerNameTag' },
   );
 
   return (

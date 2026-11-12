@@ -281,6 +281,7 @@ fn safe_path(path: &str) -> Result<()> {
                         | "optionsof.txt"
                         | "optionsshaders.txt"
                         | "servers.dat"
+                        | "icon.png"
                         | "pack-icon.png"
                         | "pack-icon.jpg"
                 )))
@@ -1487,5 +1488,40 @@ impl ServerManager {
     pub fn pack_install_details(&self, id: i32) -> Result<Option<PackDetails>> {
         let instance = crate::commands::instances::get_instance(id).map_err(io)?;
         read_json(&game_dir(&instance)?.join(".vesta/server-install.json"))
+    }
+}
+
+#[cfg(test)]
+mod path_regressions {
+    use super::*;
+    #[test]
+    fn aged_paths_and_traversal_boundaries() {
+        for path in [
+            "icon.png",
+            "mods/AsyncParticles-21.1.4.10+1.21.1.jar",
+            "mods/CameraOverhaul-v2.1.2-fabric+mc[1.21-1.21.2].jar",
+            "config/paxi/resourcepacks/ores/assets/block.json",
+        ] {
+            assert!(safe_path(path).is_ok(), "{path}");
+        }
+        for path in [
+            "../icon.png",
+            "/icon.png",
+            "C:/icon.png",
+            "config/../icon.png",
+            "config/NUL.json",
+            "config/COM1.txt",
+            "config/a.",
+            "config/a ",
+            "config/a:b",
+            "config/a\\b",
+            "config//a",
+            "config/./a",
+            ".vesta/server-install.json",
+            "libraries/a.jar",
+            "launcher.exe",
+        ] {
+            assert!(safe_path(path).is_err(), "{path}");
+        }
     }
 }

@@ -160,7 +160,7 @@ async function buildHarness() {
         import { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
         import { stableConnectionId } from ${JSON.stringify(connectionIdPath)};
         import { createServerRead, readRetryDelay } from ${JSON.stringify(readStatePath)};
-        export { createRoot, createMemo, createSignal, flush, untrack, createServerRead, readRetryDelay };
+        export { createRoot, createEffect, createMemo, createSignal, flush, untrack, createServerRead, readRetryDelay };
         export { ConsoleBuffer, clearConsoleDisplay, consoleDisplayBoundary } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-model.ts', import.meta.url)))};
         export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
@@ -428,5 +428,40 @@ test('resource change hints refresh mounted reads once, preserving local drafts 
       guard.review(current.revision); expect(guard.conflicts(current.revision)).toBe(false);
     } finally { owner.dispose(); await check.removeServer(id); }
   }, { scenario: 'cross-admin-live-resource-refresh' });
+  check.expectNoDiagnostics(artifact);
+});
+
+
+test('silent equal refresh keeps data and unchanged row identities', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    let resolve;
+    const id = 'silent-refresh';
+    const def = check.serverResource('stable-list', () => new Promise(done => { resolve = done; }));
+    let runs = 0;
+    const owner = check.createRoot(dispose => {
+      const resource = check.useServerResource(() => id, def);
+      check.createEffect(resource.value, () => { runs++; }, { name: 'silentRefreshConsumer' });
+      return { dispose, resource };
+    });
+    const settle = async () => { for (let i = 0; i < 12; i++) { await Promise.resolve(); check.flush(); } };
+    const value = () => check.untrack(owner.resource.value);
+    try {
+      check.flush(); await settle();
+      resolve([{ id: 'a', count: 1 }, { id: 'b', count: 2 }]); await settle();
+      const initial = value();
+      const initialRuns = runs;
+      const refresh = owner.resource.refresh(); await settle();
+      expect(value()).toBe(initial);
+      expect(check.untrack(owner.resource.loading)).toBe(false);
+      resolve([{ id: 'a', count: 1 }, { id: 'b', count: 2 }]); await refresh; await settle();
+      expect(value()).toBe(initial);
+      expect(runs).toBe(initialRuns);
+      const changed = owner.resource.refresh(); await settle();
+      resolve([{ id: 'a', count: 3 }, { id: 'b', count: 2 }]); await changed; await settle();
+      expect(value()[0].count).toBe(3);
+      expect(value()[1]).toBe(initial[1]);
+    } finally { owner.dispose(); await check.removeServer(id); }
+  }, { scenario: 'silent-stale-resource-refresh' });
   check.expectNoDiagnostics(artifact);
 });

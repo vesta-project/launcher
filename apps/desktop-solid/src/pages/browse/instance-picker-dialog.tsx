@@ -30,7 +30,7 @@ import {
   type TargetStates,
   type ClientPackState,
 } from '../../features/browse/install-targets';
-import { prepareServerSelection, serverSoftware, serverClientPack } from '../../features/browse/server-install';
+import { prepareServerSelection, cachedServerSoftware, serverSoftware, serverClientPack } from '../../features/browse/server-install';
 import { contentErrorMessage } from '../../features/servers/content-model';
 import type { ServerCommandError } from '../../features/servers/native';
 import { instances } from '../../features/instances/catalog';
@@ -223,7 +223,7 @@ export function InstancePickerDialog() {
       const needle = filter().trim().toLowerCase();
       const known = software();
       const packs = clientPacks();
-      return serverTargets(serverSnapshots(), (id) => (id in known ? known[id] : undefined), id => packs[id] ?? 'checking')
+      return serverTargets(serverSnapshots(), (id) => (id in known ? known[id] : cachedServerSoftware(id)), id => packs[id] ?? 'checking')
         .filter((target) => !needle || target.name.toLowerCase().includes(needle))
         .map((target) => ({
           target,

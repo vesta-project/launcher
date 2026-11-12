@@ -12,9 +12,10 @@ let pendingListing: ResourceProject | undefined;
 
 export type CreateAction = 'new' | 'methods' | 'file' | 'launchers';
 let pendingAction: CreateAction | undefined;
+let actionGeneration = 0;
 const [actionRevision, setActionRevision] = createSignal(0, { name: 'createActionRevision' });
 /** An explicit intent also works when Create is already mounted at the same URL. */
-export const createActionKey = () => `create:${actionRevision()}`;
+export const createActionKey = () => { actionRevision(); return `create:${actionGeneration}`; };
 export function requestCreateAction(action: CreateAction) {
   // Importing is a dialog over the current page; only a new instance opens the install form.
   if (action !== 'new') { openImport(action); return; }
@@ -22,7 +23,7 @@ export function requestCreateAction(action: CreateAction) {
   pendingSource = undefined; pendingListing = undefined;
   pendingResource = undefined;
   pendingAction = action;
-  setActionRevision((value) => value + 1);
+  setActionRevision(++actionGeneration);
   navigate('/create');
 }
 export function takeCreateAction() {
@@ -37,7 +38,7 @@ export function openInstallSource(source: InstallSourceHandoff, listing?: Resour
   pendingResource = undefined;
   pendingSource = source;
   pendingListing = listing;
-  setActionRevision((value) => value + 1);
+  setActionRevision(++actionGeneration);
   navigate("/create");
 }
 export function takeInstallSource() {
@@ -52,13 +53,13 @@ export function takeServerListing() {
   return listing;
 }
 
-/** Consumed by the mounted form; leaving it drops the unsubmitted resource. */
+/** Consumed by the session-owned form, which stays mounted across navigation. */
 export function openResourceInstall(resource: PendingResourceInstall) {
   pendingServer = undefined;
   pendingAction = undefined;
   pendingSource = undefined; pendingListing = undefined;
   pendingResource = resource;
-  setActionRevision((value) => value + 1);
+  setActionRevision(++actionGeneration);
   navigate("/create");
 }
 export function takeResourceInstall() {
@@ -71,6 +72,6 @@ let pendingServer: string | undefined;
 export function openServerInstall(connectionId: string) {
   pendingSource = undefined; pendingListing = undefined; pendingResource = undefined; pendingAction = undefined;
   pendingServer = connectionId;
-  setActionRevision(value => value + 1); navigate('/create');
+  setActionRevision(++actionGeneration); navigate('/create');
 }
 export function takeServerInstall() { const id = pendingServer; pendingServer = undefined; return id; }
