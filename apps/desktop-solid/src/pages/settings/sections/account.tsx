@@ -176,6 +176,7 @@ function SkinPanel(props: { account: Account }) {
                 model={hover()?.variant ?? variant()}
                 cape={view()?.capeId ? view()?.cape : undefined}
                 label={t('skins.current')}
+                greet={currentSkin() ? `${currentSkin()}:${variant()}` : undefined}
               />
               <Show when={supported() && !profile() && !skins.error()}>
                 <span data-vesta="skin-stage-status">{t('skins.loading')}</span>

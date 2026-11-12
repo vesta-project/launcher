@@ -1,6 +1,7 @@
 import { ServerEulaDialog } from '../features/servers/eula-dialog';
 import { useNavigationPreloading } from "./navigation-preload";
 import { NativeImportDialog } from '../features/instances/native-import-dialog';
+import { GlobalImportDialog } from '../pages/create/import-dialog';
 import { InstanceDeleteDialog } from '../features/instances/delete-dialog';
 import { useNativeDropZone, watchFileDrag } from '../features/file-drop/zone';
 import { FileDragHint } from '../features/file-drop/drag-hint';
@@ -74,6 +75,7 @@ export function Shell() {
       <DropTargetDialog />
       <FileDragHint enabled={route().page !== 'create'} onLibrary={route().page === 'library' && !route().section} />
       <NativeImportDialog />
+      <GlobalImportDialog />
       <InstanceDeleteDialog />
       <div data-vesta="shell-body">
         <Rail />

@@ -445,7 +445,6 @@ function ModerationDialog(props: {
       <Show when={uncertain()}>
         <p data-vesta="server-muted" role="status">{t('servers.operation.uncertain-retry')}</p>
       </Show>
-      <p data-vesta="server-muted">{t('servers.moderate.delivery-note')}</p>
       <ServerErrorNote error={error()} />
     </Dialog>
   );

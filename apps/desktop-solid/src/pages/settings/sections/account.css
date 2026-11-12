@@ -327,3 +327,87 @@
     }
   }
 }
+
+/*
+ * The character gets a stage: a spotlight in the theme's accent, a soft shadow to stand on and a
+ * faint block floor. Skin and cape tiles lift when pointed at, and the worn one pops into place.
+ */
+@layer launcher {
+  :where([data-vesta='skin-stage-view']) {
+    isolation: isolate;
+    overflow: hidden;
+    min-block-size: 20rem;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    background:
+      radial-gradient(60% 55% at 50% 62%, color-mix(in oklab, var(--vesta-color-accent) 28%, transparent), transparent 70%),
+      linear-gradient(180deg, color-mix(in oklab, var(--vesta-color-accent) 6%, var(--vesta-color-surface-raised)), var(--vesta-color-surface));
+  }
+
+  /* A floor of blocks, fading out towards the back. */
+  :where([data-vesta='skin-stage-view'])::before {
+    position: absolute;
+    inset: 62% 0 0;
+    z-index: -1;
+    background: repeating-conic-gradient(color-mix(in oklab, var(--vesta-color-text) 7%, transparent) 0 25%, transparent 0 50%) 0 0 / 24px 24px;
+    mask-image: linear-gradient(180deg, transparent, var(--vesta-color-text) 70%);
+    transform: perspective(240px) rotateX(48deg);
+    transform-origin: bottom;
+    content: '';
+  }
+
+  /* The shadow the character stands in. */
+  :where([data-vesta='skin-stage-view'])::after {
+    position: absolute;
+    inset-block-end: 11%;
+    inset-inline-start: 50%;
+    z-index: -1;
+    inline-size: 46%;
+    block-size: 7%;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--vesta-color-media-shade) 45%, transparent), transparent);
+    transform: translateX(-50%);
+    content: '';
+  }
+
+  :where([data-vesta='skin-tile-apply'], [data-vesta='cape-option']) {
+    transition:
+      transform var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
+      box-shadow var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease),
+      border-color var(--vesta-duration-fast, 120ms) var(--vesta-ease-standard, ease);
+  }
+
+  :where([data-vesta='skin-tile-apply']:hover:not(:disabled), [data-vesta='cape-option']:hover:not(:disabled)) {
+    box-shadow: 0 6px 14px -8px color-mix(in oklab, var(--vesta-color-media-shade) 60%, transparent);
+    transform: translateY(-2px);
+  }
+
+  :where([data-vesta='skin-tile-apply']) {
+    background:
+      radial-gradient(70% 60% at 50% 70%, color-mix(in oklab, var(--vesta-color-accent) 10%, transparent), transparent),
+      var(--vesta-color-surface-raised);
+  }
+
+  :where([data-vesta='skin-tile-apply'][aria-pressed='true']) {
+    background:
+      radial-gradient(70% 60% at 50% 70%, color-mix(in oklab, var(--vesta-color-accent) 26%, transparent), transparent),
+      var(--vesta-color-surface-raised);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :where([data-vesta='skin-tile-apply'][aria-pressed='true'], [data-vesta='cape-option'][aria-checked='true']) {
+      animation: skin-worn 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+  }
+
+  @keyframes skin-worn {
+    from { transform: scale(0.92); }
+  }
+}
+
+@layer launcher {
+  /* The shelf switch sits at the start of its column, like the Cape heading below it. */
+  :where([data-vesta='skin-group']) > :where([data-vesta='segmented-field']) {
+    align-self: flex-start;
+    inline-size: auto;
+  }
+}

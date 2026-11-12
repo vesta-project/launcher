@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { filterLog, levelCounts, lineTotal, logText } from '../src/components/log-view/log-model';
+import { filterLog, groupLogEntries, levelCounts, lineTotal, logText } from '../src/components/log-view/log-model';
 import { ConsoleBuffer } from '../src/features/servers/console-model';
 import { toLogEntries } from '../src/features/servers/console-view';
 import { parseLog } from '../src/features/instances/interaction-utils';
@@ -7,6 +7,48 @@ import { parseLog } from '../src/features/instances/interaction-utils';
 const gapCopy = { label: 'Lines skipped', detail: 'See latest.log' };
 const lines = (from, count, text = (n) => `[12:00:0${n % 10}] [Server thread/INFO]: line ${n}`) =>
   Array.from({ length: count }, (_, index) => ({ cursor: String(from + index), text: text(from + index), truncated: false }));
+
+describe('[log view] multiline grouping', () => {
+  test('all unprefixed lines inherit the entry level before filtering and counting', () => {
+    const raw = [
+      'standalone output',
+      '[10:00:00] [main/ERROR]: java.lang.OutOfMemoryError: Java heap space',
+      '\tat net.minecraft.Main.run(Main.java:42)',
+      'at launcher.Main.main(Main.java:1)',
+      'Caused by: java.lang.IllegalStateException',
+      '... 3 more',
+      'additional diagnostic detail',
+      '',
+      '[10:00:01] [main/WARN]: recovering',
+      '  recovery detail',
+      '[10:00:02] [main/INFO]: ready',
+      'ready detail',
+    ];
+    const source = raw.map(parseLog);
+    const grouped = groupLogEntries(source);
+    expect(grouped.map((entry) => entry.level)).toEqual([
+      'UNKNOWN', 'ERROR', 'ERROR', 'ERROR', 'ERROR', 'ERROR', 'ERROR', 'ERROR',
+      'WARN', 'WARN', 'INFO', 'INFO',
+    ]);
+    expect(filterLog(grouped, 0, ['ERROR'], '').map((entry) => entry.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(levelCounts(grouped)).toEqual({ UNKNOWN: 1, ERROR: 7, WARN: 2, INFO: 2 });
+    expect(logText(grouped)).toBe(raw.join('\n'));
+    expect(source[2].level).toBe('UNKNOWN');
+  });
+
+  test('gaps and parsed headers stop inheritance, including unknown levels', () => {
+    const grouped = groupLogEntries([
+      parseLog('[10:00:00] [main/FATAL]: failed', 0),
+      parseLog('  detail', 1),
+      { kind: 'gap', id: 2, label: 'Skipped' },
+      parseLog('  after gap', 3),
+      parseLog('[10:00:01] [main/TRACE]: tracing', 4),
+      parseLog('  trace detail', 5),
+    ]);
+    expect(grouped.map((entry) => entry.level)).toEqual(['FATAL', 'FATAL', undefined, 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']);
+    expect(levelCounts(grouped)).toEqual({ ERROR: 2, UNKNOWN: 3 });
+  });
+});
 
 describe('[log view] server console entries', () => {
   test('ids increase down the buffer, including a merged tail placed on top', () => {

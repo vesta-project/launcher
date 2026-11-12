@@ -9,6 +9,8 @@ export interface SkinViewerProps {
   model: 'classic' | 'slim';
   cape?: string;
   label: string;
+  /** Changes when a skin is applied (not previewed): the character hops to greet it. */
+  greet?: string;
 }
 
 /** Draggable 3D character. Transparent background; idles gently unless motion is reduced. */
@@ -57,6 +59,12 @@ export function SkinViewer(props: SkinViewerProps) {
     () => ({ controller: controller(), reduced: reducedMotion() }),
     ({ controller: preview, reduced }) => preview?.setReducedMotion(reduced),
     { name: 'skinViewerMotion' },
+  );
+
+  createEffect(
+    () => ({ controller: controller(), greet: props.greet }),
+    ({ controller: preview, greet }) => { if (preview && greet) preview.hop(); },
+    { name: 'skinViewerGreet' },
   );
 
   return (

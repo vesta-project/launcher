@@ -18,6 +18,9 @@ interface Dependencies {
 }
 
 /** Owns one GPU viewer. Async work may finish late, but can never update an obsolete preview. */
+/** Radians around the character for the resting view (a little from its right). */
+const HOME_YAW = -0.48;
+
 export class SkinViewerController {
   private viewer?: Viewer;
   private idle?: InstanceType<Library['IdleAnimation']>;
@@ -54,6 +57,13 @@ export class SkinViewerController {
       this.motion.setDragging(false);
     }
     this.sync();
+  }
+
+  /** A small jump to greet a newly applied skin (skipped with reduced motion). */
+  hop() {
+    if (this.reduced) return;
+    this.motion.hop();
+    this.invalidate();
   }
 
   setReducedMotion(reduced: boolean) {
@@ -122,9 +132,14 @@ export class SkinViewerController {
         if (this.disposed || !this.visible || !this.appearance.skin) return;
         this.viewer = new module.SkinViewer({
           canvas: this.canvas, width: this.width, height: this.height,
-          pixelRatio: this.ratio, zoom: 0.85, renderPaused: true,
+          pixelRatio: this.ratio, zoom: 0.7, renderPaused: true,
         });
         this.idle = new module.IdleAnimation();
+        // Rest at a three-quarter view so the character reads as a figure, not a flat sprite.
+        const camera = this.viewer.camera.position, target = this.viewer.controls.target;
+        const reach = Math.hypot(camera.x - target.x, camera.z - target.z);
+        camera.set(target.x + reach * Math.sin(HOME_YAW), camera.y, target.z + reach * Math.cos(HOME_YAW));
+        this.viewer.controls.update();
         this.orbit = new SkinOrbitReturn(this.viewer.camera.position, this.viewer.controls.target);
         let previous = 0;
         this.idle.addAnimation((player, progress) => {

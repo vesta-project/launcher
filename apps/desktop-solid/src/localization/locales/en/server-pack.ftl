@@ -77,8 +77,6 @@ server-pack-loader = Client loader
 server-pack-loader-none = None (vanilla)
 server-pack-loader-version = Loader version
 server-pack-minecraft-help = Minecraft { $version } comes from the server and can't be changed here.
-server-pack-drift = The server now runs Minecraft { $version }. Update the pack to match before publishing.
-server-pack-repair = Use the server's version
 server-pack-icon-change = Change icon
 server-pack-icon-invalid = Choose a PNG or JPEG up to 256 KB.
 server-pack-save = Save
@@ -184,7 +182,6 @@ server-pack-kind-resource-pack = Resource pack
 server-pack-kind-shader = Shader
 server-pack-kind-datapack = Datapack
 server-pack-kind-config = Config
-server-pack-kind-column = Kind
 server-pack-required-column = Required
 server-pack-required-entry = { $name } is required
 server-pack-select-entry = Select { $name }
@@ -247,6 +244,8 @@ server-pack-upload-too-large = Files can be up to 16 MB.
 server-pack-upload-path-refused = Modpack files go in mods, config, resourcepacks, shaderpacks, datapacks, defaultconfigs, kubejs, scripts or resources, or are options.txt or servers.dat.
 
 # Versions
+server-pack-drift-short = The server runs Minecraft { $version }
+server-pack-drift-update = Update to { $version }
 server-pack-draft-title = Draft
 server-pack-draft-matches = No changes since revision { $revision }
 server-pack-draft-based = from revision { $revision }

@@ -142,12 +142,6 @@ function IdentityPanel() {
           </div>
           <Show when={metadataError()}><Button size="sm" variant="ghost" onClick={() => void loadMetadata()}>{t('common.retry')}</Button></Show>
           <p data-vesta="server-muted"><Icon name="icons/security/lock" size={11} /> {t('server-pack.minecraft-help', { version: workspace().serverMinecraftVersion })}</p>
-          <Show when={workspace().minecraftDrift}>
-            <div data-vesta="server-callout" data-tone="warning" role="alert">
-              <span>{t('server-pack.drift', { version: workspace().serverMinecraftVersion })}</span>
-              <Button size="sm" variant="outline" disabled={busy()} onClick={() => void save({ minecraftVersion: workspace().serverMinecraftVersion })}>{t('server-pack.repair')}</Button>
-            </div>
-          </Show>
           <ServerErrorNote error={error()} />
         </div>
       </div>

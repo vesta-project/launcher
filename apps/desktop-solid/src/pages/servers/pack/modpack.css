@@ -1806,3 +1806,30 @@
     margin-block-start: var(--vesta-space-2);
   }
 }
+
+/* Player modpack Content: the instance Resources table without its Size column (a pack entry
+   has no local file). Required sits where Enabled does. */
+@layer launcher {
+  [data-vesta="resources"][data-modpack-content] .resource-table [data-vesta="table-row"] {
+    grid-template-columns: calc(var(--instance-gutter) + 24px) minmax(0, 1fr) 128px 72px calc(var(--instance-gutter) + 32px);
+  }
+
+  @container pane (max-width: 480px) {
+    [data-vesta="resources"][data-modpack-content] .resource-table [data-vesta="table-row"] {
+      grid-template-columns: calc(var(--instance-gutter) + 24px) minmax(0, 1fr) 72px calc(var(--instance-gutter) + 32px);
+    }
+  }
+}
+
+@layer launcher {
+  /* The server changed Minecraft version: one notice beside the sections, with the fix. */
+  :where([data-vesta="modpack-drift"]) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    color: var(--vesta-color-warning-text, var(--vesta-color-text-muted));
+    font-size: var(--vesta-text-sm);
+    white-space: nowrap;
+  }
+}

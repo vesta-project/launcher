@@ -89,29 +89,25 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         }
       >
         {(world) => (
-          <section data-vesta="overview-continue" aria-label={t("overview.continue-playing")}>
-            <img src={world().image} alt="" draggable="false" />
-            <div data-vesta="overview-continue-copy">
+          // The world you were last in, as a scene: its icon washed across the card, crisp in front.
+          <section data-vesta="overview-hero" aria-label={t("overview.continue-playing")} style={{ "--hero-art": `url("${world().image}")` }}>
+            <span data-vesta="overview-hero-art" aria-hidden="true" />
+            <img data-vesta="overview-hero-icon" src={world().image} alt="" draggable="false" />
+            <div data-vesta="overview-hero-copy">
               <span data-vesta="overview-eyebrow">{t("overview.continue-playing")}</span>
               <strong>{world().name}</strong>
-              <span data-vesta="overview-continue-meta">
-                <span
-                  data-vesta="mode-tag"
-                  data-mode={world().mode.toLowerCase()}
-                >
-                  {world().mode}
-                </span>
-                <Show when={world().days !== undefined}><span>{t("worlds.day-count", { count: world().days ?? 0 })}</span></Show><span>{world().lastPlayed}</span>
+              <span data-vesta="overview-hero-meta">
+                <span data-vesta="mode-tag" data-mode={world().mode.toLowerCase()}>{world().mode}</span>
+                <Show when={world().days !== undefined}><span>{t("worlds.day-count", { count: world().days ?? 0 })}</span></Show>
+                <span>{world().lastPlayed}</span>
               </span>
             </div>
-            <div data-vesta="overview-continue-actions">
-              <Button
-                variant="ghost"
-                onClick={() => goto(`worlds/${encodeURIComponent(world().id)}`)}
-              >
+            <div data-vesta="overview-hero-actions">
+              <Button variant="ghost" onClick={() => goto(`worlds/${encodeURIComponent(world().id)}`)}>
                 {t("overview.manage")}
               </Button>
               <Button
+                size="lg"
                 tone="accent"
                 disabled={!idle()}
                 icon={<Icon name="icons/actions/play" />}
@@ -124,89 +120,66 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
         )}
       </Show>
 
-      <div data-vesta="overview-columns">
-        <section data-vesta="overview-panel" aria-labelledby="overview-worlds">
+      {/* The instance at a glance, like the game's own statistics screen. */}
+      <ul data-vesta="overview-stats">
+        <li data-stat="played">
+          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/timer" size={18} /></span>
+          <strong>{formatPlaytime(stats().playtimeMinutes)}</strong>
+          <span>{t("overview.played")}<Show when={stats().lastPlayed}> · {stats().lastPlayed}</Show></span>
+        </li>
+        <li data-stat="worlds">
+          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/globe" size={18} /></span>
+          <strong>{worlds().length}</strong>
+          <span>{t("overview.worlds")}</span>
+        </li>
+        <li data-stat="resources">
+          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/layers" size={18} /></span>
+          <strong>{resources().length}</strong>
+          <span>
+            {t("overview.resources")}
+            <Show when={disabled()}> · {t("overview.off-count", { count: disabled() })}</Show>
+          </span>
+          <Show when={updates()}>
+            <button type="button" data-vesta="overview-stat-pill" onClick={() => goto("resources")}>
+              <Icon name="icons/actions/download" size={12} />
+              {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
+            </button>
+          </Show>
+        </li>
+        <li data-stat="memory">
+          <span data-vesta="overview-stat-icon" aria-hidden="true"><Icon name="icons/content/storage" size={18} /></span>
+          <strong>{(stats().memoryMb / 1024).toFixed(1)} GB</strong>
+          <span>{t("overview.memory")}</span>
+        </li>
+      </ul>
+
+      <Show when={others().length}>
+        <section aria-labelledby="overview-worlds">
           <header data-vesta="overview-panel-header">
             <h2 id="overview-worlds">{t("overview.other-worlds")}</h2>
             <Button size="sm" variant="ghost" onClick={() => goto("worlds")}>
               {t("overview.view-all-count", { count: worlds().length })}
             </Button>
           </header>
-          <Show
-            when={others().length}
-            fallback={<p data-vesta="overview-quiet">{t("overview.no-other-worlds")}</p>}
-          >
-            <ul data-vesta="overview-world-list">
-              <For each={others()}>
-                {(world) => (
-                  <li>
-                    <button
-                      type="button"
-                      data-vesta="overview-world"
-                      onClick={() => goto(`worlds/${encodeURIComponent(world.id)}`)}
-                    >
-                      <img src={world.image} alt="" draggable="false" />
-                      <span data-vesta="overview-world-name">{world.name}</span>
-                      <span data-vesta="overview-world-meta">
-                        <span
-                          data-vesta="mode-tag"
-                          data-mode={world.mode.toLowerCase()}
-                        >
-                          {world.mode}
-                        </span>
-                        {world.lastPlayed}
-                      </span>
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
+          {/* Worlds as square cards, like the game's world list, newest first. */}
+          <ul data-vesta="overview-world-grid">
+            <For each={others()}>
+              {(world) => (
+                <li>
+                  <button type="button" data-vesta="overview-world-card" onClick={() => goto(`worlds/${encodeURIComponent(world.id)}`)}>
+                    <img src={world.image} alt="" draggable="false" />
+                    <span data-vesta="overview-world-name">{world.name}</span>
+                    <span data-vesta="overview-world-meta">
+                      <span data-vesta="mode-tag" data-mode={world.mode.toLowerCase()}>{world.mode}</span>
+                      <span>{world.lastPlayed}</span>
+                    </span>
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
         </section>
-
-        <section data-vesta="overview-panel" aria-labelledby="overview-status">
-          <header data-vesta="overview-panel-header">
-            <h2 id="overview-status">{t("overview.instance")}</h2>
-          </header>
-          <dl data-vesta="overview-facts">
-            <div>
-              <dt>{t("overview.played")}</dt>
-              <dd>{formatPlaytime(stats().playtimeMinutes)}</dd>
-            </div>
-            <div>
-              <dt>{t("overview.last-played")}</dt>
-              <dd>{stats().lastPlayed}</dd>
-            </div>
-            <div>
-              <dt>{t("overview.resources")}</dt>
-              <dd>
-                {resources().length}
-                <Show when={disabled()}>
-                  <span>{t("overview.off-count", { count: disabled() })}</span>
-                </Show>
-              </dd>
-            </div>
-            <div>
-              <dt>{t("overview.memory")}</dt>
-              <dd>{(stats().memoryMb / 1024).toFixed(1)} GB</dd>
-            </div>
-          </dl>
-          <Show when={updates()}>
-            <div data-vesta="overview-updates">
-              <span>
-                {t(updates() === 1 ? "overview.update-one" : "overview.update-other", { count: updates() })}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => goto("resources")}
-              >
-                {t("common.review")}
-              </Button>
-            </div>
-          </Show>
-        </section>
-      </div>
+      </Show>
 
       <Show when={shots().length}>
         <section aria-labelledby="overview-shots">
@@ -215,7 +188,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
             <span data-vesta="overview-quiet">{shots().length}</span>
           </header>
           <ul data-vesta="shot-grid">
-            <For each={shots().slice(0, 4)}>
+            <For each={shots().slice(0, 5)}>
               {(shot, index) => (
                 <li data-vesta="shot-item">
                   <button

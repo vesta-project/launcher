@@ -25,6 +25,7 @@ import { Icon } from "../icon";
 import {
   LOG_LEVELS,
   filterLog,
+  groupLogEntries,
   isGap,
   levelCounts,
   lineTotal,
@@ -123,7 +124,7 @@ export function LogView(props: LogViewProps) {
         a.query === b.query,
     },
   );
-  const sourceLines = createMemo(() => props.lines(), {
+  const sourceLines = createMemo(() => groupLogEntries(props.lines()), {
     name: "log-view:source-lines",
   });
   const visible = createMemo(

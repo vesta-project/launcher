@@ -1,5 +1,7 @@
 const step = (delta: number) => Number.isFinite(delta) ? Math.min(0.1, Math.max(0, delta)) : 0;
 const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+const HOP_SECONDS = 0.42;
+const HOP_HEIGHT = 1.6;
 
 /** Small occasional gestures laid over skinview3d's existing arm/cape breathing. */
 export class SkinIdleMotion {
@@ -9,6 +11,9 @@ export class SkinIdleMotion {
   private duration: number;
   private dragging = false;
   private pose = { yaw: 0, pitch: 0, x: 0, y: 0, roll: 0 };
+  /** Seconds into a hop, or null when standing; a new skin is greeted with one. */
+  private hopping: number | null = null;
+  private out = { yaw: 0, pitch: 0, x: 0, y: 0, roll: 0 };
 
   constructor(private random = Math.random) {
     this.preset = Math.floor(this.unit() * 3);
@@ -16,6 +21,9 @@ export class SkinIdleMotion {
   }
 
   private unit() { return Math.max(0, Math.min(1 - Number.EPSILON, this.random())); }
+
+  /** A small happy jump, e.g. when a new skin is put on. */
+  hop() { this.hopping = 0; }
 
   setDragging(dragging: boolean) {
     this.dragging = dragging;
@@ -28,6 +36,7 @@ export class SkinIdleMotion {
     this.elapsed = 0;
     this.wait = 1;
     this.pose.yaw = this.pose.pitch = this.pose.x = this.pose.y = this.pose.roll = 0;
+    this.hopping = null;
   }
 
   /** Called only by the existing visible animation loop; no timers or per-frame allocations. */
@@ -56,7 +65,19 @@ export class SkinIdleMotion {
     this.pose.x += ((this.preset === 2 ? sway * 0.16 : 0) - this.pose.x) * blend;
     this.pose.y += ((this.preset === 0 ? sway * 0.22 : 0) - this.pose.y) * blend;
     this.pose.roll += ((this.preset === 2 ? sway * 0.035 : 0) - this.pose.roll) * blend;
-    return this.pose;
+    // The hop rides on top of the eased pose, so it never feeds back into the easing.
+    let lift = 0;
+    if (this.hopping !== null) {
+      this.hopping += dt;
+      const t = this.hopping / HOP_SECONDS;
+      if (t >= 1) this.hopping = null;
+      else lift = Math.sin(Math.PI * t);
+    }
+    const out = this.out;
+    out.yaw = this.pose.yaw; out.x = this.pose.x; out.roll = this.pose.roll;
+    out.y = this.pose.y + lift * HOP_HEIGHT;
+    out.pitch = this.pose.pitch - lift * 0.12;
+    return out;
   }
 }
 

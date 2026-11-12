@@ -3,8 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { Button, Dialog } from '@vesta/ui';
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import { navigate } from '../../../app/router';
-import { ImportDialog } from '../../create/import-dialog';
-import { openInstallSource } from '../../create/install-navigation';
+import { openImport } from '../../../features/installation/import-request';
 import { Icon } from '../../../components/icon';
 import { openExternal } from '../../../features/links/external-links';
 import { SettingRow } from '../../../components/setting-row';
@@ -44,7 +43,6 @@ export function AboutSettings() {
   const [changelogOpen, setChangelogOpen] = createSignal(false, { name: 'changelogOpen' });
   const status = () => updateStatus().state;
   const [resetting, setResetting] = createSignal(false);
-  const [importing, setImporting] = createSignal(false);
   const checkNow = () => void checkForUpdates();
   onSettled(() => {
     if (isTauri()) void getVersion().then(setVersion);
@@ -52,15 +50,6 @@ export function AboutSettings() {
   return (
     <>
       <ChangelogDialog open={changelogOpen()} onOpenChange={setChangelogOpen} version={version()} />
-      <Show when={importing()}>
-        <ImportDialog
-          open
-          initialStep="launchers"
-          onClose={() => setImporting(false)}
-          onSource={openInstallSource}
-          onLauncher={(kind) => navigate(`/create/import/${kind}`)}
-        />
-      </Show>
       <section data-vesta="prefs-about">
         <img src="/favicon.ico" alt="" width="56" height="56" draggable="false" />
         <div>
@@ -134,7 +123,7 @@ export function AboutSettings() {
           </Button>
         </SettingRow>
         <SettingRow label={t('prefs.about.importer')} description={t('prefs.about.importer-description')}>
-          <Button variant="outline" onClick={() => setImporting(true)}>
+          <Button variant="outline" onClick={() => openImport('launchers')}>
             {t('prefs.about.open')}
           </Button>
         </SettingRow>

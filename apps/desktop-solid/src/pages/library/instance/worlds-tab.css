@@ -46,10 +46,10 @@
   }
   :where([data-vesta="world-thumb"]) {
     flex: none;
-    inline-size: 64px;
-    block-size: 48px;
+    inline-size: 28px;
+    block-size: 28px;
     object-fit: cover;
-    border-radius: var(--vesta-radius-sm);
+    border-radius: var(--vesta-radius-md);
   }
   :where([data-vesta="world-copy"]) {
     display: flex;
@@ -97,9 +97,9 @@
   }
   :where([data-vesta="world-detail-header"] > img) {
     flex: none;
-    inline-size: 64px;
+    inline-size: 40px;
     block-size: 40px;
-    border-radius: var(--vesta-radius-md);;
+    border-radius: var(--vesta-radius-md);
     object-fit: cover;
     box-shadow: 0 0 0 1px var(--vesta-color-border-strong);
   }

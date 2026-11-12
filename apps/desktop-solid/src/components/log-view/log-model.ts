@@ -32,6 +32,23 @@ export const LOG_LEVELS =["INFO", "WARN", "ERROR", "DEBUG"] as const;
 export const isGap = (entry: LogEntry): entry is LogGapEntry =>
   entry.kind === "gap";
 
+/** Unprefixed physical lines continue the preceding entry until a parsed
+ * header or source gap starts another entry. Raw text stays intact. */
+export function groupLogEntries(entries: readonly LogEntry[]): LogEntry[] {
+  let previous: LogLineEntry | undefined;
+  return entries.map((entry) => {
+    if (isGap(entry)) {
+      previous = undefined;
+      return entry;
+    }
+    if (entry.level === "UNKNOWN" && !entry.timestamp && !entry.thread) {
+      return previous ? { ...entry, level: previous.level, thread: previous.thread } : entry;
+    }
+    previous = entry;
+    return entry;
+  });
+}
+
 /**
  * Entries at or after the display boundary that pass the level and text filters.
  * Gaps always pass the filters, since hiding one would invent continuity.

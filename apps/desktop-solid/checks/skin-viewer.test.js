@@ -19,7 +19,7 @@ function fixture({ slowModule = false, slowTextures = false, failModule = false 
     constructor(options) {
       this.options = options;
       this.renderPaused = true;
-      this.controls = Object.assign(new EventTarget(), { enabled: true, target: { x: 0, y: 0, z: 0 } });
+      this.controls = Object.assign(new EventTarget(), { enabled: true, target: { x: 0, y: 0, z: 0 }, update() {} });
       this.camera = { position: { x: 0, y: 0, z: 50, set(x, y, z) { Object.assign(this, { x, y, z }); } } };
       this.playerObject = new PlayerObject();
       this.renderer = { getContext: () => ({ isContextLost: () => false }) };
@@ -242,8 +242,9 @@ describe('skin viewer lifecycle and render budgets', () => {
     expect(v.camera.position.z).toBe(position.z);
     v.controls.dispatchEvent(new Event('end'));
     f.animate(2.6);
-    expect(v.camera.position.x).toBeCloseTo(0, 6);
-    expect(v.camera.position.z).toBeCloseTo(50, 6);
+    // Home is the three-quarter resting view, a little from the character's right.
+    expect(v.camera.position.x).toBeCloseTo(50 * Math.sin(-0.48), 6);
+    expect(v.camera.position.z).toBeCloseTo(50 * Math.cos(-0.48), 6);
     expect(f.frames.size).toBe(0);
     f.controller.dispose();
   });

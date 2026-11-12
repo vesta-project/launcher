@@ -45,7 +45,8 @@
     z-index: var(--vesta-z-modal);
     display: flex;
     flex-direction: column;
-    gap: var(--dialog-gap);
+    /* Header, body and footer meet at the body's dividers, spaced by the body itself. */
+    gap: 0;
     inline-size: min(var(--dialog-width), 100%);
     /* The positioner has a definite height, so the dialog never outgrows the
        window: header and footer stay put and only the body scrolls. */
@@ -86,7 +87,7 @@
 
   :where([data-vesta='dialog-description']) {
     margin: 0;
-    margin-block-start: calc(var(--dialog-gap) * -0.5);
+    margin-block-start: var(--vesta-space-1);
     padding-inline: var(--dialog-padding);
     color: var(--vesta-color-text-muted);
   }
@@ -104,8 +105,9 @@
     flex-direction: column;
     gap: var(--vesta-space-3);
     padding-inline: var(--dialog-padding);
-    /* Content never touches the dividers; the dialog gap already spaces header and footer. */
-    padding-block: var(--vesta-space-1);
+    /* The dividers sit at the body edges, with the same space on each side of them. */
+    margin-block: var(--dialog-gap);
+    padding-block: var(--dialog-gap);
     background:
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) top / 100% 2px no-repeat local,
       linear-gradient(var(--overlay-bg), var(--overlay-bg)) bottom / 100% 2px no-repeat local,
@@ -123,6 +125,18 @@
     justify-content: flex-end;
     gap: var(--vesta-space-2);
     padding-inline: var(--dialog-padding);
-    padding-block-start: var(--vesta-space-1);
+
+  }
+}
+
+@layer ui.components {
+  /* Without a footer the body ends the dialog: no closing divider, and the dialog's own padding
+     spaces the last row from the edge. */
+  :where([data-vesta='dialog-body']:last-child) {
+    margin-block-end: 0;
+    padding-block-end: 0;
+    background:
+      linear-gradient(var(--overlay-bg), var(--overlay-bg)) top / 100% 2px no-repeat local,
+      linear-gradient(var(--overlay-border-color), var(--overlay-border-color)) top / 100% var(--vesta-border-width) no-repeat scroll;
   }
 }

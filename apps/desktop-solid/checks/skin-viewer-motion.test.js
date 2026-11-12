@@ -99,3 +99,15 @@ describe('gentle camera recovery', () => {
     expect(position).toMatchObject(current);
   });
 });
+
+test('a hop rises and lands once, without feeding into the eased pose', () => {
+  const motion = new SkinIdleMotion(() => 0);
+  motion.reset();
+  motion.hop();
+  let peak = 0;
+  for (let frame = 0; frame < 30; frame++) peak = Math.max(peak, motion.tick(1 / 60).y);
+  expect(peak).toBeGreaterThan(1);
+  expect(peak).toBeLessThan(2);
+  for (let frame = 0; frame < 60; frame++) motion.tick(1 / 60);
+  expect(Math.abs(motion.tick(1 / 60).y)).toBeLessThan(0.3);
+});

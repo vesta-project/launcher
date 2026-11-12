@@ -7,6 +7,10 @@ import { setType } from "../../features/browse/browse-store";
 import { t } from "../../localization";
 import { nativeInstances } from "../../features/instances/native-service";
 import type { PackSource } from "../../features/installation/install-service";
+import { closeImport, importRequest } from "../../features/installation/import-request";
+import { openInstallSource } from "./install-navigation";
+import { navigate } from "../../app/router";
+import "./import-dialog.css";
 
 import {
   launchers,
@@ -30,6 +34,8 @@ export function ImportDialog(props: {
     { name: "modpackImportUrl" },
   );
   const [showUrl, setShowUrl] = createSignal(untrack(() => !!props.initialUrl));
+  /** Which way the last page change went, so the new page slides in from that side. */
+  const [direction, setDirection] = createSignal<"forward" | "back" | undefined>(undefined, { name: "importDirection" });
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
   let disposed = false;
@@ -75,6 +81,7 @@ export function ImportDialog(props: {
     props.onSource({ kind: "url", value: url().trim() });
   };
   const back = () => {
+    setDirection("back");
     setStep("methods");
     setError("");
   };
@@ -109,18 +116,20 @@ export function ImportDialog(props: {
       }}
       class="install-import-dialog"
       title={
-        <span class="install-import-heading">
-          <Show when={step() !== "methods"}>
+        // The back button's slot is always there and slides open, so the title moves smoothly
+        // instead of jumping when a page is pushed.
+        <span class="install-import-heading" data-nested={step() !== "methods" ? "" : undefined}>
+          <span class="install-import-back" inert={step() === "methods"}>
             <IconButton
               variant="ghost"
               size="sm"
               tooltip={false}
               icon={<Icon name="icons/navigation/arrow-back" />}
               label={t("common.back")}
-              disabled={busy()}
+              disabled={busy() || step() === "methods"}
               onClick={back}
             />
-          </Show>
+          </span>
           <span>
             {step() === "methods"
               ? t("install.import")
@@ -136,7 +145,7 @@ export function ImportDialog(props: {
             : undefined
       }
     >
-      <div data-vesta="install-import">
+      <div data-vesta="install-import" data-direction={direction()}>
         <Show when={step() === "methods"}>
           <div class="install-import-methods">
             {methodRow(
@@ -160,7 +169,7 @@ export function ImportDialog(props: {
               type="button"
               class="install-import-row"
               disabled={busy()}
-              onClick={() => setStep("launchers")}
+              onClick={() => { setDirection("forward"); setStep("launchers"); }}
             >
               <IconTile hook="install-import-icon" class="install-import-row-icon install-import-launcher-stack">
                 <Icon name="branding/launchers/prism-launcher" size={20} />
@@ -249,5 +258,23 @@ export function ImportDialog(props: {
         </Show>
       </div>
     </Dialog>
+  );
+}
+
+/** The launcher-wide import dialog (see openImport): opens over the current page. */
+export function GlobalImportDialog() {
+  return (
+    <Show when={importRequest()} keyed>
+      {(request) => (
+        <ImportDialog
+          open
+          initialStep={request.step}
+          initialUrl={request.url}
+          onClose={closeImport}
+          onSource={(source) => { closeImport(); openInstallSource(source); }}
+          onLauncher={(kind) => { closeImport(); navigate(`/create/import/${kind}`); }}
+        />
+      )}
+    </Show>
   );
 }

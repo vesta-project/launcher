@@ -48,7 +48,6 @@ server-content-error-stale = The file changed on the server. Refresh and try aga
 # Server modpack ownership
 server-content-managed-by-modpack = Managed by the server modpack
 server-content-open-modpack = Open server modpack
-server-content-server-modpack = the server modpack
 
 server-content-side-client = Client
 server-content-side-server = Server

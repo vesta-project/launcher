@@ -1,5 +1,6 @@
 import { navigate } from "../../app/router";
 import { createSignal } from 'solid-js';
+import { openImport } from '../../features/installation/import-request';
 import type { PackSource } from "../../features/installation/install-service";
 import type { ResourceProject } from "../../features/browse/browse-model";
 import type { PendingResourceInstall } from "../../features/browse/new-instance-install";
@@ -15,6 +16,8 @@ const [actionRevision, setActionRevision] = createSignal(0, { name: 'createActio
 /** An explicit intent also works when Create is already mounted at the same URL. */
 export const createActionKey = () => `create:${actionRevision()}`;
 export function requestCreateAction(action: CreateAction) {
+  // Importing is a dialog over the current page; only a new instance opens the install form.
+  if (action !== 'new') { openImport(action); return; }
   pendingServer = undefined;
   pendingSource = undefined; pendingListing = undefined;
   pendingResource = undefined;

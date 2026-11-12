@@ -199,6 +199,7 @@ export function ModpackContent() {
                   )}
                 </Show>
                 <span data-vesta="resource-file" title={entry().path}>{entryFileName(entry())}</span>
+                <Show when={entry().source.type === 'manual'}><Badge size="sm" tone="danger">{t('server-pack.needs-file')}</Badge></Show>
               </span>
             </span>
           </a>
@@ -211,11 +212,6 @@ export function ModpackContent() {
                 icon={<Icon name="icons/actions/download" />} onClick={() => update(entry())} />
             </Show>
           </span>
-        </div>
-        <div data-vesta="table-cell" role="cell" class="col-size">
-          <Show when={entry().source.type === 'manual'} fallback={<span>{t(entryKindLabel[entry().kind])}</span>}>
-            <Badge size="sm" tone="danger">{t('server-pack.needs-file')}</Badge>
-          </Show>
         </div>
         <div data-vesta="table-cell" role="cell" class="col-enabled">
           <Switch size="sm" aria-label={t('server-pack.required-entry', { name: nameOf(entry()) })} checked={entry().required}
@@ -252,7 +248,7 @@ export function ModpackContent() {
             <TextField size="sm" class="resources-search" aria-label={t('server-pack.search')} placeholder={t('server-pack.search')}
               icon={<Icon name="icons/content/search" size={14} />} value={query()} onChange={setQuery} />
             <Show when={!readOnly()} fallback={
-              <Button size="sm" variant="outline" icon={<Icon name="icons/actions/edit" />} onClick={() => area.open('overview')}>{t(area.workspace()?.minecraftDrift ? 'server-pack.repair' : 'server-pack.customize-to-edit')}</Button>
+              <Show when={area.kind() === 'provider'}><Button size="sm" variant="outline" icon={<Icon name="icons/actions/edit" />} onClick={() => area.open('overview')}>{t('server-pack.customize-to-edit')}</Button></Show>
             }>
               <Button size="sm" variant="outline" disabled={checking() || busy()} onClick={() => void checkSuggestions()}>
                 {t(checking() ? 'server-pack.checking-content' : 'server-pack.check-content')}
@@ -276,9 +272,6 @@ export function ModpackContent() {
 
       <Show when={area.kind() === 'provider'}>
         <p data-vesta="server-callout" data-tone="neutral" class="modpack-note"><Icon name="icons/security/lock" size={14} /> {t('server-pack.content-read-only')}</p>
-      </Show>
-      <Show when={area.workspace()?.minecraftDrift}>
-        <p data-vesta="server-callout" data-tone="warning" class="modpack-note" role="alert">{t('server-pack.drift', { version: area.workspace()!.serverMinecraftVersion })}</p>
       </Show>
       <Show when={strip().length}>
         <div data-vesta="modpack-suggestions" role="region" aria-label={t('server-pack.suggestions')}>
@@ -322,7 +315,7 @@ export function ModpackContent() {
           </EmptyState>
         }>
           <div data-vesta="table-scroll" class="resource-table">
-            <div data-vesta="table" role="table" aria-label={t('server-pack.tab-content')} aria-colcount={6} aria-rowcount={visible().length + 1}>
+            <div data-vesta="table" role="table" aria-label={t('server-pack.tab-content')} aria-colcount={5} aria-rowcount={visible().length + 1}>
               <VirtualList items={visible()} key={(entry) => entry.id} rowHeight={44} scrollElement={viewport()} rowRole="row"
                 headerHeight={32} headerHook="table-header" bodyHook="table-body"
                 header={
@@ -335,7 +328,6 @@ export function ModpackContent() {
                     </div>
                     <div data-vesta="table-head" role="columnheader" class="col-name">{t('resources.name-column')}</div>
                     <div data-vesta="table-head" role="columnheader" class="col-version">{t('resources.version-column')}</div>
-                    <div data-vesta="table-head" role="columnheader" class="col-size">{t('server-pack.kind-column')}</div>
                     <div data-vesta="table-head" role="columnheader" class="col-enabled">{t('server-pack.required-column')}</div>
                     <div data-vesta="table-head" role="columnheader" class="col-menu"><span data-vesta="sr-only">{t('resources.actions-column')}</span></div>
                   </div>

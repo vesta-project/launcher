@@ -189,7 +189,9 @@
     display: block;
     inline-size: 100%;
     block-size: 100%;
-    border-radius: inherit;
+    /* Clip art independently so status dots can extend over the tile border. */
+    border-radius: max(0px, calc(var(--vesta-radius-control) - var(--vesta-border-width)));
+    clip-path: inset(0 round max(0px, calc(var(--vesta-radius-control) - var(--vesta-border-width))));
     object-fit: cover;
   }
 

@@ -57,7 +57,8 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   }, { name: 'server-content:modpack-project' });
   const modpackName = () => {
     const value = linkProvider(modpackSource());
-    return (value ? peekProject(value.provider, value.projectId)?.name : undefined) ?? t('server-content.server-modpack');
+    return (value ? peekProject(value.provider, value.projectId)?.name : undefined)
+      || t('browse.kind-modpack');
   };
   const lifecycle = useLifecycle(() => props.snapshot);
   const [filter, setFilter] = createSignal<ContentFilter>('all', { name: 'server-content:filter' });
