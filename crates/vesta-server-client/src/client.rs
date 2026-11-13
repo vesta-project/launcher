@@ -46,6 +46,7 @@ struct Prepared {
 }
 pub struct Client {
     pub transport: Arc<Transport>,
+    host: Option<Arc<crate::host::HostSession>>,
     pub server_id: String,
     device_id: String,
     signer: Arc<dyn DeviceSigner>,
@@ -131,6 +132,7 @@ impl Client {
         client
     }
     pub async fn renewal_delay(&self) -> std::time::Duration {
+        if self.host.is_some() { return std::time::Duration::from_secs(25); }
         let state = self.session.lock().await;
         std::time::Duration::from_millis(
             state
@@ -148,6 +150,7 @@ impl Client {
     ) -> Arc<Self> {
         Arc::new(Self {
             transport,
+            host: None,
             server_id,
             device_id,
             signer,
@@ -168,6 +171,11 @@ impl Client {
             hosting: Default::default(),
             setup: Default::default(),
         })
+    }
+    pub fn for_host(transport: Arc<Transport>, server_id: String, host: Arc<crate::host::HostSession>) -> Arc<Self> {
+        let mut client = Self::new(transport, server_id, host.host.device_id.clone(), host.signer.clone());
+        Arc::get_mut(&mut client).expect("new client").host = Some(host);
+        client
     }
     pub async fn pair(
         transport: &Arc<Transport>,
@@ -244,6 +252,7 @@ impl Client {
         Ok(enrollment)
     }
     pub(crate) async fn token(&self, rejected: Option<&str>) -> Result<zeroize::Zeroizing<String>> {
+        if let Some(host) = &self.host { return host.token(rejected).await; }
         let mut state = self.session.lock().await;
         if let Some(s) = &state.session {
             if s.expires_at_ms > crate::now_ms() + 120_000 && rejected != Some(s.token.as_str()) {
@@ -388,9 +397,14 @@ impl Client {
     }
     /// Public lifecycle is separate from privileged process/readiness details.
     pub async fn public_lifecycle(&self) -> Result<String> {
+        // Host server routes have no anonymous access; status needs the host bearer.
+        let token = match &self.host {
+            Some(host) => Some(host.token(None).await?),
+            None => None,
+        };
         let value = self
             .transport
-            .request(Method::GET, "/api/v3/status", None, None, None, false)
+            .request(Method::GET, "/api/v3/status", token.as_deref().map(String::as_str), None, None, false)
             .await?;
         auth::check_identity(
             &self.server_id,
