@@ -16,6 +16,14 @@ fn invalid() -> Error {
 fn network(_: impl std::fmt::Display) -> Error {
     Error::new(ErrorCode::Unreachable)
 }
+/// A closed code plus a bounded reason, so the UI can tell causes apart.
+pub fn reasoned(code: ErrorCode, reason: &str) -> Error {
+    let mut error = Error::new(code);
+    error.reason = Some(reason.to_owned());
+    error
+}
+/// The PAKE token is valid for 10 minutes; leave room for account proof and claim.
+const PAKE_REUSE: Duration = Duration::from_secs(9 * 60);
 pub fn string(v: &Value, key: &str) -> Result<String> {
     v[key].as_str().map(str::to_owned).ok_or_else(invalid)
 }
@@ -83,6 +91,17 @@ pub struct Connection {
     bootstrap: bool,
 }
 impl Connection {
+    /// False once the peer closed the connection (host restart, network loss). Never blocks long.
+    pub async fn alive(&mut self) -> bool {
+        matches!(
+            tokio::time::timeout(
+                Duration::from_millis(50),
+                std::future::poll_fn(|cx| self.sender.poll_ready(cx))
+            )
+            .await,
+            Ok(Ok(()))
+        )
+    }
     pub async fn open(endpoint: &Endpoint, pin: Option<String>) -> Result<Self> {
         let observed = Arc::new(StdMutex::new(None));
         // TLS 1.3 only for every host connection; never resume bootstrap.
@@ -388,8 +407,13 @@ pub struct Bootstrap {
     pub token: Zeroizing<String>,
     pub exchange_id: String,
     pub link_id: Option<String>,
+    proven_at: std::time::Instant,
 }
 impl Bootstrap {
+    /// The PAKE capability lives only on this connection and for a bounded time.
+    pub async fn usable(&mut self) -> bool {
+        self.proven_at.elapsed() < PAKE_REUSE && self.connection.alive().await
+    }
     pub async fn start(
         address: &str,
         code: &str,
@@ -400,6 +424,10 @@ impl Bootstrap {
         let discovery = connection
             .call("GET", "/v1/host/discovery", None, None, None, None)
             .await?;
+        // LAN discovery reports claim state on purpose; a claim would only fail uniformly.
+        if purpose == vesta_host_client::Purpose::Claim && discovery["claimState"] == "claimed" {
+            return Err(reasoned(ErrorCode::Conflict, "host_already_claimed"));
+        }
         let code = vesta_host_client::SetupCode::parse(code)
             .map_err(|_| Error::new(ErrorCode::InvalidInput))?;
         let public =
@@ -427,7 +455,7 @@ impl Bootstrap {
         let link_id = started.link_id.clone();
         let (confirmation, finish) = client
             .finish(&started, &connection.fingerprint, &connection.exporter)
-            .map_err(|_| Error::new(ErrorCode::CredentialsRejected))?;
+            .map_err(|_| reasoned(ErrorCode::CredentialsRejected, "pairing_failed"))?;
         let finished = connection
             .call(
                 "POST",
@@ -440,13 +468,14 @@ impl Bootstrap {
             .await?;
         let token = confirmation
             .verify(serde_json::from_value(finished).map_err(|_| invalid())?)
-            .map_err(|_| Error::new(ErrorCode::CredentialsRejected))?;
+            .map_err(|_| reasoned(ErrorCode::CredentialsRejected, "pairing_failed"))?;
         Ok(Self {
             connection,
             discovery,
             token: Zeroizing::new(token),
             exchange_id,
             link_id,
+            proven_at: std::time::Instant::now(),
         })
     }
     pub async fn call(&mut self, path: &str, body: Option<Value>) -> Result<Value> {
@@ -643,11 +672,20 @@ impl Bootstrap {
         let challenge=self.call("/v1/host/accounts/challenge",Some(json!({"accountId":account_id,"name":name,"deviceKey":key,"purpose":purpose,"binding":binding}))).await?;
         join(string(&challenge, "serverHash")?).await?;
         let signature=signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.account.v1",&json!({"hostId":host,"deviceKey":key,"challengeId":challenge["challengeId"],"serverHash":challenge["serverHash"],"purpose":purpose,"binding":binding}))).await?;
+        // The host answers a profile the provider didn't confirm with the uniform
+        // pairing failure. At this stage the PAKE capability was just accepted, so name it.
         self.call(
             "/v1/host/accounts/complete",
             Some(json!({"challengeId":challenge["challengeId"],"signature":signature})),
         )
         .await
+        .map_err(|e| {
+            if e.reason.as_deref() == Some("pairing_failed") {
+                reasoned(ErrorCode::CredentialsRejected, "account_proof_failed")
+            } else {
+                e
+            }
+        })
     }
     pub async fn claim(
         &mut self,

@@ -29,9 +29,18 @@ pub async fn host_claim(
     code: String,
     account_uuid: String,
     device_name: String,
+    verification_id: Option<String>,
 ) -> Result<Value> {
     manager
-        .host_enroll(&app, &address, &code, &account_uuid, &device_name, false)
+        .host_enroll(
+            &app,
+            &address,
+            &code,
+            &account_uuid,
+            &device_name,
+            false,
+            verification_id.as_deref(),
+        )
         .await
 }
 #[tauri::command]
@@ -42,10 +51,34 @@ pub async fn host_link_start(
     code: String,
     account_uuid: String,
     device_name: String,
+    verification_id: Option<String>,
 ) -> Result<Value> {
     manager
-        .host_enroll(&app, &address, &code, &account_uuid, &device_name, true)
+        .host_enroll(
+            &app,
+            &address,
+            &code,
+            &account_uuid,
+            &device_name,
+            true,
+            verification_id.as_deref(),
+        )
         .await
+}
+/// Checks a setup or link code right away (PAKE only). Never logs the code.
+#[tauri::command]
+pub async fn host_verify_code(
+    manager: Manager<'_>,
+    address: String,
+    code: String,
+    purpose: String,
+) -> Result<Value> {
+    let link = match purpose.as_str() {
+        "claim" => false,
+        "link" => true,
+        _ => return Err(Error::new(ErrorCode::InvalidInput)),
+    };
+    manager.host_verify_code(&address, &code, link).await
 }
 #[tauri::command]
 pub async fn host_link_poll(manager: Manager<'_>, link_id: String) -> Result<Value> {

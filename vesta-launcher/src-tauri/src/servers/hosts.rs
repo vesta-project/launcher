@@ -1,6 +1,33 @@
 use super::*;
 use serde::Serialize;
-use vesta_server_client::host::{string, Bootstrap, HostSession, ServerRef, VestaHost};
+use vesta_server_client::host::{reasoned, string, Bootstrap, HostSession, ServerRef, VestaHost};
+type Signer = Arc<dyn vesta_server_client::auth::DeviceSigner>;
+/// A code proven by PAKE but not yet used. Holds the live bootstrap connection and the
+/// fresh device key it was bound to; dropping it closes the connection and deletes the key.
+pub struct VerifiedCode {
+    id: String,
+    address: String,
+    link: bool,
+    bootstrap: Bootstrap,
+    signer: Signer,
+    key: EnrollmentKey,
+}
+/// Connection level failures where a fresh exchange is worth one transparent retry.
+fn exchange_lost(e: &Error) -> bool {
+    match e.code {
+        ErrorCode::Unreachable | ErrorCode::TlsFailed | ErrorCode::Timeout => e.reason.is_none(),
+        ErrorCode::CredentialsRejected => e.reason.as_deref() == Some("pairing_failed"),
+        _ => false,
+    }
+}
+/// A code that already passed once now fails: it expired or was replaced on the machine.
+fn after_verified(e: Error) -> Error {
+    if e.reason.as_deref() == Some("pairing_failed") {
+        reasoned(ErrorCode::CredentialsRejected, "code_expired")
+    } else {
+        e
+    }
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostDiscovery {
@@ -224,26 +251,23 @@ impl ServerManager {
         signer: &dyn vesta_server_client::auth::DeviceSigner,
         purpose: &str,
     ) -> Result<Value> {
+        let signin = || reasoned(ErrorCode::CredentialsUnavailable, "account_signin_required");
         let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
             .await
-            .map_err(|_| Error::new(ErrorCode::CredentialsRejected))?;
+            .map_err(|_| signin())?;
         if !crate::auth::is_previously_authenticated_account(&account) {
-            return Err(Error::new(ErrorCode::CredentialsRejected));
+            return Err(signin());
         }
         let account_id = uuid::Uuid::parse_str(&account.uuid)
             .map_err(|_| internal())?
             .to_string();
         let profile = account.uuid.replace('-', "");
         let name = account.username.clone();
-        let token = zeroize::Zeroizing::new(
-            account
-                .access_token
-                .ok_or_else(|| Error::new(ErrorCode::CredentialsRejected))?,
-        );
+        let token = zeroize::Zeroizing::new(account.access_token.ok_or_else(signin)?);
         b.account_proof(&account_id,&name,signer,purpose,|server_hash|async move {
             let joined=reqwest12::Client::builder().use_rustls_tls().no_proxy().redirect(reqwest12::redirect::Policy::none()).timeout(Duration::from_secs(15)).build().map_err(|_|internal())?
-                .post("https://sessionserver.mojang.com/session/minecraft/join").json(&json!({"accessToken":token.as_str(),"selectedProfile":profile,"serverId":server_hash})).send().await.map_err(|_|Error::new(ErrorCode::Unreachable))?;
-            if !joined.status().is_success(){return Err(Error::new(ErrorCode::CredentialsRejected));}Ok(())
+                .post("https://sessionserver.mojang.com/session/minecraft/join").json(&json!({"accessToken":token.as_str(),"selectedProfile":profile,"serverId":server_hash})).send().await.map_err(|_|reasoned(ErrorCode::Unreachable,"account_service_unreachable"))?;
+            if !joined.status().is_success(){return Err(reasoned(ErrorCode::CredentialsRejected,"account_proof_failed"));}Ok(())
         }).await
     }
     async fn host_save_enrollment(
@@ -281,6 +305,54 @@ impl ServerManager {
         self.host_sessions.lock().await.insert(id, session);
         Ok(h)
     }
+    async fn host_new_key(&self) -> Result<(Signer, EnrollmentKey)> {
+        let credentials = self.credentials.clone();
+        let reference = new_id();
+        let r = reference.clone();
+        let signer = tokio::task::spawn_blocking(move || credentials.create(&r, false))
+            .await
+            .map_err(|_| internal())??;
+        Ok((
+            signer,
+            EnrollmentKey {
+                credentials: self.credentials.clone(),
+                reference,
+                retain: false,
+            },
+        ))
+    }
+    fn purpose(link: bool) -> vesta_host_client::Purpose {
+        if link {
+            vesta_host_client::Purpose::Link
+        } else {
+            vesta_host_client::Purpose::Claim
+        }
+    }
+    /// Runs the PAKE exchange as soon as a code is complete, so a wrong code is reported
+    /// before anything else. The proven connection is kept for the claim that follows.
+    pub async fn host_verify_code(&self, address: &str, code: &str, link: bool) -> Result<Value> {
+        let _gate = self.host_gate.lock().await;
+        // Drop any earlier verification first: it closes that connection and deletes its key.
+        self.host_verified.lock().await.take();
+        let (signer, key) = self.host_new_key().await?;
+        let bootstrap =
+            Bootstrap::start(address, code, Self::purpose(link), signer.as_ref()).await?;
+        let id = new_id();
+        let reply = json!({
+            "verificationId": id,
+            "hostId": bootstrap.discovery["hostId"],
+            "name": bootstrap.discovery["name"],
+        });
+        *self.host_verified.lock().await = Some(VerifiedCode {
+            id,
+            address: address.into(),
+            link,
+            bootstrap,
+            signer,
+            key,
+        });
+        Ok(reply)
+    }
     pub async fn host_enroll(
         &self,
         app: &AppHandle,
@@ -289,39 +361,54 @@ impl ServerManager {
         account_uuid: &str,
         device_name: &str,
         link: bool,
+        verification: Option<&str>,
     ) -> Result<Value> {
         let _gate = self.host_gate.lock().await;
-        let credentials = self.credentials.clone();
-        let reference = new_id();
-        let r = reference.clone();
-        let signer = tokio::task::spawn_blocking(move || credentials.create(&r, false))
-            .await
-            .map_err(|_| internal())??;
-        let mut key_guard = EnrollmentKey {
-            credentials: self.credentials.clone(),
-            reference: reference.clone(),
-            retain: false,
+        let verified = verification.is_some();
+        // Whatever sits in the slot is spent now; a mismatched one is dropped with its key.
+        let cached = self.host_verified.lock().await.take().filter(|v| {
+            Some(v.id.as_str()) == verification && v.address == address && v.link == link
+        });
+        // Reuse the proven exchange when it is still alive; otherwise redo it with the
+        // remembered code. A code that passed before and now fails has expired or rotated.
+        let cached = match cached {
+            Some(mut v) => {
+                let alive = v.bootstrap.usable().await;
+                Some((v, alive))
+            }
+            None => None,
         };
-        let mut b = Bootstrap::start(
-            address,
-            code,
-            if link {
-                vesta_host_client::Purpose::Link
-            } else {
-                vesta_host_client::Purpose::Claim
-            },
-            signer.as_ref(),
-        )
-        .await?;
-        let proof = self
-            .host_account_proof(
-                app,
-                &mut b,
-                account_uuid,
-                signer.as_ref(),
-                if link { "link" } else { "claim" },
-            )
-            .await?;
+        let (signer, mut key_guard, mut b, reused) = match cached {
+            Some((v, true)) => (v.signer, v.key, v.bootstrap, true),
+            Some((v, false)) => {
+                let b = Bootstrap::start(address, code, Self::purpose(link), v.signer.as_ref())
+                    .await
+                    .map_err(after_verified)?;
+                (v.signer, v.key, b, false)
+            }
+            None => {
+                let (signer, key) = self.host_new_key().await?;
+                let b = Bootstrap::start(address, code, Self::purpose(link), signer.as_ref())
+                    .await
+                    .map_err(|e| if verified { after_verified(e) } else { e })?;
+                (signer, key, b, false)
+            }
+        };
+        let reference = key_guard.reference.clone();
+        let purpose = if link { "link" } else { "claim" };
+        let proof = match self
+            .host_account_proof(app, &mut b, account_uuid, signer.as_ref(), purpose)
+            .await
+        {
+            Err(e) if reused && exchange_lost(&e) => {
+                b = Bootstrap::start(address, code, Self::purpose(link), signer.as_ref())
+                    .await
+                    .map_err(after_verified)?;
+                self.host_account_proof(app, &mut b, account_uuid, signer.as_ref(), purpose)
+                    .await?
+            }
+            other => other?,
+        };
         // Journal only PAKE-proven identity and key reference before dispatch. A lost
         // claim reply can be recovered via device-key lookup and fresh possession proof.
         let pending = VestaHost {

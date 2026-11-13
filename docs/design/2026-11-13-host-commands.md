@@ -36,9 +36,10 @@ The exported object is `hostsNative`; methods return promises:
 | `host_probe` | `probe(address:string)` | `HostDiscovery` |
 | `hosts_list` | `list()` | `VestaHost[]` |
 | `host_remove` | `remove(hostId:string)` | `void` |
-| `host_claim` | `claim(address,code,accountUuid,deviceName)` (all string) | `VestaHost` |
+| `host_verify_code` | `verifyCode(address,code,purpose:'claim'|'link')` | `{verificationId,hostId,name}`: PAKE only, run as soon as the code is complete |
+| `host_claim` | `claim(address,code,accountUuid,deviceName,verificationId?)` | `VestaHost` |
 | `host_sign_in` | `signIn(hostId:string)` | `HostInfo` (automatically proves device possession) |
-| `host_link_start` | `linkStart(address,code,accountUuid,deviceName)` | `LinkResult` |
+| `host_link_start` | `linkStart(address,code,accountUuid,deviceName,verificationId?)` | `LinkResult` |
 | `host_link_poll` | `linkPoll(linkId:string)` | `LinkResult`; poll at most once/second |
 | `host_servers` | `servers(hostId:string)` | `{servers:HostServer[],nextCursor:string|null}` |
 | `host_request` | `request(hostId,action,options)` (internal binding helper) | action-specific JSON |
@@ -126,6 +127,15 @@ import service), `import_job_not_found`, `idempotency_key_required`, `eula_requi
 `worker_unavailable`, `source_changed`, `game_port_in_use`, `source_running`, `start_failed`.
 Other job conflicts arrive as `conflict` with the server code in `reason`. Do not retry
 unknown outcomes with a new import key. No raw OS/network messages are returned.
+
+Code verification: `verifyCode` keeps the PAKE-proven bootstrap connection and its fresh device key in one
+native slot (a newer verification replaces it, closing the connection and deleting the key). The PAKE token
+lasts 10 minutes and is bound to that TCP connection, so claim/link reuse it only while the connection is
+alive and younger than 9 minutes; otherwise native redoes PAKE with the code the frontend still holds in memory,
+and also once if the first account call on a reused connection fails at the connection level. Codes are never logged.
+Setup reasons added natively: `host_already_claimed` (LAN discovery says claimed), `pairing_failed` (wrong code;
+the host is deliberately uniform), `code_expired` (a code that verified earlier now fails), `account_signin_required`,
+`account_service_unreachable` (Mojang join, not the machine) and `account_proof_failed`.
 
 Pending link PAKE capabilities live in memory and require the original TCP connection;
 restart/disconnect requires restarting the link flow. PAKE-proven pending enrollments are journaled before claim/link dispatch. After a lost reply,
