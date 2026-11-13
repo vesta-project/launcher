@@ -166,6 +166,16 @@
   }
   :where([data-vesta="vesta-account"]) > span:last-child { display: flex; flex-direction: column; }
   :where([data-vesta="vesta-account"]) > span:last-child > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-account-name"]) { display: flex; flex: 1; flex-direction: column; min-inline-size: 0; }
+  :where([data-vesta="vesta-account-name"]) > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+
+  /* Which machine a code free sign in trusts */
+  :where([data-vesta="vesta-trust"]) { display: flex; flex-direction: column; gap: var(--vesta-space-1); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-trust"]) > p { display: flex; align-items: center; gap: var(--vesta-space-1-5); margin: 0; }
+  :where([data-vesta="vesta-trust"]) > p > [data-vesta="icon"] { flex: none; color: var(--vesta-color-accent-text); }
+  :where([data-vesta="vesta-trust"]) summary { inline-size: fit-content; cursor: default; }
+  :where([data-vesta="vesta-trust"]) details[open] { display: flex; flex-direction: column; gap: var(--vesta-space-1); }
+  :where([data-vesta="vesta-trust"]) code { overflow-wrap: anywhere; font-family: var(--vesta-font-mono); font-size: var(--vesta-text-xs); }
   :where([data-vesta="vesta-account-head"]) {
     display: block;
     inline-size: 36px;
@@ -367,6 +377,8 @@
   }
   :where([data-vesta="vesta-devices"]) li:first-child { border-block-start: 0; }
   :where([data-vesta="vesta-device-name"]) { flex: 1; }
+  :where([data-vesta="vesta-host-name"]) { display: inline-flex; align-items: center; gap: var(--vesta-space-1); }
+  :where([data-vesta="vesta-host-rename"]) { display: flex; align-items: start; gap: var(--vesta-space-2); }
   :where([data-vesta="vesta-dialog-actions"]) { display: flex; justify-content: end; gap: var(--vesta-space-2); }
   :where([data-vesta="vesta-link"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
   :where([data-vesta="vesta-link"]) p { margin: 0; }

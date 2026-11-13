@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   CODE_ALPHABET, CODE_GROUPS, CODE_LENGTH, HOST_PORT, backspaceCode, blockerFix, canonicalCode, codeChar, codeComplete, codeGroups, codeProblem, enrollProblemForFind,
-  formatCode, groupServers, hostIdOf, importPercent, setupProblem, typeIntoCode, waitSeconds,
+  formatCode, groupServers, hostIdOf, importPercent, setupProblem, typeIntoCode, waitSeconds, signInProblem, formatFingerprint, hostNameProblem, tidyHostName,
   importRootCommand, keepKey, machineState, parseVestaAddress, readCandidates, reviewSummary, sortDiscovered,
   KNOWN_BLOCKERS, KNOWN_IMPORT_ERRORS, KNOWN_WARNINGS, below, folderName, folderUse, importProblem, isDriveRoot, joinPath, lastSegment, locate,
   normalisePath, readFolderCheck, readNotServer, splitPath, warningMessage,
@@ -92,7 +92,7 @@ describe('[hosts] discovery and enrollment', () => {
     { hostId: 'c', name: 'mine', fingerprint: 'f', address: '10.0.0.3:25500', state: 'claimed' },
     { hostId: 'a', name: 'people-server', fingerprint: 'f', address: '[fe80::1]:25500', state: 'unclaimed' },
   ];
-  test('machines this device is linked to sign in; claimed ones need a link code; ready ones list first', () => {
+  test('machines this device is linked to sign in; set up ones sign in as the account; ready ones list first', () => {
     const hosts = [{ id: 'c' }];
     expect(machineState(found[0], hosts)).toBe('claimed');
     expect(machineState(found[1], hosts)).toBe('ready');
@@ -127,11 +127,51 @@ describe('[hosts] discovery and enrollment', () => {
     expect(enrollProblemForFind({ code: 'unreachable' })).toBe('vesta-server.problem.unreachable');
   });
 
+  test('account sign in maps each answer to where it leads', () => {
+    const kind = (error) => signInProblem(error).kind;
+    expect(kind({ code: 'forbidden', reason: 'account_has_no_access' })).toBe('no-access');
+    expect(kind({ code: 'forbidden', reason: 'device_approval_required' })).toBe('approval');
+    expect(signInProblem({ code: 'forbidden', reason: 'device_approval_required' }).message).toBe('vesta-server.account.approval');
+    expect(kind({ code: 'unreachable' })).toBe('unreachable');
+    expect(kind({ code: 'timeout' })).toBe('unreachable');
+    // A different machine answering, or a challenge that doesn't add up, is never "offline".
+    expect(kind({ code: 'fingerprint_mismatch' })).toBe('identity');
+    expect(kind({ code: 'fingerprint_mismatch', reason: 'server_hash_mismatch' })).toBe('identity');
+    expect(kind({ code: 'fingerprint_mismatch', reason: 'host_identity_changed' })).toBe('identity');
+    // No code is involved, so a refused or expired proof is about the account, not a code.
+    expect(kind({ code: 'credentials_rejected', reason: 'account_proof_failed' })).toBe('account-proof');
+    expect(kind({ code: 'credentials_rejected', reason: 'pairing_failed' })).toBe('account-proof');
+    expect(kind({ code: 'credentials_rejected' })).toBe('account-proof');
+    expect(kind({ code: 'credentials_unavailable', reason: 'account_signin_required' })).toBe('account-signin');
+    expect(kind({ code: 'server_busy', reason: 'account_verification_unavailable' })).toBe('account-offline');
+    expect(signInProblem({ code: 'rate_limited', retryAfterMs: 12_000 })).toMatchObject({ kind: 'too-many', retryAfterMs: 12_000 });
+    expect(kind({ code: 'conflict', reason: 'device_key_unusable' })).toBe('other');
+    // Opening a machine this device already knows says the same when the account has no role.
+    expect(enrollProblemForFind({ code: 'forbidden', reason: 'account_has_no_access' })).toBe('vesta-server.problem.no-access');
+    expect(enrollProblemForFind({ code: 'fingerprint_mismatch', reason: 'host_identity_changed' })).toBe('vesta-server.problem.identity');
+  });
+
+  test('the serverHash is checked before the Mojang join, for every purpose', () => {
+    const client = readFileSync(join(root, '../../crates/vesta-server-client/src/host.rs'), 'utf8');
+    const prove = client.slice(client.indexOf('async fn prove_account'), client.indexOf('pub fn device_name'));
+    expect(prove.indexOf('checked_server_hash(')).toBeGreaterThan(0);
+    expect(prove.indexOf('checked_server_hash(')).toBeLessThan(prove.indexOf('join(server_hash'));
+    // Both the code flows and account sign in go through it.
+    expect(client.match(/prove_account\(\s*&mut self\.connection/g)).toHaveLength(2);
+    expect(client).toContain('vesta_host_client::requests::account_server_hash(');
+    // The helper is the server's own, byte for byte.
+    const ours = readFileSync(join(root, '../../crates/vesta-host-client/src/requests.rs'), 'utf8');
+    expect(ours).toContain('pub fn account_server_hash(');
+  });
+
   test('the native layer names each cause instead of collapsing them', () => {
     const native = readFileSync(join(root, '../../vesta-launcher/src-tauri/src/servers/hosts.rs'), 'utf8');
     const client = readFileSync(join(root, '../../crates/vesta-server-client/src/host.rs'), 'utf8');
-    for (const reason of ['account_signin_required', 'account_service_unreachable', 'account_proof_failed', 'code_expired'])
+    for (const reason of ['account_signin_required', 'account_service_unreachable', 'account_proof_failed', 'code_expired', 'server_hash_mismatch', 'host_identity_changed', 'device_revoked'])
       expect(native + client, reason).toContain(`"${reason}"`);
+    // A revoked device or a lost key signs in again with the account before anything is shown.
+    expect(native).toContain('Some("device_revoked")');
+    expect(native).toContain('self.host_recover(app, id, &device)');
     expect(client).toContain('"host_already_claimed"');
     expect(client).toContain('"pairing_failed"');
     // The code is never logged.
@@ -311,6 +351,83 @@ describe('[hosts] servers list', () => {
       expect(value, line).not.toMatch(/ - | – | — |;|→|->/);
     }
     expect(lines.length).toBeGreaterThan(100);
+  });
+});
+
+describe('[hosts] machine settings', () => {
+  test('a machine name is tidied and must fit in 63 bytes', () => {
+    expect(tidyHostName('  attic\u200b  pc \n')).toBe('attic pc');
+    expect(hostNameProblem('   ')).toBe('empty');
+    expect(hostNameProblem('a'.repeat(63))).toBeNull();
+    expect(hostNameProblem('a'.repeat(64))).toBe('long');
+    // Bytes, not characters: 21 three byte characters fill it exactly.
+    expect(hostNameProblem('\u20ac'.repeat(21))).toBeNull();
+    expect(hostNameProblem('\u20ac'.repeat(22))).toBe('long');
+  });
+
+  test('a fingerprint reads in groups of four', () => {
+    expect(formatFingerprint('ABCD1234ef')).toBe('abcd 1234 ef');
+    expect(formatFingerprint('')).toBe('');
+  });
+});
+
+describe('[hosts] account sign in', () => {
+  const attic = async (api) => (await api.discover()).find((entry) => entry.state === 'claimed');
+
+  test('a set up machine signs in as the account, with no code, and lists its servers', async () => {
+    const api = createHostFixtures();
+    const found = await attic(api);
+    const host = await api.signInWithAccount(found.address, found.hostId, 'uuid', 'ATTIC-LAPTOP');
+    expect(host.id).toBe(found.hostId);
+    expect((await api.list()).map((entry) => entry.id)).toEqual([found.hostId]);
+    expect((await api.servers(found.hostId)).servers.length).toBeGreaterThan(0);
+    expect((await api.devices(found.hostId)).devices.map((device) => device.name)).toContain('ATTIC-LAPTOP');
+    // Another machine at the picked address is an identity change, never a new pin.
+    await expect(api.signInWithAccount(found.address, 'someone-else', 'uuid', 'x')).rejects.toMatchObject({ reason: 'host_identity_changed' });
+  }, 10_000);
+
+  test('no role and approval mode come back as answers, and nothing is added', async () => {
+    for (const [signin, kind] of [['no-access', 'no-access'], ['approval', 'approval']]) {
+      const api = createHostFixtures({ signin });
+      const found = await attic(api);
+      const error = await api.signInWithAccount(found.address, found.hostId, 'uuid', 'x').catch((reason) => reason);
+      expect(signInProblem(error).kind, signin).toBe(kind);
+      expect(await api.list()).toEqual([]);
+    }
+  }, 10_000);
+
+  test('owners rename the machine and switch new devices to approval', async () => {
+    const api = createHostFixtures({ hosts: 'one' });
+    const [machine] = await api.list();
+    expect((await api.info(machine.id)).newDeviceSignIn).toBe('account');
+    expect((await api.update(machine.id, { name: '  Attic   PC ' })).name).toBe('Attic PC');
+    await expect(api.update(machine.id, { name: 'a'.repeat(64) })).rejects.toMatchObject({ reason: 'invalid_request' });
+    await api.update(machine.id, { newDeviceSignIn: 'approval' });
+    expect((await api.info(machine.id)).newDeviceSignIn).toBe('approval');
+    const { owners } = await api.owners(machine.id);
+    expect(owners[0]).toMatchObject({ role: 'primary_owner' });
+  });
+
+  test('the setup screen asks for no code on a set up machine and trusts it in one calm line', () => {
+    const page = source('src/pages/servers/vesta-setup.tsx');
+    expect(page).toContain("if (state === 'claimed') return toSignIn(next);");
+    expect(page).toContain("'vesta-server.account.trust'");
+    expect(page).toContain('<details>');
+    expect(page).toContain("toLinkCode(current, 'vesta-server.account.approval')");
+    expect(page).toContain('<AccountMenu');
+    // The device name is the computer's own; the platform label is only a fallback.
+    const native = readFileSync(join(root, '../../vesta-launcher/src-tauri/src/commands/hosts.rs'), 'utf8');
+    expect(native.match(/ServerManager::host_device_name\(&device_name\)/g)).toHaveLength(3);
+  });
+
+  test('the settings page binds the approval switch to the machine setting', () => {
+    const page = source('src/pages/servers/host-settings.tsx');
+    expect(page).toContain("newDeviceSignIn: on ? 'approval' : 'account'");
+    expect(page).toContain('client.owners(id())');
+    expect(page).toContain("client.update(id(), { name })");
+    const commands = readFileSync(join(root, '../../vesta-launcher/src-tauri/src/commands/hosts.rs'), 'utf8');
+    expect(commands).toContain('Update => ("PATCH", "".into())');
+    expect(commands).toContain('Owners => ("GET", "/owners".into())');
   });
 });
 

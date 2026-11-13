@@ -37,6 +37,8 @@ export interface AccountMenuProps {
   placement?: Placement;
   /** Called for "Manage skin and account"; the shell decides where that goes. */
   onManage?: () => void;
+  /** Open the menu from a small text button with this label instead of the player's head. */
+  label?: string;
 }
 
 /**
@@ -96,7 +98,11 @@ export function AccountMenu(props: AccountMenuProps) {
       onOpenChange={changeOpen}
       placement={props.placement ?? 'right-start'}
       class="account-popover"
-      trigger={(popoverProps) => (
+      trigger={(popoverProps) => props.label ? (
+        <button {...popoverProps} type="button" data-vesta="account-switch-button" data-open={open() ? '' : undefined}>
+          {props.label}
+        </button>
+      ) : (
         <button
           {...popoverProps}
           type="button"

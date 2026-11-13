@@ -1,6 +1,7 @@
-// Servers > Set up a Vesta Server: sign in first, pick a machine (LAN list or typed address),
-// then enter its setup code (or a link code when someone already set it up). The code is
-// checked the moment it is complete; claim or link follows on its own.
+// Servers > Set up a Vesta Server: sign in first, pick a machine (LAN list or typed address).
+// A new machine asks for its setup code, checked the moment it is complete; claim follows on
+// its own. A machine someone already set up needs no code: the Minecraft account is the
+// permission, so this device signs in as that account. Link codes stay as a fallback.
 import { Button, IconButton, TextField } from '@vesta/ui';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
@@ -10,25 +11,22 @@ import { detectPlatform } from '../../app/platform';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { activeAccount, addAccount, usePlayerHead } from '../../features/accounts/accounts';
-import { codeComplete, codeProblem, deviceName, enrollProblemForFind, machineState, parseVestaAddress, setupProblem, sortDiscovered, waitSeconds, type MachineState, type SetupProblem } from '../../features/servers/host-model';
+import { AccountMenu } from '../../features/accounts/account-menu';
+import { codeComplete, codeProblem, deviceName, enrollProblemForFind, formatFingerprint, machineState, parseVestaAddress, setupProblem, signInProblem, sortDiscovered, waitSeconds, type MachineState, type SetupProblem } from '../../features/servers/host-model';
 import { discoverHosts, discovered, discovering, hostCommand, hosts, loadHostServers, refreshHosts } from '../../features/servers/hosts-store';
 import type { HostDiscovery } from '../../features/servers/native-hosts';
 import type { AddressProblem } from '../../features/servers/address';
 import { CodeInput, CommandLine, Steps, Working, type CodeInputApi, type CodeInputState } from './vesta-parts';
 import './vesta-server.css';
 
-type Step = 'find' | 'code' | 'waiting' | 'done';
+type Step = 'find' | 'signin' | 'code' | 'waiting' | 'done';
 type Purpose = 'claim' | 'link';
 /** entry: typing. checking: PAKE running. accepted: code proven. enrolling: account proof and claim or link. */
 type Phase = 'entry' | 'checking' | 'accepted' | 'enrolling';
 type Reach = 'checking' | 'online' | 'offline';
-interface Target { address: string; hostId: string; name: string; purpose: Purpose }
-
-const steps = [
-  { id: 'account', label: 'vesta-server.step.account' },
-  { id: 'find', label: 'vesta-server.step.find' },
-  { id: 'code', label: 'vesta-server.step.code' },
-] as const satisfies readonly { id: string; label: MessageId }[];
+/** `setUp`: the machine said it is set up (true) or ready (false); null when it didn't say (outside the LAN). */
+interface Target { address: string; hostId: string; name: string; purpose: Purpose; fingerprint: string; setUp: boolean | null }
+type StepId = 'account' | 'find' | 'code';
 
 const addressProblems: Record<AddressProblem, MessageId> = {
   empty: 'servers.address.problem-empty',
@@ -78,6 +76,10 @@ export function VestaSetup() {
   const [problem, setProblem] = createSignal<MessageId | null>(null, { name: 'vesta-setup:problem' });
   const [linkId, setLinkId] = createSignal<string | null>(null, { name: 'vesta-setup:link-id' });
   const [doneHost, setDoneHost] = createSignal<string | null>(null, { name: 'vesta-setup:done-host' });
+  const [signingIn, setSigningIn] = createSignal(false, { name: 'vesta-setup:signing-in' });
+  // Kept with the account it was for: switching account clears it without a write.
+  const [signInFailure, setSignInFailure] = createSignal<{ problem: SetupProblem; account: string } | null>(null, { name: 'vesta-setup:signin-failure' });
+  const [notice, setNotice] = createSignal<MessageId | null>(null, { name: 'vesta-setup:notice' });
 
   let codeInput: CodeInputApi | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -118,6 +120,10 @@ export function VestaSetup() {
       setCodeState('error');
       codeInput?.reject();
     } else setCodeState('idle');
+    setRetryWait(next);
+  };
+
+  const setRetryWait = (next: SetupProblem) => {
     clearTimeout(retryTimer);
     if (next.kind === 'too-many') {
       setRetryReady(false);
@@ -125,25 +131,80 @@ export function VestaSetup() {
     } else setRetryReady(true);
   };
 
-  /** A machine was picked: linked ones just sign in; others need a code. */
+  /** The link code screen, for an owner who approves new devices or someone who has a code. */
+  const toLinkCode = (current: Target, why: MessageId | null) => {
+    setTarget({ ...current, purpose: 'link' });
+    resetCode();
+    setNotice(why);
+    setReach('online');
+    setStep('code');
+  };
+
+  const toSignIn = (current: Target) => {
+    setTarget({ ...current, purpose: 'link', setUp: true });
+    resetCode();
+    setNotice(null);
+    setSignInFailure(null);
+    setStep('signin');
+  };
+
+  /** A machine was picked: linked ones just sign in, set up ones sign in as the account, new ones need the setup code. */
   const choose = async (found: HostDiscovery, typed?: string) => {
     setProblem(null);
+    setNotice(null);
     const state = machineState(found, hosts());
-    const name = found.name ?? typed ?? found.address;
+    const next: Target = {
+      address: typed ?? found.address, hostId: found.hostId, name: found.name ?? typed ?? found.address,
+      purpose: state === 'ready' ? 'claim' : 'link', fingerprint: found.fingerprint,
+      setUp: found.state === 'claimed' ? true : found.state === 'unclaimed' ? false : null,
+    };
     if (state === 'linked') {
       setBusy(found.hostId);
       try {
+        // Native signs in again with the account on its own if this device lost access.
         await hostCommand((client) => client.signIn(found.hostId));
         await loadHostServers(found.hostId);
         transitionTo('/servers');
-      } catch (reason) { setProblem(enrollProblemForFind(reason)); }
+      } catch (reason) {
+        if (signInProblem(reason).kind === 'approval') toLinkCode(next, 'vesta-server.account.approval');
+        else setProblem(enrollProblemForFind(reason));
+      }
       finally { setBusy(null); }
       return;
     }
-    setTarget({ address: typed ?? found.address, hostId: found.hostId, name, purpose: state === 'ready' ? 'claim' : 'link' });
+    if (state === 'claimed') return toSignIn(next);
+    setTarget(next);
     resetCode();
     setReach('online');
     setStep('code');
+  };
+
+  /** No code: this device signs in as the Minecraft account, then shows the machine's servers. */
+  const signInWithAccount = async () => {
+    const current = target();
+    const who = account();
+    if (!current || !who || signingIn() || !retryReady()) return;
+    setSigningIn(true);
+    setSignInFailure(null);
+    try {
+      const host = await hostCommand((client) => client.signInWithAccount(current.address, current.hostId, who.uuid, t(deviceName(detectPlatform()))));
+      await refreshHosts({ servers: false });
+      // The servers list shows its own note if this first read doesn't answer.
+      await loadHostServers(host.id).catch(() => undefined);
+      transitionTo('/servers');
+    } catch (reason) {
+      if (target() !== current) return;
+      const next = signInProblem(reason);
+      if (next.kind === 'approval') return toLinkCode(current, 'vesta-server.account.approval');
+      setSignInFailure({ problem: next, account: who.uuid });
+      setRetryWait(next);
+    } finally {
+      setSigningIn(false);
+    }
+  };
+  const shownSignInFailure = () => {
+    const failure = signInFailure();
+    return failure && failure.account === account()?.uuid ? failure.problem : null;
   };
 
   const lookUp = async (event?: Event) => {
@@ -215,14 +276,6 @@ export function VestaSetup() {
     if (verification()) void enroll();
     else if (codeComplete(code())) void verify(code());
     else { setFailure(null); codeInput?.focus(); }
-  };
-
-  const useLinkCode = () => {
-    const current = target();
-    if (!current) return;
-    setTarget({ ...current, purpose: 'link' });
-    resetCode();
-    codeInput?.focus();
   };
 
   // Keep an eye on the machine while the code screen is open, so going offline shows up
@@ -309,11 +362,20 @@ export function VestaSetup() {
 
   const back = () => {
     setProblem(null);
-    if (step() === 'code' || step() === 'waiting') { resetCode(); setStep('find'); }
+    const current = target();
+    // A set up machine's link code screen is the fallback from signing in, so go back there.
+    if (step() === 'code' && current?.setUp === true) toSignIn(current);
+    else if (step() === 'code' || step() === 'waiting' || step() === 'signin') { resetCode(); setNotice(null); setStep('find'); }
     else transitionTo('/servers');
   };
 
-  const flowStep = (): (typeof steps)[number]['id'] | 'done' =>
+  const steps = (): { id: StepId; label: MessageId }[] => [
+    { id: 'account', label: 'vesta-server.step.account' },
+    { id: 'find', label: 'vesta-server.step.find' },
+    { id: 'code', label: step() === 'signin' ? 'vesta-server.step.connect' : 'vesta-server.step.code' },
+  ];
+
+  const flowStep = (): StepId | 'done' =>
     needsAccount() ? 'account' : step() === 'find' ? 'find' : step() === 'done' ? 'done' : 'code';
 
   const waitText = (ms: number | undefined) => {
@@ -338,7 +400,7 @@ export function VestaSetup() {
       </Show>
       <div data-vesta="vesta-failure-actions">
         <Show when={props.failure.kind === 'claimed'}>
-          <Button size="sm" onClick={useLinkCode}>{t('vesta-server.problem.claimed-link')}</Button>
+          <Button size="sm" onClick={() => toSignIn(props.current)}>{t('vesta-server.problem.claimed-signin')}</Button>
         </Show>
         <Show when={props.failure.kind === 'account-signin'}>
           <Button size="sm" onClick={() => void addAccount()}>{t('vesta-server.signin.button')}</Button>
@@ -353,7 +415,7 @@ export function VestaSetup() {
   return (
     <Board class="servers-board">
       <div data-vesta="server-add">
-        <Steps steps={steps} current={flowStep()} />
+        <Steps steps={steps()} current={flowStep()} />
         <Switch>
           <Match when={needsAccount()}>
             <div data-vesta="server-add-panel">
@@ -428,6 +490,75 @@ export function VestaSetup() {
             </div>
           </Match>
 
+          <Match when={step() === 'signin' && target()}>
+            {(current) => (
+              <form data-vesta="server-add-panel" onSubmit={(event) => { event.preventDefault(); void signInWithAccount(); }}>
+                <h1>{t('vesta-server.account.title', { name: current().name })}</h1>
+                <p>{t('vesta-server.account.help', { name: current().name })}</p>
+                {/* No code proves this is the machine, so say once which one is trusted. */}
+                <div data-vesta="vesta-trust">
+                  <p>
+                    <Icon name="icons/content/server" size={16} />
+                    <span>{t('vesta-server.account.trust', { name: current().name, address: current().address })}</span>
+                  </p>
+                  <details>
+                    <summary>{t('vesta-server.account.details')}</summary>
+                    <span>{t('vesta-server.account.fingerprint')}</span>
+                    <code>{formatFingerprint(current().fingerprint)}</code>
+                  </details>
+                </div>
+                <Show when={account()}>
+                  {(who) => (
+                    <div data-vesta="vesta-account">
+                      <Show when={head()} fallback={<span data-vesta="vesta-account-head" aria-hidden="true" />}>
+                        {(url) => <img data-vesta="vesta-account-head" src={url()} alt="" />}
+                      </Show>
+                      <span data-vesta="vesta-account-name">
+                        <strong>{who().username}</strong>
+                        <span>{t('vesta-server.account.minecraft')}</span>
+                      </span>
+                      <AccountMenu placement="bottom-end" label={t('vesta-server.account.switch')} />
+                    </div>
+                  )}
+                </Show>
+                <Show when={signingIn()}>
+                  <Working label={t('vesta-server.account.signing-in', { name: current().name })} />
+                </Show>
+                <Show when={shownSignInFailure()}>
+                  {(shown) => (
+                    <div data-vesta="server-callout" data-tone={shown().kind === 'no-access' ? 'neutral' : 'danger'} role="alert">
+                      <Switch fallback={<p>{t(shown().message)}</p>}>
+                        <Match when={shown().kind === 'no-access'}>
+                          <p>{t('vesta-server.account.no-access', { name: current().name })}</p>
+                        </Match>
+                        <Match when={shown().kind === 'unreachable'}>
+                          <p>{t('vesta-server.problem.unreachable-at', { address: current().address })}</p>
+                        </Match>
+                        <Match when={shown().kind === 'too-many'}>
+                          <p>{shown().retryAfterMs ? waitText(shown().retryAfterMs) : t(shown().message)}</p>
+                        </Match>
+                      </Switch>
+                      <div data-vesta="vesta-failure-actions">
+                        <Show when={shown().kind === 'no-access'}>
+                          <Button size="sm" variant="ghost" onClick={() => toLinkCode(current(), null)}>{t('vesta-server.problem.claimed-link')}</Button>
+                        </Show>
+                        <Show when={shown().kind === 'account-signin'}>
+                          <Button size="sm" onClick={() => void addAccount()}>{t('vesta-server.signin.button')}</Button>
+                        </Show>
+                      </div>
+                    </div>
+                  )}
+                </Show>
+                <footer>
+                  <Button variant="ghost" disabled={signingIn()} onClick={back}>{t('common.back')}</Button>
+                  <Button type="submit" tone="accent" disabled={signingIn() || !retryReady() || !account()}>
+                    {t('vesta-server.account.sign-in-as', { name: account()?.username ?? '' })}
+                  </Button>
+                </footer>
+              </form>
+            )}
+          </Match>
+
           <Match when={step() === 'code' && target()}>
             {(current) => (
               <form data-vesta="server-add-panel" onSubmit={(event) => { event.preventDefault(); if (codeComplete(code())) retry(); }}>
@@ -438,6 +569,7 @@ export function VestaSetup() {
                     {t(reachLabels[reach()], { name: current().name })}
                   </p>
                 </header>
+                <Show when={notice()}>{(why) => <p data-vesta="server-callout" data-tone="neutral" role="status">{t(why())}</p>}</Show>
                 <p>{t(current().purpose === 'claim' ? 'vesta-server.code.setup-help' : 'vesta-server.code.link-help', { name: current().name })}</p>
                 <CodeInput
                   label={t(current().purpose === 'claim' ? 'vesta-server.code.setup-label' : 'vesta-server.code.link-label')}
@@ -488,6 +620,10 @@ export function VestaSetup() {
                 </Show>
                 <footer>
                   <Button variant="ghost" disabled={phase() === 'enrolling'} onClick={back}>{t('common.back')}</Button>
+                  {/* Outside the LAN a machine doesn't say whether it is set up. */}
+                  <Show when={current().purpose === 'claim' && current().setUp === null}>
+                    <Button variant="ghost" disabled={phase() !== 'entry'} onClick={() => toSignIn(current())}>{t('vesta-server.code.already-set-up')}</Button>
+                  </Show>
                 </footer>
               </form>
             )}

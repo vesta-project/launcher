@@ -94,6 +94,9 @@ export function machineState(found: Pick<HostDiscovery, 'hostId' | 'state'>, hos
   return found.state === 'claimed' ? 'claimed' : 'ready';
 }
 
+/** A certificate fingerprint in groups of four, for reading against the machine. */
+export const formatFingerprint = (fingerprint: string) => fingerprint.toLowerCase().match(/.{1,4}/g)?.join(' ') ?? '';
+
 /** Ready machines first, then ones already set up; one row per machine. */
 export function sortDiscovered(found: readonly HostDiscovery[], hosts: readonly Pick<VestaHost, 'id'>[]): HostDiscovery[] {
   const rank: Record<MachineState, number> = { ready: 0, linked: 1, claimed: 2 };
@@ -108,7 +111,7 @@ export function sortDiscovered(found: readonly HostDiscovery[], hosts: readonly 
 /** Setup and link failures, sorted by what the person can do about each one. */
 export type SetupProblemKind =
   | 'unreachable' | 'wrong-code' | 'expired-code' | 'too-many' | 'claimed'
-  | 'account-signin' | 'account-proof' | 'account-offline' | 'no-access' | 'other';
+  | 'account-signin' | 'account-proof' | 'account-offline' | 'no-access' | 'approval' | 'identity' | 'other';
 
 export interface SetupProblem {
   kind: SetupProblemKind;
@@ -147,9 +150,33 @@ export function setupProblem(reason: unknown, purpose: 'claim' | 'link'): SetupP
 }
 
 
+/**
+ * Signing in with the Minecraft account on a machine someone already set up, no code. The
+ * account having no role and the owner wanting approval are answers, not errors: each one
+ * leads somewhere. A different machine answering, or a challenge that doesn't add up,
+ * stops before Mojang is asked anything.
+ */
+export function signInProblem(reason: unknown): SetupProblem {
+  const error = toServerError(reason);
+  switch (error.reason) {
+    case 'account_has_no_access': return { kind: 'no-access', message: 'vesta-server.problem.no-access' };
+    case 'device_approval_required': return { kind: 'approval', message: 'vesta-server.account.approval' };
+    case 'server_hash_mismatch':
+    case 'host_identity_changed': return { kind: 'identity', message: 'vesta-server.problem.identity' };
+  }
+  if (error.code === 'fingerprint_mismatch') return { kind: 'identity', message: 'vesta-server.problem.identity' };
+  const problem = setupProblem(error, 'link');
+  // No code is involved here, so a refused proof is about the account.
+  if (codeProblem(problem.kind)) return { kind: 'account-proof', message: 'vesta-server.problem.account-proof' };
+  return problem.kind === 'claimed' ? { kind: 'other', message: errorMessage(error) } : problem;
+}
+
 /** Looking a machine up or signing in to one already linked, before any code is involved. */
 export function enrollProblemForFind(reason: unknown): MessageId {
   const error = toServerError(reason);
+  if (error.reason === 'account_has_no_access') return 'vesta-server.problem.no-access';
+  if (error.reason === 'host_identity_changed' || error.reason === 'server_hash_mismatch') return 'vesta-server.problem.identity';
+  if (error.reason === 'account_signin_required') return 'vesta-server.problem.account-signin';
   if (UNREACHABLE.includes(error.code)) return 'vesta-server.problem.unreachable';
   if (error.code === 'rate_limited') return 'vesta-server.problem.too-many';
   if (error.code === 'forbidden' || error.code === 'credentials_rejected') return 'vesta-server.problem.no-access';
@@ -174,6 +201,17 @@ export function hostRoleLabel(role: string | null | undefined): MessageId {
 }
 
 export const canManageHost = (role: string | null | undefined) => role === 'primary_owner' || role === 'owner';
+
+/** A machine name as the machine stores it: hidden characters dropped, spaces collapsed. */
+export const tidyHostName = (name: string) =>
+  name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\u061c\ufeff]/g, '').replace(/\s+/g, ' ').trim();
+
+/** Why a new machine name can't be used: it must be 1 to 63 bytes once tidied. */
+export function hostNameProblem(name: string): 'empty' | 'long' | null {
+  const tidy = tidyHostName(name);
+  if (!tidy) return 'empty';
+  return new TextEncoder().encode(tidy).length > 63 ? 'long' : null;
+}
 
 // ------------------------------------------------------------------ import: finding a folder
 

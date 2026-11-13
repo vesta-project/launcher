@@ -11,11 +11,24 @@ vesta-server-setup-address-help = An IP address or domain. Add a port only if it
 
 vesta-server-step-find = Machine
 vesta-server-step-code = Code
+vesta-server-step-connect = Connect
 vesta-server-step-account = Sign in
 
 vesta-server-found-ready = Ready to set up
 vesta-server-found-linked = Linked to this device
-vesta-server-found-claimed = Already set up, use a link code
+vesta-server-found-claimed = Already set up
+
+vesta-server-account-title = Sign in to { $name }
+vesta-server-account-help = { $name } is already set up. Your Minecraft account decides what you can use here, so there's no code to enter.
+vesta-server-account-trust = Connecting to { $name } at { $address } for the first time.
+vesta-server-account-details = Details
+vesta-server-account-fingerprint = Certificate fingerprint
+vesta-server-account-minecraft = Minecraft account
+vesta-server-account-switch = Use another account
+vesta-server-account-sign-in-as = Sign in as { $name }
+vesta-server-account-signing-in = Signing in to { $name }
+vesta-server-account-no-access = This account doesn't have access to { $name }. Ask the owner for an invite.
+vesta-server-account-approval = The owner approves each new device here. Ask them for a link code.
 
 vesta-server-code-setup-title = Enter the setup code
 vesta-server-code-setup-help = { $name } showed this code when Vesta Server was installed.
@@ -25,6 +38,7 @@ vesta-server-code-link-title = I have a link code
 vesta-server-code-link-help = { $name } is already set up. Get a link code from Link a device on a device that's already linked.
 vesta-server-code-link-label = Link code
 vesta-server-code-link-new = You can also get one on the machine:
+vesta-server-code-already-set-up = It's already set up
 
 vesta-server-signin-title = Sign in first
 vesta-server-signin-help = Vesta Server uses your Microsoft account to know the machine is yours. You'll come right back here.
@@ -75,9 +89,11 @@ vesta-server-problem-too-many-minutes = { $count ->
 }
 vesta-server-problem-unreachable = Can't reach that machine. Check that it's on and Vesta Server is running.
 vesta-server-problem-unreachable-at = Can't reach { $address }. Is Vesta Server running on that machine?
-vesta-server-problem-already-set-up = This machine is already set up by someone else. If they gave you a link code, use that.
+vesta-server-problem-already-set-up = This machine is already set up. If your account has access, you can sign in.
 vesta-server-problem-claimed-link = I have a link code
+vesta-server-problem-claimed-signin = Sign in
 vesta-server-problem-no-access = You don't have access to this Vesta Server.
+vesta-server-problem-identity = This isn't the machine you picked. Check the address and try again.
 
 vesta-server-device-windows = Windows PC
 vesta-server-device-mac = Mac
@@ -109,6 +125,13 @@ vesta-server-connection-runs-on = Runs on
 
 vesta-server-host-about = This Vesta Server
 vesta-server-host-name = Name
+vesta-server-host-name-long = That name is too long.
+vesta-server-host-rename = Rename
+vesta-server-host-owners = Owners
+vesta-server-host-owner-unknown = Unknown player
+vesta-server-host-you = You
+vesta-server-host-approval = New devices need approval
+vesta-server-host-approval-help = When on, a new device needs a link code from an owner, even if its account has access.
 vesta-server-host-address = Address
 vesta-server-host-role = Your role
 vesta-server-host-checking = Checking
@@ -123,12 +146,12 @@ vesta-server-host-devices = Devices
 vesta-server-host-this-device = This device
 vesta-server-host-unlink = Unlink
 vesta-server-host-unlink-title = Unlink { $name }?
-vesta-server-host-unlink-help = It loses access right away. You can link it again later with a new code.
+vesta-server-host-unlink-help = It's signed out right away. The account keeps its access and can sign in again.
 vesta-server-host-danger = Remove
 vesta-server-host-remove = Remove from this launcher
 vesta-server-host-remove-short = Remove
 vesta-server-host-remove-title = Remove { $name }?
-vesta-server-host-remove-help = Its servers keep running on the machine. To get them back here, link this device again.
+vesta-server-host-remove-help = Its servers keep running on the machine. To get them back here, sign in to it again.
 vesta-server-host-import-running = { $name } is still being added.
 vesta-server-host-import-open = Show
 

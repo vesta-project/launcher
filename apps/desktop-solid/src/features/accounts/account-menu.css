@@ -1,6 +1,6 @@
 /*
  * Profile button and account popover.
- * Hooks: [data-vesta=profile-button] -spinner, [data-vesta=account-head]
+ * Hooks: [data-vesta=profile-button] -spinner, [data-vesta=account-head], [data-vesta=account-switch-button]
  *        [data-vesta=account-top|face|copy|actions|line|divider|section-title|list|expired]
  * States: profile-button: data-open; account-line: data-tone=danger; account-face: data-size=small
  * Knobs: --profile-size, --profile-radius, --profile-border
@@ -26,6 +26,21 @@
       border-color var(--vesta-duration-fast) var(--vesta-ease-standard),
       transform var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
+
+  /* The same menu, opened from a line of text next to an account. */
+  :where([data-vesta="account-switch-button"]) {
+    margin: 0;
+    padding: var(--vesta-space-1) var(--vesta-space-2);
+    border: 0;
+    border-radius: var(--vesta-radius-control);
+    background: transparent;
+    color: var(--vesta-color-accent-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+    cursor: default;
+  }
+  :where([data-vesta="account-switch-button"]:hover, [data-vesta="account-switch-button"][data-open]) { background: var(--vesta-color-fill); }
+  :where([data-vesta="account-switch-button"]:focus-visible) { outline: 2px solid var(--vesta-color-focus); outline-offset: 2px; }
 
   :where([data-vesta="profile-button"]:hover) {
     --profile-border: color-mix(in oklab, var(--vesta-color-text) 30%, transparent);

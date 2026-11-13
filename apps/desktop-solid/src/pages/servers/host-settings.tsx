@@ -1,6 +1,7 @@
-// `/servers/host/<hostId>`: the machine itself. Name, address, your role, linked devices,
-// Link a device (with approval), Add server, and forgetting the machine in this launcher.
-import { Badge, Button, Dialog, IconButton } from '@vesta/ui';
+// `/servers/host/<hostId>`: the machine itself. Name (owners rename it), address, your role,
+// owners, linked devices, whether new devices need approval, Link a device, Add server, and
+// forgetting the machine in this launcher.
+import { Badge, Button, Dialog, IconButton, Switch, TextField } from '@vesta/ui';
 import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
 import { Board } from '../../components/board';
 import { EmptyState } from '../../components/empty-state';
@@ -11,9 +12,9 @@ import { t } from '../../localization';
 import { copyText } from '../../platform/clipboard';
 import { age } from '../../features/servers/model';
 import { toServerError } from '../../features/servers/errors';
-import { canManageHost, formatCode, hostIdOf, hostRoleLabel, importProblem } from '../../features/servers/host-model';
-import { forgetHost, hostCommand, hostInfo, hostProblem, importTask, loadHostInfo, vestaHost } from '../../features/servers/hosts-store';
-import type { HostDevice, VestaHost } from '../../features/servers/native-hosts';
+import { canManageHost, formatCode, hostIdOf, hostNameProblem, hostRoleLabel, importProblem, tidyHostName } from '../../features/servers/host-model';
+import { forgetHost, hostCommand, hostInfo, hostProblem, importTask, loadHostInfo, refreshHosts, vestaHost } from '../../features/servers/hosts-store';
+import type { HostDevice, HostOwner, VestaHost } from '../../features/servers/native-hosts';
 import type { ServerCommandError } from '../../features/servers/native';
 import { refreshServers, serverSnapshots, useServersClock } from '../../features/servers/store';
 import { Card as Panel } from '../settings/parts';
@@ -48,7 +49,12 @@ function HostSettingsContent(props: { host: VestaHost }) {
   const [unlinking, setUnlinking] = createSignal<HostDevice | null>(null, { name: 'host-settings:unlinking' });
   const [removing, setRemoving] = createSignal(false, { name: 'host-settings:removing' });
   const [copied, setCopied] = createSignal(false, { name: 'host-settings:copied' });
+  const [owners, setOwners] = createSignal<HostOwner[] | null>(null, { name: 'host-settings:owners' });
+  const [renaming, setRenaming] = createSignal(false, { name: 'host-settings:renaming' });
+  const [draft, setDraft] = createSignal('', { name: 'host-settings:name-draft' });
+  const [saving, setSaving] = createSignal<'name' | 'approval' | null>(null, { name: 'host-settings:saving' });
   const importing = () => importTask(id());
+  const nameProblem = () => hostNameProblem(draft());
 
   const loadDevices = async () => {
     try {
@@ -56,12 +62,46 @@ function HostSettingsContent(props: { host: VestaHost }) {
       setDevices(reply.devices.filter((device) => !device.revoked));
     } catch (reason) { setError(toServerError(reason)); }
   };
+  const loadOwners = async () => {
+    try { setOwners((await hostCommand((client) => client.owners(id()))).owners); }
+    catch (reason) { setError(toServerError(reason)); }
+  };
   const load = async () => {
     setError(null);
-    try { await loadHostInfo(id()); } catch (reason) { setError(toServerError(reason)); return; }
-    await loadDevices();
+    let current;
+    try { current = await loadHostInfo(id()); } catch (reason) { setError(toServerError(reason)); return; }
+    // Devices and owners are for owners only; the role comes from this read, not the signal.
+    if (canManageHost(current.role)) await Promise.all([loadDevices(), loadOwners()]);
   };
   onSettled(() => void load());
+
+  const startRename = () => {
+    setDraft(props.host.name);
+    setRenaming(true);
+  };
+  const saveName = async () => {
+    const name = tidyHostName(draft());
+    if (nameProblem() || name === props.host.name || saving()) return;
+    setSaving('name');
+    setError(null);
+    try {
+      await hostCommand((client) => client.update(id(), { name }));
+      setRenaming(false);
+      await loadHostInfo(id());
+      await refreshHosts({ servers: false });
+    } catch (reason) { setError(toServerError(reason)); }
+    finally { setSaving(null); }
+  };
+  const setApproval = async (on: boolean) => {
+    if (saving()) return;
+    setSaving('approval');
+    setError(null);
+    try {
+      await hostCommand((client) => client.update(id(), { newDeviceSignIn: on ? 'approval' : 'account' }));
+      await loadHostInfo(id());
+    } catch (reason) { setError(toServerError(reason)); }
+    finally { setSaving(null); }
+  };
 
   const copyAddress = async () => {
     await copyText(props.host.endpoints[0] ?? '').catch(() => {});
@@ -98,7 +138,23 @@ function HostSettingsContent(props: { host: VestaHost }) {
         }>
           <Panel title={t('vesta-server.host.about')}>
             <SettingRow label={t('vesta-server.host.name')}>
-              <span data-vesta="server-setting-value">{props.host.name}</span>
+              <Show when={renaming()} fallback={
+                <span data-vesta="vesta-host-name">
+                  <span data-vesta="server-setting-value">{props.host.name}</span>
+                  <Show when={owner()}>
+                    <IconButton size="sm" variant="ghost" label={t('vesta-server.host.rename')} icon={<Icon name="icons/actions/edit" />} onClick={startRename} />
+                  </Show>
+                </span>
+              }>
+                <form data-vesta="vesta-host-rename" onSubmit={(event) => { event.preventDefault(); void saveName(); }}>
+                  <TextField size="sm" aria-label={t('vesta-server.host.name')} value={draft()} onChange={setDraft} maxlength={63} spellcheck={false}
+                    ref={(input: HTMLInputElement) => requestAnimationFrame(() => input.select())}
+                    onKeyDown={(event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setRenaming(false); } }}
+                    error={nameProblem() === 'long' ? t('vesta-server.host.name-long') : undefined} />
+                  <Button size="sm" variant="ghost" disabled={saving() === 'name'} onClick={() => setRenaming(false)}>{t('common.cancel')}</Button>
+                  <Button size="sm" tone="accent" type="submit" disabled={saving() === 'name' || !!nameProblem() || tidyHostName(draft()) === props.host.name}>{t('servers.save')}</Button>
+                </form>
+              </Show>
             </SettingRow>
             <SettingRow label={t('vesta-server.host.address')}>
               <span data-vesta="server-setting-value">{props.host.endpoints[0] ?? ''}</span>
@@ -115,33 +171,62 @@ function HostSettingsContent(props: { host: VestaHost }) {
             </SettingRow>
           </Panel>
 
-          <Panel title={t('vesta-server.host.devices')} action={
-            <Show when={owner()}>
-              <Button size="sm" icon={<Icon name="icons/content/link" />} onClick={() => setLinking(true)}>{t('vesta-server.link.action')}</Button>
-            </Show>
-          }>
-            <Show when={devices()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('vesta-server.host.checking')}</p>}>
-              {(list) => (
-                <ul data-vesta="vesta-devices">
-                  <For each={list()}>
-                    {(device) => (
-                      <li>
-                        <Icon name="icons/content/monitor" size={16} />
-                        <span data-vesta="vesta-device-name">{device.name}</span>
-                        <Show when={device.deviceId === props.host.deviceId} fallback={
-                          <Show when={owner()}>
-                            <Button size="sm" variant="ghost" onClick={() => setUnlinking(device)}>{t('vesta-server.host.unlink')}</Button>
+          <Show when={owner()}>
+            <Panel title={t('vesta-server.host.owners')}>
+              <Show when={owners()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('vesta-server.host.checking')}</p>}>
+                {(list) => (
+                  <ul data-vesta="vesta-devices">
+                    <For each={list()}>
+                      {(person) => (
+                        <li>
+                          <Icon name="icons/content/people" size={16} />
+                          <span data-vesta="vesta-device-name">{person.name ?? t('vesta-server.host.owner-unknown')}</span>
+                          <Show when={person.accountId === props.host.accountId}>
+                            <Badge variant="soft">{t('vesta-server.host.you')}</Badge>
                           </Show>
-                        }>
-                          <Badge variant="soft">{t('vesta-server.host.this-device')}</Badge>
-                        </Show>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              )}
-            </Show>
-          </Panel>
+                          <Badge variant="soft">{t(hostRoleLabel(person.role))}</Badge>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                )}
+              </Show>
+            </Panel>
+          </Show>
+
+          <Show when={owner()}>
+            <Panel title={t('vesta-server.host.devices')} action={
+              <Button size="sm" icon={<Icon name="icons/content/link" />} onClick={() => setLinking(true)}>{t('vesta-server.link.action')}</Button>
+            }>
+              <Show when={info()?.newDeviceSignIn}>
+                {(policy) => (
+                  <SettingRow label={t('vesta-server.host.approval')} description={t('vesta-server.host.approval-help')}>
+                    <Switch size="sm" aria-label={t('vesta-server.host.approval')} checked={policy() === 'approval'} disabled={saving() === 'approval'}
+                      onChange={(on: boolean) => void setApproval(on)} />
+                  </SettingRow>
+                )}
+              </Show>
+              <Show when={devices()} fallback={<p data-vesta="server-muted" class="server-panel-note">{t('vesta-server.host.checking')}</p>}>
+                {(list) => (
+                  <ul data-vesta="vesta-devices">
+                    <For each={list()}>
+                      {(device) => (
+                        <li>
+                          <Icon name="icons/content/monitor" size={16} />
+                          <span data-vesta="vesta-device-name">{device.name}</span>
+                          <Show when={device.deviceId === props.host.deviceId} fallback={
+                            <Button size="sm" variant="ghost" onClick={() => setUnlinking(device)}>{t('vesta-server.host.unlink')}</Button>
+                          }>
+                            <Badge variant="soft">{t('vesta-server.host.this-device')}</Badge>
+                          </Show>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                )}
+              </Show>
+            </Panel>
+          </Show>
         </SettingsColumns>
       </div>
 
