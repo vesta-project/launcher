@@ -9,6 +9,7 @@ import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { serverArt } from '../../features/servers/art';
+import { hostIdOf } from '../../features/servers/host-model';
 import { lifecycleControls, minecraftFact, playersFact, quickAction, statusDot } from '../../features/servers/model';
 import { serverRefreshing, updateServer } from '../../features/servers/store';
 import { refreshServerWithFeedback } from './refresh-button';
@@ -135,6 +136,9 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
           <ContextMenuItem onSelect={() => setCreating(true)}>{t('server-pack.play-create')}</ContextMenuItem>
         </Show>
         <ContextMenuSeparator />
+        <Show when={hostIdOf(props.snapshot)}>
+          {(hostId) => <ContextMenuItem onSelect={() => transitionTo(`/servers/host/${hostId()}`)}>{t('vesta-server.list.machine-settings')}</ContextMenuItem>}
+        </Show>
         <ContextMenuItem onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
           {props.snapshot.connection.pinned ? t('common.unpin') : t('servers.pin')}
         </ContextMenuItem>

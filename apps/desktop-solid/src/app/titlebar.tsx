@@ -15,6 +15,7 @@ import { canGoBack, route } from './router';
 import { goBack, transitionTo } from './transition';
 import { isSection, sectionLabels } from '../pages/settings/sections';
 import { serverSnapshot } from '../features/servers/store';
+import { vestaHost } from '../features/servers/hosts-store';
 import { mainTabs, resolveServerLocation, settingsSections, visibleSections } from '../features/servers/shell-model';
 import { t } from '../localization';
 import type { MessageId } from '../localization/messages';
@@ -147,8 +148,18 @@ function location(): {
     }
     case 'servers': {
       const root = { label: t('nav.servers'), href: '#/servers' };
-      if (current.section === 'add') {
+      if (current.section === 'add' && current.detail) {
         return { label: t('servers.add'), icon: 'icons/rail/servers', trail: [root, { label: t('servers.add') }], back: { to: '/servers', label: t('common.back') } };
+      }
+      if (current.section === 'add' || current.section === 'setup') {
+        return { label: t('vesta-server.setup.title'), icon: 'icons/rail/servers', trail: [root, { label: t('vesta-server.setup.title') }], back: { to: '/servers', label: t('common.back') } };
+      }
+      if (current.section === 'host') {
+        const name = vestaHost(current.detail)?.name ?? t('nav.servers');
+        const back = { to: '/servers', label: t('common.back') };
+        return current.item === 'import'
+          ? { label: t('vesta-server.host.add-server'), icon: 'icons/rail/servers', trail: [root, { label: name, href: `#/servers/host/${current.detail}` }, { label: t('vesta-server.host.add-server') }], back }
+          : { label: name, icon: 'icons/rail/servers', trail: [root, { label: name }], back };
       }
       const server = serverSnapshot(current.section);
       if (server) {

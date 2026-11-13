@@ -5,6 +5,8 @@ import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import { transitionTo } from '../../../app/transition';
 import { connectionFact, roleLabel } from '../../../features/servers/model';
+import { hostIdOf } from '../../../features/servers/host-model';
+import { vestaHost } from '../../../features/servers/hosts-store';
 import { updateServer, useServersClock } from '../../../features/servers/store';
 import type { ServerSnapshot } from '../../../features/servers/native';
 import { FingerprintView, Sensitive } from '../parts';
@@ -31,6 +33,8 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+  const hostId = () => hostIdOf(props.snapshot);
+  const machine = () => vestaHost(hostId() ?? undefined);
   const signIn = () =>
     [props.snapshot.connection.signInMethod === 'minecraft' ? t('servers.sign-in.minecraft') : t('servers.sign-in.code'),
       props.snapshot.connection.role ? roleLabel(props.snapshot.connection.role) : null].filter(Boolean).join(', ');
@@ -41,14 +45,26 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
       <SettingsColumns aside={
         <>
           <Panel title={t('servers.connection.identity')}>
-            <SettingRow label={t('servers.connection.sign-in')}>
-              <span data-vesta="server-setting-value">{signIn()}</span>
-            </SettingRow>
-            <SettingRow label={t('servers.connection.invitation')}>
-              <Button size="sm" variant="outline" onClick={() => transitionTo(`/servers/add/${id()}`)}>
-                {t('servers.connection.redeem')}
-              </Button>
-            </SettingRow>
+            {/* Servers on a Vesta Server sign in through the machine, not one by one. */}
+            <Show when={hostId()} fallback={
+              <>
+                <SettingRow label={t('servers.connection.sign-in')}>
+                  <span data-vesta="server-setting-value">{signIn()}</span>
+                </SettingRow>
+                <SettingRow label={t('servers.connection.invitation')}>
+                  <Button size="sm" variant="outline" onClick={() => transitionTo(`/servers/add/${id()}`)}>
+                    {t('servers.connection.redeem')}
+                  </Button>
+                </SettingRow>
+              </>
+            }>
+              {(host) => (
+                <SettingRow label={t('vesta-server.connection.runs-on')}>
+                  <span data-vesta="server-setting-value">{machine()?.name ?? ''}</span>
+                  <Button size="sm" variant="ghost" onClick={() => transitionTo(`/servers/host/${host()}`)}>{t('vesta-server.list.machine-settings')}</Button>
+                </SettingRow>
+              )}
+            </Show>
             <SettingRow label={t('servers.connection.storage')}>
               <span data-vesta="server-setting-value">
                 {props.snapshot.connection.memoryOnly ? t('servers.connection.memory-only') : t('servers.connection.secure-storage')}

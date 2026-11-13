@@ -66,7 +66,7 @@ function RailLink(props: { item: NavItem }) {
         </For>
       </Show>
       <Show when={props.item.id === 'servers'}>
-        <ContextMenuItem onSelect={() => transitionTo('/servers/add')}>{t('servers.add')}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => updateSetting('servers_in_rail', false)}>{t('servers.hide-from-sidebar')}</ContextMenuItem>
       </Show>

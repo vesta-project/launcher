@@ -1,0 +1,225 @@
+/* Vesta Server setup, import wizard and machine settings. Tokens only; see servers.css for the
+   shared add panel, callouts and facts list these screens build on. */
+@layer launcher {
+  :where([data-vesta="server-add"][data-wide]) { max-inline-size: 720px; }
+
+  /* Machine and folder lists */
+  :where([data-vesta="vesta-machines"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-machines"]) > header { display: flex; align-items: center; justify-content: space-between; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-machines"]) ul,
+  :where([data-vesta="vesta-browser"]) ul,
+  :where([data-vesta="vesta-blockers"]) ul,
+  :where([data-vesta="vesta-devices"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  :where([data-vesta="vesta-machine"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised, var(--vesta-color-surface));
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="vesta-machine"]:hover:not(:disabled)) { background: var(--vesta-color-fill); }
+  :where([data-vesta="vesta-machine"]:focus-visible),
+  :where([data-vesta="vesta-folder"]:focus-visible) { outline: var(--vesta-focus-width) solid var(--vesta-color-focus); outline-offset: var(--vesta-focus-offset); }
+  :where([data-vesta="vesta-machine"]:disabled) { opacity: 0.6; }
+  :where([data-vesta="vesta-machine"][data-state="ready"]) > [data-vesta="icon"]:first-child { color: var(--vesta-color-accent-text); }
+  :where([data-vesta="vesta-machine-text"]) { display: flex; flex: 1; flex-direction: column; gap: 2px; min-inline-size: 0; }
+  :where([data-vesta="vesta-machine-text"]) > span {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Typed address */
+  :where([data-vesta="vesta-address"]) { display: flex; align-items: start; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-address"]) > :first-child { flex: 1; }
+  :where([data-vesta="vesta-address"]) > button { margin-block-start: calc(var(--vesta-text-sm) * 1.5 + var(--vesta-space-1-5)); }
+
+  /* Codes and commands */
+  :where([data-vesta="vesta-code-field"]) input {
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-lg);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  :where([data-vesta="vesta-command"]) {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-1-5) var(--vesta-space-1-5) var(--vesta-space-1-5) var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+  }
+  :where([data-vesta="vesta-command"]) code { flex: 1; overflow-wrap: anywhere; font-family: var(--vesta-font-mono); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-hint"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-hint"]) p { font-size: var(--vesta-text-sm); }
+
+  /* Working */
+  :where([data-vesta="vesta-working"]) { display: flex; align-items: center; gap: var(--vesta-space-2); margin: 0; color: var(--vesta-color-text-muted); }
+  :where([data-vesta="vesta-spinner"]) {
+    display: inline-block;
+    flex: none;
+    box-sizing: border-box;
+    inline-size: 16px;
+    block-size: 16px;
+    border: calc(var(--vesta-border-width) * 2) solid color-mix(in oklab, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: server-spin 0.9s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { :where([data-vesta="vesta-spinner"]) { animation-duration: 2.4s; } }
+
+  /* Account */
+  :where([data-vesta="vesta-account"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+  }
+  :where([data-vesta="vesta-account"]) > span:last-child { display: flex; flex-direction: column; }
+  :where([data-vesta="vesta-account"]) > span:last-child > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-account-head"]) {
+    display: block;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-fill);
+    image-rendering: pixelated;
+  }
+
+  /* Import */
+  :where([data-vesta="vesta-remote-note"]) { display: flex; align-items: center; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-browser"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-browser"]) > button:last-child { align-self: end; }
+  :where([data-vesta="vesta-browser-bar"]) { display: flex; align-items: center; gap: var(--vesta-space-2); min-inline-size: 0; }
+  :where([data-vesta="vesta-browser-bar"]) code { overflow: hidden; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); text-overflow: ellipsis; white-space: nowrap; }
+  :where([data-vesta="vesta-browser"]) ul {
+    gap: 0;
+    max-block-size: 280px;
+    overflow: auto;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+  }
+  :where([data-vesta="vesta-browser"]) li > p { padding: var(--vesta-space-3); }
+  :where([data-vesta="vesta-folder"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    inline-size: 100%;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+  :where([data-vesta="vesta-folder"]:hover:not(:disabled)) { background: var(--vesta-color-fill); }
+  :where([data-vesta="vesta-folder"]:disabled) { color: var(--vesta-color-text-subtle); }
+  :where([data-vesta="vesta-blockers"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-customize"]) summary { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); cursor: default; }
+  :where([data-vesta="vesta-customize-fields"]) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--vesta-space-3);
+    margin-block-start: var(--vesta-space-3);
+  }
+  :where([data-vesta="vesta-customize-fields"]) > p { grid-column: 1 / -1; }
+  :where([data-vesta="vesta-eula"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-3); font-size: var(--vesta-text-sm); }
+
+  /* Servers list */
+  :where([data-vesta="vesta-machine-bar"]) {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: end;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-3) var(--library-grid-padding, 40px) 0;
+  }
+  :where([data-vesta="vesta-machine-bar"]) > :first-child:not(:only-child) { margin-inline-end: auto; }
+  :where([data-vesta="vesta-group-header"]) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-5) var(--library-grid-padding, 40px) 0;
+  }
+  :where([data-vesta="vesta-group-header"]) h2 {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+  }
+  :where(.vesta-import-banner) { margin: var(--vesta-space-3) var(--library-grid-padding, 40px) 0; }
+  :where(.vesta-import-banner) > span { flex: 1; }
+
+  /* Machine settings */
+  :where([data-vesta="vesta-host"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-4);
+    max-inline-size: 1080px;
+    margin-inline: auto;
+    padding: var(--vesta-space-6);
+  }
+  :where([data-vesta="vesta-host-header"]) { display: flex; flex-direction: column; align-items: start; gap: var(--vesta-space-3); }
+  :where([data-vesta="vesta-host-header"]) > div { display: flex; align-items: center; gap: var(--vesta-space-3); }
+  :where([data-vesta="vesta-host-header"]) h1 { margin: 0; font-size: var(--vesta-text-xl, var(--vesta-text-lg)); }
+  :where([data-vesta="vesta-host-icon"]) {
+    display: grid;
+    place-items: center;
+    inline-size: 40px;
+    block-size: 40px;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-accent-text);
+  }
+  :where([data-vesta="vesta-devices"]) { gap: 0; }
+  :where([data-vesta="vesta-devices"]) li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 44px;
+    padding: var(--vesta-space-1-5) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="vesta-devices"]) li:first-child { border-block-start: 0; }
+  :where([data-vesta="vesta-device-name"]) { flex: 1; }
+  :where([data-vesta="vesta-dialog-actions"]) { display: flex; justify-content: end; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-link"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
+  :where([data-vesta="vesta-link"]) p { margin: 0; }
+  :where([data-vesta="vesta-link-code"]) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-2);
+    padding: var(--vesta-space-4);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+  }
+  :where([data-vesta="vesta-link-code"]) code { font-family: var(--vesta-font-mono); font-size: var(--vesta-text-xl, var(--vesta-text-lg)); letter-spacing: 0.12em; }
+
+  @media (max-width: 640px) {
+    :where([data-vesta="vesta-address"]) { flex-direction: column; align-items: stretch; }
+    :where([data-vesta="vesta-address"]) > button { margin-block-start: 0; }
+  }
+}

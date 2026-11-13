@@ -11,6 +11,7 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { anyVisible, gate } from '../../features/servers/capabilities';
 import { stableConnectionId } from '../../features/servers/connection-id';
+import { hostIdOf } from '../../features/servers/host-model';
 import { warmContentMetadata } from '../../features/servers/content-metadata';
 import { invalidateServerResources, useServerResource } from '../../features/servers/resources';
 import { backupsResource, contentResource, operationsResource } from '../../features/servers/server-resources';
@@ -270,7 +271,12 @@ function CredentialsRejected(props: { snapshot: ServerSnapshot }) {
       <p>{t('servers.error.credentials-rejected')}</p>
       <footer>
         <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.remove')}</Button>
-        <Button onClick={() => transitionTo(`/servers/add/${props.snapshot.connection.id}`)}>{t('servers.rejected.pair-again')}</Button>
+        {/* A server on a Vesta Server signs in through its machine, so it is set up again there. */}
+        <Show when={hostIdOf(props.snapshot)} fallback={
+          <Button onClick={() => transitionTo(`/servers/add/${props.snapshot.connection.id}`)}>{t('servers.rejected.pair-again')}</Button>
+        }>
+          <Button onClick={() => transitionTo('/servers/setup')}>{t('servers.rejected.set-up-again')}</Button>
+        </Show>
       </footer>
     </div>
   );

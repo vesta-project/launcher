@@ -240,6 +240,7 @@ servers-trust-check = Check current fingerprint
 servers-trust-approve = I compared it, approve
 servers-rejected-title = Sign-in rejected
 servers-rejected-pair-again = Pair again
+servers-rejected-set-up-again = Set up again
 
 # Connection tab
 servers-connection-name = Name
