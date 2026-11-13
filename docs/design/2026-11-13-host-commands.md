@@ -60,6 +60,7 @@ All wrapper methods below take `hostId:string` first:
 | `folderRoots` | none | GET `/folders/roots` |
 | `folderResolve` | `rootId:string,relativePath:string` | POST `/folders/resolve` |
 | `folderList` | `folderToken:string,cursor:string|null=null` | POST `/folders/list` |
+| `folderCheck` | `path:string` | POST `/folders/check` -> `{path,status,folderToken,remediationCommand}` |
 | `importCandidates` | none | GET `/imports/candidates` |
 | `importInspect` | `folderToken:string,gamePort:number|null=null` | POST `/imports/inspect` |
 | `importResources` | `gamePort:number|null,memoryMiB:number|null` | POST `/imports/resources` |

@@ -10,13 +10,17 @@ export interface HostDevice { deviceId: string; name: string; accountId: string;
 export interface LinkResult { linkId: string; state: string; requestHash: string; deviceId?: string }
 /** A code the machine accepted. Pass the id to claim or link so the same exchange is reused. */
 export interface CodeVerified { verificationId: string; hostId: string; name: string | null }
-export interface Folder { name: string; kind: 'directory'; folderToken: string | null; readable: boolean }
+/** `looksLikeServer` and `remediationCommand` are absent on older machines. */
+export interface Folder { name: string; kind: 'directory'; folderToken: string | null; readable: boolean; looksLikeServer?: boolean; remediationCommand?: string | null }
+export interface FolderRoot { rootId: string; label: string; displayPath: string; readable: boolean }
+export type FolderCheckStatus = 'ok' | 'permission_needed' | 'not_found' | 'not_directory' | 'protected';
+export interface FolderCheck { path: string; status: FolderCheckStatus; folderToken: string | null; remediationCommand: string | null }
 export interface ImportPlan { folderToken: string; name: string; gamePort: number | null; memoryMiB: number | null; launchChoice: { kind: 'jar' | 'java_argfile'; relativePath: string } | null; minecraftVersion: string | null }
 export interface ImportApply { planId: string; confirmation: string; acknowledgedWarnings: string[]; eulaAccepted: true; sourceStoppedConfirmed: true }
 export type ImportState = 'planning' | 'review' | 'applying' | 'ready' | 'starting' | 'online' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
 export interface ImportJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: { filesDone: number; filesTotal: number; bytesDone: number; bytesTotal: number }; review: ImportReview | null; serverId: string | null }
 export interface ImportReview { planId: string; confirmation: string | null; expiresAt: string; blockers: string[]; warnings: string[]; source: { displayPath: string; snapshot: string; files: number; bytes: number }; detected: unknown; runtime: unknown; destination: { serverId: string; displayPath: string; freeBytes: number }; resources: { gamePort: number; memoryMiB: number }; processes: unknown[]; ports: unknown[]; inspection: unknown }
-export type HostAction = 'info' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness';
+export type HostAction = 'info' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness';
 export interface HostRequestOptions { id?: string; body?: unknown; revision?: string; idempotencyKey?: string }
 const request = <T>(hostId: string, action: HostAction, options: HostRequestOptions = {}) => invoke<T>('host_request', { hostId, action, ...options });
 export const hostsNative = {
@@ -38,9 +42,11 @@ export const hostsNative = {
   linkApprove: (hostId: string, id: string, requestHash: string) => request<void>(hostId, 'link_approve', { id, body: { requestHash } }),
   deviceRevoke: (hostId: string, id: string) => request<void>(hostId, 'device_revoke', { id }),
   ownerChange: (hostId: string, action: 'owner_promote' | 'owner_demote' | 'ownership_transfer', accountId: string, revision: string) => request<{ authGeneration: string; revision: string }>(hostId, action, { id: accountId, revision }),
-  folderRoots: (hostId: string) => request<{ roots: { rootId: string; label: string; displayPath: string; readable: boolean }[]; revision: string }>(hostId, 'folder_roots'),
+  folderRoots: (hostId: string) => request<{ roots: FolderRoot[]; revision: string }>(hostId, 'folder_roots'),
   folderResolve: (hostId: string, rootId: string, relativePath: string) => request<{ folderToken: string; displayPath: string; expiresAt: string }>(hostId, 'folder_resolve', { body: { rootId, relativePath } }),
   folderList: (hostId: string, folderToken: string, cursor: string | null = null) => request<{ displayPath: string; entries: Folder[]; nextCursor: string | null }>(hostId, 'folder_list', { body: { folderToken, cursor } }),
+  /** An absolute path typed on this device, checked on the machine. */
+  folderCheck: (hostId: string, path: string) => request<FolderCheck>(hostId, 'folder_check', { body: { path } }),
   importCandidates: (hostId: string) => request<{ candidates: unknown[]; warnings: unknown[] }>(hostId, 'import_candidates'),
   importInspect: (hostId: string, folderToken: string, gamePort: number | null = null) => request<unknown>(hostId, 'import_inspect', { body: { folderToken, gamePort } }),
   importResources: (hostId: string, gamePort: number | null, memoryMiB: number | null) => request<unknown>(hostId, 'import_resources', { body: { gamePort, memoryMiB } }),
