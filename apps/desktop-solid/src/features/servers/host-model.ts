@@ -132,6 +132,7 @@ export function setupProblem(reason: unknown, purpose: 'claim' | 'link'): SetupP
   const link = purpose === 'link';
   switch (error.reason) {
     case 'host_already_claimed': return { kind: 'claimed', message: 'vesta-server.problem.already-set-up' };
+    case 'setup_code_expired_or_replaced': // the machine's own word for it, e.g. after a restart
     case 'code_expired': return { kind: 'expired-code', message: link ? 'vesta-server.problem.link-expired' : 'vesta-server.problem.code-expired' };
     case 'pairing_failed': return { kind: 'wrong-code', message: link ? 'vesta-server.problem.link-wrong' : 'vesta-server.problem.code-wrong' };
     case 'account_signin_required': return { kind: 'account-signin', message: 'vesta-server.problem.account-signin' };
