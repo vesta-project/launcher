@@ -74,11 +74,19 @@ export function createHostFixtures(): HostsApi {
       if (index < 0) return reject('not_found');
       hosts.splice(index, 1);
     },
+    verifyCode: async (address, code, purpose) => {
+      await wait(700);
+      const found = find(address);
+      if (!found) return reject('unreachable');
+      if (purpose === 'claim' && found.state === 'claimed') return reject('conflict', 'host_already_claimed');
+      if (purpose === 'claim' ? clean(code) !== SETUP_CODE : clean(code).length !== 12) return reject('credentials_rejected', 'pairing_failed');
+      return { verificationId: 'verified-' + Date.now(), hostId: found.hostId, name: found.name };
+    },
     claim: async (address, code, accountUuid, deviceName) => {
       await wait(900);
       const found = find(address);
       if (!found) return reject('unreachable');
-      if (found.state === 'claimed') return reject('conflict');
+      if (found.state === 'claimed') return reject('conflict', 'host_already_claimed');
       if (clean(code) !== SETUP_CODE) return reject('credentials_rejected', 'pairing_failed');
       found.state = 'claimed';
       const added: VestaHost = { id: found.hostId, name: found.name ?? address, fingerprint: found.fingerprint, endpoints: [found.address], deviceId: 'device-self', keyReference: 'fixture', accountId: accountUuid, authRevision: '1' };

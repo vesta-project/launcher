@@ -66,6 +66,7 @@ const args = {
   port: 25565,
   files: 1200,
   percent: 45,
+  address: "192.168.1.67:25500",
 };
 
 describe("localization catalogs", () => {

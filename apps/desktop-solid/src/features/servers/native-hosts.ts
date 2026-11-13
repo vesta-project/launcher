@@ -8,6 +8,8 @@ export interface HostInfo { hostId: string; name: string; fingerprint: string; e
 export interface HostServer { serverId: string; name: string; gamePort: number; state: string; role: string }
 export interface HostDevice { deviceId: string; name: string; accountId: string; revoked: boolean; createdAt: string }
 export interface LinkResult { linkId: string; state: string; requestHash: string; deviceId?: string }
+/** A code the machine accepted. Pass the id to claim or link so the same exchange is reused. */
+export interface CodeVerified { verificationId: string; hostId: string; name: string | null }
 export interface Folder { name: string; kind: 'directory'; folderToken: string | null; readable: boolean }
 export interface ImportPlan { folderToken: string; name: string; gamePort: number | null; memoryMiB: number | null; launchChoice: { kind: 'jar' | 'java_argfile'; relativePath: string } | null; minecraftVersion: string | null }
 export interface ImportApply { planId: string; confirmation: string; acknowledgedWarnings: string[]; eulaAccepted: true; sourceStoppedConfirmed: true }
@@ -22,9 +24,11 @@ export const hostsNative = {
   probe: (address: string) => invoke<HostDiscovery>('host_probe', { address }),
   list: () => invoke<VestaHost[]>('hosts_list'),
   remove: (hostId: string) => invoke<void>('host_remove', { hostId }),
-  claim: (address: string, code: string, accountUuid: string, deviceName: string) => invoke<VestaHost>('host_claim', { address, code, accountUuid, deviceName }),
+  /** Runs the PAKE exchange for a complete code right away; the proven connection waits for claim or link. */
+  verifyCode: (address: string, code: string, purpose: 'claim' | 'link') => invoke<CodeVerified>('host_verify_code', { address, code, purpose }),
+  claim: (address: string, code: string, accountUuid: string, deviceName: string, verificationId: string | null = null) => invoke<VestaHost>('host_claim', { address, code, accountUuid, deviceName, verificationId }),
   signIn: (hostId: string) => invoke<HostInfo>('host_sign_in', { hostId }),
-  linkStart: (address: string, code: string, accountUuid: string, deviceName: string) => invoke<LinkResult>('host_link_start', { address, code, accountUuid, deviceName }),
+  linkStart: (address: string, code: string, accountUuid: string, deviceName: string, verificationId: string | null = null) => invoke<LinkResult>('host_link_start', { address, code, accountUuid, deviceName, verificationId }),
   linkPoll: (linkId: string) => invoke<LinkResult>('host_link_poll', { linkId }),
   servers: (hostId: string) => invoke<{ servers: HostServer[]; nextCursor: string | null }>('host_servers', { hostId }),
   info: (hostId: string) => request<HostInfo>(hostId, 'info'),

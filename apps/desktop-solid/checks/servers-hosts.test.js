@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  HOST_PORT, blockerFix, canonicalCode, codeComplete, codeRejected, enrollProblem, formatCode, groupServers, hostIdOf, importPercent,
+  CODE_ALPHABET, CODE_GROUPS, CODE_LENGTH, HOST_PORT, backspaceCode, blockerFix, canonicalCode, codeChar, codeComplete, codeGroups, codeProblem, enrollProblemForFind,
+  formatCode, groupServers, hostIdOf, importPercent, setupProblem, typeIntoCode, waitSeconds,
   importRootCommand, keepKey, machineState, parseVestaAddress, readCandidates, reviewSummary, sortDiscovered,
 } from '../src/features/servers/host-model';
 import { createHostFixtures } from '../src/features/servers/host-fixtures';
@@ -32,6 +33,48 @@ describe('[hosts] codes and addresses', () => {
     expect(canonicalCode('K7Q4MX29P3ABEXTRA')).toHaveLength(12);
   });
 
+  test('the code format matches the client crate', () => {
+    const crate = readFileSync(join(root, '../../crates/vesta-host-client/src/lib.rs'), 'utf8');
+    expect(crate).toContain(`pub const ALPHABET: &[u8] = b"${CODE_ALPHABET}";`);
+    expect(crate).toContain('code.len() != 12');
+    expect(CODE_LENGTH).toBe(12);
+    expect(CODE_GROUPS.reduce((sum, size) => sum + size, 0)).toBe(CODE_LENGTH);
+    expect(codeGroups().map((cells) => cells.join(','))).toEqual(['0,1,2,3', '4,5,6,7', '8,9,10,11']);
+  });
+
+  test('paste fills every cell from any reasonable form', () => {
+    for (const pasted of [
+      'K7Q4-MX29-P3AB', 'k7q4mx29p3ab', 'k7q4 mx29 p3ab', ' K7Q4 - MX29 - P3AB \n', 'K7Q4\u2009MX29\tP3AB',
+      'Setup code: K7Q4-MX29-P3AB', 'code K7Q4 MX29 P3AB', 'K7Q4 MX29 P3AB expires in 30 minutes',
+      'Your setup code is K7Q4MX29P3AB.', 'K7Q4-MX29-P3AB (vesta setup-code)',
+    ]) expect(canonicalCode(pasted), pasted).toBe('K7Q4MX29P3AB');
+    // Not a code character at all: nothing to paste.
+    expect(canonicalCode('!!!')).toBe('');
+    // A partial paste fills from the start.
+    expect(canonicalCode('k7q4-mx')).toBe('K7Q4MX');
+  });
+
+  test('typing accepts only code characters and fills cells in order', () => {
+    expect(codeChar('a')).toBe('A');
+    expect(codeChar('o')).toBe('0');
+    expect(codeChar('l')).toBe('1');
+    for (const bad of ['u', 'U', '-', ' ', '!', 'é', 'ab', '']) expect(codeChar(bad), bad).toBeNull();
+    expect(typeIntoCode('', 0, 'k')).toEqual({ value: 'K', focus: 1 });
+    // Clicking ahead never leaves a gap.
+    expect(typeIntoCode('K7', 9, 'q')).toEqual({ value: 'K7Q', focus: 3 });
+    // Typing over a filled cell replaces it.
+    expect(typeIntoCode('K7Q4', 1, '8')).toEqual({ value: 'K8Q4', focus: 2 });
+    expect(typeIntoCode('K7Q4MX29P3A', 11, 'b')).toEqual({ value: 'K7Q4MX29P3AB', focus: 11 });
+    expect(typeIntoCode('K7', 2, 'u')).toBeNull();
+  });
+
+  test('backspace clears a filled cell, or steps back from an empty one', () => {
+    expect(backspaceCode('K7Q4', 3)).toEqual({ value: 'K7Q', focus: 3 });
+    expect(backspaceCode('K7Q', 3)).toEqual({ value: 'K7', focus: 2 });
+    expect(backspaceCode('K7Q', 7)).toEqual({ value: 'K7', focus: 2 });
+    expect(backspaceCode('', 0)).toEqual({ value: '', focus: 0 });
+  });
+
   test('Vesta addresses default to port 25500 and keep an explicit port', () => {
     expect(parseVestaAddress('192.168.1.67')).toMatchObject({ kind: 'address', port: HOST_PORT, display: '192.168.1.67:25500' });
     expect(parseVestaAddress('vps.example.net:8443')).toMatchObject({ port: 8443 });
@@ -55,14 +98,42 @@ describe('[hosts] discovery and enrollment', () => {
     expect(sortDiscovered(found, hosts).map((entry) => entry.hostId)).toEqual(['a', 'c', 'b']);
   });
 
-  test('a wrong or expired code says how to get a new one; other failures stay on the account step', () => {
-    const wrong = { code: 'credentials_rejected', reason: 'pairing_failed' };
-    expect(enrollProblem(wrong, 'claim')).toBe('vesta-server.problem.setup-code');
-    expect(enrollProblem(wrong, 'link')).toBe('vesta-server.problem.link-code');
-    expect(codeRejected(wrong)).toBe(true);
-    expect(enrollProblem({ code: 'unreachable' }, 'claim')).toBe('vesta-server.problem.unreachable');
-    expect(codeRejected({ code: 'unreachable' })).toBe(false);
-    expect(enrollProblem({ code: 'internal', reason: 'account_verification_unavailable' }, 'claim')).toBe('vesta-server.problem.account');
+  test('each setup failure maps to one honest cause', () => {
+    const kind = (error, purpose = 'claim') => setupProblem(error, purpose).kind;
+    expect(kind({ code: 'unreachable' })).toBe('unreachable');
+    expect(kind({ code: 'tls_failed' })).toBe('unreachable');
+    expect(kind({ code: 'timeout' })).toBe('unreachable');
+    expect(kind({ code: 'credentials_rejected', reason: 'pairing_failed' })).toBe('wrong-code');
+    expect(setupProblem({ code: 'credentials_rejected', reason: 'pairing_failed' }, 'link').message).toBe('vesta-server.problem.link-wrong');
+    expect(kind({ code: 'credentials_rejected', reason: 'code_expired' })).toBe('expired-code');
+    expect(setupProblem({ code: 'credentials_rejected', reason: 'code_expired' }, 'claim').message).toBe('vesta-server.problem.code-expired');
+    expect(setupProblem({ code: 'rate_limited', retryAfterMs: 42_000 }, 'claim')).toMatchObject({ kind: 'too-many', retryAfterMs: 42_000 });
+    expect(waitSeconds(42_000)).toBe(42);
+    expect(waitSeconds(1)).toBe(1);
+    expect(waitSeconds(undefined)).toBe(60);
+    expect(kind({ code: 'conflict', reason: 'host_already_claimed' })).toBe('claimed');
+    expect(kind({ code: 'conflict' })).toBe('claimed');
+    expect(kind({ code: 'credentials_unavailable', reason: 'account_signin_required' })).toBe('account-signin');
+    expect(kind({ code: 'credentials_rejected', reason: 'account_proof_failed' })).toBe('account-proof');
+    // Mojang being down is not the machine being down.
+    expect(kind({ code: 'unreachable', reason: 'account_service_unreachable' })).toBe('account-offline');
+    expect(kind({ code: 'server_busy', reason: 'account_verification_unavailable' })).toBe('account-offline');
+    expect(kind({ code: 'forbidden' })).toBe('no-access');
+    expect(codeProblem('wrong-code')).toBe(true);
+    expect(codeProblem('expired-code')).toBe(true);
+    expect(codeProblem('unreachable')).toBe(false);
+    expect(enrollProblemForFind({ code: 'unreachable' })).toBe('vesta-server.problem.unreachable');
+  });
+
+  test('the native layer names each cause instead of collapsing them', () => {
+    const native = readFileSync(join(root, '../../vesta-launcher/src-tauri/src/servers/hosts.rs'), 'utf8');
+    const client = readFileSync(join(root, '../../crates/vesta-server-client/src/host.rs'), 'utf8');
+    for (const reason of ['account_signin_required', 'account_service_unreachable', 'account_proof_failed', 'code_expired'])
+      expect(native + client, reason).toContain(`"${reason}"`);
+    expect(client).toContain('"host_already_claimed"');
+    expect(client).toContain('"pairing_failed"');
+    // The code is never logged.
+    expect(native).not.toMatch(/log::[a-z]+!\([^)]*code/);
   });
 });
 
@@ -149,6 +220,11 @@ describe('[hosts] fixture flow', () => {
     const api = createHostFixtures();
     const lan = await api.discover();
     const ready = lan.find((entry) => entry.state === 'unclaimed');
+    // A complete code is checked on its own, before any account step.
+    await expect(api.verifyCode(ready.address, 'AAAA-AAAA-AAAA', 'claim')).rejects.toMatchObject({ reason: 'pairing_failed' });
+    await expect(api.verifyCode('10.0.0.9', 'K7Q4MX29P3AB', 'claim')).rejects.toMatchObject({ code: 'unreachable' });
+    await expect(api.verifyCode(lan.find((entry) => entry.state === 'claimed').address, 'K7Q4MX29P3AB', 'claim')).rejects.toMatchObject({ reason: 'host_already_claimed' });
+    expect(await api.verifyCode(ready.address, 'k7q4 mx29 p3ab', 'claim')).toMatchObject({ hostId: ready.hostId });
     await expect(api.claim(ready.address, 'AAAA-AAAA-AAAA', 'uuid', 'Windows PC')).rejects.toMatchObject({ reason: 'pairing_failed' });
     const claimed = await api.claim(ready.address, 'k7q4-mx29-p3ab', 'uuid', 'Windows PC');
     expect((await api.list()).map((entry) => entry.id)).toEqual([claimed.id]);

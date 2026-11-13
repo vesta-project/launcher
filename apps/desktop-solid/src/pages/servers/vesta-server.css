@@ -51,12 +51,82 @@
   :where([data-vesta="vesta-address"]) > button { margin-block-start: calc(var(--vesta-text-sm) * 1.5 + var(--vesta-space-1-5)); }
 
   /* Codes and commands */
-  :where([data-vesta="vesta-code-field"]) input {
+  /* Segmented code cells: grouped like the machine prints the code */
+  :where([data-vesta="vesta-code-input"]) { display: flex; flex-direction: column; gap: var(--vesta-space-1-5); }
+  :where([data-vesta="vesta-code-label"]) { color: var(--vesta-color-text); font-size: var(--vesta-text-sm); font-weight: 600; }
+  :where([data-vesta="vesta-code-cells"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1-5); }
+  :where([data-vesta="vesta-code-group"]) { display: flex; align-items: center; gap: var(--vesta-space-1); }
+  :where([data-vesta="vesta-code-dash"]) {
+    margin-inline-end: var(--vesta-space-0-5);
+    color: var(--vesta-color-text-subtle);
     font-family: var(--vesta-font-mono);
     font-size: var(--vesta-text-lg);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    user-select: none;
   }
+  :where([data-vesta="vesta-code-cell"]) {
+    box-sizing: border-box;
+    inline-size: 2.25em;
+    block-size: 2.75em;
+    padding: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-sm);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text);
+    caret-color: var(--vesta-color-accent);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-lg);
+    font-weight: 600;
+    text-align: center;
+    text-transform: uppercase;
+    transition: border-color var(--vesta-duration-fast) var(--vesta-ease-standard), background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+  :where([data-vesta="vesta-code-cell"][data-filled]) { border-color: var(--vesta-color-border-strong); background: var(--vesta-color-surface); }
+  :where([data-vesta="vesta-code-cell"]:focus-visible),
+  :where([data-vesta="vesta-code-cell"]:focus) {
+    border-color: var(--vesta-color-accent);
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: 1px;
+  }
+  :where([data-vesta="vesta-code-input"][data-state="checking"]) [data-vesta="vesta-code-cell"] {
+    border-color: var(--vesta-color-accent-border);
+    animation: vesta-code-wait 1.2s var(--vesta-ease-standard) infinite;
+    animation-delay: calc(var(--vesta-code-index) * 60ms);
+  }
+  :where([data-vesta="vesta-code-input"][data-state="success"]) [data-vesta="vesta-code-cell"] {
+    border-color: var(--vesta-color-success);
+    color: var(--vesta-color-success-text);
+    animation: vesta-code-settle var(--vesta-duration-slow) var(--vesta-ease-out) both;
+    animation-delay: calc(var(--vesta-code-index) * 25ms);
+  }
+  :where([data-vesta="vesta-code-input"][data-state="error"]) [data-vesta="vesta-code-cell"] {
+    border-color: var(--vesta-color-danger-border, var(--vesta-color-danger));
+    background: color-mix(in oklab, var(--vesta-color-danger) 8%, var(--vesta-color-surface));
+  }
+  :where([data-vesta="vesta-code-note"]) { min-block-size: 1lh; margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  @keyframes vesta-code-wait { 50% { opacity: 0.55; } }
+  @keyframes vesta-code-settle { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta="vesta-code-input"]) [data-vesta="vesta-code-cell"] { animation: none !important; transition: none; }
+  }
+
+  /* Is the machine still there? */
+  :where([data-vesta="vesta-code-head"]) { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-reach"]) { display: inline-flex; align-items: center; gap: var(--vesta-space-1-5); margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-reach-dot"]) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-text-subtle);
+  }
+  :where([data-vesta="vesta-reach"][data-state="online"]) [data-vesta="vesta-reach-dot"] {
+    background: var(--vesta-color-success);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--vesta-color-success) 25%, transparent);
+  }
+  :where([data-vesta="vesta-reach"][data-state="offline"]) { color: var(--vesta-color-danger-text); }
+  :where([data-vesta="vesta-reach"][data-state="offline"]) [data-vesta="vesta-reach-dot"] { background: var(--vesta-color-danger); }
+  :where([data-vesta="vesta-working"][data-tone="success"]) { color: var(--vesta-color-success-text); }
+  :where([data-vesta="vesta-account"][data-size="compact"]) { padding: var(--vesta-space-2); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
+  :where([data-vesta="vesta-account"][data-size="compact"]) [data-vesta="vesta-account-head"] { inline-size: 24px; block-size: 24px; }
   :where([data-vesta="vesta-command"]) {
     display: flex;
     flex-basis: 100%;

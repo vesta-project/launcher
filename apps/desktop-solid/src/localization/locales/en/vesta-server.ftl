@@ -11,7 +11,7 @@ vesta-server-setup-address-help = An IP address or domain. Add a port only if it
 
 vesta-server-step-find = Machine
 vesta-server-step-code = Code
-vesta-server-step-account = Account
+vesta-server-step-account = Sign in
 
 vesta-server-found-ready = Ready to set up
 vesta-server-found-linked = Linked to this device
@@ -26,15 +26,22 @@ vesta-server-code-link-help = { $name } is already set up. Get a link code from 
 vesta-server-code-link-label = Link code
 vesta-server-code-link-new = You can also get one on the machine:
 
-vesta-server-account-title = Confirm your account
-vesta-server-account-claim-help = This account becomes the owner of { $name }.
-vesta-server-account-link-help = This device will be linked to { $name } with this account.
-vesta-server-account-microsoft = Microsoft account
-vesta-server-account-missing = Sign in with a Microsoft account to continue.
-vesta-server-account-add = Sign in
-vesta-server-account-claim = Set up
-vesta-server-account-link = Link this device
-vesta-server-account-working = Connecting
+vesta-server-signin-title = Sign in first
+vesta-server-signin-help = Vesta Server uses your Microsoft account to know the machine is yours. You'll come right back here.
+vesta-server-signin-button = Sign in
+
+vesta-server-code-cell = Character { $count } of { $total }
+vesta-server-code-invalid-char = Only letters and numbers from the code
+vesta-server-code-checking = Checking the code
+vesta-server-code-accepted = Code accepted
+vesta-server-code-claiming = Setting up { $name }
+vesta-server-code-linking = Asking to link this device
+vesta-server-code-owner-as = { $name } will own this Vesta Server
+vesta-server-code-link-as = Linking as { $name }
+
+vesta-server-reach-checking = Checking { $name }
+vesta-server-reach-online = { $name } is online
+vesta-server-reach-offline = { $name } isn't answering
 
 vesta-server-waiting-title = Almost there
 vesta-server-waiting-help = Approve this device on a device already linked to { $name }.
@@ -49,13 +56,27 @@ vesta-server-done-first-server = Add a server
 vesta-server-done-later = Later
 vesta-server-done-show-servers = Show servers
 
-vesta-server-problem-setup-code = That code didn't work. It may have expired or already been used. Get a new one on the machine.
-vesta-server-problem-link-code = That link code didn't work. It may have expired. Ask for a new one.
+vesta-server-problem-code-wrong = That code doesn't match. Check it and try again.
+vesta-server-problem-link-wrong = That link code doesn't match. Check it and try again.
+vesta-server-problem-code-expired = That code has expired or was replaced. Get a fresh one on the machine:
+vesta-server-problem-link-expired = That link code has expired. Get a new one from Link a device.
 vesta-server-problem-link-declined = This device wasn't approved. Try again with a new link code.
 vesta-server-problem-account = We couldn't check your Microsoft account right now. Try again in a moment.
+vesta-server-problem-account-signin = Your Microsoft sign in needs a refresh. Sign in again to continue.
+vesta-server-problem-account-proof = Vesta Server couldn't confirm this Minecraft account. Make sure it owns Minecraft Java Edition.
 vesta-server-problem-too-many = Too many tries. Wait a minute and try again.
+vesta-server-problem-too-many-seconds = { $count ->
+    [one] Too many tries. Try again in a second.
+   *[other] Too many tries. Try again in { $count } seconds.
+}
+vesta-server-problem-too-many-minutes = { $count ->
+    [one] Too many tries. Try again in a minute.
+   *[other] Too many tries. Try again in { $count } minutes.
+}
 vesta-server-problem-unreachable = Can't reach that machine. Check that it's on and Vesta Server is running.
-vesta-server-problem-already-set-up = This machine is already set up. Use a link code instead.
+vesta-server-problem-unreachable-at = Can't reach { $address }. Is Vesta Server running on that machine?
+vesta-server-problem-already-set-up = This machine is already set up by someone else. If they gave you a link code, use that.
+vesta-server-problem-claimed-link = I have a link code
 vesta-server-problem-no-access = You don't have access to this Vesta Server.
 
 vesta-server-device-windows = Windows PC

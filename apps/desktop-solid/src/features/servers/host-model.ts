@@ -16,27 +16,73 @@ export function parseVestaAddress(input: string): ParsedAddress | { kind: 'inval
 
 // ------------------------------------------------------------------ setup and link codes
 
-const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const CODE_LENGTH = 12;
+// Same format as the vesta-host-client crate (`SetupCode`): 12 Crockford base32 characters,
+// shown as XXXX-XXXX-XXXX. The machine accepts any case with hyphens or spaces.
+export const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const CODE_LENGTH = 12;
+export const CODE_GROUPS = [4, 4, 4] as const;
 
-/** Code characters only, uppercased, with look alike letters folded (O to 0, I and L to 1). */
-export function canonicalCode(input: string): string {
-  // A whole pasted line ("Setup code: K7Q4-MX29-P3AB  ...") keeps only the code itself.
-  const grouped = /([0-9a-z]{4})[-\s]([0-9a-z]{4})[-\s]([0-9a-z]{4})/i.exec(input);
-  const source = grouped ? grouped.slice(1).join('') : input;
-  return [...source.toUpperCase()]
-    .map((char) => (char === 'O' ? '0' : char === 'I' || char === 'L' ? '1' : char))
-    .filter((char) => CODE_ALPHABET.includes(char))
-    .join('')
-    .slice(0, CODE_LENGTH);
+/** One typed character as it goes in the code, or null when it can't be part of one. */
+export function codeChar(input: string): string | null {
+  if (input.length !== 1) return null;
+  const upper = input.toUpperCase();
+  // Crockford look alikes: O reads as zero, I and L as one.
+  const folded = upper === 'O' ? '0' : upper === 'I' || upper === 'L' ? '1' : upper;
+  return CODE_ALPHABET.includes(folded) ? folded : null;
 }
 
-/** What the code field shows while typing: groups of four, joined like the machine prints them. */
+const fold = (text: string) => [...text].map((char) => codeChar(char) ?? '').join('');
+const isCode = (text: string) => fold(text).length === text.length;
+
+/**
+ * Code characters only, uppercased and folded. A pasted line ("Setup code: K7Q4-MX29-P3AB
+ * expires in 30 minutes") keeps just the code: grouped XXXX-XXXX-XXXX first, then a lone
+ * 12 character word, then everything that could be part of a code.
+ */
+export function canonicalCode(input: string): string {
+  const grouped = [...input.matchAll(/(?<![0-9a-z])(?=([0-9a-z]{4})([-\s]+)([0-9a-z]{4})([-\s]+)([0-9a-z]{4})(?![0-9a-z]))/gi)]
+    .map((match) => ({ parts: [match[1], match[3], match[5]], dashed: match[2].includes('-') && match[4].includes('-') }))
+    .filter((match) => match.parts.every(isCode));
+  const best = grouped.findLast((match) => match.dashed) ?? grouped.at(-1);
+  if (best) return fold(best.parts.join(''));
+  const word = input.split(/[^0-9a-z]+/i).findLast((part) => part.length === CODE_LENGTH && isCode(part));
+  if (word) return fold(word);
+  return fold(input).slice(0, CODE_LENGTH);
+}
+
+/** What the machine prints: groups of four joined by hyphens. */
 export function formatCode(input: string): string {
   return canonicalCode(input).match(/.{1,4}/g)?.join('-') ?? '';
 }
 
 export const codeComplete = (input: string) => canonicalCode(input).length === CODE_LENGTH;
+
+/** Where a typed character lands in the cells. Cells fill in order, without gaps. */
+export function typeIntoCode(value: string, at: number, char: string): { value: string; focus: number } | null {
+  const next = codeChar(char);
+  if (!next) return null;
+  const index = Math.min(at, value.length, CODE_LENGTH - 1);
+  const typed = (value.slice(0, index) + next + value.slice(index + 1)).slice(0, CODE_LENGTH);
+  return { value: typed, focus: Math.min(index + 1, CODE_LENGTH - 1) };
+}
+
+/** Backspace in a cell: clear it when filled, otherwise step back and clear the one before. */
+export function backspaceCode(value: string, at: number): { value: string; focus: number } {
+  if (at < value.length) return { value: value.slice(0, at) + value.slice(at + 1), focus: at };
+  const index = Math.min(at, value.length) - 1;
+  if (index < 0) return { value, focus: 0 };
+  return { value: value.slice(0, index) + value.slice(index + 1), focus: index };
+}
+
+/** The group each cell sits in, for drawing the fixed separators between groups. */
+export const codeGroups = () => {
+  let start = 0;
+  return CODE_GROUPS.map((size) => {
+    const cells = Array.from({ length: size }, (_, offset) => start + offset);
+    start += size;
+    return cells;
+  });
+};
 
 // ------------------------------------------------------------------ discovery
 
@@ -59,25 +105,61 @@ export function sortDiscovered(found: readonly HostDiscovery[], hosts: readonly 
 
 // ------------------------------------------------------------------ errors
 
-/** Setup and link failures, worded for what the person can do next. */
-export function enrollProblem(reason: unknown, purpose: 'claim' | 'link'): MessageId {
-  const error = toServerError(reason);
-  if (error.reason === 'pairing_failed' || error.code === 'credentials_rejected' || error.code === 'pair_code_invalid')
-    return purpose === 'claim' ? 'vesta-server.problem.setup-code' : 'vesta-server.problem.link-code';
-  if (error.reason === 'account_verification_unavailable') return 'vesta-server.problem.account';
-  if (error.code === 'rate_limited') return 'vesta-server.problem.too-many';
-  if (error.code === 'unreachable' || error.code === 'timeout' || error.code === 'tls_failed' || error.code === 'invalid_address')
-    return 'vesta-server.problem.unreachable';
-  if (error.code === 'conflict') return purpose === 'claim' ? 'vesta-server.problem.already-set-up' : 'vesta-server.problem.link-code';
-  if (error.code === 'forbidden') return 'vesta-server.problem.no-access';
-  return errorMessage(error);
+/** Setup and link failures, sorted by what the person can do about each one. */
+export type SetupProblemKind =
+  | 'unreachable' | 'wrong-code' | 'expired-code' | 'too-many' | 'claimed'
+  | 'account-signin' | 'account-proof' | 'account-offline' | 'no-access' | 'other';
+
+export interface SetupProblem {
+  kind: SetupProblemKind;
+  message: MessageId;
+  /** Only for `too-many`: how long the machine asked us to wait. */
+  retryAfterMs?: number;
 }
 
-/** True when the code itself was the problem, so the code step should show it. */
-export const codeRejected = (reason: unknown) => {
+const UNREACHABLE = ['unreachable', 'timeout', 'tls_failed', 'invalid_address', 'fingerprint_mismatch'];
+
+/**
+ * Maps a native setup error to one honest cause. The machine answers every bad code with the
+ * same `pairing_failed` on purpose, so wrong and expired only differ when this launcher saw
+ * the code pass earlier (native then says `code_expired`).
+ */
+export function setupProblem(reason: unknown, purpose: 'claim' | 'link'): SetupProblem {
   const error = toServerError(reason);
-  return error.reason === 'pairing_failed' || error.code === 'credentials_rejected' || error.code === 'pair_code_invalid' || error.code === 'conflict';
-};
+  const link = purpose === 'link';
+  switch (error.reason) {
+    case 'host_already_claimed': return { kind: 'claimed', message: 'vesta-server.problem.already-set-up' };
+    case 'code_expired': return { kind: 'expired-code', message: link ? 'vesta-server.problem.link-expired' : 'vesta-server.problem.code-expired' };
+    case 'pairing_failed': return { kind: 'wrong-code', message: link ? 'vesta-server.problem.link-wrong' : 'vesta-server.problem.code-wrong' };
+    case 'account_signin_required': return { kind: 'account-signin', message: 'vesta-server.problem.account-signin' };
+    case 'account_proof_failed': return { kind: 'account-proof', message: 'vesta-server.problem.account-proof' };
+    case 'account_service_unreachable':
+    case 'account_verification_unavailable': return { kind: 'account-offline', message: 'vesta-server.problem.account' };
+  }
+  if (error.code === 'rate_limited') return { kind: 'too-many', message: 'vesta-server.problem.too-many', retryAfterMs: error.retryAfterMs ?? undefined };
+  if (UNREACHABLE.includes(error.code)) return { kind: 'unreachable', message: 'vesta-server.problem.unreachable' };
+  if (error.code === 'credentials_rejected' || error.code === 'pair_code_invalid')
+    return { kind: 'wrong-code', message: link ? 'vesta-server.problem.link-wrong' : 'vesta-server.problem.code-wrong' };
+  if (error.code === 'credentials_unavailable') return { kind: 'account-signin', message: 'vesta-server.problem.account-signin' };
+  if (error.code === 'conflict' && !link) return { kind: 'claimed', message: 'vesta-server.problem.already-set-up' };
+  if (error.code === 'forbidden') return { kind: 'no-access', message: 'vesta-server.problem.no-access' };
+  return { kind: 'other', message: errorMessage(error) };
+}
+
+
+/** Looking a machine up or signing in to one already linked, before any code is involved. */
+export function enrollProblemForFind(reason: unknown): MessageId {
+  const error = toServerError(reason);
+  if (UNREACHABLE.includes(error.code)) return 'vesta-server.problem.unreachable';
+  if (error.code === 'rate_limited') return 'vesta-server.problem.too-many';
+  if (error.code === 'forbidden' || error.code === 'credentials_rejected') return 'vesta-server.problem.no-access';
+  return errorMessage(error);
+}
+/** Problems that belong to the code itself: the code cells shake and clear. */
+export const codeProblem = (kind: SetupProblemKind) => kind === 'wrong-code' || kind === 'expired-code';
+
+/** The machine's wait, rounded up to whole seconds (at least one). */
+export const waitSeconds = (ms: number | undefined) => Math.max(1, Math.ceil((ms ?? 60_000) / 1000));
 
 // ------------------------------------------------------------------ roles
 
