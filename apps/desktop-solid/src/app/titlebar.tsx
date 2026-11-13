@@ -158,7 +158,7 @@ function location(): {
         const name = vestaHost(current.detail)?.name ?? t('nav.servers');
         const back = { to: '/servers', label: t('common.back') };
         return current.item === 'import'
-          ? { label: t('vesta-server.host.add-server'), icon: 'icons/rail/servers', trail: [root, { label: name, href: `#/servers/host/${current.detail}` }, { label: t('vesta-server.host.add-server') }], back }
+          ? { label: t('vesta-server.import.title'), icon: 'icons/rail/servers', trail: [root, { label: name, href: `#/servers/host/${current.detail}` }, { label: t('vesta-server.import.title') }], back }
           : { label: name, icon: 'icons/rail/servers', trail: [root, { label: name }], back };
       }
       const server = serverSnapshot(current.section);

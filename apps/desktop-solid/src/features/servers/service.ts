@@ -40,8 +40,14 @@ function nativeApi(): ServersApi {
   };
 }
 
-/** Preview only: `localStorage['vesta.fixtures.backups'] = 'off'` starts the owner server without backups. */
-const fixtureOptions = () => (globalThis.localStorage?.getItem('vesta.fixtures.backups') === 'off' ? { backupsConfigured: false } : {});
+/**
+ * Preview only: `localStorage['vesta.fixtures.backups'] = 'off'` starts the owner server without backups.
+ * A Vesta Server scenario with no servers yet (`vesta.fixtures.hosts`, see host-fixtures.ts) starts the list empty.
+ */
+const fixtureOptions = () => ({
+  ...(globalThis.localStorage?.getItem('vesta.fixtures.backups') === 'off' ? { backupsConfigured: false } : {}),
+  ...(['none', 'one', 'offline'].includes(globalThis.localStorage?.getItem('vesta.fixtures.hosts') ?? '') ? { seeded: false } : {}),
+});
 
 let fixtureApi: Promise<ServersApi> | undefined;
 const fixtures = () => (fixtureApi ??= Promise.all([import('./fixtures'), import('./modpack-preview')]).then(([module, preview]) =>

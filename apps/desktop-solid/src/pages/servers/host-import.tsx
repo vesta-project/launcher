@@ -1,12 +1,11 @@
-// First server wizard on a Vesta Server: pick a folder on that machine, let it check the
-// folder, review, copy (the original stays untouched), then start. The job itself lives in
+// Add a server to a Vesta Server: pick a folder on that machine, let it check the folder,
+// review, copy (the original stays untouched), then start. The job itself lives in
 // hosts-store, so closing this page never stops a copy.
 import { Badge, Button, Checkbox, NumberField, Progress, TextField } from '@vesta/ui';
-import { For, Match, Show, Switch, createMemo, createSignal, onSettled, untrack } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, createSignal, createUniqueId, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
-import { OptionCards } from '../../components/option-cards';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
@@ -14,28 +13,31 @@ import { openExternal } from '../../features/links/external-links';
 import { formatBytes } from '../../features/settings/storage-model';
 import { toServerError } from '../../features/servers/errors';
 import {
-  blockerFix, importBusy, importPercent, importProblem, importRootCommand, lastSegment, readCandidates, reviewSummary, warningMessage,
-  type CandidateWarning, type ImportCandidate,
+  blockerFix, folderName, folderUse, importBusy, importRootCommand, importPercent, importPhase, importProblem, isDriveRoot, joinPath, lastSegment, locate,
+  normalisePath, readCandidates, readFolderCheck, readNotServer, reviewSummary, splitPath, warningMessage,
+  type CheckOutcome, type FolderUse, type ImportCandidate,
 } from '../../features/servers/host-model';
 import {
   applyImport, cancelImport, clearImport, hostCommand, importTask, loadHostServers, planImport, recheckImport, resumeImport, startImport,
   vestaHost, type ImportTask,
 } from '../../features/servers/hosts-store';
-import { hostConnectionId, type Folder, type ImportReview } from '../../features/servers/native-hosts';
+import { hostConnectionId, type Folder, type FolderRoot, type ImportReview } from '../../features/servers/native-hosts';
 import type { ServerCommandError } from '../../features/servers/native';
 import { CommandLine, Steps, Working } from './vesta-parts';
 import './vesta-server.css';
 
-type Kind = 'import' | 'new' | 'modpack' | 'restore';
 type Picked = ImportTask['folder'] & { name: string };
-type WizardStep = 'kind' | 'folder' | 'review' | 'copy';
+type WizardStep = 'folder' | 'review' | 'copy';
 
+// Importing is the one way to add a server today. New, Modpack and Restore become modes here,
+// each with its own first step; the steps, panel and review stay the same.
 const steps = [
-  { id: 'kind', label: 'vesta-server.import.step-kind' },
   { id: 'folder', label: 'vesta-server.import.step-folder' },
   { id: 'review', label: 'vesta-server.import.step-review' },
   { id: 'copy', label: 'vesta-server.import.step-copy' },
 ] as const satisfies readonly { id: WizardStep; label: MessageId }[];
+
+const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function HostImport(props: { hostId: string }) {
   const host = () => vestaHost(props.hostId);
@@ -53,8 +55,6 @@ export function HostImport(props: { hostId: string }) {
 }
 
 function ImportFlow(props: { hostId: string; machine: string }) {
-  const [kind, setKind] = createSignal<Kind>('import', { name: 'host-import:kind' });
-  const [choosing, setChoosing] = createSignal<'kind' | 'folder'>('kind', { name: 'host-import:choosing' });
   const task = () => importTask(props.hostId);
   const state = () => task()?.job?.state;
 
@@ -63,7 +63,7 @@ function ImportFlow(props: { hostId: string; machine: string }) {
 
   const current = (): WizardStep | 'done' => {
     const job = task();
-    if (!job) return choosing();
+    if (!job) return 'folder';
     switch (job.job?.state) {
       case undefined: case 'planning': case 'review': case 'blocked': return 'review';
       case 'online': return 'done';
@@ -72,37 +72,15 @@ function ImportFlow(props: { hostId: string; machine: string }) {
   };
 
   const pick = (folder: Picked) => void planImport(props.hostId, { folder: { token: folder.token, displayPath: folder.displayPath }, name: folder.name, gamePort: null, memoryMiB: null });
-  const startOver = () => { clearImport(props.hostId); setChoosing('folder'); };
+  const startOver = () => clearImport(props.hostId);
 
   return (
     <Board class="servers-board">
       <div data-vesta="server-add" data-wide>
         <Steps steps={steps} current={current()} />
         <Switch>
-          <Match when={!task() && choosing() === 'kind'}>
-            <div data-vesta="server-add-panel">
-              <h1>{t('vesta-server.import.kind-title', { name: props.machine })}</h1>
-              <OptionCards<Kind>
-                aria-label={t('vesta-server.import.kind-title', { name: props.machine })}
-                value={kind()}
-                onChange={setKind}
-                options={[
-                  { value: 'import', label: t('vesta-server.import.kind-import'), icon: <Icon name="icons/content/folder" size={20} /> },
-                  { value: 'new', label: t('vesta-server.import.kind-new'), hint: t('vesta-server.import.soon'), icon: <Icon name="icons/actions/add" size={20} />, disabled: true },
-                  { value: 'modpack', label: t('vesta-server.import.kind-modpack'), hint: t('vesta-server.import.soon'), icon: <Icon name="icons/content/modpack" size={20} />, disabled: true },
-                  { value: 'restore', label: t('vesta-server.import.kind-restore'), hint: t('vesta-server.import.soon'), icon: <Icon name="icons/content/history" size={20} />, disabled: true },
-                ]}
-              />
-              <p>{t('vesta-server.import.kind-import-help')}</p>
-              <footer>
-                <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
-                <Button tone="accent" onClick={() => setChoosing('folder')}>{t('servers.continue')}</Button>
-              </footer>
-            </div>
-          </Match>
-
-          <Match when={!task() && choosing() === 'folder'}>
-            <FolderPicker hostId={props.hostId} machine={props.machine} onPick={pick} onBack={() => setChoosing('kind')} />
+          <Match when={!task()}>
+            <FolderStep hostId={props.hostId} machine={props.machine} onPick={pick} />
           </Match>
 
           <Match when={task() && !task()!.jobId && task()!.error}>
@@ -111,8 +89,11 @@ function ImportFlow(props: { hostId: string; machine: string }) {
               <h1>{t('vesta-server.import.check-failed')}</h1>
               <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(task()!.error))}</p>
               <footer>
-                <Button variant="ghost" onClick={startOver}>{t('common.back')}</Button>
-                <Button tone="accent" onClick={() => void planImport(props.hostId, { folder: task()!.folder, name: task()!.name, gamePort: null, memoryMiB: null })}>{t('vesta-server.import.check-again')}</Button>
+                <Button variant="ghost" onClick={startOver}>{t('vesta-server.import.start-over')}</Button>
+                <Button tone="accent" icon={<Icon name="icons/actions/refresh" />}
+                  onClick={() => void planImport(props.hostId, { folder: task()!.folder, name: task()!.name, gamePort: null, memoryMiB: null })}>
+                  {t('vesta-server.import.check-again')}
+                </Button>
               </footer>
             </div>
           </Match>
@@ -120,8 +101,12 @@ function ImportFlow(props: { hostId: string; machine: string }) {
           <Match when={task() && (!task()!.job || state() === 'planning')}>
             <div data-vesta="server-add-panel">
               <h1>{t('vesta-server.import.checking-title', { name: task()!.name || props.machine })}</h1>
-              <Working label={t('vesta-server.import.checking')} />
-              <Show when={task()!.error}>{(error) => <p data-vesta="server-callout" data-tone="warning">{t(importProblem(error()))}</p>}</Show>
+              <Show when={task()!.error} fallback={<Working label={t('vesta-server.import.checking')} />}>
+                {(error) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(importProblem(error()))}</p>}
+              </Show>
+              <Show when={task()!.error}>
+                <footer><Button variant="ghost" onClick={startOver}>{t('vesta-server.import.start-over')}</Button></footer>
+              </Show>
             </div>
           </Match>
 
@@ -145,17 +130,43 @@ function ImportFlow(props: { hostId: string; machine: string }) {
   );
 }
 
-// ------------------------------------------------------------------ folder picker
+// ------------------------------------------------------------------ permission
 
-interface Browsing { rootId: string; label: string; path: string[]; token: string; displayPath: string; entries: Folder[]; cursor: string | null }
+/** A folder Vesta Server can't read: why, the exact command for the machine, and Check again. */
+function PermissionHelp(props: { name: string; machine: string; command: string; checking: boolean; still: boolean; onCheck: () => void }) {
+  return (
+    <div data-vesta="server-callout" data-tone="warning" role="group">
+      <p>{t('vesta-server.import.permission', { path: props.name, name: props.machine })}</p>
+      <CommandLine command={props.command} />
+      <div data-vesta="vesta-callout-actions">
+        <Show when={props.still}><span role="status">{t('vesta-server.import.permission-still')}</span></Show>
+        <Button size="sm" disabled={props.checking} icon={<Icon name="icons/actions/refresh" />} onClick={() => props.onCheck()}>
+          {props.checking ? t('vesta-server.import.checking-path') : t('vesta-server.import.check-again')}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
-function FolderPicker(props: { hostId: string; machine: string; onPick: (folder: Picked) => void; onBack: () => void }) {
+/** A folder check that can fail on older machines without the check route. */
+async function checkPath(hostId: string, path: string): Promise<CheckOutcome | { kind: 'unsupported' } | { kind: 'error'; error: ServerCommandError }> {
+  try {
+    return readFolderCheck(await hostCommand((client) => client.folderCheck(hostId, path)), path);
+  } catch (reason) {
+    const error = toServerError(reason);
+    return error.code === 'not_found' || error.code === 'unsupported' ? { kind: 'unsupported' } : { kind: 'error', error };
+  }
+}
+
+// ------------------------------------------------------------------ folder step
+
+function FolderStep(props: { hostId: string; machine: string; onPick: (folder: Picked) => void }) {
   const [candidates, setCandidates] = createSignal<ImportCandidate[] | null>(null, { name: 'host-import:candidates' });
-  const [warnings, setWarnings] = createSignal<CandidateWarning[]>([], { name: 'host-import:warnings' });
-  const [roots, setRoots] = createSignal<{ rootId: string; label: string; displayPath: string; readable: boolean }[] | null>(null, { name: 'host-import:roots' });
-  const [browsing, setBrowsing] = createSignal<Browsing | null>(null, { name: 'host-import:browsing' });
-  const [loading, setLoading] = createSignal(false, { name: 'host-import:loading' });
+  const [truncated, setTruncated] = createSignal(false, { name: 'host-import:truncated' });
+  const [roots, setRoots] = createSignal<FolderRoot[] | null>(null, { name: 'host-import:roots' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'host-import:error' });
+  let browser: BrowserApi | undefined;
+  let browserSection: HTMLElement | undefined;
 
   const load = async () => {
     setError(null);
@@ -166,162 +177,520 @@ function FolderPicker(props: { hostId: string; machine: string; onPick: (folder:
     if (found.status === 'fulfilled') {
       const read = readCandidates(found.value);
       setCandidates(read.candidates);
-      setWarnings(read.warnings);
+      setTruncated(read.truncated);
     } else { setCandidates([]); setError(toServerError(found.reason)); }
     if (shared.status === 'fulfilled') setRoots(shared.value.roots);
     else { setRoots([]); if (found.status === 'fulfilled') setError(toServerError(shared.reason)); }
   };
   onSettled(() => void load());
 
-  const list = async (next: Omit<Browsing, 'entries' | 'cursor'>, cursor: string | null = null) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await hostCommand((client) => client.folderList(props.hostId, next.token, cursor));
-      setBrowsing((current) => ({ ...next, displayPath: page.displayPath, entries: cursor && current ? [...current.entries, ...page.entries] : page.entries, cursor: page.nextCursor }));
-    } catch (reason) { setError(toServerError(reason)); }
-    finally { setLoading(false); }
-  };
-
-  const open = async (rootId: string, label: string, path: string[]) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const resolved = await hostCommand((client) => client.folderResolve(props.hostId, rootId, path.join('/')));
-      await list({ rootId, label, path, token: resolved.folderToken, displayPath: resolved.displayPath });
-    } catch (reason) { setError(toServerError(reason)); }
-    finally { setLoading(false); }
-  };
-
-  const enter = (folder: Folder) => {
-    const current = browsing();
-    if (!current || !folder.folderToken) return;
-    void list({ rootId: current.rootId, label: current.label, path: [...current.path, folder.name], token: folder.folderToken, displayPath: current.displayPath });
-  };
-  const up = () => {
-    const current = browsing();
-    if (!current) return;
-    if (!current.path.length) setBrowsing(null);
-    else void open(current.rootId, current.label, current.path.slice(0, -1));
-  };
   const unavailable = () => error()?.reason === 'imports_unavailable' || error()?.code === 'unsupported';
+  const openInBrowser = async (path: string, token: string) => {
+    await browser?.goTo(path, { token });
+    browserSection?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+  };
 
   return (
     <div data-vesta="server-add-panel">
-      <h1>{t('vesta-server.import.folder-title')}</h1>
-      <p data-vesta="vesta-remote-note"><Icon name="icons/content/server" size={16} /> {t('vesta-server.import.folder-remote', { name: props.machine })}</p>
+      <header data-vesta="vesta-step-intro">
+        <h1>{t('vesta-server.import.title')}</h1>
+        <p>{t('vesta-server.import.intro', { name: props.machine })}</p>
+        <p data-vesta="vesta-soon">{t('vesta-server.import.more-soon')}</p>
+      </header>
 
       <Show when={unavailable()}>
         <p data-vesta="server-callout" data-tone="warning">{t('vesta-server.import.unavailable')}</p>
       </Show>
-      <Show when={error() && !unavailable()}>
-        <div data-vesta="server-callout" data-tone="danger" role="alert">
-          <p>{t(importProblem(error()))}</p>
-          <Button size="sm" onClick={() => void load()}>{t('common.retry')}</Button>
+      <Show when={!unavailable()}>
+        <Show when={error()}>
+          {(problem) => (
+            <div data-vesta="server-callout" data-tone="danger" role="alert">
+              <p>{t(importProblem(problem()))}</p>
+              <Button size="sm" onClick={() => void load()}>{t('common.retry')}</Button>
+            </div>
+          )}
+        </Show>
+
+        <p data-vesta="vesta-remote-note"><Icon name="icons/content/server" size={16} />{t('vesta-server.import.remote', { name: props.machine })}</p>
+
+        <FoundList hostId={props.hostId} machine={props.machine} candidates={candidates()} truncated={truncated()} onPick={props.onPick} onReload={() => void load()} />
+
+        <PathCheck hostId={props.hostId} machine={props.machine} onFound={(path, token) => void openInBrowser(path, token)} />
+
+        <section ref={(element) => (browserSection = element)} data-vesta="vesta-section" aria-labelledby="vesta-browse-heading">
+          <h2 id="vesta-browse-heading">{t('vesta-server.import.browse', { name: props.machine })}</h2>
+          <Show when={roots()} fallback={<Working label={t('vesta-server.import.opening')} />}>
+            {(list) => (
+              <FolderBrowser hostId={props.hostId} machine={props.machine} roots={list()} onPick={props.onPick}
+                controls={(api) => (browser = api)} />
+            )}
+          </Show>
+        </section>
+      </Show>
+
+      <footer>
+        <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
+      </footer>
+    </div>
+  );
+}
+
+/** Likely servers the machine found, for a one click choice. */
+function FoundList(props: { hostId: string; machine: string; candidates: ImportCandidate[] | null; truncated: boolean; onPick: (folder: Picked) => void; onReload: () => void }) {
+  const [open, setOpen] = createSignal<string | null>(null, { name: 'host-import:found-open' });
+  const [checking, setChecking] = createSignal(false, { name: 'host-import:found-checking' });
+  const [still, setStill] = createSignal(false, { name: 'host-import:found-still' });
+
+  const recheck = async (candidate: ImportCandidate) => {
+    setChecking(true);
+    setStill(false);
+    const outcome = await checkPath(props.hostId, candidate.displayPath);
+    setChecking(false);
+    if (outcome.kind === 'ok') props.onPick({ token: outcome.token, displayPath: outcome.path, name: lastSegment(outcome.path) });
+    else if (outcome.kind === 'unsupported') props.onReload();
+    else setStill(true);
+  };
+  const toggle = (candidate: ImportCandidate) => {
+    setStill(false);
+    setOpen((current) => (current === candidate.candidateId ? null : candidate.candidateId));
+  };
+
+  return (
+    <section data-vesta="vesta-section" aria-labelledby="vesta-found-heading">
+      <h2 id="vesta-found-heading">{t('vesta-server.import.found', { name: props.machine })}</h2>
+      <Show when={props.candidates} fallback={<Working label={t('vesta-server.import.looking', { name: props.machine })} />}>
+        {(found) => (
+          <Show when={found().length > 0} fallback={<p data-vesta="server-muted">{t('vesta-server.import.found-none')}</p>}>
+            <ul data-vesta="vesta-found">
+              <For each={found()} keyed={(candidate) => candidate.candidateId}>
+                {(candidate) => (
+                  <li>
+                    <button type="button" data-vesta="vesta-machine" data-locked={candidate().folderToken ? undefined : ''}
+                      aria-expanded={candidate().folderToken ? undefined : open() === candidate().candidateId ? 'true' : 'false'}
+                      onClick={() => {
+                        const picked = candidate();
+                        if (picked.folderToken) props.onPick({ token: picked.folderToken, displayPath: picked.displayPath, name: picked.label });
+                        else toggle(picked);
+                      }}>
+                      <Icon name={candidate().folderToken ? 'icons/content/folder' : 'icons/security/folder-lock'} size={18} />
+                      <span data-vesta="vesta-machine-text">
+                        <strong>{candidate().label}</strong>
+                        <span>{candidate().displayPath}</span>
+                      </span>
+                      <span data-vesta="vesta-found-meta">
+                        <Show when={!candidate().folderToken}><Badge tone="warning" size="sm">{t('vesta-server.import.needs-permission')}</Badge></Show>
+                        <Show when={candidate().software}>{(software) => <Badge size="sm">{software()}</Badge>}</Show>
+                        <Show when={candidate().bytes}>{(bytes) => <span data-vesta="vesta-found-size">{formatBytes(bytes())}</span>}</Show>
+                      </span>
+                      <Icon name={candidate().folderToken ? 'icons/controls/chevron-right' : open() === candidate().candidateId ? 'icons/controls/chevron-up' : 'icons/controls/chevron-down'} size={16} />
+                    </button>
+                    <Show when={!candidate().folderToken && open() === candidate().candidateId && candidate().command}>
+                      {(command) => (
+                        <PermissionHelp name={candidate().displayPath} machine={props.machine} command={command()} checking={checking()} still={still()}
+                          onCheck={() => void recheck(candidate())} />
+                      )}
+                    </Show>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+        )}
+      </Show>
+      <Show when={props.truncated}><p data-vesta="server-muted">{t('vesta-server.warning.truncated')}</p></Show>
+    </section>
+  );
+}
+
+type PathResult = CheckOutcome | { kind: 'invalid' } | { kind: 'unsupported' } | { kind: 'error'; error: ServerCommandError };
+
+/** "Know the path?": a pasted path checked on the machine, with the answer right under it. */
+function PathCheck(props: { hostId: string; machine: string; onFound: (path: string, token: string) => void }) {
+  const [typed, setTyped] = createSignal('', { name: 'host-import:path' });
+  const [checking, setChecking] = createSignal(false, { name: 'host-import:path-checking' });
+  const [result, setResult] = createSignal<PathResult | null>(null, { name: 'host-import:path-result' });
+  const [still, setStill] = createSignal(false, { name: 'host-import:path-still' });
+
+  const check = async (again = false) => {
+    const path = normalisePath(typed());
+    if (!path) { setResult({ kind: 'invalid' }); return; }
+    setChecking(true);
+    setStill(false);
+    const outcome = await checkPath(props.hostId, path);
+    setChecking(false);
+    setResult(outcome);
+    if (again && outcome.kind === 'permission') setStill(true);
+    if (outcome.kind === 'ok') props.onFound(outcome.path, outcome.token);
+  };
+
+  return (
+    <section data-vesta="vesta-section">
+      <form data-vesta="vesta-address" onSubmit={(event) => { event.preventDefault(); void check(); }}>
+        <TextField label={t('vesta-server.import.path-label')} value={typed()} spellcheck={false} autocomplete="off"
+          placeholder={t('vesta-server.import.path-example')}
+          onChange={(value) => { setTyped(value); setResult(null); }} />
+        <Button type="submit" disabled={checking() || !typed().trim()}>{checking() ? t('vesta-server.import.checking-path') : t('vesta-server.import.check')}</Button>
+      </form>
+      <Show when={result()}>
+        {(outcome) => (
+          <Switch>
+            <Match when={outcome().kind === 'ok'}>
+              <p data-vesta="vesta-note" data-tone="success" role="status"><Icon name="icons/controls/success" size={16} />{t('vesta-server.import.path-found')}</p>
+            </Match>
+            <Match when={outcome().kind === 'permission' && (outcome() as Extract<CheckOutcome, { kind: 'permission' }>)}>
+              {(needed) => (
+                <PermissionHelp name={needed().path} machine={props.machine} command={needed().command} checking={checking()} still={still()}
+                  onCheck={() => void check(true)} />
+              )}
+            </Match>
+            <Match when={outcome().kind === 'problem' && (outcome() as Extract<CheckOutcome, { kind: 'problem' }>)}>
+              {(problem) => <p data-vesta="vesta-note" data-tone="danger" role="alert">{t(problem().message, { name: props.machine })}</p>}
+            </Match>
+            <Match when={outcome().kind === 'invalid'}>
+              <p data-vesta="vesta-note" data-tone="danger" role="alert">{t('vesta-server.import.path-invalid')}</p>
+            </Match>
+            <Match when={outcome().kind === 'unsupported'}>
+              <p data-vesta="vesta-note" role="status">{t('vesta-server.import.path-unsupported')}</p>
+            </Match>
+            <Match when={outcome().kind === 'error' && (outcome() as { kind: 'error'; error: ServerCommandError })}>
+              {(failed) => <p data-vesta="vesta-note" data-tone="danger" role="alert">{t(importProblem(failed().error))}</p>}
+            </Match>
+          </Switch>
+        )}
+      </Show>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ folder browser
+
+interface Place { rootId: string | null; path: string; token: string; entries: Folder[]; cursor: string | null; looksLikeServer?: boolean }
+type View = { kind: 'top' } | { kind: 'folder'; place: Place };
+interface Locked { name: string; path: string; command: string }
+interface BrowserApi { goTo(path: string, hint?: { token?: string; looksLikeServer?: boolean }): Promise<void> }
+
+/**
+ * The machine's folders from the top: a path trail, Up, and the folders here. Likely servers
+ * carry a badge; folders Vesta Server can't read show a lock and how to fix that.
+ */
+function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRoot[]; onPick: (folder: Picked) => void; controls: (api: BrowserApi) => void }) {
+  const drives = createMemo(() => props.roots.filter((root) => isDriveRoot(root.displayPath)), { name: 'host-import:drives' });
+  const shortcuts = createMemo(() => props.roots.filter((root) => !isDriveRoot(root.displayPath)), { name: 'host-import:shortcuts' });
+  // The top of the machine: one drive opens straight away, several (or none, on older machines) list here.
+  const topRoots = () => (drives().length ? drives() : shortcuts());
+  const single = () => (drives().length === 1 ? drives()[0] : undefined);
+
+  const [view, setView] = createSignal<View>({ kind: 'top' }, { name: 'host-import:view' });
+  // With one drive the browser opens it right away, so it starts out loading.
+  const [loading, setLoading] = createSignal(untrack(() => props.roots.filter((root) => isDriveRoot(root.displayPath)).length === 1), { name: 'host-import:browsing' });
+  const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'host-import:browse-error' });
+  const [locked, setLocked] = createSignal<Locked | null>(null, { name: 'host-import:locked' });
+  const [lockChecking, setLockChecking] = createSignal(false, { name: 'host-import:lock-checking' });
+  const [lockStill, setLockStill] = createSignal(false, { name: 'host-import:lock-still' });
+  const [inspected, setInspected] = createSignal<{ token: string; use: FolderUse | 'checking' } | null>(null, { name: 'host-import:inspected' });
+  const [active, setActive] = createSignal(0, { name: 'host-import:active-row' });
+  const noteId = createUniqueId();
+  let list: HTMLUListElement | undefined;
+  let focusAfter = false;
+
+  const place = () => { const current = view(); return current.kind === 'folder' ? current.place : null; };
+
+  /** Ask the machine only when the listing didn't already say. */
+  const inspect = async (token: string) => {
+    setInspected({ token, use: 'checking' });
+    try {
+      const report = await hostCommand((client) => client.importInspect(props.hostId, token));
+      const read = readNotServer(report);
+      setInspected({ token, use: read.notServer ? folderUse({ missing: read.missing })! : { usable: true } });
+    } catch {
+      // Older machines can't inspect here; the review step will say what's wrong, if anything.
+      setInspected({ token, use: { usable: true } });
+    }
+  };
+
+  const show = (next: View) => {
+    setView(next);
+    setLocked(null);
+    setActive(0);
+    if (next.kind === 'folder' && folderUse({ top: isDriveRoot(next.place.path), looksLikeServer: next.place.looksLikeServer }) === null) void inspect(next.place.token);
+    if (focusAfter) {
+      focusAfter = false;
+      requestAnimationFrame(() => list?.querySelector<HTMLElement>('[data-vesta="vesta-folder"]')?.focus());
+    }
+  };
+
+  const listFolder = async (target: Omit<Place, 'entries' | 'cursor'>) => {
+    const page = await hostCommand((client) => client.folderList(props.hostId, target.token, null));
+    show({ kind: 'folder', place: { ...target, path: page.displayPath || target.path, entries: page.entries, cursor: page.nextCursor } });
+  };
+
+  const run = async (work: () => Promise<void>) => {
+    setLoading(true);
+    setError(null);
+    try { await work(); }
+    catch (reason) { setError(toServerError(reason)); }
+    finally { setLoading(false); }
+  };
+
+  const goTo: BrowserApi['goTo'] = (path, hint = {}) => run(async () => {
+    const found = locate(path, props.roots, place()?.rootId);
+    if (found) {
+      const resolved = await hostCommand((client) => client.folderResolve(props.hostId, found.root.rootId, found.segments.join('/')));
+      await listFolder({ rootId: found.root.rootId, path: resolved.displayPath, token: resolved.folderToken, looksLikeServer: hint.looksLikeServer });
+    } else if (hint.token) {
+      await listFolder({ rootId: null, path, token: hint.token, looksLikeServer: hint.looksLikeServer });
+    } else {
+      show({ kind: 'top' });
+    }
+  });
+  props.controls({ goTo });
+
+  const home = () => {
+    const only = single();
+    if (only) void goTo(only.displayPath);
+    else show({ kind: 'top' });
+  };
+  onSettled(home);
+
+  const enter = (entry: Folder) => {
+    const current = place();
+    if (!current) return;
+    const here = splitPath(current.path);
+    const path = joinPath(here.root, [...here.parts, entry.name]);
+    if (!entry.readable || !entry.folderToken) {
+      focusAfter = false;
+      setLockStill(false);
+      setLocked((open) => (open?.path === path ? null : { name: entry.name, path, command: entry.remediationCommand ?? importRootCommand(path) }));
+      return;
+    }
+    void run(() => listFolder({ rootId: current.rootId, path, token: entry.folderToken!, looksLikeServer: entry.looksLikeServer }));
+  };
+  const openRoot = (root: FolderRoot) => void goTo(root.displayPath);
+
+  const parent = () => {
+    const current = place();
+    if (!current) return null;
+    const split = splitPath(current.path);
+    return split.parts.length ? joinPath(split.root, split.parts.slice(0, -1)) : null;
+  };
+  const canGoUp = () => view().kind === 'folder' && (parent() !== null || !single());
+  const up = () => {
+    const target = parent();
+    if (target !== null && locate(target, props.roots)) void goTo(target);
+    else show({ kind: 'top' });
+  };
+
+  const more = () => {
+    const current = place();
+    if (!current?.cursor) return;
+    void run(async () => {
+      const page = await hostCommand((client) => client.folderList(props.hostId, current.token, current.cursor));
+      setView({ kind: 'folder', place: { ...current, entries: [...current.entries, ...page.entries], cursor: page.nextCursor } });
+    });
+  };
+
+  const recheckLocked = async () => {
+    const target = locked();
+    if (!target) return;
+    setLockChecking(true);
+    setLockStill(false);
+    const outcome = await checkPath(props.hostId, target.path);
+    setLockChecking(false);
+    if (outcome.kind === 'ok') { await goTo(outcome.path, { token: outcome.token }); return; }
+    if (outcome.kind === 'unsupported') {
+      // Older machines: read this folder again and open the locked one if it can be read now.
+      const current = place();
+      if (!current) return;
+      await run(() => listFolder({ rootId: current.rootId, path: current.path, token: current.token, looksLikeServer: current.looksLikeServer }));
+      const entry = place()?.entries.find((candidate) => candidate.name === target.name);
+      if (entry?.readable && entry.folderToken) enter(entry);
+      else { setLocked(target); setLockStill(true); }
+      return;
+    }
+    setLockStill(true);
+  };
+
+  /** The open folder: usable, why not, or still being checked. */
+  const use = (): FolderUse | 'checking' => {
+    const current = place();
+    if (!current) return { usable: false, reason: 'vesta-server.import.why-top' };
+    const known = folderUse({ top: isDriveRoot(current.path), looksLikeServer: current.looksLikeServer });
+    if (known) return known;
+    const asked = inspected();
+    return asked?.token === current.token ? asked.use : 'checking';
+  };
+  const usable = () => { const current = use(); return current !== 'checking' && current.usable; };
+
+  const crumbs = () => {
+    const current = place();
+    if (!current) return [];
+    const split = splitPath(current.path);
+    return split.parts.map((name, index) => ({ name, path: joinPath(split.root, split.parts.slice(0, index + 1)) }));
+  };
+  const driveLabel = () => splitPath(place()?.path ?? '/').root;
+
+  const rows = () => [...(list?.querySelectorAll<HTMLElement>('[data-vesta="vesta-folder"]') ?? [])];
+  const onListKey = (event: KeyboardEvent) => {
+    const all = rows();
+    const at = all.indexOf(document.activeElement as HTMLElement);
+    const move = (index: number) => { event.preventDefault(); all[Math.max(0, Math.min(index, all.length - 1))]?.focus(); };
+    switch (event.key) {
+      case 'ArrowDown': return move(at + 1);
+      case 'ArrowUp':
+        if (event.altKey) { event.preventDefault(); if (canGoUp()) { focusAfter = true; up(); } return; }
+        return move(at - 1);
+      case 'Home': return move(0);
+      case 'End': return move(all.length - 1);
+      case 'Backspace':
+      case 'ArrowLeft':
+        if (canGoUp()) { event.preventDefault(); focusAfter = true; up(); }
+        return;
+    }
+  };
+
+  return (
+    <div data-vesta="vesta-browser" aria-busy={loading() ? 'true' : undefined}>
+      <Show when={shortcuts().length > 0 && drives().length > 0}>
+        <div data-vesta="vesta-shortcuts" role="group" aria-label={t('vesta-server.import.shortcuts')}>
+          <span>{t('vesta-server.import.shortcuts')}</span>
+          <For each={shortcuts()} keyed={(root) => root.rootId}>
+            {(root) => (
+              <button type="button" data-vesta="vesta-shortcut" title={root().displayPath} disabled={!root().readable || loading()} onClick={() => openRoot(root())}>
+                <Icon name="icons/content/folder" size={14} />
+                <strong>{folderName(root().displayPath)}</strong>
+                <span>{root().displayPath}</span>
+              </button>
+            )}
+          </For>
         </div>
       </Show>
 
-      <section data-vesta="vesta-machines" aria-labelledby="vesta-found-heading">
-        <header><h2 id="vesta-found-heading">{t('vesta-server.import.found', { name: props.machine })}</h2></header>
-        <Show when={candidates()} fallback={<Working label={t('vesta-server.import.looking')} />}>
-          {(found) => (
-            <Show when={found().length > 0} fallback={<p data-vesta="server-muted">{t('vesta-server.import.found-none')}</p>}>
-              <ul>
-                <For each={found()}>
-                  {(candidate) => (
+      <div data-vesta="vesta-browser-frame">
+        <div data-vesta="vesta-browser-bar">
+          <nav data-vesta="breadcrumbs" aria-label={t('vesta-server.import.trail')}>
+            <ol data-vesta="breadcrumb-list">
+              <li data-vesta="breadcrumb-item">
+                <Show when={crumbs().length > 0 || (view().kind === 'folder' && !single())} fallback={
+                  <span data-vesta="breadcrumb-link" data-current aria-current="location"><Icon name="icons/content/server" size={14} />{props.machine}</span>
+                }>
+                  <button type="button" data-vesta="breadcrumb-link" disabled={loading()} onClick={() => (single() ? void goTo(single()!.displayPath) : show({ kind: 'top' }))}>
+                    <Icon name="icons/content/server" size={14} />{props.machine}
+                  </button>
+                  <span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span>
+                </Show>
+              </li>
+              <Show when={place() && !single()}>
+                <li data-vesta="breadcrumb-item">
+                  <Show when={crumbs().length > 0} fallback={<span data-vesta="breadcrumb-link" data-current aria-current="location">{driveLabel()}</span>}>
+                    <button type="button" data-vesta="breadcrumb-link" disabled={loading()} onClick={() => void goTo(driveLabel())}>{driveLabel()}</button>
+                    <span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span>
+                  </Show>
+                </li>
+              </Show>
+              <For each={crumbs()}>
+                {(crumb, index) => (
+                  <li data-vesta="breadcrumb-item">
+                    <Show when={index() < crumbs().length - 1} fallback={<span data-vesta="breadcrumb-link" data-current aria-current="location">{crumb.name}</span>}>
+                      <button type="button" data-vesta="breadcrumb-link" disabled={loading()} onClick={() => void goTo(crumb.path)}>{crumb.name}</button>
+                      <span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span>
+                    </Show>
+                  </li>
+                )}
+              </For>
+            </ol>
+          </nav>
+          <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-up" />} disabled={loading() || !canGoUp()} onClick={up}>{t('vesta-server.import.up')}</Button>
+        </div>
+
+        <Show when={!loading() || view().kind === 'folder'} fallback={<div data-vesta="vesta-browser-wait"><Working label={t('vesta-server.import.opening')} /></div>}>
+          <Switch>
+            <Match when={view().kind === 'top'}>
+              <ul ref={(element) => (list = element)} data-vesta="vesta-folders" aria-label={t('vesta-server.import.folders', { name: props.machine })} onKeyDown={onListKey}>
+                <For each={topRoots()} keyed={(root) => root.rootId} fallback={<li><p data-vesta="vesta-folders-empty">{t('vesta-server.import.no-roots', { name: props.machine })}</p></li>}>
+                  {(root, index) => (
                     <li>
-                      <button type="button" data-vesta="vesta-machine" disabled={!candidate.folderToken}
-                        onClick={() => candidate.folderToken && props.onPick({ token: candidate.folderToken, displayPath: candidate.displayPath, name: candidate.label })}>
-                        <Icon name="icons/content/folder" size={18} />
-                        <span data-vesta="vesta-machine-text">
-                          <strong>{candidate.label}</strong>
-                          <span>{candidate.displayPath}</span>
-                        </span>
-                        <Show when={candidate.kind === 'amp'}><Badge variant="soft">AMP</Badge></Show>
-                        <Icon name="icons/controls/chevron-right" size={16} />
+                      <button type="button" data-vesta="vesta-folder" tabindex={index() === active() ? 0 : -1} disabled={!root().readable}
+                        onFocus={() => setActive(index())} onClick={() => openRoot(root())}>
+                        <Icon name={isDriveRoot(root().displayPath) ? 'icons/content/storage' : 'icons/content/folder'} size={16} />
+                        <span data-vesta="vesta-folder-name">{folderName(root().displayPath)}</span>
+                        <Show when={!isDriveRoot(root().displayPath)}><span data-vesta="vesta-folder-path">{root().displayPath}</span></Show>
+                        <Icon name="icons/controls/chevron-right" size={14} />
                       </button>
                     </li>
                   )}
                 </For>
               </ul>
-            </Show>
-          )}
-        </Show>
-        <For each={warnings()}>
-          {(warning) => (
-            <div data-vesta="server-callout" data-tone="warning">
-              <p>{t(warningMessage(warning.code), { path: warning.displayPath })}</p>
-              <Show when={warning.command ?? (warning.code === 'source_unreadable' && warning.displayPath ? importRootCommand(warning.displayPath) : null)}>
-                {(command) => <CommandLine command={command()} />}
-              </Show>
-            </div>
-          )}
-        </For>
-      </section>
-
-      <section data-vesta="vesta-machines" aria-labelledby="vesta-browse-heading">
-        <header>
-          <h2 id="vesta-browse-heading">{t('vesta-server.import.browse', { name: props.machine })}</h2>
-        </header>
-        <Show when={browsing()} fallback={
-          <Show when={roots()} fallback={<Working label={t('vesta-server.import.looking')} />}>
-            {(shared) => (
-              <Show when={shared().length > 0} fallback={
-                <div data-vesta="vesta-hint">
-                  <p>{t('vesta-server.import.no-roots')}</p>
-                  <CommandLine command={importRootCommand('/path/to/server')} />
-                </div>
-              }>
-                <ul>
-                  <For each={shared()}>
-                    {(root) => (
+            </Match>
+            <Match when={place()}>
+              {(current) => (
+                <ul ref={(element) => (list = element)} data-vesta="vesta-folders" aria-label={t('vesta-server.import.folders', { name: folderName(current().path) })}
+                  data-loading={loading() ? '' : undefined} onKeyDown={onListKey}>
+                  <For each={current().entries} keyed={(entry) => entry.name} fallback={<li><p data-vesta="vesta-folders-empty">{t('vesta-server.import.empty-folder')}</p></li>}>
+                    {(entry, index) => (
                       <li>
-                        <button type="button" data-vesta="vesta-machine" disabled={!root.readable || loading()} onClick={() => void open(root.rootId, root.label, [])}>
-                          <Icon name="icons/content/storage" size={18} />
-                          <span data-vesta="vesta-machine-text"><strong>{root.label}</strong><span>{root.displayPath}</span></span>
-                          <Icon name="icons/controls/chevron-right" size={16} />
+                        <button type="button" data-vesta="vesta-folder" data-locked={entry().readable ? undefined : ''}
+                          tabindex={index() === active() ? 0 : -1} aria-disabled={loading() ? 'true' : undefined}
+                          aria-expanded={entry().readable ? undefined : locked()?.name === entry().name ? 'true' : 'false'}
+                          onFocus={() => setActive(index())}
+                          onClick={() => { if (!loading()) { focusAfter = true; enter(entry()); } }}>
+                          <Icon name={entry().readable ? 'icons/content/folder' : 'icons/security/folder-lock'} size={16} />
+                          <span data-vesta="vesta-folder-name">{entry().name}</span>
+                          <Show when={entry().looksLikeServer}><Badge tone="accent" size="sm">{t('vesta-server.import.server-badge')}</Badge></Show>
+                          <Show when={!entry().readable}><Badge tone="warning" size="sm">{t('vesta-server.import.needs-permission')}</Badge></Show>
+                          <Icon name="icons/controls/chevron-right" size={14} />
                         </button>
                       </li>
                     )}
                   </For>
+                  <Show when={current().cursor}>
+                    <li><Button size="sm" variant="ghost" disabled={loading()} onClick={more}>{t('vesta-server.import.more')}</Button></li>
+                  </Show>
                 </ul>
-              </Show>
-            )}
-          </Show>
-        }>
-          {(current) => (
-            <div data-vesta="vesta-browser" aria-busy={loading() ? 'true' : undefined}>
-              <div data-vesta="vesta-browser-bar">
-                <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-up" />} disabled={loading()} onClick={up}>{t('vesta-server.import.up')}</Button>
-                <code>{current().displayPath}</code>
-              </div>
-              <ul>
-                <For each={current().entries} fallback={<li><p data-vesta="server-muted">{t('vesta-server.import.empty-folder')}</p></li>}>
-                  {(entry) => (
-                    <li>
-                      <button type="button" data-vesta="vesta-folder" disabled={!entry.readable || !entry.folderToken || loading()} onClick={() => enter(entry)}>
-                        <Icon name={entry.readable ? 'icons/content/folder' : 'icons/security/folder-lock'} size={16} />
-                        <span>{entry.name}</span>
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </ul>
-              <Show when={current().cursor}>
-                {(cursor) => <Button size="sm" variant="ghost" disabled={loading()} onClick={() => void list(current(), cursor())}>{t('vesta-server.import.more')}</Button>}
-              </Show>
-              <Button tone="accent" disabled={loading() || !current().path.length}
-                onClick={() => props.onPick({ token: current().token, displayPath: current().displayPath, name: lastSegment(current().displayPath) })}>
-                {t('vesta-server.import.use-folder')}
-              </Button>
+              )}
+            </Match>
+          </Switch>
+        </Show>
+
+        <Show when={locked()}>
+          {(target) => (
+            <div data-vesta="vesta-browser-locked">
+              <PermissionHelp name={target().path} machine={props.machine} command={target().command} checking={lockChecking()} still={lockStill()}
+                onCheck={() => void recheckLocked()} />
             </div>
           )}
         </Show>
-      </section>
 
-      <footer>
-        <Button variant="ghost" onClick={props.onBack}>{t('common.back')}</Button>
-      </footer>
+        <Show when={error()}>
+          {(problem) => (
+            <div data-vesta="vesta-browser-locked">
+              <div data-vesta="server-callout" data-tone="danger" role="alert">
+                <p>{t(importProblem(problem()))}</p>
+                <Button size="sm" onClick={home}>{t('common.retry')}</Button>
+              </div>
+            </div>
+          )}
+        </Show>
+
+        <div data-vesta="vesta-use">
+          <p id={noteId} data-vesta="vesta-note" data-tone={usable() ? 'success' : undefined} aria-live="polite">
+            <Switch>
+              <Match when={use() === 'checking'}>
+                <span data-vesta="vesta-spinner" aria-hidden="true" />{t('vesta-server.import.folder-checking')}
+              </Match>
+              <Match when={usable()}>
+                <Icon name="icons/controls/success" size={16} />{t('vesta-server.import.folder-ready')}
+              </Match>
+              <Match when={use() as Extract<FolderUse, { usable: false }>}>
+                {(why) => <span>{t(why().reason)}</span>}
+              </Match>
+            </Switch>
+          </p>
+          <Button tone="accent" disabled={loading() || !usable()} aria-describedby={noteId}
+            onClick={() => { const current = place(); if (current) props.onPick({ token: current.token, displayPath: current.path, name: lastSegment(current.path) }); }}>
+            {t('vesta-server.import.use-folder')}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -332,6 +701,11 @@ const MIB = 1024 * 1024;
 
 function Review(props: { hostId: string; machine: string; task: ImportTask; review: ImportReview; onBack: () => void }) {
   const summary = createMemo(() => reviewSummary(props.review), { name: 'host-import:summary' });
+  const fixes = createMemo(() => {
+    const missing = readNotServer(props.review).missing;
+    const codes = props.review.blockers.length ? props.review.blockers : ['unknown'];
+    return codes.map((code) => blockerFix(code, props.review.source.displayPath, missing));
+  }, { name: 'host-import:fixes' });
   const blocked = () => props.review.blockers.length > 0 || !props.review.confirmation;
   const [name, setName] = createSignal(untrack(() => props.task.name), { name: 'host-import:name' });
   const [port, setPort] = createSignal(untrack(() => summary().gamePort), { name: 'host-import:port' });
@@ -351,44 +725,57 @@ function Review(props: { hostId: string; machine: string; task: ImportTask; revi
   const allAcknowledged = () => props.review.warnings.every((code) => acknowledged().includes(code));
   const ready = () => !blocked() && !changed() && allAcknowledged() && stopped() && eula() && !props.task.sending;
   const busy = () => props.task.sending !== null;
+  const values = () => ({ port: summary().gamePort, size: formatBytes(summary().bytes), free: formatBytes(summary().freeBytes), name: props.machine });
 
   return (
     <div data-vesta="server-add-panel">
-      <h1>{t('vesta-server.import.review-title', { name: props.task.name })}</h1>
+      <header data-vesta="vesta-step-intro">
+        <h1>{t('vesta-server.import.review-title', { name: props.task.name })}</h1>
+        <p data-vesta="vesta-from"><Icon name="icons/content/folder" size={14} /><code>{props.review.source.displayPath}</code></p>
+      </header>
+
       <dl data-vesta="server-add-facts">
         <dt>{t('vesta-server.import.software')}</dt><dd>{summary().software ?? t('vesta-server.import.unknown')}</dd>
         <dt>{t('vesta-server.import.minecraft')}</dt><dd>{summary().minecraftVersion ?? t('vesta-server.import.unknown')}</dd>
         <dt>{t('vesta-server.import.size')}</dt><dd>{formatBytes(summary().bytes)}</dd>
         <dt>{t('vesta-server.import.port')}</dt><dd>{summary().gamePort}</dd>
-        <dt>{t('vesta-server.import.from')}</dt><dd><code>{props.review.source.displayPath}</code></dd>
+        <dt>{t('vesta-server.import.memory')}</dt><dd>{formatBytes(summary().memoryMiB * MIB)}</dd>
+        <dt>{t('vesta-server.import.java')}</dt><dd>{summary().javaMajor ? t('vesta-server.import.java-auto-version', { version: String(summary().javaMajor) }) : t('vesta-server.import.java-auto')}</dd>
       </dl>
 
-      <Show when={blocked()}>
-        <section data-vesta="vesta-blockers" aria-labelledby="vesta-blockers-heading">
+      <Show when={blocked()} fallback={
+        <section data-vesta="vesta-section" aria-labelledby="vesta-confirm-heading">
+          <h2 id="vesta-confirm-heading">{t('vesta-server.import.before-copy')}</h2>
+          <div data-vesta="vesta-confirm">
+            <For each={props.review.warnings}>
+              {(code) => (
+                <Checkbox checked={acknowledged().includes(code)} label={t(warningMessage(code))}
+                  onChange={(checked) => setAcknowledged((current) => (checked ? [...current, code] : current.filter((entry) => entry !== code)))} />
+              )}
+            </For>
+            <Checkbox checked={stopped()} onChange={setStopped} label={t('vesta-server.import.stopped')} />
+            <div data-vesta="vesta-eula">
+              <Checkbox checked={eula()} onChange={setEula} label={t('vesta-server.import.eula')} />
+              <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal('https://aka.ms/MinecraftEULA'); }}>{t('servers.eula.read')}</a>
+            </div>
+          </div>
+          <p data-vesta="vesta-note" data-tone="success"><Icon name="icons/security/shield-check" size={16} />{t('vesta-server.import.untouched')}</p>
+        </section>
+      }>
+        <section data-vesta="vesta-section" aria-labelledby="vesta-blockers-heading">
           <h2 id="vesta-blockers-heading">{t('vesta-server.import.blocked')}</h2>
-          <ul>
-            <For each={props.review.blockers}>
-              {(code) => {
-                const fix = blockerFix(code, props.review.source.displayPath);
-                return (
-                  <li data-vesta="server-callout" data-tone="warning">
-                    <p>{t(fix.message, { port: summary().gamePort, size: formatBytes(summary().bytes), free: formatBytes(summary().freeBytes) })}</p>
-                    <Show when={fix.command}>{(command) => <CommandLine command={command()} />}</Show>
-                    <Show when={fix.customize}><Button size="sm" variant="outline" onClick={() => setCustomize(true)}>{t('vesta-server.import.customize')}</Button></Show>
-                  </li>
-                );
-              }}
+          <ul data-vesta="vesta-blockers">
+            <For each={fixes()}>
+              {(fix) => (
+                <li data-vesta="server-callout" data-tone="warning">
+                  <p>{t(fix.message, values())}</p>
+                  <Show when={fix.command}>{(command) => <CommandLine command={command()} />}</Show>
+                  <Show when={fix.customize}><Button size="sm" variant="outline" onClick={() => setCustomize(true)}>{t('vesta-server.import.customize')}</Button></Show>
+                </li>
+              )}
             </For>
           </ul>
         </section>
-      </Show>
-
-      <Show when={!blocked()}>
-        <dl data-vesta="server-add-facts">
-          <dt>{t('vesta-server.import.name')}</dt><dd>{props.task.name}</dd>
-          <dt>{t('vesta-server.import.memory')}</dt><dd>{formatBytes(summary().memoryMiB * MIB)}</dd>
-          <dt>{t('vesta-server.import.java')}</dt><dd>{summary().javaMajor ? t('vesta-server.import.java-auto-version', { version: String(summary().javaMajor) }) : t('vesta-server.import.java-auto')}</dd>
-        </dl>
       </Show>
 
       <details data-vesta="vesta-customize" open={customize()} onToggle={(event) => setCustomize(event.currentTarget.open)}>
@@ -401,25 +788,10 @@ function Review(props: { hostId: string; machine: string; task: ImportTask; revi
         </div>
       </details>
 
-      <Show when={!blocked()}>
-        <For each={props.review.warnings}>
-          {(code) => (
-            <Checkbox checked={acknowledged().includes(code)} label={t(warningMessage(code), { path: props.review.source.displayPath })}
-              onChange={(checked) => setAcknowledged((current) => (checked ? [...current, code] : current.filter((entry) => entry !== code)))} />
-          )}
-        </For>
-        <p data-vesta="server-callout" data-tone="success"><Icon name="icons/security/shield-check" /> {t('vesta-server.import.untouched')}</p>
-        <Checkbox checked={stopped()} onChange={setStopped} label={t('vesta-server.import.stopped')} />
-        <div data-vesta="vesta-eula">
-          <Checkbox checked={eula()} onChange={setEula} label={t('vesta-server.import.eula')} />
-          <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal('https://aka.ms/MinecraftEULA'); }}>{t('servers.eula.read')}</a>
-        </div>
-      </Show>
-
       <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(error()))}</p>}</Show>
 
       <footer>
-        <Button variant="ghost" disabled={busy()} onClick={props.onBack}>{t('common.back')}</Button>
+        <Button variant="ghost" disabled={busy()} onClick={props.onBack}>{t('vesta-server.import.start-over')}</Button>
         <Show when={blocked() || changed()} fallback={
           <Button tone="accent" disabled={!ready()} onClick={() => void applyImport(props.hostId, acknowledged())}>
             {props.task.sending === 'apply' ? t('vesta-server.import.copy-starting') : t('vesta-server.import.copy')}
@@ -458,7 +830,7 @@ function Progressing(props: { hostId: string; machine: string; task: ImportTask;
       <Switch>
         <Match when={state() === 'applying' || state() === 'interrupted'}>
           <h1>{t(state() === 'interrupted' ? 'vesta-server.import.paused-title' : 'vesta-server.import.copying-title', { name: name() })}</h1>
-          <Progress value={percent() ?? undefined} label={t('vesta-server.import.copying')} valueLabel={percent() == null ? undefined : `${Math.floor(percent()!)}%`} />
+          <Progress value={percent() ?? undefined} label={t(importPhase(job()?.phase))} valueLabel={percent() == null ? undefined : `${Math.floor(percent()!)}%`} />
           <Show when={progress()?.bytesTotal}>
             <p data-vesta="server-muted">{t('vesta-server.import.copied-bytes', {
               done: formatBytes(progress()!.bytesDone), total: formatBytes(progress()!.bytesTotal),
@@ -506,7 +878,7 @@ function Progressing(props: { hostId: string; machine: string; task: ImportTask;
             <Button tone="accent" disabled={busy()} onClick={() => void resumeImport(props.hostId)}>{t('vesta-server.import.resume')}</Button>
           </Match>
           <Match when={state() === 'ready'}>
-            <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('vesta-server.done.later')}</Button>
+            <Button variant="ghost" disabled={busy() || opening()} onClick={() => void open()}>{t('servers.open')}</Button>
             <Button tone="accent" disabled={busy()} icon={<Icon name="icons/actions/play" />} onClick={() => void startImport(props.hostId)}>{t('vesta-server.import.start')}</Button>
           </Match>
           <Match when={state() === 'starting'}>

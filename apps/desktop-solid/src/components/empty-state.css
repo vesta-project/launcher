@@ -3,7 +3,7 @@
  * where that content would start (the page gutter, or the row inset of a list)
  * instead of floating in the middle of the void.
  *
- * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -title
+ * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -heading -title
  *         -description -actions -suggestions -suggestions-label -suggestion
  *         -suggestion-icon -suggestion-text -suggestion-label -suggestion-description
  *         [data-vesta=empty-line]
@@ -48,6 +48,13 @@
     gap: var(--vesta-space-1);
     min-inline-size: 0;
     max-inline-size: 60ch;
+  }
+
+  :where([data-vesta='empty-state-heading']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-1) var(--vesta-space-3);
   }
 
   :where([data-vesta='empty-state-title']) {

@@ -17,6 +17,8 @@ export interface EmptyStateProps {
   /** Bundled icon name. Optional: a title alone is often enough inline. */
   icon?: string;
   title: string;
+  /** A small status beside the title, e.g. whether a machine is online. */
+  status?: JSX.Element;
   /** What will appear here, and how it gets here. Muted, one or two sentences. */
   description?: string;
   /**
@@ -41,6 +43,7 @@ export interface EmptyStateProps {
 export function EmptyState(props: EmptyStateProps) {
   // Slots are resolved once; reading a JSX prop twice would create it twice.
   const actions = children(() => props.children);
+  const status = children(() => props.status);
   return (
     <div data-vesta="empty-state" data-variant={props.variant ?? 'page'} class={props.class}>
       <Show when={props.icon}>
@@ -51,7 +54,12 @@ export function EmptyState(props: EmptyStateProps) {
         )}
       </Show>
       <div data-vesta="empty-state-body">
-        <h2 data-vesta="empty-state-title">{props.title}</h2>
+        <Show when={status()} fallback={<h2 data-vesta="empty-state-title">{props.title}</h2>}>
+          <div data-vesta="empty-state-heading">
+            <h2 data-vesta="empty-state-title">{props.title}</h2>
+            {status()}
+          </div>
+        </Show>
         <Show when={props.description}>
           <p data-vesta="empty-state-description">{props.description}</p>
         </Show>

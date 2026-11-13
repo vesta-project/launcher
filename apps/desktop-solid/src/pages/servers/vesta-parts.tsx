@@ -6,6 +6,7 @@ import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
 import { copyText } from '../../platform/clipboard';
 import { CODE_LENGTH, backspaceCode, canonicalCode, codeGroups, typeIntoCode } from '../../features/servers/host-model';
+import { hostReach } from '../../features/servers/hosts-store';
 
 /** A command to run on the machine, with a copy button. */
 export function CommandLine(props: { command: string }) {
@@ -75,9 +76,16 @@ export function CodeInput(props: {
     input?.focus();
     input?.select();
   };
+  // Signal writes land after this handler, so focus logic reads the value just written, not the stale prop.
+  let pending: string | undefined;
+  const current = () => {
+    if (pending !== undefined && pending === props.value) pending = undefined;
+    return pending ?? props.value;
+  };
+  const change = (value: string) => { pending = value; props.onChange(value); };
   const commit = (value: string, focus: number) => {
-    const before = props.value;
-    props.onChange(value);
+    const before = current();
+    change(value);
     focusCell(focus);
     if (value.length === CODE_LENGTH && value !== before) props.onComplete?.(value);
   };
@@ -98,41 +106,41 @@ export function CodeInput(props: {
     reject: () => {
       shake(group);
       clearTimeout(clearTimer);
-      clearTimer = setTimeout(() => { props.onChange(''); focusCell(0); }, reducedMotion() ? 0 : 320);
+      clearTimer = setTimeout(() => { change(''); focusCell(0); }, reducedMotion() ? 0 : 320);
     },
-    focus: () => focusCell(props.value.length),
+    focus: () => focusCell(current().length),
   });
 
   onSettled(() => { if (untrack(() => props.autofocus)) focusCell(untrack(() => props.value.length)); });
 
   const onInput = (index: number, event: InputEvent & { currentTarget: HTMLInputElement }) => {
     const input = event.currentTarget;
-    const previous = props.value[index] ?? '';
+    const previous = current()[index] ?? '';
     const typed = input.value;
     input.value = previous; // the cell shows the model, never raw input
     if (locked()) return;
     const incoming = previous && typed.length === 2 && typed.includes(previous) ? typed.replace(previous, '') : typed;
-    if (!incoming) return commit(props.value.slice(0, index) + props.value.slice(index + 1), index);
+    if (!incoming) return commit(current().slice(0, index) + current().slice(index + 1), index);
     if (incoming.length > 1) return paste(incoming, input); // autofill or a fast IME burst
-    const next = typeIntoCode(props.value, index, incoming);
+    const next = typeIntoCode(current(), index, incoming);
     if (!next) return refuse(input);
     commit(next.value, next.focus);
   };
 
   const onKeyDown = (index: number, event: KeyboardEvent) => {
     if (locked()) return;
-    const move = (to: number) => { event.preventDefault(); focusCell(Math.min(to, props.value.length)); };
+    const move = (to: number) => { event.preventDefault(); focusCell(Math.min(to, current().length)); };
     switch (event.key) {
       case 'Backspace': {
         event.preventDefault();
-        const next = backspaceCode(props.value, index);
-        props.onChange(next.value);
+        const next = backspaceCode(current(), index);
+        change(next.value);
         focusCell(next.focus);
         return;
       }
       case 'Delete':
         event.preventDefault();
-        props.onChange(props.value.slice(0, index) + props.value.slice(index + 1));
+        change(current().slice(0, index) + current().slice(index + 1));
         return;
       case 'ArrowLeft': return move(index - 1);
       case 'ArrowRight': return move(index + 1);
@@ -167,7 +175,7 @@ export function CodeInput(props: {
                     autocomplete={index === 0 ? 'one-time-code' : 'off'}
                     spellcheck={false}
                     onFocus={(event) => {
-                      if (index > props.value.length) focusCell(props.value.length);
+                      if (index > current().length) focusCell(current().length);
                       else event.currentTarget.select();
                     }}
                     onInput={(event) => onInput(index, event)}
@@ -203,6 +211,18 @@ export function Steps<T extends string>(props: { steps: readonly { id: T; label:
         </For>
       </ol>
     </nav>
+  );
+}
+
+const reachLabels = { checking: 'vesta-server.list.checking', online: 'vesta-server.list.online', offline: 'vesta-server.list.offline' } as const satisfies Record<string, MessageId>;
+
+/** A small online or offline light for a machine, from its last servers read. */
+export function Reach(props: { hostId: string }) {
+  return (
+    <span data-vesta="vesta-reach" data-state={hostReach(props.hostId)}>
+      <span data-vesta="vesta-reach-dot" aria-hidden="true" />
+      {t(reachLabels[hostReach(props.hostId)])}
+    </span>
   );
 }
 

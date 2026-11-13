@@ -175,50 +175,66 @@ export function hostRoleLabel(role: string | null | undefined): MessageId {
 
 export const canManageHost = (role: string | null | undefined) => role === 'primary_owner' || role === 'owner';
 
-// ------------------------------------------------------------------ import review
-
-export interface ImportCandidate {
-  candidateId: string;
-  kind: 'amp' | 'minecraft';
-  label: string;
-  displayPath: string;
-  folderToken: string | null;
-}
-
-export interface CandidateWarning { code: string; displayPath: string; command: string | null }
+// ------------------------------------------------------------------ import: finding a folder
 
 const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
 
-/** Server reply to candidate rows, AMP first. Malformed rows are dropped, never guessed at. */
-export function readCandidates(reply: { candidates?: unknown; warnings?: unknown } | null | undefined): { candidates: ImportCandidate[]; warnings: CandidateWarning[] } {
-  const rows = Array.isArray(reply?.candidates) ? reply.candidates : [];
-  const candidates = rows.flatMap((row): ImportCandidate[] => {
-    const value = row as Record<string, unknown>;
-    const displayPath = text(value?.displayPath);
-    if (!displayPath) return [];
-    return [{
-      candidateId: text(value.candidateId) ?? displayPath,
-      kind: value.kind === 'amp' ? 'amp' : 'minecraft',
-      label: text(value.label) ?? lastSegment(displayPath),
-      displayPath,
-      folderToken: text(value.folderToken),
-    }];
-  }).sort((a, b) => Number(b.kind === 'amp') - Number(a.kind === 'amp') || a.label.localeCompare(b.label));
-  const warnings = (Array.isArray(reply?.warnings) ? reply.warnings : []).flatMap((row): CandidateWarning[] => {
-    const value = row as Record<string, unknown>;
-    const code = text(value?.code);
-    if (!code) return [];
-    const remediation = value.remediation as Record<string, unknown> | null | undefined;
-    return [{ code, displayPath: text(value.displayPath) ?? '', command: text(remediation?.command) }];
-  });
-  return { candidates, warnings };
+const SOFTWARE: Record<string, string> = {
+  vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge',
+  paper: 'Paper', purpur: 'Purpur', spigot: 'Spigot', bukkit: 'Bukkit', folia: 'Folia', velocity: 'Velocity',
+};
+const softwareName = (value: string | null) => (value ? SOFTWARE[value.toLowerCase()] ?? value : null);
+
+export interface ImportCandidate {
+  candidateId: string;
+  label: string;
+  displayPath: string;
+  /** Null when Vesta Server can see the folder but can't read it yet. */
+  folderToken: string | null;
+  /** What a local admin runs so Vesta Server can read it; set only when it can't. */
+  command: string | null;
+  software: string | null;
+  bytes: number | null;
 }
 
+/**
+ * Likely servers from the machine, ready ones first. Malformed rows are dropped, never guessed
+ * at. Machine wide warnings (a default location that isn't readable) are not shown: only a
+ * specific found server can need permission. `truncated` means the search stopped early.
+ */
+export function readCandidates(reply: { candidates?: unknown; warnings?: unknown } | null | undefined): { candidates: ImportCandidate[]; truncated: boolean } {
+  const rows = Array.isArray(reply?.candidates) ? reply.candidates : [];
+  const candidates = rows.flatMap((row): ImportCandidate[] => {
+    const value = row as Record<string, unknown> | null;
+    const displayPath = text(value?.displayPath);
+    if (!value || !displayPath) return [];
+    const folderToken = text(value.folderToken);
+    return [{
+      candidateId: text(value.candidateId) ?? displayPath,
+      label: text(value.label) ?? folderName(displayPath),
+      displayPath,
+      folderToken,
+      command: folderToken ? null : text(value.remediationCommand) ?? importRootCommand(displayPath),
+      software: softwareName(text(value.loader) ?? text(value.software)),
+      bytes: typeof value.bytes === 'number' && value.bytes > 0 ? value.bytes : null,
+    }];
+  }).sort((a, b) => Number(!a.folderToken) - Number(!b.folderToken) || a.label.localeCompare(b.label));
+  const warnings = Array.isArray(reply?.warnings) ? reply.warnings : [];
+  const truncated = warnings.some((row) => (row as Record<string, unknown> | null)?.code === 'scan_truncated');
+  return { candidates, truncated };
+}
+
+/** The name a new server gets from its folder. A bare `minecraft` folder takes its parent's name. */
 export function lastSegment(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-  // AMP keeps the server one level below the instance: name it after the instance.
+  const parts = splitPath(path).parts;
   const last = parts.at(-1) ?? path;
   return last.toLowerCase() === 'minecraft' && parts.length > 1 ? parts.at(-2)! : last;
+}
+
+/** A folder's own name; the top of a drive is its path. */
+export function folderName(path: string): string {
+  const split = splitPath(path);
+  return split.parts.at(-1) ?? split.root;
 }
 
 /** The local admin command that lets Vesta Server read a folder. Windows has no sudo. */
@@ -226,6 +242,126 @@ export function importRootCommand(path: string): string {
   if (/^[A-Za-z]:[\\/]/.test(path)) return `vesta import-root add ${/\s/.test(path) ? `"${path}"` : path}`;
   return `sudo vesta import-root add ${/[\s"'$`\\]/.test(path) ? `"${path.replace(/(["\\$`])/g, '\\$1')}"` : path}`;
 }
+
+// ------------------------------------------------------------------ import: paths on the machine
+
+export interface SplitPath { root: string; parts: string[] }
+
+/** `/srv/a/b` or `D:\games\a`, split into its top (`/`, `D:\`) and folder names. */
+export function splitPath(path: string): SplitPath {
+  const drive = /^([A-Za-z]):(?:[\\/]|$)/.exec(path);
+  const root = drive ? `${drive[1]!.toUpperCase()}:\\` : '/';
+  const rest = drive ? path.slice(drive[0].length) : path;
+  return { root, parts: rest.split(/[\\/]+/).filter(Boolean) };
+}
+
+export function joinPath(root: string, parts: readonly string[]): string {
+  return root + parts.join(root === '/' ? '/' : '\\');
+}
+
+/** A pasted path, tidied: quotes and trailing separators dropped. Null unless it's absolute. */
+export function normalisePath(input: string): string | null {
+  const trimmed = input.trim().replace(/^(["'])(.*)\1$/, '$2').trim();
+  if (!trimmed.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(trimmed)) return null;
+  const split = splitPath(trimmed);
+  if (split.parts.some((part) => part === '..' || part === '.')) return null;
+  return joinPath(split.root, split.parts);
+}
+
+const samePart = (root: string) => (a: string, b: string) => (root === '/' ? a === b : a.toLowerCase() === b.toLowerCase());
+
+/** Is `path` the folder `base` or somewhere inside it? Returns the names below `base`. */
+export function below(base: string, path: string): string[] | null {
+  const outer = splitPath(base);
+  const inner = splitPath(path);
+  if (outer.root !== inner.root || outer.parts.length > inner.parts.length) return null;
+  const same = samePart(outer.root);
+  return outer.parts.every((part, index) => same(part, inner.parts[index]!)) ? inner.parts.slice(outer.parts.length) : null;
+}
+
+/** A folder at the very top of a drive (`/`, `C:\`). */
+export const isDriveRoot = (path: string) => splitPath(path).parts.length === 0;
+
+export interface BrowseRoot { rootId: string; displayPath: string; readable: boolean }
+
+/**
+ * The root to open `path` through: the preferred one when it holds the path, otherwise the
+ * deepest readable root that does (a shared folder is readable even where its parents aren't).
+ */
+export function locate<R extends BrowseRoot>(path: string, roots: readonly R[], prefer?: string | null): { root: R; segments: string[] } | null {
+  const holding = roots.flatMap((root) => {
+    const segments = root.readable ? below(root.displayPath, path) : null;
+    return segments ? [{ root, segments }] : [];
+  });
+  return holding.find((entry) => entry.root.rootId === prefer)
+    ?? holding.sort((a, b) => a.segments.length - b.segments.length)[0]
+    ?? null;
+}
+
+// ------------------------------------------------------------------ import: can this folder be used?
+
+export type ServerPart = 'server_properties' | 'server_jar' | 'world';
+
+/** Why a folder isn't a server, in the order a person would fix it. */
+const MISSING_REASONS: [ServerPart, MessageId][] = [
+  ['server_properties', 'vesta-server.import.why-no-server-file'],
+  ['server_jar', 'vesta-server.import.why-no-jar'],
+  ['world', 'vesta-server.import.why-no-world'],
+];
+
+export type FolderUse = { usable: true } | { usable: false; reason: MessageId };
+
+/** What the launcher knows about the open folder. Null means ask the machine. */
+export function folderUse(folder: { top?: boolean; looksLikeServer?: boolean; missing?: readonly string[] | null }): FolderUse | null {
+  if (folder.top) return { usable: false, reason: 'vesta-server.import.why-top' };
+  if (folder.missing?.length) {
+    const reason = MISSING_REASONS.find(([part]) => folder.missing!.includes(part))?.[1] ?? 'vesta-server.import.why-no-server-file';
+    return { usable: false, reason };
+  }
+  if (folder.looksLikeServer === true) return { usable: true };
+  if (folder.looksLikeServer === false) return { usable: false, reason: 'vesta-server.import.why-no-server-file' };
+  return null;
+}
+
+const codeOf = (entry: unknown) => (typeof entry === 'string' ? entry : text((entry as Record<string, unknown> | null)?.code));
+const parts = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []);
+
+/**
+ * `not_minecraft_server` and what's missing, from an inspection report or an import review.
+ * The machine may put `missing` at the top, on the blocker itself, or under `inspection`.
+ */
+export function readNotServer(report: unknown): { notServer: boolean; missing: string[] } {
+  const value = (report ?? {}) as Record<string, unknown>;
+  const blockers = Array.isArray(value.blockers) ? value.blockers : [];
+  const blocker = blockers.find((entry) => codeOf(entry) === 'not_minecraft_server');
+  if (blocker === undefined) return { notServer: false, missing: [] };
+  const nested = [blocker, value, value.inspection, value.detected].map((entry) => parts((entry as Record<string, unknown> | null)?.missing));
+  const missing = nested.find((list) => list.length) ?? [];
+  return { notServer: true, missing: missing.length ? missing : ['server_properties'] };
+}
+
+export type CheckOutcome =
+  | { kind: 'ok'; path: string; token: string }
+  | { kind: 'permission'; path: string; command: string }
+  | { kind: 'problem'; path: string; message: MessageId };
+
+const CHECK_PROBLEMS: Record<string, MessageId> = {
+  not_found: 'vesta-server.import.path-not-found',
+  not_directory: 'vesta-server.import.path-not-folder',
+  protected: 'vesta-server.import.path-protected',
+};
+
+/** The machine's answer about a typed path, or an honest fallback for anything unexpected. */
+export function readFolderCheck(reply: unknown, typed: string): CheckOutcome {
+  const value = (reply ?? {}) as Record<string, unknown>;
+  const path = text(value.path) ?? typed;
+  const token = text(value.folderToken);
+  if (value.status === 'ok' && token) return { kind: 'ok', path, token };
+  if (value.status === 'permission_needed') return { kind: 'permission', path, command: text(value.remediationCommand) ?? importRootCommand(typed) };
+  return { kind: 'problem', path, message: CHECK_PROBLEMS[String(value.status)] ?? 'vesta-server.import.path-not-found' };
+}
+
+// ------------------------------------------------------------------ import: review
 
 export interface BlockerFix {
   code: string;
@@ -245,8 +381,8 @@ const blockerMessages: Record<string, MessageId> = {
   port_unresolved: 'vesta-server.blocker.port-unknown',
   insufficient_space: 'vesta-server.blocker.disk',
   software_unresolved: 'vesta-server.blocker.software',
-  launch_unresolved: 'vesta-server.blocker.software',
-  java_unresolved: 'vesta-server.blocker.software',
+  launch_unresolved: 'vesta-server.blocker.launch',
+  java_unresolved: 'vesta-server.blocker.java',
   not_minecraft_server: 'vesta-server.blocker.not-minecraft',
   memory_budget_exceeded: 'vesta-server.blocker.memory',
   memory_invalid: 'vesta-server.blocker.memory',
@@ -255,21 +391,28 @@ const blockerMessages: Record<string, MessageId> = {
   source_too_large: 'vesta-server.blocker.too-large',
   unsafe_path: 'vesta-server.blocker.unsafe',
 };
+/** Every blocker code the machine documents; each has its own line above. */
+export const KNOWN_BLOCKERS = Object.keys(blockerMessages);
+
+const CUSTOMIZE = ['game_port_in_use', 'port_unresolved', 'port_state_unknown', 'memory_budget_exceeded', 'memory_invalid'];
 
 /** One plain fix per blocker code; unknown codes still get a readable line. */
-export function blockerFix(code: string, sourcePath: string): BlockerFix {
+export function blockerFix(code: string, sourcePath: string, missing: readonly string[] = []): BlockerFix {
+  if (code === 'not_minecraft_server' && missing.length) {
+    const use = folderUse({ missing });
+    if (use && !use.usable) return { code, message: use.reason };
+  }
   const message = blockerMessages[code] ?? 'vesta-server.blocker.other';
   if (code === 'source_unreadable') return { code, message, command: importRootCommand(sourcePath) };
-  if (code === 'game_port_in_use' || code === 'memory_budget_exceeded' || code === 'memory_invalid') return { code, message, customize: true };
+  if (CUSTOMIZE.includes(code)) return { code, message, customize: true };
   return { code, message };
 }
 
 const warningMessages: Record<string, MessageId> = {
-  disable_amp_auto_restart: 'vesta-server.warning.amp-restart',
-  source_unreadable: 'vesta-server.warning.unreadable',
-  outside_import_roots: 'vesta-server.warning.outside',
-  scan_truncated: 'vesta-server.warning.truncated',
+  disable_amp_auto_restart: 'vesta-server.warning.auto-restart',
+  rcon_disabled: 'vesta-server.warning.rcon',
 };
+export const KNOWN_WARNINGS = Object.keys(warningMessages);
 export const warningMessage = (code: string): MessageId => warningMessages[code] ?? 'vesta-server.warning.other';
 
 export interface ReviewSummary {
@@ -284,18 +427,13 @@ export interface ReviewSummary {
   freeBytes: number;
 }
 
-const SOFTWARE: Record<string, string> = {
-  vanilla: 'Vanilla', fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge',
-  paper: 'Paper', purpur: 'Purpur', spigot: 'Spigot', bukkit: 'Bukkit', folia: 'Folia', velocity: 'Velocity',
-};
-
 export function reviewSummary(review: ImportReview): ReviewSummary {
   const detected = (review.detected ?? {}) as Record<string, unknown>;
   const runtime = (review.runtime ?? {}) as Record<string, unknown>;
   const loader = text(detected.loader) ?? text(detected.software);
   const minecraftVersion = text(detected.minecraftVersion);
   return {
-    software: loader ? SOFTWARE[loader.toLowerCase()] ?? loader : minecraftVersion ? SOFTWARE.vanilla! : null,
+    software: softwareName(loader) ?? (minecraftVersion ? SOFTWARE.vanilla! : null),
     minecraftVersion,
     instanceName: text(detected.instanceName),
     bytes: review.source.bytes,
@@ -320,26 +458,49 @@ export function importPercent(progress: ImportJob['progress'] | null | undefined
   return null;
 }
 
+/** What the machine is doing during a copy, in words. */
+export function importPhase(phase: string | null | undefined): MessageId {
+  if (phase === 'copy') return 'vesta-server.import.phase-copy';
+  if (phase === 'configure' || phase === 'register' || phase === 'start') return 'vesta-server.import.phase-finish';
+  return 'vesta-server.import.phase-check';
+}
+
+// Shown without review details, so none of these lines take arguments.
 const jobErrors: Record<string, MessageId> = {
-  game_port_in_use: 'vesta-server.blocker.port-in-use',
+  game_port_in_use: 'vesta-server.import.port-busy',
+  memory_budget_exceeded: 'vesta-server.blocker.memory',
   source_running: 'vesta-server.blocker.source-running',
   source_state_unknown: 'vesta-server.blocker.source-unknown',
   port_state_unknown: 'vesta-server.blocker.port-unknown',
   source_changed: 'vesta-server.blocker.changed',
-  insufficient_space: 'vesta-server.blocker.disk',
+  insufficient_space: 'vesta-server.import.disk-full',
+  source_too_large: 'vesta-server.blocker.too-large',
+  unsafe_path: 'vesta-server.blocker.unsafe',
   start_failed: 'vesta-server.import.start-failed',
   imports_unavailable: 'vesta-server.import.unavailable',
   import_jobs_saturated: 'vesta-server.import.busy',
   worker_unavailable: 'vesta-server.import.busy',
+  unavailable: 'vesta-server.import.busy',
+  eula_required: 'vesta-server.import.eula-needed',
+  warnings_unacknowledged: 'vesta-server.import.confirm-all',
+  source_stop_confirmation_required: 'vesta-server.import.confirm-all',
+  plan_blocked: 'vesta-server.import.fix-first',
+  plan_expired: 'vesta-server.import.out-of-date',
+  confirmation_invalid: 'vesta-server.import.out-of-date',
+  idempotency_conflict: 'vesta-server.import.out-of-date',
+  conflict: 'vesta-server.import.out-of-date',
+  server_capacity_reached: 'vesta-server.import.full',
+  import_job_not_found: 'vesta-server.import.gone',
 };
+/** Every job and route error code the machine documents; each has its own line above. */
+export const KNOWN_IMPORT_ERRORS = Object.keys(jobErrors);
 
 /** A job error or command failure as one friendly line. */
 export function importProblem(reason: unknown): MessageId {
   if (typeof reason === 'string') return jobErrors[reason] ?? 'vesta-server.import.failed';
   const error = toServerError(reason);
   if (error.reason && jobErrors[error.reason]) return jobErrors[error.reason]!;
-  if (error.reason === 'eula_required') return 'vesta-server.import.eula-needed';
-  if (error.reason === 'import_job_not_found' || error.code === 'not_found') return 'vesta-server.import.gone';
+  if (error.code === 'not_found') return 'vesta-server.import.gone';
   return errorMessage(error);
 }
 

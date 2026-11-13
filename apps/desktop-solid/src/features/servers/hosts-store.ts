@@ -10,9 +10,11 @@ import { nativeServers, type ServerCommandError } from './native';
 import type { HostsApi } from './host-fixtures';
 
 let fixtureApi: Promise<HostsApi> | undefined;
+// Preview only: `localStorage['vesta.fixtures.hosts']` and `['vesta.fixtures.import']` pick a scenario (see host-fixtures.ts).
+const fixtureScenario = (key: string) => globalThis.localStorage?.getItem(`vesta.fixtures.${key}`) ?? null;
 const api = (): Promise<HostsApi> => (nativeServers
   ? Promise.resolve(hostsNative)
-  : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures())));
+  : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures({ hosts: fixtureScenario('hosts'), found: fixtureScenario('import') }))));
 
 /** Run a host command, normalizing rejections into the closed error model. */
 export async function hostCommand<T>(run: (client: HostsApi) => Promise<T>): Promise<T> {
@@ -24,6 +26,7 @@ const [hosts, setHosts] = createSignal<VestaHost[]>([], { name: 'vestaHosts' });
 const [hostsLoaded, setHostsLoaded] = createSignal(false, { name: 'vestaHostsLoaded' });
 const [hostInfos, setHostInfos] = createSignal<Record<string, HostInfo>>({}, { name: 'vestaHostInfos' });
 const [hostProblems, setHostProblems] = createSignal<Record<string, ServerCommandError>>({}, { name: 'vestaHostProblems' });
+const [hostAnswers, setHostAnswers] = createSignal<Record<string, boolean>>({}, { name: 'vestaHostAnswers' });
 const [discovered, setDiscovered] = createSignal<HostDiscovery[]>([], { name: 'vestaDiscovered' });
 const [discovering, setDiscovering] = createSignal(false, { name: 'vestaDiscovering' });
 
@@ -31,6 +34,12 @@ export { hosts, hostsLoaded, discovered, discovering };
 export const vestaHost = (id: string | undefined) => (id ? hosts().find((host) => host.id === id) : undefined);
 export const hostInfo = (id: string) => hostInfos()[id];
 export const hostProblem = (id: string) => hostProblems()[id];
+/** Whether the machine answered its last servers read. */
+export const hostReach = (id: string): 'checking' | 'online' | 'offline' => {
+  const answered = hostAnswers()[id];
+  return answered === undefined ? 'checking' : answered ? 'online' : 'offline';
+};
+const NO_ANSWER = ['unreachable', 'timeout', 'tls_failed', 'fingerprint_mismatch'];
 
 const patch = <T>(set: (next: (current: Record<string, T>) => Record<string, T>) => void, id: string, value: T | undefined) =>
   set((current) => {
@@ -45,9 +54,12 @@ export async function loadHostServers(hostId: string) {
   try {
     const reply = await hostCommand((client) => client.servers(hostId));
     patch(setHostProblems, hostId, undefined);
+    patch(setHostAnswers, hostId, true);
     return reply.servers;
   } catch (reason) {
-    patch(setHostProblems, hostId, toServerError(reason));
+    const error = toServerError(reason);
+    patch(setHostProblems, hostId, error);
+    patch(setHostAnswers, hostId, !NO_ANSWER.includes(error.code));
     throw reason;
   }
 }
@@ -92,6 +104,7 @@ export async function forgetHost(hostId: string) {
   await hostCommand((client) => client.remove(hostId));
   patch(setHostInfos, hostId, undefined);
   patch(setHostProblems, hostId, undefined);
+  patch(setHostAnswers, hostId, undefined);
   clearImport(hostId);
   await refreshHosts({ servers: false });
 }

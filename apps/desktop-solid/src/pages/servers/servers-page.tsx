@@ -13,7 +13,8 @@ import { HostGuide } from './onboarding';
 import { FirstServerSetup } from './first-server';
 import { addRoute } from '../../features/servers/onboarding-model';
 import { groupServers, importPercent } from '../../features/servers/host-model';
-import { activeImports, hosts } from '../../features/servers/hosts-store';
+import { activeImports, hostReach, hosts } from '../../features/servers/hosts-store';
+import type { VestaHost } from '../../features/servers/native-hosts';
 import type { ServerSnapshot } from '../../features/servers/native';
 import { HostImport } from './host-import';
 import { HostSettings } from './host-settings';
@@ -21,6 +22,7 @@ import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
 import { ServerErrorNote } from './parts';
 import { VestaSetup } from './vesta-setup';
+import { Reach } from './vesta-parts';
 import '../library/library-page.css';
 import './servers.css';
 import './vesta-server.css';
@@ -71,11 +73,16 @@ function AddPage() {
   );
 }
 
-/** The server grid, laid out exactly like the Library: cards, then an add tile. */
+/**
+ * The server grid, laid out exactly like the Library: cards, then an add tile. One machine
+ * with no servers yet is a single calm empty state for that machine; machines only get their
+ * own headings once there are two or more.
+ */
 function ServerList() {
   const now = useServersClock();
   const groups = createMemo(() => groupServers(serverSnapshots(), hosts()), { name: 'servers:groups' });
   const single = () => (hosts().length === 1 ? hosts()[0] : undefined);
+  const empty = () => serverSnapshots().length === 0;
   return (
     <Board>
       <Show when={usingFixtures}>
@@ -90,50 +97,66 @@ function ServerList() {
           </p>
         )}
       </For>
-      <Show when={hosts().length > 0}>
-        <div data-vesta="vesta-machine-bar">
-          <Show when={single()}>
-            {(host) => <Button size="sm" variant="ghost" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>{host().name}</Button>}
-          </Show>
-          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
-        </div>
-      </Show>
-      <Show
-        when={serverSnapshots().length > 0 || hosts().length > 1}
-        fallback={
+      <Switch>
+        <Match when={empty() && hosts().length === 0}>
           <Show when={serversLoaded()}>
             <EmptyState icon="icons/rail/servers" title={t('servers.empty-title')} description={t('vesta-server.list.empty-description')}>
-              <Show when={single()} fallback={
-                <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
-              }>
-                {(host) => <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${host().id}/import`)}>{t('vesta-server.host.add-server')}</Button>}
-              </Show>
+              <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
             </EmptyState>
           </Show>
-        }
-      >
-        <For each={groups()} keyed={(group) => group.key}>
-          {(group) => (
-            <section data-vesta="vesta-server-group" aria-label={group().host?.name ?? (group().key === 'other' ? t('vesta-server.list.other') : t('servers.title'))}>
-              <Show when={group().host}>
-                {(host) => (
-                  <header data-vesta="vesta-group-header">
-                    <h2><Icon name="icons/content/server" size={16} />{host().name}</h2>
-                    <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: host().name })} icon={<Icon name="icons/content/gear" />}
-                      onClick={() => transitionTo(`/servers/host/${host().id}`)} />
-                  </header>
-                )}
-              </Show>
-              <Show when={group().key === 'other'}>
-                <header data-vesta="vesta-group-header"><h2>{t('vesta-server.list.other')}</h2></header>
-              </Show>
-              <ServerGrid servers={group().servers} now={now()} label={group().host?.name ?? t('servers.title')}
-                addTo={group().host?.id ?? (group().key === 'all' ? single()?.id ?? null : undefined)} />
-            </section>
-          )}
-        </For>
+        </Match>
+        <Match when={empty() && single()}>
+          {(host) => <MachineEmpty host={host()} />}
+        </Match>
+        <Match when={true}>
+          <For each={groups()} keyed={(group) => group.key}>
+            {(group) => (
+              <section data-vesta="vesta-server-group" aria-label={group().host?.name ?? (group().key === 'other' ? t('vesta-server.list.other') : t('servers.title'))}>
+                <Show when={group().host}>
+                  {(host) => (
+                    <header data-vesta="vesta-group-header">
+                      <h2><Icon name="icons/content/server" size={16} />{host().name}</h2>
+                      <Reach hostId={host().id} />
+                      <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: host().name })} icon={<Icon name="icons/content/gear" />}
+                        onClick={() => transitionTo(`/servers/host/${host().id}`)} />
+                    </header>
+                  )}
+                </Show>
+                <Show when={group().key === 'other'}>
+                  <header data-vesta="vesta-group-header"><h2>{t('vesta-server.list.other')}</h2></header>
+                </Show>
+                <ServerGrid servers={group().servers} now={now()} label={group().host?.name ?? t('servers.title')}
+                  addTo={group().host?.id ?? (group().key === 'all' ? single()?.id ?? null : undefined)} />
+              </section>
+            )}
+          </For>
+        </Match>
+      </Switch>
+      <Show when={hosts().length > 0}>
+        <footer data-vesta="vesta-list-footer">
+          <Show when={!empty() ? single() : undefined}>
+            {(host) => (
+              <Button size="sm" variant="ghost" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}
+                aria-label={t('vesta-server.list.settings', { name: host().name })}>
+                {host().name}<Reach hostId={host().id} />
+              </Button>
+            )}
+          </Show>
+          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.list.set-up-another')}</Button>
+        </footer>
       </Show>
     </Board>
+  );
+}
+
+/** One machine, no servers yet: the machine, whether it's online, and the one next step. */
+function MachineEmpty(props: { host: VestaHost }) {
+  return (
+    <EmptyState icon="icons/content/server" title={props.host.name} status={<Reach hostId={props.host.id} />}
+      description={t(hostReach(props.host.id) === 'offline' ? 'vesta-server.list.machine-offline' : 'vesta-server.list.machine-empty', { name: props.host.name })}>
+      <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/import`)}>{t('vesta-server.list.add-first')}</Button>
+      <Button variant="ghost" icon={<Icon name="icons/content/gear" />} onClick={() => transitionTo(`/servers/host/${props.host.id}`)}>{t('vesta-server.list.machine-settings')}</Button>
+    </EmptyState>
   );
 }
 
