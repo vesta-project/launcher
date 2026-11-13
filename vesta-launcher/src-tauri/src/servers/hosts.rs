@@ -1,7 +1,39 @@
 use super::*;
 use serde::Serialize;
-use vesta_server_client::host::{reasoned, string, Bootstrap, HostSession, ServerRef, VestaHost};
+use vesta_server_client::host::{
+    device_name, reasoned, string, AccountSignIn, Bootstrap, HostSession, ServerRef, VestaHost,
+};
 type Signer = Arc<dyn vesta_server_client::auth::DeviceSigner>;
+/// The launcher's Minecraft session, used only for the Mojang join.
+struct MinecraftAccount {
+    id: String,
+    name: String,
+    profile: String,
+    token: zeroize::Zeroizing<String>,
+}
+impl MinecraftAccount {
+    async fn join(self, server_hash: String) -> Result<()> {
+        let joined = reqwest12::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .redirect(reqwest12::redirect::Policy::none())
+            .timeout(Duration::from_secs(15))
+            .build()
+            .map_err(|_| internal())?
+            .post("https://sessionserver.mojang.com/session/minecraft/join")
+            .json(&json!({"accessToken":self.token.as_str(),"selectedProfile":self.profile,"serverId":server_hash}))
+            .send()
+            .await
+            .map_err(|_| reasoned(ErrorCode::Unreachable, "account_service_unreachable"))?;
+        if !joined.status().is_success() {
+            return Err(reasoned(
+                ErrorCode::CredentialsRejected,
+                "account_proof_failed",
+            ));
+        }
+        Ok(())
+    }
+}
 /// A code proven by PAKE but not yet used. Holds the live bootstrap connection and the
 /// fresh device key it was bound to; dropping it closes the connection and deletes the key.
 pub struct VerifiedCode {
@@ -221,20 +253,7 @@ impl ServerManager {
                             session.update_endpoints(endpoints);
                         }
                         // Retire clients so their next connection uses the re-resolved address.
-                        if let Ok(mut live) = self.live.lock() {
-                            live.retain(|id, slot| {
-                                if id.starts_with(&format!("{}:", d.host_id)) {
-                                    if let Ok(mut worker) = slot.worker.lock() {
-                                        if let Some(task) = worker.take() {
-                                            task.abort();
-                                        }
-                                    }
-                                    false
-                                } else {
-                                    true
-                                }
-                            });
-                        }
+                        self.host_retire_clients(&d.host_id);
                     }
                 }
                 found.push(d);
@@ -242,6 +261,23 @@ impl ServerManager {
             }
         }
         Ok(found)
+    }
+    async fn host_minecraft_account(app: &AppHandle, account_uuid: &str) -> Result<MinecraftAccount> {
+        let signin = || reasoned(ErrorCode::CredentialsUnavailable, "account_signin_required");
+        let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
+            .await
+            .map_err(|_| signin())?;
+        if !crate::auth::is_previously_authenticated_account(&account) {
+            return Err(signin());
+        }
+        Ok(MinecraftAccount {
+            id: uuid::Uuid::parse_str(&account.uuid)
+                .map_err(|_| internal())?
+                .to_string(),
+            name: account.username.clone(),
+            profile: account.uuid.replace('-', ""),
+            token: zeroize::Zeroizing::new(account.access_token.ok_or_else(signin)?),
+        })
     }
     async fn host_account_proof(
         &self,
@@ -251,41 +287,43 @@ impl ServerManager {
         signer: &dyn vesta_server_client::auth::DeviceSigner,
         purpose: &str,
     ) -> Result<Value> {
-        let signin = || reasoned(ErrorCode::CredentialsUnavailable, "account_signin_required");
-        let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
+        let account = Self::host_minecraft_account(app, account_uuid).await?;
+        let (id, name) = (account.id.clone(), account.name.clone());
+        b.account_proof(&id, &name, signer, purpose, move |hash| account.join(hash))
             .await
-            .map_err(|_| signin())?;
-        if !crate::auth::is_previously_authenticated_account(&account) {
-            return Err(signin());
-        }
-        let account_id = uuid::Uuid::parse_str(&account.uuid)
-            .map_err(|_| internal())?
-            .to_string();
-        let profile = account.uuid.replace('-', "");
-        let name = account.username.clone();
-        let token = zeroize::Zeroizing::new(account.access_token.ok_or_else(signin)?);
-        b.account_proof(&account_id,&name,signer,purpose,|server_hash|async move {
-            let joined=reqwest12::Client::builder().use_rustls_tls().no_proxy().redirect(reqwest12::redirect::Policy::none()).timeout(Duration::from_secs(15)).build().map_err(|_|internal())?
-                .post("https://sessionserver.mojang.com/session/minecraft/join").json(&json!({"accessToken":token.as_str(),"selectedProfile":profile,"serverId":server_hash})).send().await.map_err(|_|reasoned(ErrorCode::Unreachable,"account_service_unreachable"))?;
-            if !joined.status().is_success(){return Err(reasoned(ErrorCode::CredentialsRejected,"account_proof_failed"));}Ok(())
-        }).await
+    }
+    /// What this computer is called on the machine's devices list.
+    pub fn host_device_name(fallback: &str) -> String {
+        sysinfo::System::host_name()
+            .as_deref()
+            .and_then(device_name)
+            .or_else(|| device_name(fallback))
+            .unwrap_or_else(|| {
+                match std::env::consts::OS {
+                    "windows" => "Windows PC",
+                    "macos" => "Mac",
+                    _ => "Linux PC",
+                }
+                .into()
+            })
     }
     async fn host_save_enrollment(
         &self,
-        b: &Bootstrap,
+        discovery: &Value,
+        fingerprint: &str,
         address: &str,
         reference: String,
         signer: Arc<dyn vesta_server_client::auth::DeviceSigner>,
         reply: &Value,
     ) -> Result<VestaHost> {
-        let id = string(&b.discovery, "hostId")?;
-        if reply["hostId"] != id || reply["fingerprint"] != b.connection.fingerprint {
+        let id = string(discovery, "hostId")?;
+        if reply["hostId"] != id || reply["fingerprint"] != fingerprint {
             return Err(Error::new(ErrorCode::FingerprintMismatch));
         }
         let h = VestaHost {
             id: id.clone(),
-            name: b.discovery["name"].as_str().unwrap_or(address).into(),
-            fingerprint: b.connection.fingerprint.clone(),
+            name: discovery["name"].as_str().unwrap_or(address).into(),
+            fingerprint: fingerprint.into(),
             endpoints: vec![Endpoint::host(address)?.display()],
             device_id: string(reply, "deviceId")?,
             key_reference: reference,
@@ -458,10 +496,224 @@ impl ServerManager {
         }
         let reply = b.claim(&proof, device_name, signer.as_ref()).await?;
         Ok(serde_json::to_value(
-            self.host_save_enrollment(&b, address, reference, signer, &reply)
-                .await?,
+            self.host_save_enrollment(
+                &b.discovery,
+                &b.connection.fingerprint,
+                address,
+                reference,
+                signer,
+                &reply,
+            )
+            .await?,
         )
         .map_err(|_| internal())?)
+    }
+    /// A machine someone already set up: the Minecraft account is the permission, so a new
+    /// device key is enrolled with no code. `host_id` is the machine the person picked.
+    pub async fn host_sign_in_with_account(
+        &self,
+        app: &AppHandle,
+        address: &str,
+        host_id: Option<&str>,
+        account_uuid: &str,
+        device_name: &str,
+    ) -> Result<VestaHost> {
+        let _gate = self.host_gate.lock().await;
+        let h = self
+            .host_account_sign_in(app, address, host_id, account_uuid, device_name)
+            .await?;
+        self.changed(app);
+        Ok(h)
+    }
+    async fn host_account_sign_in(
+        &self,
+        app: &AppHandle,
+        address: &str,
+        host_id: Option<&str>,
+        account_uuid: &str,
+        device_name: &str,
+    ) -> Result<VestaHost> {
+        let known = |store: &vesta_server_client::host::HostStore, id: &str| {
+            store
+                .hosts
+                .iter()
+                .chain(store.pending_enrollments.iter())
+                .find(|h| h.id == id)
+                .cloned()
+        };
+        // An existing pin always wins over whatever the address presents now.
+        let pin = match host_id {
+            Some(id) => known(&*self.host_store.lock().await, id).map(|h| h.fingerprint),
+            None => None,
+        };
+        let mut s = AccountSignIn::open(address, pin.clone(), host_id).await?;
+        if pin.is_none() {
+            if let Some(h) = known(&*self.host_store.lock().await, &s.host_id) {
+                if h.fingerprint != s.connection.fingerprint {
+                    return Err(reasoned(
+                        ErrorCode::FingerprintMismatch,
+                        "host_identity_changed",
+                    ));
+                }
+            }
+        }
+        let account = Self::host_minecraft_account(app, account_uuid).await?;
+        let (signer, mut key) = self.host_new_key().await?;
+        let (id, name) = (account.id.clone(), account.name.clone());
+        let proof = s
+            .account_proof(&id, &name, signer.as_ref(), move |hash| account.join(hash))
+            .await?;
+        // Journal the key before enrolling so a lost reply is recovered by device key lookup.
+        let pending = VestaHost {
+            id: s.host_id.clone(),
+            name: s.discovery["name"].as_str().unwrap_or(address).into(),
+            fingerprint: s.connection.fingerprint.clone(),
+            endpoints: vec![Endpoint::host(address)?.display()],
+            device_id: String::new(),
+            key_reference: key.reference.clone(),
+            account_id: string(&proof, "accountId")?,
+            auth_revision: "0".into(),
+        };
+        self.host_journal(|next| {
+            next.pending_enrollments.retain(|p| p.id != pending.id);
+            next.pending_enrollments.push(pending.clone());
+        })
+        .await?;
+        key.retain = true;
+        let reply = match s.enroll(&proof, device_name, signer.as_ref()).await {
+            Ok(reply) => reply,
+            Err(e) => {
+                if !matches!(e.code, ErrorCode::Unreachable | ErrorCode::Timeout) {
+                    // A definite answer: nothing was enrolled, so forget the key.
+                    key.retain = false;
+                    let reference = key.reference.clone();
+                    self.host_journal(|next| {
+                        next.pending_enrollments
+                            .retain(|p| p.key_reference != reference)
+                    })
+                    .await?;
+                }
+                return Err(e);
+            }
+        };
+        let previous = self
+            .host_store
+            .lock()
+            .await
+            .hosts
+            .iter()
+            .find(|h| h.id == s.host_id)
+            .cloned();
+        let h = self
+            .host_save_enrollment(
+                &s.discovery,
+                &s.connection.fingerprint,
+                address,
+                key.reference.clone(),
+                signer,
+                &reply,
+            )
+            .await?;
+        if let Some(old) = previous.filter(|old| old.key_reference != h.key_reference) {
+            self.host_retire_clients(&h.id);
+            let credentials = self.credentials.clone();
+            let _ = tokio::task::spawn_blocking(move || credentials.delete(&old.key_reference))
+                .await;
+        }
+        Ok(h)
+    }
+    async fn host_journal(
+        &self,
+        change: impl FnOnce(&mut vesta_server_client::host::HostStore),
+    ) -> Result<()> {
+        let mut store = self.host_store.lock().await;
+        let mut next = store.clone();
+        change(&mut next);
+        next.save(&self.root)?;
+        *store = next;
+        Ok(())
+    }
+    /// Server clients of a machine hold its old session; the next use builds new ones.
+    fn host_retire_clients(&self, host_id: &str) {
+        if let Ok(mut live) = self.live.lock() {
+            live.retain(|id, slot| {
+                if id.starts_with(&format!("{host_id}:")) {
+                    if let Ok(mut worker) = slot.worker.lock() {
+                        if let Some(task) = worker.take() {
+                            task.abort();
+                        }
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+    }
+    /// This device was revoked or its key is gone. The account still decides access, so
+    /// sign in again with a new key; only a failure reaches the person.
+    async fn host_recover(&self, app: &AppHandle, id: &str, stale_device: &str) -> Result<()> {
+        let _gate = self.host_gate.lock().await;
+        let h = self
+            .host_store
+            .lock()
+            .await
+            .hosts
+            .iter()
+            .find(|h| h.id == id)
+            .cloned()
+            .ok_or_else(|| Error::new(ErrorCode::NotFound))?;
+        if h.device_id != stale_device {
+            return Ok(()); // someone else already signed in again
+        }
+        self.host_sessions.lock().await.remove(id);
+        let device = Self::host_device_name("");
+        let mut last = Error::new(ErrorCode::Unreachable);
+        for address in &h.endpoints {
+            match self
+                .host_account_sign_in(app, address, Some(id), &h.account_id, &device)
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(e) if matches!(e.code, ErrorCode::Unreachable | ErrorCode::Timeout | ErrorCode::TlsFailed) && e.reason.is_none() => last = e,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last)
+    }
+    /// Runs a host request, signing in again once if this device lost its access.
+    pub async fn host_using<T, F, Fut>(&self, app: &AppHandle, id: &str, run: F) -> Result<T>
+    where
+        F: Fn(Arc<HostSession>) -> Fut,
+        Fut: std::future::Future<Output = Result<T>>,
+    {
+        let stale = |store: &vesta_server_client::host::HostStore| {
+            store
+                .hosts
+                .iter()
+                .find(|h| h.id == id)
+                .map(|h| h.device_id.clone())
+        };
+        let session = match self.host_session(id).await {
+            Ok(session) => session,
+            // The key for this machine is missing from the system keychain.
+            Err(e) if e.code == ErrorCode::CredentialsUnavailable && e.reason.is_none() => {
+                let Some(device) = stale(&*self.host_store.lock().await) else {
+                    return Err(e);
+                };
+                self.host_recover(app, id, &device).await?;
+                self.host_session(id).await?
+            }
+            Err(e) => return Err(e),
+        };
+        let device = session.host.device_id.clone();
+        match run(session).await {
+            Err(e) if e.reason.as_deref() == Some("device_revoked") => {
+                self.host_recover(app, id, &device).await?;
+                run(self.host_session(id).await?).await
+            }
+            other => other,
+        }
     }
     pub async fn host_link_poll(&self, link_id: &str) -> Result<Value> {
         uuid::Uuid::parse_str(link_id).map_err(|_| Error::new(ErrorCode::InvalidInput))?;
@@ -552,9 +804,12 @@ impl ServerManager {
         self.changed(app);
         Ok(())
     }
-    pub async fn host_info(&self, id: &str) -> Result<Value> {
-        let session = self.host_session(id).await?;
-        let info = session.call("GET", "/v1/host", None, None, None).await?;
+    pub async fn host_info(&self, app: &AppHandle, id: &str) -> Result<Value> {
+        let (info, session) = self
+            .host_using(app, id, |session| async move {
+                Ok((session.call("GET", "/v1/host", None, None, None).await?, session))
+            })
+            .await?;
         if info["hostId"] != id || info["fingerprint"] != session.host.fingerprint {
             return Err(Error::new(ErrorCode::FingerprintMismatch));
         }
@@ -571,9 +826,15 @@ impl ServerManager {
         Ok(info)
     }
     pub async fn host_servers(&self, app: &AppHandle, id: &str) -> Result<Value> {
-        let session = self.host_session(id).await?;
-        let response = session
-            .call("GET", "/v1/host/servers", None, None, None)
+        let (response, session) = self
+            .host_using(app, id, |session| async move {
+                Ok((
+                    session
+                        .call("GET", "/v1/host/servers", None, None, None)
+                        .await?,
+                    session,
+                ))
+            })
             .await?;
         let servers = response["servers"].as_array().ok_or_else(internal)?;
         // Machine servers belong to the account that was signed in when they were listed.

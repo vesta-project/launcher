@@ -39,3 +39,24 @@ pub fn signing_bytes(domain: &str, value: &Value) -> Vec<u8> {
     bytes.extend(json.as_bytes());
     bytes
 }
+
+/// The Mojang `serverId` an honest host issues for an account challenge:
+/// `lowerhex(SHA256("vesta.host.account.v1\0" || JCS({hostId,deviceKey,purpose,
+/// binding,accountId,nonce}))[0..20])`. For `purpose:"signin"` the binding is the
+/// certificate fingerprint. Build every argument except `nonce` from values the
+/// launcher chose or observed itself (pinned host id, observed fingerprint, its
+/// own device key and account), and call Mojang join only when this equals the
+/// host's `serverHash`; otherwise a relaying host could spend the join elsewhere.
+pub fn account_server_hash(
+    host_id: &str,
+    device_key: &str,
+    purpose: &str,
+    binding: &str,
+    account_id: &str,
+    nonce: &str,
+) -> String {
+    use sha2::{Digest, Sha256};
+    let value = serde_json::json!({"hostId":host_id,"deviceKey":device_key,"purpose":purpose,"binding":binding,"accountId":account_id,"nonce":nonce});
+    let digest = Sha256::digest(signing_bytes("vesta.host.account.v1", &value));
+    digest[..20].iter().map(|b| format!("{b:02x}")).collect()
+}

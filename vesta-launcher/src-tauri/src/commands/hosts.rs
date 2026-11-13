@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
-use vesta_server_client::{host::VestaHost, Error, ErrorCode, Result};
+use vesta_server_client::{
+    host::{HostSession, VestaHost},
+    Error, ErrorCode, Result,
+};
 type Manager<'a> = State<'a, Arc<ServerManager>>;
 #[tauri::command]
 pub async fn host_discover(manager: Manager<'_>) -> Result<Vec<HostDiscovery>> {
@@ -21,6 +24,7 @@ pub async fn hosts_list(manager: Manager<'_>) -> Result<Vec<VestaHost>> {
 pub async fn host_remove(app: AppHandle, manager: Manager<'_>, host_id: String) -> Result<()> {
     manager.host_remove(&app, &host_id).await
 }
+/// `device_name` is only a fallback: the machine lists this computer by its own name.
 #[tauri::command]
 pub async fn host_claim(
     app: AppHandle,
@@ -37,7 +41,7 @@ pub async fn host_claim(
             &address,
             &code,
             &account_uuid,
-            &device_name,
+            &ServerManager::host_device_name(&device_name),
             false,
             verification_id.as_deref(),
         )
@@ -59,9 +63,29 @@ pub async fn host_link_start(
             &address,
             &code,
             &account_uuid,
-            &device_name,
+            &ServerManager::host_device_name(&device_name),
             true,
             verification_id.as_deref(),
+        )
+        .await
+}
+/// No code: signs this device in to a machine someone already set up, as the account.
+#[tauri::command]
+pub async fn host_sign_in_with_account(
+    app: AppHandle,
+    manager: Manager<'_>,
+    address: String,
+    host_id: Option<String>,
+    account_uuid: String,
+    device_name: String,
+) -> Result<VestaHost> {
+    manager
+        .host_sign_in_with_account(
+            &app,
+            &address,
+            host_id.as_deref(),
+            &account_uuid,
+            &ServerManager::host_device_name(&device_name),
         )
         .await
 }
@@ -85,8 +109,8 @@ pub async fn host_link_poll(manager: Manager<'_>, link_id: String) -> Result<Val
     manager.host_link_poll(&link_id).await
 }
 #[tauri::command]
-pub async fn host_sign_in(manager: Manager<'_>, host_id: String) -> Result<Value> {
-    manager.host_info(&host_id).await
+pub async fn host_sign_in(app: AppHandle, manager: Manager<'_>, host_id: String) -> Result<Value> {
+    manager.host_info(&app, &host_id).await
 }
 #[tauri::command]
 pub async fn host_servers(app: AppHandle, manager: Manager<'_>, host_id: String) -> Result<Value> {
@@ -96,6 +120,8 @@ pub async fn host_servers(app: AppHandle, manager: Manager<'_>, host_id: String)
 #[serde(rename_all = "snake_case")]
 pub enum HostAction {
     Info,
+    Update,
+    Owners,
     Devices,
     LinkCode,
     LinkStatus,
@@ -121,7 +147,9 @@ pub enum HostAction {
 }
 /// Closed route selection: frontend cannot provide arbitrary URLs or authorization.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn host_request(
+    app: AppHandle,
     manager: Manager<'_>,
     host_id: String,
     action: HostAction,
@@ -131,9 +159,33 @@ pub async fn host_request(
     idempotency_key: Option<String>,
 ) -> Result<Value> {
     if matches!(action, HostAction::Info) {
-        return manager.host_info(&host_id).await;
+        return manager.host_info(&app, &host_id).await;
     }
-    let session = manager.host_session(&host_id).await?;
+    // One key for both attempts: a retry after signing in again is the same request.
+    let key = idempotency_key.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    manager
+        .host_using(&app, &host_id, |session| {
+            dispatch(
+                session,
+                host_id.clone(),
+                action.clone(),
+                id.clone(),
+                body.clone(),
+                revision.clone(),
+                key.clone(),
+            )
+        })
+        .await
+}
+async fn dispatch(
+    session: Arc<HostSession>,
+    host_id: String,
+    action: HostAction,
+    id: Option<String>,
+    body: Option<Value>,
+    revision: Option<String>,
+    idempotency_key: String,
+) -> Result<Value> {
     let id = || -> Result<String> {
         let id = id
             .as_ref()
@@ -181,12 +233,13 @@ pub async fn host_request(
                 &path,
                 Some(body),
                 Some(&revision),
-                idempotency_key.as_deref(),
+                Some(&idempotency_key),
             )
             .await;
     }
     let (method, suffix) = match action {
-        Info => ("GET", "".into()),
+        Update => ("PATCH", "".into()),
+        Owners => ("GET", "/owners".into()),
         Devices => ("GET", "/devices".into()),
         LinkCode => ("POST", "/link-codes".into()),
         LinkStatus => ("GET", format!("/links/{}", id()?)),
@@ -214,7 +267,7 @@ pub async fn host_request(
             &format!("/v1/host{suffix}"),
             body,
             revision.as_deref(),
-            idempotency_key.as_deref(),
+            Some(&idempotency_key),
         )
         .await
 }

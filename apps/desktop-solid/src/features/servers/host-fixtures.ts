@@ -5,7 +5,8 @@
 //   vesta.fixtures.hosts  = 'none' (nothing yet) | 'one' (a machine, no servers) | 'servers' (a machine
 //                           and servers) | 'two' (two machines) | 'offline' (a machine that isn't answering)
 //   vesta.fixtures.import = 'none' (nothing found automatically)
-import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, VestaHost } from './native-hosts';
+//   vesta.fixtures.signin = 'no-access' (the account has no role on attic-pc) | 'approval' (attic-pc wants a link code)
+import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, VestaHost } from './native-hosts';
 
 export type HostsApi = typeof hostsNative;
 
@@ -67,7 +68,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface FixtureJob extends ImportJob { startedAt: number; folder: string; name: string; port: number | null; memory: number | null; checks: number }
 
-export function createHostFixtures(options: { hosts?: string | null; found?: string | null } = {}): HostsApi {
+export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null } = {}): HostsApi {
   const lan: HostDiscovery[] = [
     { hostId: 'host-people', name: 'people-server', fingerprint: 'a'.repeat(64), address: '192.168.1.67:25500', state: 'unclaimed' },
     { hostId: 'host-attic', name: 'attic-pc', fingerprint: 'b'.repeat(64), address: '192.168.1.80:25500', state: 'claimed' },
@@ -83,6 +84,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     devices.set(found.hostId, [{ deviceId: 'device-self', name: 'Windows PC', accountId: 'fixture-account', revoked: false, createdAt: new Date().toISOString() }]);
   }
   const offline = options.hosts === 'offline';
+  const signInPolicy = new Map<string, NewDeviceSignIn>();
   const jobs = new Map<string, FixtureJob>();
   const links = new Map<string, { state: string; polls: number }>();
   let checks = 0;
@@ -165,6 +167,23 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const found = await need(hostId);
       return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: ['imports'], role: 'primary_owner', revision: '1' };
     },
+    signInWithAccount: async (address, hostId, accountUuid, deviceName) => {
+      await wait(900);
+      const found = find(address);
+      if (!found) return reject('unreachable');
+      if (hostId && found.hostId !== hostId) return reject('fingerprint_mismatch', 'host_identity_changed');
+      if (found.state !== 'claimed') return reject('credentials_rejected', 'account_proof_failed');
+      if (options.signin === 'no-access') return reject('forbidden', 'account_has_no_access');
+      if (options.signin === 'approval' || signInPolicy.get(found.hostId) === 'approval') return reject('forbidden', 'device_approval_required');
+      const added: VestaHost = { id: found.hostId, name: found.name ?? address, fingerprint: found.fingerprint, endpoints: [found.address], deviceId: 'device-self', keyReference: 'fixture', accountId: accountUuid, authRevision: '2' };
+      hosts.splice(0, hosts.length, ...hosts.filter((entry) => entry.id !== added.id), added);
+      devices.set(added.id, [
+        { deviceId: 'device-owner', name: 'ATTIC-PC', accountId: 'owner-account', revoked: false, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
+        { deviceId: 'device-self', name: deviceName, accountId: accountUuid, revoked: false, createdAt: new Date().toISOString() },
+      ]);
+      servers.set(added.id, [{ serverId: 'srv-attic', name: 'Attic Survival', gamePort: 25565, state: 'running', role: 'admin' }]);
+      return { ...added };
+    },
     linkStart: async (address, code) => {
       await wait(700);
       if (!find(address)) return reject('unreachable');
@@ -186,7 +205,24 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     info: async (hostId): Promise<HostInfo> => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: ['imports'], role: 'primary_owner', revision: '1' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: ['imports'], role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
+    },
+    update: async (hostId, body) => {
+      const found = await need(hostId);
+      await wait(300);
+      if (body.name !== undefined) {
+        const name = body.name.replace(/\s+/g, ' ').trim();
+        if (!name || new TextEncoder().encode(name).length > 63) return reject('invalid_input', 'invalid_request');
+        found.name = name;
+        const listed = lan.find((entry) => entry.hostId === hostId);
+        if (listed) listed.name = name;
+      }
+      if (body.newDeviceSignIn) signInPolicy.set(hostId, body.newDeviceSignIn);
+      return { hostId, name: found.name, newDeviceSignIn: signInPolicy.get(hostId) ?? 'account', revision: '2' };
+    },
+    owners: async (hostId) => {
+      const found = await need(hostId);
+      return { owners: [{ accountId: found.accountId, role: 'primary_owner', name: 'PlayerOne' }, { accountId: 'owner-rae', role: 'owner', name: null }] };
     },
     devices: async (hostId) => { await need(hostId); return { devices: [...(devices.get(hostId) ?? [])], nextCursor: null }; },
     linkCode: async (hostId) => { await need(hostId); const linkId = `issued-${Date.now()}`; links.set(linkId, { state: 'waiting', polls: 0 }); return { linkId, code: 'R2D2C3P0BB8X', expiresAt: new Date(Date.now() + 600_000).toISOString() }; },

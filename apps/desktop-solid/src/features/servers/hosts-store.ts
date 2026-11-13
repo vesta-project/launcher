@@ -10,11 +10,11 @@ import { nativeServers, type ServerCommandError } from './native';
 import type { HostsApi } from './host-fixtures';
 
 let fixtureApi: Promise<HostsApi> | undefined;
-// Preview only: `localStorage['vesta.fixtures.hosts']` and `['vesta.fixtures.import']` pick a scenario (see host-fixtures.ts).
+// Preview only: `localStorage['vesta.fixtures.hosts']`, `['vesta.fixtures.import']` and `['vesta.fixtures.signin']` pick a scenario (see host-fixtures.ts).
 const fixtureScenario = (key: string) => globalThis.localStorage?.getItem(`vesta.fixtures.${key}`) ?? null;
 const api = (): Promise<HostsApi> => (nativeServers
   ? Promise.resolve(hostsNative)
-  : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures({ hosts: fixtureScenario('hosts'), found: fixtureScenario('import') }))));
+  : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures({ hosts: fixtureScenario('hosts'), found: fixtureScenario('import'), signin: fixtureScenario('signin') }))));
 
 /** Run a host command, normalizing rejections into the closed error model. */
 export async function hostCommand<T>(run: (client: HostsApi) => Promise<T>): Promise<T> {

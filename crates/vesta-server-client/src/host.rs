@@ -196,6 +196,7 @@ impl Connection {
                     | "/v1/host/accounts/challenge"
                     | "/v1/host/accounts/complete"
                     | "/v1/host/claim"
+                    | "/v1/host/sign-in"
                     | "/v1/host/links"
             )
             && !path.starts_with("/v1/host/links/")
@@ -338,6 +339,15 @@ impl HostSession {
             }
         }
         let mut c = self.connect().await?;
+        // The host answers an unknown or revoked device with the same 401; either way this
+        // key can no longer sign in and the account has to enroll a new one.
+        let revoked = |e: Error| {
+            if e.code == ErrorCode::CredentialsRejected {
+                reasoned(ErrorCode::CredentialsRejected, "device_revoked")
+            } else {
+                e
+            }
+        };
         let challenge = c
             .call(
                 "POST",
@@ -347,9 +357,10 @@ impl HostSession {
                 None,
                 None,
             )
-            .await?;
+            .await
+            .map_err(revoked)?;
         let signature=self.signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.session.v1",&json!({"hostId":self.host.id,"deviceId":self.host.device_id,"challengeId":challenge["challengeId"],"nonce":challenge["nonce"],"expiresAt":challenge["expiresAt"]}))).await?;
-        let response=c.call("POST","/v1/host/sessions",None,Some(json!({"deviceId":self.host.device_id,"challengeId":challenge["challengeId"],"signature":signature})),None,None).await?;
+        let response=c.call("POST","/v1/host/sessions",None,Some(json!({"deviceId":self.host.device_id,"challengeId":challenge["challengeId"],"signature":signature})),None,None).await.map_err(revoked)?;
         let renewed = self.decode_session(&response)?;
         let token = renewed.token.clone();
         *session = Some(renewed);
@@ -666,26 +677,23 @@ impl Bootstrap {
         F: FnOnce(String) -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
     {
-        let binding = self.exchange_id.clone();
         let host = string(&self.discovery, "hostId")?;
-        let key = signer.public_key();
-        let challenge=self.call("/v1/host/accounts/challenge",Some(json!({"accountId":account_id,"name":name,"deviceKey":key,"purpose":purpose,"binding":binding}))).await?;
-        join(string(&challenge, "serverHash")?).await?;
-        let signature=signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.account.v1",&json!({"hostId":host,"deviceKey":key,"challengeId":challenge["challengeId"],"serverHash":challenge["serverHash"],"purpose":purpose,"binding":binding}))).await?;
-        // The host answers a profile the provider didn't confirm with the uniform
-        // pairing failure. At this stage the PAKE capability was just accepted, so name it.
-        self.call(
-            "/v1/host/accounts/complete",
-            Some(json!({"challengeId":challenge["challengeId"],"signature":signature})),
+        let auth = format!("Pake {}", self.token.as_str());
+        let binding = self.exchange_id.clone();
+        prove_account(
+            &mut self.connection,
+            Some(&auth),
+            &host,
+            &binding,
+            AccountRequest {
+                account_id,
+                name,
+                purpose,
+            },
+            signer,
+            join,
         )
         .await
-        .map_err(|e| {
-            if e.reason.as_deref() == Some("pairing_failed") {
-                reasoned(ErrorCode::CredentialsRejected, "account_proof_failed")
-            } else {
-                e
-            }
-        })
     }
     pub async fn claim(
         &mut self,
@@ -695,5 +703,403 @@ impl Bootstrap {
     ) -> Result<Value> {
         let signature=signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.claim.v1",&json!({"hostId":self.discovery["hostId"],"exchangeId":self.exchange_id,"accountProofId":proof["accountProofId"],"deviceKey":signer.public_key(),"deviceName":device_name}))).await?;
         self.call("/v1/host/claim",Some(json!({"exchangeId":self.exchange_id,"accountProofId":proof["accountProofId"],"deviceName":device_name,"signature":signature}))).await
+    }
+}
+pub struct AccountRequest<'a> {
+    pub account_id: &'a str,
+    pub name: &'a str,
+    pub purpose: &'a str,
+}
+/// The Mojang serverId to join, only when it is the one an honest host would issue for
+/// values this launcher chose or observed itself. Otherwise a relaying host could spend
+/// the join on another machine, so the join must not happen at all.
+pub fn checked_server_hash(
+    challenge: &Value,
+    host_id: &str,
+    device_key: &str,
+    purpose: &str,
+    binding: &str,
+    account_id: &str,
+) -> Result<String> {
+    let server_hash = string(challenge, "serverHash")?;
+    let nonce = string(challenge, "nonce")
+        .map_err(|_| reasoned(ErrorCode::FingerprintMismatch, "server_hash_mismatch"))?;
+    let expected = vesta_host_client::requests::account_server_hash(
+        host_id, device_key, purpose, binding, account_id, &nonce,
+    );
+    if expected != server_hash {
+        return Err(reasoned(
+            ErrorCode::FingerprintMismatch,
+            "server_hash_mismatch",
+        ));
+    }
+    Ok(server_hash)
+}
+async fn prove_account<F, Fut>(
+    connection: &mut Connection,
+    auth: Option<&str>,
+    host_id: &str,
+    binding: &str,
+    request: AccountRequest<'_>,
+    signer: &dyn DeviceSigner,
+    join: F,
+) -> Result<Value>
+where
+    F: FnOnce(String) -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    let AccountRequest {
+        account_id,
+        name,
+        purpose,
+    } = request;
+    let key = signer.public_key();
+    let challenge = connection
+        .call(
+            "POST",
+            "/v1/host/accounts/challenge",
+            auth,
+            Some(json!({"accountId":account_id,"name":name,"deviceKey":key,"purpose":purpose,"binding":binding})),
+            None,
+            None,
+        )
+        .await?;
+    let server_hash = checked_server_hash(&challenge, host_id, &key, purpose, binding, account_id)?;
+    join(server_hash.clone()).await?;
+    let signature=signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.account.v1",&json!({"hostId":host_id,"deviceKey":key,"challengeId":challenge["challengeId"],"serverHash":server_hash,"purpose":purpose,"binding":binding}))).await?;
+    // The host answers a profile the provider didn't confirm with the uniform pairing
+    // failure. The capability (PAKE or the pinned connection) was just accepted, so name it.
+    connection
+        .call(
+            "POST",
+            "/v1/host/accounts/complete",
+            auth,
+            Some(json!({"challengeId":challenge["challengeId"],"signature":signature})),
+            None,
+            None,
+        )
+        .await
+        .map_err(|e| {
+            if e.reason.as_deref() == Some("pairing_failed") {
+                reasoned(ErrorCode::CredentialsRejected, "account_proof_failed")
+            } else {
+                e
+            }
+        })
+}
+/// The name the host lists for this device, in the host's sanitised form: control,
+/// zero width and bidi characters removed, whitespace collapsed, at most 64 characters.
+pub fn device_name(raw: &str) -> Option<String> {
+    let hidden = |c: char| {
+        c.is_control()
+            || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{061C}' | '\u{FEFF}')
+    };
+    let cleaned: String = raw.chars().take(256).filter(|c| !hidden(*c)).collect();
+    let name: String = cleaned
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(64)
+        .collect();
+    let name = name.trim().to_owned();
+    (!name.is_empty()).then_some(name)
+}
+/// Sign in on a new device with no code: one connection carries discovery, a fresh
+/// account proof bound to the observed certificate, and enrollment of a new device key.
+pub struct AccountSignIn {
+    pub connection: Connection,
+    pub discovery: Value,
+    pub host_id: String,
+}
+impl AccountSignIn {
+    /// `pin` is a fingerprint this launcher already trusts for the machine; without one
+    /// the observed certificate is trusted on first use. `expected_host` is the machine the
+    /// person picked; a different one answering is an identity change, never a re-pin.
+    pub async fn open(
+        address: &str,
+        pin: Option<String>,
+        expected_host: Option<&str>,
+    ) -> Result<Self> {
+        let mut connection = Connection::open(&Endpoint::host(address)?, pin).await?;
+        let discovery = connection
+            .call("GET", "/v1/host/discovery", None, None, None, None)
+            .await?;
+        if discovery["fingerprint"] != connection.fingerprint || discovery["protocol"] != "host-v1"
+        {
+            return Err(Error::new(ErrorCode::FingerprintMismatch));
+        }
+        let host_id = string(&discovery, "hostId")?;
+        if expected_host.is_some_and(|expected| expected != host_id) {
+            return Err(reasoned(
+                ErrorCode::FingerprintMismatch,
+                "host_identity_changed",
+            ));
+        }
+        Ok(Self {
+            connection,
+            discovery,
+            host_id,
+        })
+    }
+    pub async fn account_proof<F, Fut>(
+        &mut self,
+        account_id: &str,
+        name: &str,
+        signer: &dyn DeviceSigner,
+        join: F,
+    ) -> Result<Value>
+    where
+        F: FnOnce(String) -> Fut,
+        Fut: std::future::Future<Output = Result<()>>,
+    {
+        let binding = self.connection.fingerprint.clone();
+        prove_account(
+            &mut self.connection,
+            None,
+            &self.host_id,
+            &binding,
+            AccountRequest {
+                account_id,
+                name,
+                purpose: "signin",
+            },
+            signer,
+            join,
+        )
+        .await
+    }
+    /// Enrolls the device key. 403 `account_has_no_access` and `device_approval_required`
+    /// keep their reasons so the launcher can explain each one.
+    pub async fn enroll(
+        &mut self,
+        proof: &Value,
+        device_name: &str,
+        signer: &dyn DeviceSigner,
+    ) -> Result<Value> {
+        let key = signer.public_key();
+        let signature=signer.sign(&vesta_host_client::requests::signing_bytes("vesta.host.signin.v1",&json!({"hostId":self.host_id,"fingerprint":self.connection.fingerprint,"accountProofId":proof["accountProofId"],"deviceKey":key,"deviceName":device_name}))).await?;
+        let reply = self
+            .connection
+            .call(
+                "POST",
+                "/v1/host/sign-in",
+                None,
+                Some(json!({"accountProofId":proof["accountProofId"],"deviceKey":key,"deviceName":device_name,"signature":signature})),
+                None,
+                None,
+            )
+            .await
+            .map_err(|e| {
+                if e.reason.as_deref() == Some("pairing_failed") {
+                    reasoned(ErrorCode::CredentialsRejected, "account_proof_failed")
+                } else {
+                    e
+                }
+            })?;
+        if reply["state"] != "enrolled"
+            || reply["hostId"] != self.host_id
+            || reply["fingerprint"] != self.connection.fingerprint
+            || reply["accountId"] != proof["accountId"]
+        {
+            return Err(Error::new(ErrorCode::FingerprintMismatch));
+        }
+        Ok(reply)
+    }
+}
+#[cfg(test)]
+mod sign_in_tests {
+    use super::*;
+    use crate::auth::DeviceSigner;
+    use hyper::{service::service_fn, Response};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    const ACCOUNT: &str = "11111111-2222-4333-8444-555555555555";
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum Behaviour {
+        Honest,
+        WrongHash,
+        NoAccess,
+        Approval,
+    }
+
+    /// A host that answers the sign-in routes; returns its address, pin and route hit counts.
+    async fn host(behaviour: Behaviour) -> (String, String, Arc<StdMutex<Vec<String>>>) {
+        let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let pin = crate::trust::leaf_fingerprint(cert.cert.der());
+        let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![cert.cert.der().clone()],
+            rustls::pki_types::PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der()).into(),
+        )
+        .unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(tls));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        let routes = Arc::new(StdMutex::new(Vec::new()));
+        let (seen, fp) = (routes.clone(), pin.clone());
+        tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let tls = acceptor.accept(tcp).await.unwrap();
+            let challenge: Arc<StdMutex<Value>> = Arc::default();
+            let _ = hyper::server::conn::Http::new()
+                .serve_connection(
+                    tls,
+                    service_fn(move |req: Request<Body>| {
+                        let (seen, fp, challenge) = (seen.clone(), fp.clone(), challenge.clone());
+                        async move {
+                            let path = req.uri().path().to_owned();
+                            seen.lock().unwrap().push(path.clone());
+                            let body: Value = serde_json::from_slice(
+                                &hyper::body::to_bytes(req.into_body()).await.unwrap(),
+                            )
+                            .unwrap_or(Value::Null);
+                            let (status, value) = match path.as_str() {
+                                "/v1/host/discovery" => (200, json!({"hostId":"host","fingerprint":fp,"protocol":"host-v1","name":"attic-pc"})),
+                                "/v1/host/accounts/challenge" => {
+                                    let nonce = "bm9uY2U";
+                                    let hash = vesta_host_client::requests::account_server_hash(
+                                        "host",
+                                        body["deviceKey"].as_str().unwrap(),
+                                        body["purpose"].as_str().unwrap(),
+                                        body["binding"].as_str().unwrap(),
+                                        body["accountId"].as_str().unwrap(),
+                                        nonce,
+                                    );
+                                    let hash = if behaviour == Behaviour::WrongHash { "0".repeat(40) } else { hash };
+                                    *challenge.lock().unwrap() = body.clone();
+                                    (200, json!({"challengeId":"c1","serverHash":hash,"nonce":nonce,"expiresAt":"2099-01-01T00:00:00Z"}))
+                                }
+                                "/v1/host/accounts/complete" => (200, json!({"accountProofId":"p1","accountId":ACCOUNT,"expiresAt":"2099-01-01T00:00:00Z"})),
+                                "/v1/host/sign-in" => match behaviour {
+                                    Behaviour::NoAccess => (403, json!({"error":{"code":"account_has_no_access"}})),
+                                    Behaviour::Approval => (403, json!({"error":{"code":"device_approval_required"}})),
+                                    _ => {
+                                        assert_eq!(body["deviceName"], "Attic PC");
+                                        assert_eq!(body["deviceKey"], challenge.lock().unwrap()["deviceKey"]);
+                                        (200, json!({"state":"enrolled","hostId":"host","fingerprint":fp,"accountId":ACCOUNT,"deviceId":"d1","deviceName":"Attic PC","session":"s","expiresAt":(chrono::Utc::now()+chrono::Duration::minutes(15)).to_rfc3339(),"authGeneration":"2"}))
+                                    }
+                                },
+                                _ => (404, json!({"error":{"code":"not_found"}})),
+                            };
+                            let mut response = Response::new(Body::from(value.to_string()));
+                            *response.status_mut() = hyper::StatusCode::from_u16(status).unwrap();
+                            Ok::<_, std::convert::Infallible>(response)
+                        }
+                    }),
+                )
+                .await;
+        });
+        (address, pin, routes)
+    }
+
+    async fn run(behaviour: Behaviour) -> (Result<Value>, usize, Vec<String>) {
+        let (address, _, routes) = host(behaviour).await;
+        let signer = crate::auth::Ed25519Signer::from_seed([7; 32]);
+        let joins = Arc::new(AtomicUsize::new(0));
+        let mut sign_in = AccountSignIn::open(&address, None, Some("host")).await.unwrap();
+        let fingerprint = sign_in.connection.fingerprint.clone();
+        let counted = joins.clone();
+        let key = signer.public_key();
+        let result = async {
+            let proof = sign_in
+                .account_proof(ACCOUNT, "Steve", &signer, move |hash| async move {
+                    assert_eq!(
+                        hash,
+                        vesta_host_client::requests::account_server_hash(
+                            "host", &key, "signin", &fingerprint, ACCOUNT, "bm9uY2U"
+                        )
+                    );
+                    counted.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .await?;
+            sign_in.enroll(&proof, "Attic PC", &signer).await
+        }
+        .await;
+        let routes = routes.lock().unwrap().clone();
+        (result, joins.load(Ordering::SeqCst), routes)
+    }
+
+    #[tokio::test]
+    async fn signs_in_on_one_pinned_connection_and_joins_once() {
+        let (result, joins, routes) = run(Behaviour::Honest).await;
+        let reply = result.unwrap();
+        assert_eq!(reply["deviceId"], "d1");
+        assert_eq!(joins, 1);
+        assert_eq!(
+            routes,
+            [
+                "/v1/host/discovery",
+                "/v1/host/accounts/challenge",
+                "/v1/host/accounts/complete",
+                "/v1/host/sign-in"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_server_hash_that_does_not_match_stops_before_the_join() {
+        let (result, joins, routes) = run(Behaviour::WrongHash).await;
+        let error = result.unwrap_err();
+        assert_eq!(error.code, ErrorCode::FingerprintMismatch);
+        assert_eq!(error.reason.as_deref(), Some("server_hash_mismatch"));
+        assert_eq!(joins, 0);
+        assert!(!routes.iter().any(|r| r.ends_with("complete")));
+    }
+
+    #[tokio::test]
+    async fn no_access_and_approval_keep_their_reasons() {
+        for (behaviour, reason) in [
+            (Behaviour::NoAccess, "account_has_no_access"),
+            (Behaviour::Approval, "device_approval_required"),
+        ] {
+            let error = run(behaviour).await.0.unwrap_err();
+            assert_eq!(error.code, ErrorCode::Forbidden);
+            assert_eq!(error.reason.as_deref(), Some(reason));
+        }
+    }
+
+    #[tokio::test]
+    async fn another_machine_at_the_address_is_an_identity_change() {
+        let (address, _, _) = host(Behaviour::Honest).await;
+        let error = AccountSignIn::open(&address, None, Some("other"))
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.reason.as_deref(), Some("host_identity_changed"));
+        let (address, _, _) = host(Behaviour::Honest).await;
+        let error = AccountSignIn::open(&address, Some("ab".repeat(32)), None)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.code, ErrorCode::FingerprintMismatch);
+    }
+
+    #[test]
+    fn hash_check_needs_the_nonce_and_exact_values() {
+        let good = vesta_host_client::requests::account_server_hash("h", "k", "signin", "f", "a", "n");
+        let challenge = json!({"serverHash":good,"nonce":"n"});
+        assert_eq!(
+            checked_server_hash(&challenge, "h", "k", "signin", "f", "a").unwrap(),
+            good
+        );
+        assert!(checked_server_hash(&challenge, "h", "k", "signin", "other", "a").is_err());
+        assert!(checked_server_hash(&challenge, "h", "k2", "signin", "f", "a").is_err());
+        assert!(checked_server_hash(&json!({"serverHash":good}), "h", "k", "signin", "f", "a").is_err());
+    }
+
+    #[test]
+    fn device_names_follow_the_host_rules() {
+        assert_eq!(device_name("  ATTIC-PC  ").as_deref(), Some("ATTIC-PC"));
+        assert_eq!(device_name("Rae's\u{202E}  \tlaptop\u{200B}\n").as_deref(), Some("Rae's laptop"));
+        assert_eq!(device_name(&"x".repeat(300)).unwrap().chars().count(), 64);
+        assert_eq!(device_name("\u{200B}\u{0007} "), None);
     }
 }

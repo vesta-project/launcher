@@ -4,7 +4,12 @@ export interface ServerRef { hostId: string; serverId: string }
 export const hostConnectionId = (ref: ServerRef) => `${ref.hostId}:${ref.serverId}`;
 export interface VestaHost { id: string; name: string; fingerprint: string; endpoints: string[]; deviceId: string; keyReference: string; accountId: string; authRevision: string }
 export interface HostDiscovery { hostId: string; name: string | null; fingerprint: string; address: string; state: 'claimed' | 'unclaimed' | null }
-export interface HostInfo { hostId: string; name: string; fingerprint: string; endpoints: unknown[]; authGeneration: string; capabilities: string[]; role: string; revision: string }
+/** `newDeviceSignIn` is only sent to owners: `account` lets a new device sign in with its Minecraft account, `approval` needs a link code. */
+export interface HostInfo { hostId: string; name: string; fingerprint: string; endpoints: unknown[]; authGeneration: string; capabilities: string[]; role: string; revision: string; newDeviceSignIn?: NewDeviceSignIn }
+export type NewDeviceSignIn = 'account' | 'approval';
+/** `name` is the last Minecraft name the machine verified for that account, or null. */
+export interface HostOwner { accountId: string; role: 'primary_owner' | 'owner'; name: string | null }
+export interface HostUpdate { name?: string; newDeviceSignIn?: NewDeviceSignIn }
 export interface HostServer { serverId: string; name: string; gamePort: number; state: string; role: string }
 export interface HostDevice { deviceId: string; name: string; accountId: string; revoked: boolean; createdAt: string }
 export interface LinkResult { linkId: string; state: string; requestHash: string; deviceId?: string }
@@ -20,7 +25,7 @@ export interface ImportApply { planId: string; confirmation: string; acknowledge
 export type ImportState = 'planning' | 'review' | 'applying' | 'ready' | 'starting' | 'online' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
 export interface ImportJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: { filesDone: number; filesTotal: number; bytesDone: number; bytesTotal: number }; review: ImportReview | null; serverId: string | null }
 export interface ImportReview { planId: string; confirmation: string | null; expiresAt: string; blockers: string[]; warnings: string[]; source: { displayPath: string; snapshot: string; files: number; bytes: number }; detected: unknown; runtime: unknown; destination: { serverId: string; displayPath: string; freeBytes: number }; resources: { gamePort: number; memoryMiB: number }; processes: unknown[]; ports: unknown[]; inspection: unknown }
-export type HostAction = 'info' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness';
+export type HostAction = 'info' | 'update' | 'owners' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness';
 export interface HostRequestOptions { id?: string; body?: unknown; revision?: string; idempotencyKey?: string }
 const request = <T>(hostId: string, action: HostAction, options: HostRequestOptions = {}) => invoke<T>('host_request', { hostId, action, ...options });
 export const hostsNative = {
@@ -32,10 +37,18 @@ export const hostsNative = {
   verifyCode: (address: string, code: string, purpose: 'claim' | 'link') => invoke<CodeVerified>('host_verify_code', { address, code, purpose }),
   claim: (address: string, code: string, accountUuid: string, deviceName: string, verificationId: string | null = null) => invoke<VestaHost>('host_claim', { address, code, accountUuid, deviceName, verificationId }),
   signIn: (hostId: string) => invoke<HostInfo>('host_sign_in', { hostId }),
+  /**
+   * No code: signs this device in to a machine someone already set up, as this Minecraft account.
+   * `hostId` is the machine that was picked. `deviceName` is a fallback; native sends the computer's name.
+   */
+  signInWithAccount: (address: string, hostId: string | null, accountUuid: string, deviceName: string) => invoke<VestaHost>('host_sign_in_with_account', { address, hostId, accountUuid, deviceName }),
   linkStart: (address: string, code: string, accountUuid: string, deviceName: string, verificationId: string | null = null) => invoke<LinkResult>('host_link_start', { address, code, accountUuid, deviceName, verificationId }),
   linkPoll: (linkId: string) => invoke<LinkResult>('host_link_poll', { linkId }),
   servers: (hostId: string) => invoke<{ servers: HostServer[]; nextCursor: string | null }>('host_servers', { hostId }),
   info: (hostId: string) => request<HostInfo>(hostId, 'info'),
+  /** Owners only: rename the machine or change how new devices get in. */
+  update: (hostId: string, body: HostUpdate) => request<{ hostId: string; name: string; newDeviceSignIn: NewDeviceSignIn; revision: string }>(hostId, 'update', { body }),
+  owners: (hostId: string) => request<{ owners: HostOwner[] }>(hostId, 'owners'),
   devices: (hostId: string) => request<{ devices: HostDevice[]; nextCursor: string | null }>(hostId, 'devices'),
   linkCode: (hostId: string, targetAccountId: string) => request<{ linkId: string; code: string; expiresAt: string }>(hostId, 'link_code', { body: { targetAccountId } }),
   linkStatus: (hostId: string, id: string) => request<LinkResult>(hostId, 'link_status', { id }),

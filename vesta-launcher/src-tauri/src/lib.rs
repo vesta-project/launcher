@@ -160,7 +160,7 @@ pub fn run(context: tauri::Context) {
             }
         }))
         .invoke_handler(tauri::generate_handler![
-            commands::hosts::host_discover, commands::hosts::host_probe, commands::hosts::hosts_list, commands::hosts::host_remove, commands::hosts::host_claim, commands::hosts::host_link_start, commands::hosts::host_verify_code, commands::hosts::host_link_poll, commands::hosts::host_sign_in, commands::hosts::host_servers, commands::hosts::host_request,
+            commands::hosts::host_discover, commands::hosts::host_probe, commands::hosts::hosts_list, commands::hosts::host_remove, commands::hosts::host_claim, commands::hosts::host_link_start, commands::hosts::host_verify_code, commands::hosts::host_link_poll, commands::hosts::host_sign_in, commands::hosts::host_sign_in_with_account, commands::hosts::host_servers, commands::hosts::host_request,
             commands::servers::server_connections_list,
             commands::servers_automation::server_automation_self,
             commands::servers_automation::server_automation_workflows,
