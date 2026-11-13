@@ -9193,6 +9193,7 @@ dependencies = [
  "urlencoding",
  "uuid 1.29.0",
  "version-compare",
+ "vesta-host-client",
  "vesta-sandbox",
  "vesta-server-client",
  "walkdir",

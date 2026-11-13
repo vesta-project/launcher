@@ -41,3 +41,4 @@ pub mod destinations;
 pub mod modrinth_servers;
 
 pub mod servers_setup;
+pub mod hosts;

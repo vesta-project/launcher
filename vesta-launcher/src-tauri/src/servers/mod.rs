@@ -1,4 +1,5 @@
 mod credentials;
+pub(crate) mod hosts;
 pub(crate) mod files;
 mod hosting;
 mod management;
@@ -125,6 +126,10 @@ struct Live {
 }
 pub struct ServerManager {
     account_app: StdMutex<Option<AppHandle>>,
+    host_store: Mutex<vesta_server_client::host::HostStore>,
+    host_sessions: Mutex<HashMap<String, Arc<vesta_server_client::host::HostSession>>>,
+    host_gate: Mutex<()>,
+    host_links: Mutex<HashMap<String, hosts::PendingLink>>,
     pack_previews: Mutex<HashMap<String, pack_sync::Prepared>>,
     pack_gate: Mutex<()>,
     root: PathBuf,
@@ -172,6 +177,7 @@ impl ServerManager {
                     break;
                 };
                 manager.cleanup_deleted_credentials().await;
+                let _ = tokio::time::timeout(Duration::from_secs(10), manager.host_discover()).await;
                 drop(manager);
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
@@ -186,8 +192,13 @@ impl ServerManager {
                 (Store::default(), Some(e))
             }
         };
+        let host_store = vesta_server_client::host::HostStore::load(&root)?;
         let manager = Arc::new(Self {
             account_app: Default::default(),
+            host_store: Mutex::new(host_store),
+            host_sessions: Default::default(),
+            host_gate: Default::default(),
+            host_links: Default::default(),
             pack_previews: Default::default(),
             pack_gate: Default::default(),
             credentials: Arc::new(Credentials::new(&root)),
@@ -381,6 +392,24 @@ impl ServerManager {
             slot.capabilities_loaded
                 .store(false, std::sync::atomic::Ordering::Relaxed);
             *slot.players.lock().map_err(|_| internal())? = None;
+        }
+        if r.snapshot.connection.sign_in_method == "host" {
+            let (host_id, _) = id.split_once(':').ok_or_else(internal)?;
+            let session = self.host_session(host_id).await?;
+            let endpoint = self.host_endpoint(host_id).await?.for_server(&r.snapshot.connection.server_id)?;
+            let transport = Transport::for_host(endpoint, session.clone())?;
+            protect_transport(
+                &transport,
+                r.account_uuid
+                    .as_deref()
+                    .ok_or_else(|| Error::new(ErrorCode::CredentialsRejected))?,
+                scope,
+            )?;
+            let client = Client::for_host(transport, r.snapshot.connection.server_id, session);
+            slot.client_scope
+                .store(scope, std::sync::atomic::Ordering::Release);
+            *live = Some(client.clone());
+            return Ok(client);
         }
         if r.snapshot.connection.memory_only {
             return Err(Error::new(ErrorCode::CredentialsUnavailable));
@@ -1067,6 +1096,7 @@ impl ServerManager {
         id: &str,
         fingerprint: &str,
     ) -> Result<ServerSnapshot> {
+        if self.record(id).await?.snapshot.connection.sign_in_method == "host" {return Err(Error::new(ErrorCode::Unsupported));}
         self.client(id).await?;
         let slot = self.slot(id)?;
         let _refresh = slot.refresh.lock().await;
@@ -1112,7 +1142,11 @@ impl ServerManager {
         self.snapshot(app, id, true).await
     }
     pub async fn remove(&self, app: &AppHandle, id: &str) -> Result<()> {
-        self.edit_store(|s| s.remove_connection(id)).await?;
+        if self.record(id).await?.snapshot.connection.sign_in_method == "host" {
+            self.edit_store(|s| { s.connections.retain(|r|r.snapshot.connection.id!=id); Ok(()) }).await?;
+            let mut store=self.host_store.lock().await; let mut next=store.clone();
+            next.servers.retain(|r|r.connection_id()!=id);next.save(&self.root)?;*store=next;
+        } else { self.edit_store(|s| s.remove_connection(id)).await?; }
         self.subscriptions
             .lock()
             .map_err(|_| internal())?
