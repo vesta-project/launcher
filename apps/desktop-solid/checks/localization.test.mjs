@@ -62,6 +62,10 @@ const args = {
   server: "Survival",
   time: "1:24",
   address: "localhost:8443",
+  free: "12 GB",
+  port: 25565,
+  files: 1200,
+  percent: 45,
 };
 
 describe("localization catalogs", () => {
