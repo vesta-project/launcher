@@ -1,0 +1,33 @@
+[package]
+name = "vesta-host-client"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[dependencies]
+spake2 = "=0.4.0"
+hkdf = "=0.12.4"
+hmac = "=0.12.1"
+rand_core = { version = "=0.6.4", features = ["getrandom"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.149"
+sha2 = "=0.10.9"
+base64 = "=0.22.1"
+zeroize = { version = "=1.9.1", features = ["alloc"] }
+
+[dev-dependencies]
+rand_chacha = "=0.3.1"
+hex = "=0.4.3"
+
+[features]
+discovery = ["dep:mdns-sd", "dep:uuid"]
+
+[dependencies.mdns-sd]
+version = "=0.21.7"
+optional = true
+default-features = false
+
+[dependencies.uuid]
+version = "=1.23.2"
+optional = true
