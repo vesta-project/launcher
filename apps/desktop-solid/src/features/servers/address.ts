@@ -43,7 +43,7 @@ function ipv6(value: string) {
 const shown = (host: string, port: number) => `${host.includes(':') ? `[${host}]` : host}:${port}`;
 
 /** Parses `host`, `host:port`, `[v6]:port`, `https://host:port` (no path, no credentials). */
-export function parseHostPort(input: string): ParsedAddress | { kind: 'invalid'; problem: AddressProblem } {
+export function parseHostPort(input: string, defaultPort = DEFAULT_PORT): ParsedAddress | { kind: 'invalid'; problem: AddressProblem } {
   let value = input.trim();
   if (!value) return invalid('empty');
   const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
@@ -61,7 +61,7 @@ export function parseHostPort(input: string): ParsedAddress | { kind: 'invalid';
   }
 
   let host = value;
-  let port = DEFAULT_PORT;
+  let port = defaultPort;
   const bracketed = /^\[([^\]]+)\](?::(\d+))?$/.exec(value);
   if (bracketed) {
     host = bracketed[1];

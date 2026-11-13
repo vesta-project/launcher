@@ -24,6 +24,7 @@ import { LibraryPage } from '../pages/library/library-page';
 import { SettingsPage } from '../pages/settings/settings-page';
 import { ServersPage } from '../pages/servers/servers-page';
 import { useServerSync } from '../features/servers/store';
+import { useHostSync } from '../features/servers/hosts-store';
 import { Rail } from './rail';
 import { route } from './router';
 import { Titlebar } from './titlebar';
@@ -52,6 +53,7 @@ export function Shell() {
   prefetchSettingsWhenIdle();
   useInstanceSync();
   useServerSync();
+  useHostSync();
   useInstanceShortcutRuntime();
   useMouseBack();
   let visitedCreate = false;

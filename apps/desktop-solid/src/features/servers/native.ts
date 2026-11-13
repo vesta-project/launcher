@@ -109,7 +109,8 @@ export interface ServerConnection {
   fingerprint: string;
   /** Role name returned when pairing, or null after Minecraft sign-in. */
   role: string | null;
-  signInMethod: 'pairing_code' | 'minecraft';
+  /** `host`: a server on a Vesta Server machine, reached through the machine's own sign in. */
+  signInMethod: 'pairing_code' | 'minecraft' | 'host';
   /** True when credentials are kept in memory only for this session. */
   memoryOnly: boolean;
   pinned: boolean;
