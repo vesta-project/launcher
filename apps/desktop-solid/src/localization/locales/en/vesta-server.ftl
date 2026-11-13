@@ -255,11 +255,17 @@ vesta-server-blocker-memory-unknown = We couldn't check how much memory the mach
 vesta-server-blocker-changed = Files changed while we were checking. Check again.
 vesta-server-blocker-too-large = This server is too big to copy for now.
 vesta-server-blocker-unsafe = This folder has links or special files that can't be copied safely.
+vesta-server-blocker-source-listening = Something is still answering on this server's game port. Stop the server, then check again.
+vesta-server-blocker-source-active = This world was in use a moment ago. Stop the server, wait a minute, then check again.
+vesta-server-blocker-world-outside = This server keeps its world in another folder. Pick a folder that contains the world.
+vesta-server-blocker-launch-arguments = This server starts with options Vesta Server can't use safely yet.
 vesta-server-blocker-other = Something needs fixing before this can be copied. Check again in a moment.
 
 vesta-server-warning-auto-restart = I turned off auto start and auto restart for the original server
 vesta-server-warning-rcon = I understand the copy starts with remote console (RCON) turned off
 vesta-server-warning-truncated = Some folders weren't searched. Paste a path or browse if your server is missing.
+vesta-server-warning-process-unknown = I stopped the original server
+vesta-server-warning-bind-cleared = I understand the copy listens on every network address
 vesta-server-warning-other = I've checked this server and want to continue
 
 vesta-server-import-copying-title = Copying { $name }

@@ -429,6 +429,10 @@ const blockerMessages: Record<string, MessageId> = {
   source_changed: 'vesta-server.blocker.changed',
   source_too_large: 'vesta-server.blocker.too-large',
   unsafe_path: 'vesta-server.blocker.unsafe',
+  source_port_listening: 'vesta-server.blocker.source-listening',
+  source_recently_active: 'vesta-server.blocker.source-active',
+  world_outside_source: 'vesta-server.blocker.world-outside',
+  launch_arguments_unsupported: 'vesta-server.blocker.launch-arguments',
 };
 /** Every blocker code the machine documents; each has its own line above. */
 export const KNOWN_BLOCKERS = Object.keys(blockerMessages);
@@ -450,6 +454,8 @@ export function blockerFix(code: string, sourcePath: string, missing: readonly s
 const warningMessages: Record<string, MessageId> = {
   disable_amp_auto_restart: 'vesta-server.warning.auto-restart',
   rcon_disabled: 'vesta-server.warning.rcon',
+  source_process_unknown: 'vesta-server.warning.process-unknown',
+  bind_address_cleared: 'vesta-server.warning.bind-cleared',
 };
 export const KNOWN_WARNINGS = Object.keys(warningMessages);
 export const warningMessage = (code: string): MessageId => warningMessages[code] ?? 'vesta-server.warning.other';
