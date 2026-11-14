@@ -1,7 +1,8 @@
 // Frozen from implemented agent role presets (2026-10-21). UI hints only.
 pub(crate) fn role_defaults(role: Option<&str>) -> Vec<String> {
     let values: &[&str] = match role.unwrap_or("").to_ascii_lowercase().as_str() {
-        "owner" => &[
+        // A Vesta Server machine names its primary and promoted owners; both hold every server permission.
+        "owner" | "primary_owner" => &[
             "status.view",
             "status.detailed",
             "metrics.view",
@@ -168,7 +169,7 @@ pub(crate) fn role_defaults(role: Option<&str>) -> Vec<String> {
             "activity.view",
             "tasks.view",
         ],
-        "pack-user" => &[
+        "pack-user" | "player" => &[
             "status.view",
             "public.info",
             "pack.download",
@@ -178,4 +179,16 @@ pub(crate) fn role_defaults(role: Option<&str>) -> Vec<String> {
         _ => &[],
     };
     values.iter().map(|v| (*v).to_owned()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::role_defaults;
+
+    #[test]
+    fn host_role_names_map_to_presets() {
+        assert_eq!(role_defaults(Some("primary_owner")), role_defaults(Some("owner")));
+        assert!(role_defaults(Some("primary_owner")).iter().any(|c| c == "status.view"));
+        assert_eq!(role_defaults(Some("player")), role_defaults(Some("pack-user")));
+    }
 }
