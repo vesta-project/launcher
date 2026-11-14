@@ -3,7 +3,6 @@
 server-add-intro = It runs on { $name }, ready for your friends whenever they are.
 server-add-on-machine = On { $name }
 server-add-continue = Continue
-server-add-back-to-review = Back to review
 server-add-start-over = Start over
 
 server-add-mode-label = How to add it

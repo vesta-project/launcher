@@ -3876,7 +3876,6 @@ export const messageIds = [
   "browse.target-new-instance-help",
   "browse.target-any-help",
   "browse.target-empty",
-  "server-add.back-to-review",
   "server-add.blocker.archive",
   "server-add.blocker.archive-large",
   "server-add.blocker.disk",

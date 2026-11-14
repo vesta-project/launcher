@@ -389,9 +389,8 @@ function AddWizard(props: { hostId: string; machine: string }) {
               </Show>
 
               <footer data-vesta="add-footer">
-                <Button variant="ghost" onClick={() => (task()?.job?.review ? setEditing(false) : transitionTo('/servers'))}>
-                  {task()?.job?.review ? t('server-add.back-to-review') : t('common.cancel')}
-                </Button>
+                {/* Continue always checks again and reviews, so one way back out is enough. */}
+                <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
                 <Show when={loaded() && continueBlocker()}>{(why) => <span data-vesta="add-why" id="add-continue-why">{t(why(), { name: kind() ? softwareLabel(kind()!.kind, kind()!.label)! : '' })}</span>}</Show>
                 <Button tone="accent" disabled={!loaded() || !!continueBlocker() || !!task()?.sending} aria-describedby={continueBlocker() ? 'add-continue-why' : undefined} onClick={goToReview}>
                   {t('server-add.continue')}
