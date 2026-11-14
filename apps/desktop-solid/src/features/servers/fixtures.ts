@@ -157,8 +157,30 @@ function seed(): FixtureServer[] {
   return [survival, creative, away];
 }
 
-export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number; backupsConfigured?: boolean } = {}): ServersApi {
-  const servers = new Map<ConnectionId, FixtureServer>((options.seeded ?? true ? seed() : []).map((server) => [server.snapshot.connection.id, server]));
+/**
+ * A server on a Vesta Server machine, as its primary owner sees it: signed in through the
+ * machine, with the machine's session projection (every owner permission).
+ */
+export function machineServer(): FixtureServer {
+  const base = seed()[0]!;
+  return {
+    ...base,
+    snapshot: {
+      ...base.snapshot,
+      connection: connection('host-people:srv-lobby', 'Lobby', '192.168.1.67:25500', 'primary_owner', { serverId: 'srv-lobby', signInMethod: 'host', pinned: false }),
+      info: { ...base.snapshot.info!, serverId: 'srv-lobby', name: 'Lobby' },
+      capabilities: { source: 'session', roles: ['owner'], granted: capabilitiesForRole('owner') ?? [], refused: [] },
+      restartRequired: false,
+      joinAddress: '192.168.1.67:25565',
+    },
+    whitelist: [...base.whitelist], ops: [...base.ops], bans: [], operations: [], pending: new Map(), intents: new Map(),
+  };
+}
+
+export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number; backupsConfigured?: boolean; machineServer?: boolean } = {}): ServersApi {
+  const seeded = options.seeded ?? true ? seed() : [];
+  if (options.machineServer) seeded.push(machineServer());
+  const servers = new Map<ConnectionId, FixtureServer>(seeded.map((server) => [server.snapshot.connection.id, server]));
   if (options.backupsConfigured !== undefined) {
     const target = servers.get('fixture-survival');
     if (target) target.snapshot.backupsConfigured = options.backupsConfigured;

@@ -363,6 +363,10 @@ impl Client {
             .as_ref()
             .is_err_and(|e| e.code == ErrorCode::Forbidden)
             && !capability.is_empty()
+            // A Vesta Server machine's session projection is exact, and the machine refuses
+            // routes it owns itself (SFTP, people) with 403. Those say nothing about this
+            // capability, so they must not hide every other screen that needs it.
+            && self.host.is_none()
         {
             let mut refused = self.refused.lock().await;
             if !refused.iter().any(|v| v == capability) && refused.len() < 128 {

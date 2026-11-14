@@ -47,6 +47,8 @@ function nativeApi(): ServersApi {
 const fixtureOptions = () => ({
   ...(globalThis.localStorage?.getItem('vesta.fixtures.backups') === 'off' ? { backupsConfigured: false } : {}),
   ...(['none', 'one', 'offline'].includes(globalThis.localStorage?.getItem('vesta.fixtures.hosts') ?? '') ? { seeded: false } : {}),
+  // A machine with servers also lists one of them, opened as its owner.
+  ...(['servers', 'two'].includes(globalThis.localStorage?.getItem('vesta.fixtures.hosts') ?? '') ? { machineServer: true } : {}),
 });
 
 let fixtureApi: Promise<ServersApi> | undefined;

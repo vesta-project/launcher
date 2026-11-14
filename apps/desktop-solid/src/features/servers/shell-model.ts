@@ -25,6 +25,8 @@ export interface ShellSection extends ShellTab<SettingsSectionId> {
   group: SettingsGroupId;
   /** Owner-reserved on the agent: hidden once the caller's role is known to be another. */
   owner?: boolean;
+  /** Belongs to the Vesta Server machine, not one server: hidden on servers that live on one. */
+  machine?: boolean;
 }
 
 export const mainTabs: readonly ShellTab<MainTabId>[] = [
@@ -45,10 +47,10 @@ export const settingsSections: readonly ShellSection[] = [
   { id: 'game', group: 'server', label: 'servers.settings.game', icon: 'icons/content/sliders', needs: ['config.view'], live: true },
   { id: 'world', group: 'server', label: 'server-hosting.world', icon: 'icons/content/globe', needs: ['config.view'], live: true },
   { id: 'software', group: 'server', label: 'server-hosting.software', icon: 'icons/content/cube', needs: ['content.install'], live: true, owner: true },
-  { id: 'sftp', group: 'server', label: 'server-hosting.sftp', icon: 'icons/security/folder-lock', needs: ['config.view'], live: true },
+  { id: 'sftp', group: 'server', label: 'server-hosting.sftp', icon: 'icons/security/folder-lock', needs: ['config.view'], live: true, machine: true },
   { id: 'presence', group: 'server', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], live: true },
   { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/people', needs: ['players.view'], live: true },
-  { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true },
+  { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true, machine: true },
   { id: 'connection', group: 'device', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], live: false },
 ];
 
@@ -146,11 +148,17 @@ export function navEntryPath(id: string, value: string): string {
   return serverPath(id, { mode: 'main', tab: value as MainTabId });
 }
 
-export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'> & { connection?: { role: string | null } }): ShellSection[] {
+/**
+ * The settings sections this person can open. SFTP and who has access belong to a Vesta Server
+ * machine (its own settings), and the machine refuses them per server, so they are left out there.
+ */
+export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'> & { connection?: { role: string | null; signInMethod?: string } }): ShellSection[] {
   const role = snapshot.connection?.role;
+  const onMachine = snapshot.connection?.signInMethod === 'host';
   return settingsSections.filter((section) =>
     (!section.needs.length || anyVisible(snapshot.capabilities, section.needs))
-    && !(section.owner && role && roleKey(role) !== 'owner'));
+    && !(section.owner && role && roleKey(role) !== 'owner')
+    && !(section.machine && onMachine));
 }
 
 /** The agent can be asked for data right now. */

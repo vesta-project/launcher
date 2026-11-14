@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { capabilitiesForRole } from '../src/features/servers/capabilities';
+import { canInstallServerModpack, capabilitiesForRole, roleKey } from '../src/features/servers/capabilities';
+import { machineServer } from '../src/features/servers/fixtures';
 import {
   activeNavEntry, agentReachable, backupsConfigured, extraWarnings, headerExplains, headerNotice, isQuietError, joinAddress,
   knownPlayerCount, legacyTabs, navEntryPath, paneState, resolveServerLocation, restartPending, serverNavEntries, serverPath, visibleMainTabs,
@@ -108,6 +109,18 @@ describe('[shell] routing', () => {
     expect(visibleSections(snapshot()).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'sftp', 'presence', 'players', 'access', 'connection']);
     expect(visibleSections(snapshot({}, 'viewer')).map((section) => section.id)).toEqual(['players', 'connection']);
     expect(visibleSections(snapshot({}, 'pack-user')).map((section) => section.id)).toEqual(['connection']);
+  });
+
+  test('the owner of a server on a Vesta Server sees every server setting', () => {
+    // The machine names its first owner primary_owner and projects every owner permission;
+    // SFTP and who has access live in the machine's own settings.
+    const owned = machineServer().snapshot;
+    expect(owned.connection.signInMethod).toBe('host');
+    expect(visibleSections(owned).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'connection']);
+    const promoted = { ...owned, connection: { ...owned.connection, role: 'owner' } };
+    expect(visibleSections(promoted).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'connection']);
+    expect(roleKey('primary_owner')).toBe('owner');
+    expect(canInstallServerModpack({ ...owned.capabilities, roles: undefined }, 'primary_owner')).toBe(true);
   });
 });
 

@@ -27,10 +27,13 @@ export const builtinRoleCapabilities: Record<string, readonly string[]> = {
   'pack-user': ['status.view', 'public.info', 'pack.download', 'pack.realtime', 'pack.access'],
 };
 
-/** Canonical role id for the names the agent returns (`admin` is an alias). */
+/**
+ * Canonical role id for the names the agent returns (`admin` is an alias). A Vesta Server
+ * machine calls its first owner `primary_owner`; on each of its servers that is the owner role.
+ */
 export const roleKey = (role: string | null | undefined) => {
   const value = (role ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-');
-  return value === 'admin' ? 'administrator' : value;
+  return value === 'admin' ? 'administrator' : value === 'primary-owner' ? 'owner' : value;
 };
 
 export const capabilitiesForRole = (role: string | null | undefined): string[] | undefined => {
