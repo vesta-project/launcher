@@ -144,6 +144,30 @@ pub enum HostAction {
     ImportResume,
     ImportStart,
     ImportReadiness,
+    CatalogueMinecraft,
+    CatalogueSoftware,
+    CreateDefaults,
+    CreateRestoreSources,
+    CreatePlan,
+    CreateApply,
+    CreateJob,
+    CreateCancel,
+    CreateResume,
+    CreateStart,
+}
+/// A Minecraft version id for a catalogue query: short, and only characters a version uses.
+fn version_query(body: Option<&Value>) -> Result<String> {
+    body.and_then(|body| body.get("minecraftVersion"))
+        .and_then(Value::as_str)
+        .filter(|id| {
+            !id.is_empty()
+                && id.len() <= 48
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+        })
+        .map(str::to_owned)
+        .ok_or_else(|| Error::new(ErrorCode::InvalidInput))
 }
 /// Closed route selection: frontend cannot provide arbitrary URLs or authorization.
 #[tauri::command]
@@ -259,8 +283,26 @@ async fn dispatch(
         ImportResume => ("POST", format!("/imports/jobs/{}/resume", id()?)),
         ImportStart => ("POST", format!("/imports/jobs/{}/start", id()?)),
         ImportReadiness => ("GET", format!("/imports/jobs/{}", id()?)),
+        CatalogueMinecraft => ("GET", "/catalogue/minecraft".into()),
+        CatalogueSoftware => (
+            "GET",
+            format!(
+                "/catalogue/software?minecraftVersion={}",
+                version_query(body.as_ref())?
+            ),
+        ),
+        CreateDefaults => ("GET", "/creates/defaults".into()),
+        CreateRestoreSources => ("GET", "/creates/restore-sources".into()),
+        CreatePlan => ("POST", "/creates/plan".into()),
+        CreateApply => ("POST", "/creates/apply".into()),
+        CreateJob => ("GET", format!("/creates/jobs/{}", id()?)),
+        CreateCancel => ("POST", format!("/creates/jobs/{}/cancel", id()?)),
+        CreateResume => ("POST", format!("/creates/jobs/{}/resume", id()?)),
+        CreateStart => ("POST", format!("/creates/jobs/{}/start", id()?)),
         _ => unreachable!(),
     };
+    // Reads carry no body: a catalogue query travels in the path.
+    let body = if method == "GET" { None } else { body };
     session
         .call(
             method,

@@ -93,6 +93,55 @@ impl Drop for EnrollmentKey {
         }
     }
 }
+/// A server on a machine as a normal saved connection. Like any other new server it starts
+/// unpinned: the sidebar only shows what the person pinned. It belongs to the account that
+/// listed it, like every other saved connection.
+fn host_server_record(host: &VestaHost, target: &ServerRef, server: &Value, account: Option<String>) -> Result<Record> {
+    Ok(Record {
+        snapshot: ServerSnapshot {
+            connection: ServerConnection {
+                id: target.connection_id(),
+                name: string(server, "name")?,
+                endpoint: host.endpoints.first().cloned().ok_or_else(internal)?,
+                server_id: target.server_id.clone(),
+                fingerprint: host.fingerprint.clone(),
+                role: server["role"].as_str().map(str::to_owned),
+                sign_in_method: "host".into(),
+                memory_only: false,
+                pinned: false,
+                added_at_ms: vesta_server_client::now_ms(),
+                last_connected_at_ms: None,
+                auth_revision: Some(host.auth_revision.clone()),
+            },
+            state: Default::default(),
+            info: None,
+            status: None,
+            status_observed_at_ms: None,
+            pack: None,
+            capabilities: CapabilityView {
+                source: "unknown".into(),
+                roles: None,
+                granted: vec![],
+                refused: vec![],
+            },
+            restart_required: false,
+            join_address: None,
+            backups_configured: None,
+            public_lifecycle: None,
+        },
+        device_id: host.device_id.clone(),
+        key_reference: host.key_reference.clone(),
+        account_uuid: account,
+    })
+}
+/// Adds a machine's server once. A server that is already saved keeps what the person chose
+/// for it (its pin, its name), however often the machine is asked for its servers.
+fn keep_or_add(store: &mut Store, record: Record) {
+    let id = &record.snapshot.connection.id;
+    if !store.connections.iter().any(|r| &r.snapshot.connection.id == id) {
+        store.connections.push(record);
+    }
+}
 impl ServerManager {
     pub async fn hosts_list(&self) -> Result<Vec<VestaHost>> {
         Ok(self.host_store.lock().await.hosts.clone())
@@ -840,57 +889,13 @@ impl ServerManager {
         // Machine servers belong to the account that was signed in when they were listed.
         let account = selected_account();
         for server in servers {
-            let server_id = string(server, "serverId")?;
             let target = ServerRef {
                 host_id: id.into(),
-                server_id: server_id.clone(),
+                server_id: string(server, "serverId")?,
             };
-            let connection_id = target.connection_id();
-            let host = &session.host;
-            let snapshot = ServerSnapshot {
-                connection: ServerConnection {
-                    id: connection_id.clone(),
-                    name: string(server, "name")?,
-                    endpoint: host.endpoints[0].clone(),
-                    server_id,
-                    fingerprint: host.fingerprint.clone(),
-                    role: server["role"].as_str().map(str::to_owned),
-                    sign_in_method: "host".into(),
-                    memory_only: false,
-                    pinned: true,
-                    added_at_ms: vesta_server_client::now_ms(),
-                    last_connected_at_ms: None,
-                    auth_revision: Some(host.auth_revision.clone()),
-                },
-                state: Default::default(),
-                info: None,
-                status: None,
-                status_observed_at_ms: None,
-                pack: None,
-                capabilities: CapabilityView {
-                    source: "unknown".into(),
-                    roles: None,
-                    granted: vec![],
-                    refused: vec![],
-                },
-                restart_required: false,
-                join_address: None,
-                backups_configured: None,
-                public_lifecycle: None,
-            };
+            let record = host_server_record(&session.host, &target, server, account.clone())?;
             self.edit_store(|s| {
-                if !s
-                    .connections
-                    .iter()
-                    .any(|r| r.snapshot.connection.id == connection_id)
-                {
-                    s.connections.push(Record {
-                        snapshot,
-                        device_id: host.device_id.clone(),
-                        key_reference: host.key_reference.clone(),
-                        account_uuid: account.clone(),
-                    });
-                }
+                keep_or_add(s, record);
                 Ok(())
             })
             .await?;
@@ -904,5 +909,46 @@ impl ServerManager {
         }
         self.changed(app);
         Ok(response)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn host() -> VestaHost {
+        serde_json::from_value(json!({
+            "id": "host-one", "name": "attic-pc", "fingerprint": "ab".repeat(32),
+            "endpoints": ["192.168.1.80:25500"], "deviceId": "device", "keyReference": "key",
+            "accountId": "account", "authRevision": "1"
+        }))
+        .unwrap()
+    }
+    fn record(server_id: &str) -> Record {
+        let target = ServerRef {
+            host_id: "host-one".into(),
+            server_id: server_id.into(),
+        };
+        let listed = json!({"serverId": server_id, "name": "Survival", "role": "owner"});
+        host_server_record(&host(), &target, &listed, None).unwrap()
+    }
+    #[test]
+    fn a_new_server_on_a_machine_is_not_pinned() {
+        let added = record("srv-1");
+        assert!(!added.snapshot.connection.pinned);
+        assert_eq!(added.snapshot.connection.sign_in_method, "host");
+        assert_eq!(added.snapshot.connection.id, "host-one:srv-1");
+    }
+    #[test]
+    fn listing_a_machine_again_keeps_the_pin_choice() {
+        let mut store = Store::default();
+        keep_or_add(&mut store, record("srv-1"));
+        keep_or_add(&mut store, record("srv-2"));
+        store.connections[0].snapshot.connection.pinned = true;
+        store.connections[0].snapshot.connection.name = "Renamed here".into();
+        keep_or_add(&mut store, record("srv-1"));
+        keep_or_add(&mut store, record("srv-2"));
+        assert_eq!(store.connections.len(), 2);
+        assert!(store.connections[0].snapshot.connection.pinned);
+        assert_eq!(store.connections[0].snapshot.connection.name, "Renamed here");
+        assert!(!store.connections[1].snapshot.connection.pinned);
     }
 }
