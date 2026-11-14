@@ -10,7 +10,6 @@ import { usingFixtures } from '../../features/servers/service';
 import { refreshServers, serverSnapshots, serversListError, serversLoaded, useServersClock } from '../../features/servers/store';
 import { AddServer } from './add-server';
 import { HostGuide } from './onboarding';
-import { FirstServerSetup } from './first-server';
 import { addRoute } from '../../features/servers/onboarding-model';
 import { groupServers } from '../../features/servers/host-model';
 import { overallPercent } from '../../features/servers/host-add-model';
@@ -52,21 +51,16 @@ export function ServersPage() {
 }
 
 /**
- * `/servers/setup` and `/servers/add` start by setting up a Vesta Server. The older guides,
- * first-server setup and re-pairing a saved connection keep their `/servers/add/<detail>` routes.
+ * `/servers/setup` and `/servers/add` start by setting up a Vesta Server. The install guide,
+ * connecting by address and re-pairing a saved connection keep their `/servers/add/<detail>` routes.
  */
 function AddPage() {
-  const target = () => addRoute(route().section === 'setup' ? undefined : route().detail, route().item);
+  const target = () => addRoute(route().section === 'setup' ? undefined : route().detail);
   return (
     <Switch>
       <Match when={target().kind === 'start'}><VestaSetup /></Match>
       <Match when={target().kind === 'connect'}><AddServer /></Match>
-      <Match when={(() => { const value = target(); return value.kind === 'host' ? value.mode : undefined; })()} keyed>
-        {(mode) => <HostGuide mode={mode} />}
-      </Match>
-      <Match when={(() => { const value = target(); return value.kind === 'setup' ? value.connectionId : undefined; })()} keyed>
-        {(id) => <FirstServerSetup connectionId={id} />}
-      </Match>
+      <Match when={target().kind === 'host'}><HostGuide /></Match>
       <Match when={(() => { const value = target(); return value.kind === 'reconnect' ? value.connectionId : undefined; })()} keyed>
         {(id) => <AddServer connectionId={id} />}
       </Match>

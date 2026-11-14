@@ -12,8 +12,6 @@ import type { Discovery, ServerCommandError, ServerSnapshot } from '../../featur
 import type { MessageId } from '../../localization/messages';
 import { roleLabel } from '../../features/servers/model';
 import { FingerprintView, ServerErrorNote } from './parts';
-import { initialAddress, type HostMode } from '../../features/servers/onboarding-model';
-import { awaitingFirstServer } from '../../features/servers/first-server-store';
 
 type Step = 'address' | 'verify' | 'sign-in' | 'done';
 
@@ -27,16 +25,12 @@ const addressProblems: Record<AddressProblem, MessageId> = {
   link: 'servers.address.problem-link',
 };
 
-/**
- * Connect to an existing Vesta server: address → verify identity → sign in. A host guide embeds
- * it after the install step, with the address prefilled for this computer.
- */
-export function AddServer(props: { connectionId?: string; guide?: { mode: HostMode; onBack: () => void } } = {}) {
+/** Connect to an existing Vesta server by its address: address, verify identity, sign in. */
+export function AddServer(props: { connectionId?: string } = {}) {
   const reconnectId = untrack(() => props.connectionId);
-  const guide = untrack(() => props.guide);
   const [saved, setSaved] = createSignal<ServerSnapshot | null>(null);
   const [step, setStep] = createSignal<Step>(reconnectId ? 'sign-in' : 'address');
-  const [address, setAddress] = createSignal(initialAddress(guide?.mode));
+  const [address, setAddress] = createSignal('');
   const [touched, setTouched] = createSignal(false);
   const [discovery, setDiscovery] = createSignal<Discovery | null>(null);
   const [compared, setCompared] = createSignal(false);
@@ -110,8 +104,6 @@ export function AddServer(props: { connectionId?: string; guide?: { mode: HostMo
       const snapshot = await serverCommand(client => client.signInMinecraft(found.discoveryId, selected.uuid, { memoryOnly: memoryOnly(), invitationCode: code().trim() ? normalizePairingCode(code()) : undefined }));
       putSnapshot(snapshot);
       setResult(snapshot);
-      // A freshly installed host has no server yet: continue straight into setting one up.
-      if (guide && await awaitingFirstServer(snapshot.connection.id)) { transitionTo(`/servers/add/setup/${snapshot.connection.id}`); return; }
       setStep('done');
     });
   };
@@ -121,15 +113,14 @@ export function AddServer(props: { connectionId?: string; guide?: { mode: HostMo
     if (reconnectId) { transitionTo(`/servers/${reconnectId}`); return; }
     if (step() === 'sign-in') setStep('verify');
     else if (step() === 'verify') setStep('address');
-    else if (guide) guide.onBack();
-    else transitionTo('/servers/add');
+    else transitionTo('/servers');
   };
 
   return (
     <Board class="servers-board">
       <div data-vesta="server-add">
         <nav data-vesta="server-add-steps" aria-label={t('servers.add-steps')}>
-          <StepIndicator current={step()} guided={!!guide} />
+          <StepIndicator current={step()} />
         </nav>
         <Switch>
           <Match when={step() === 'address'}>
@@ -202,7 +193,7 @@ export function AddServer(props: { connectionId?: string; guide?: { mode: HostMo
               </Show>
               <TextField
                 label={t('servers.sign-in.invitation')}
-                description={t(guide ? 'servers.host.code-field-help' : 'servers.sign-in.invitation-help')}
+                description={t('servers.sign-in.invitation-help')}
                 value={code()}
                 onChange={(value) => { setCode(value); setError(null); }}
                 spellcheck={false}
@@ -257,13 +248,11 @@ const steps: { id: Step; label: MessageId }[] = [
   { id: 'sign-in', label: 'servers.step.sign-in' },
 ];
 
-/** A host guide shows its finished Install step first, so the row reads as one journey. */
-function StepIndicator(props: { current: Step; guided?: boolean }) {
-  const all = () => (props.guided ? [{ id: 'install' as const, label: 'servers.step.install' as MessageId }, ...steps] : steps);
-  const index = () => (props.current === 'done' ? all().length : all().findIndex((entry) => entry.id === props.current));
+function StepIndicator(props: { current: Step }) {
+  const index = () => (props.current === 'done' ? steps.length : steps.findIndex((entry) => entry.id === props.current));
   return (
     <ol>
-      <For each={all()}>
+      <For each={steps}>
         {(entry, at) => (
           <li data-state={at() < index() ? 'done' : at() === index() ? 'current' : 'next'} aria-current={at() === index() ? 'step' : undefined}>
             <span>{at() + 1}</span>{t(entry.label)}

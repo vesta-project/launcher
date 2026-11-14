@@ -1,29 +1,32 @@
 import { expect, test } from 'bun:test';
-import { HOST_RELEASES_URL, LOCAL_HOST_ADDRESS, addRoute, hostGuideSteps, initialAddress } from '../src/features/servers/onboarding-model.ts';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { VESTA_INSTALL_COMMAND, addRoute } from '../src/features/servers/onboarding-model.ts';
 
-test('/servers/add routes to the start page, the guides, connect, or re-pairing', () => {
+const root = join(import.meta.dir, '..');
+const source = (path) => readFileSync(join(root, path), 'utf8');
+
+test('/servers/add routes to setup, the install guide, connect, or re-pairing', () => {
   expect(addRoute(undefined)).toEqual({ kind: 'start' });
   expect(addRoute('connect')).toEqual({ kind: 'connect' });
-  expect(addRoute('host')).toEqual({ kind: 'host', mode: 'local' });
-  expect(addRoute('remote')).toEqual({ kind: 'host', mode: 'remote' });
+  // Hosting here or elsewhere is one guide now.
+  expect(addRoute('host')).toEqual({ kind: 'host' });
+  expect(addRoute('remote')).toEqual({ kind: 'host' });
+  // The old first server step after pairing a host now starts at Vesta Server setup.
+  expect(addRoute('setup')).toEqual({ kind: 'start' });
   // Existing "pair again" links keep working.
   expect(addRoute('fixture-survival')).toEqual({ kind: 'reconnect', connectionId: 'fixture-survival' });
 });
 
-test('hosting on this PC starts connecting to the local host; elsewhere the person types the address', () => {
-  expect(LOCAL_HOST_ADDRESS).toBe('localhost:8443');
-  expect(initialAddress('local')).toBe(LOCAL_HOST_ADDRESS);
-  expect(initialAddress('remote')).toBe('');
-  expect(initialAddress(undefined)).toBe('');
-});
-
-test('the guide reads as one journey: install, then the usual connect steps', () => {
-  expect(hostGuideSteps).toEqual(['servers.step.install', 'servers.step.address', 'servers.step.verify', 'servers.step.sign-in']);
-});
-
-test('installer commands come from the signed release page, never embedded pins', () => {
-  const url = new URL(HOST_RELEASES_URL);
-  expect(url.protocol).toBe('https:');
-  expect(url.hostname).toBe('github.com');
-  expect(url.pathname).toBe('/vesta-project/server/releases');
+test('the guide is one install command on the server machine, then Set up a Vesta Server', () => {
+  expect(VESTA_INSTALL_COMMAND).toStartWith('curl -fsSL https://raw.githubusercontent.com/vesta-project/server/');
+  expect(VESTA_INSTALL_COMMAND).toContain('sudo bash /tmp/vesta-install.sh');
+  const guide = source('src/pages/servers/onboarding.tsx');
+  expect(guide).toContain('<CommandLine command={VESTA_INSTALL_COMMAND} />');
+  expect(guide).toContain("transitionTo('/servers/setup')");
+  // Nothing from the old per server pairing guide remains.
+  const copy = source('src/localization/locales/en/servers.ftl');
+  expect(copy).not.toMatch(/Vesta Host|vesta-setup setup-code|^servers-first-/m);
+  expect(existsSync(join(root, 'src/pages/servers/first-server.tsx'))).toBe(false);
+  expect(source('src/pages/servers/add-server.tsx')).not.toContain('guide');
 });
