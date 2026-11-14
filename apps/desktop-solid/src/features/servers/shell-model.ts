@@ -50,7 +50,7 @@ export const settingsSections: readonly ShellSection[] = [
   { id: 'sftp', group: 'server', label: 'server-hosting.sftp', icon: 'icons/security/folder-lock', needs: ['config.view'], live: true, machine: true },
   { id: 'presence', group: 'server', label: 'servers.tab.presence', icon: 'icons/status/live', needs: ['config.view'], live: true },
   { id: 'players', group: 'people', label: 'servers.tab.players', icon: 'icons/content/people', needs: ['players.view'], live: true },
-  { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true, machine: true },
+  { id: 'access', group: 'people', label: 'servers.tab.access', icon: 'icons/security/shield', needs: ACCESS_NEEDS, live: true },
   { id: 'connection', group: 'device', label: 'servers.tab.connection', icon: 'icons/security/network', needs: [], live: false },
 ];
 
@@ -149,8 +149,9 @@ export function navEntryPath(id: string, value: string): string {
 }
 
 /**
- * The settings sections this person can open. SFTP and who has access belong to a Vesta Server
- * machine (its own settings), and the machine refuses them per server, so they are left out there.
+ * The settings sections this person can open. SFTP belongs to a Vesta Server machine (its own
+ * settings) and the machine refuses it per server, so it is left out there. Access stays: the
+ * machine serves per-server roles and invites (host-v1 README, "Server access").
  */
 export function visibleSections(snapshot: Pick<ServerSnapshot, 'capabilities'> & { connection?: { role: string | null; signInMethod?: string } }): ShellSection[] {
   const role = snapshot.connection?.role;

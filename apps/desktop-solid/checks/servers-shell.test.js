@@ -113,12 +113,12 @@ describe('[shell] routing', () => {
 
   test('the owner of a server on a Vesta Server sees every server setting', () => {
     // The machine names its first owner primary_owner and projects every owner permission;
-    // SFTP and who has access live in the machine's own settings.
+    // SFTP lives in the machine's own settings; who has access to this server stays here.
     const owned = machineServer().snapshot;
     expect(owned.connection.signInMethod).toBe('host');
-    expect(visibleSections(owned).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'connection']);
+    expect(visibleSections(owned).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'access', 'connection']);
     const promoted = { ...owned, connection: { ...owned.connection, role: 'owner' } };
-    expect(visibleSections(promoted).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'connection']);
+    expect(visibleSections(promoted).map((section) => section.id)).toEqual(['general', 'game', 'world', 'software', 'presence', 'players', 'access', 'connection']);
     expect(roleKey('primary_owner')).toBe('owner');
     expect(canInstallServerModpack({ ...owned.capabilities, roles: undefined }, 'primary_owner')).toBe(true);
   });
