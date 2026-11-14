@@ -320,10 +320,13 @@ describe('[hosts] servers list', () => {
     ]);
   });
 
-  test('the old per server pairing screen is gone and setup replaces Add server', () => {
+  test('setup replaces Add server as the start, legacy pairing keeps only its own routes', () => {
     const page = source('src/pages/servers/servers-page.tsx');
-    expect(page).not.toContain('AddServer');
-    expect(page).toContain('<VestaSetup />');
+    // `/servers/setup` and a bare `/servers/add` start with Vesta Server setup.
+    expect(page).toContain("<Match when={target().kind === 'start'}><VestaSetup /></Match>");
+    expect(page).not.toContain('serverStartChoices');
+    // Re-pairing a saved connection and the connect guide stay on `/servers/add/<detail>`.
+    expect(page).toContain("<Match when={target().kind === 'connect'}><AddServer /></Match>");
     expect(source('src/app/rail.tsx')).toContain("transitionTo('/servers/setup')");
     // Legacy saved connections still render as normal cards from the same list.
     expect(page).toContain('serverSnapshots()');
