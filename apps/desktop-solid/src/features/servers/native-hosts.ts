@@ -10,7 +10,8 @@ export type NewDeviceSignIn = 'account' | 'approval';
 /** `name` is the last Minecraft name the machine verified for that account, or null. */
 export interface HostOwner { accountId: string; role: 'primary_owner' | 'owner'; name: string | null }
 export interface HostUpdate { name?: string; newDeviceSignIn?: NewDeviceSignIn }
-export interface HostServer { serverId: string; name: string; gamePort: number; state: string; role: string }
+/** `software`, `minecraftVersion` and `iconEtag` are absent on older machines; null means unknown or no icon. */
+export interface HostServer { serverId: string; name: string; gamePort: number; state: string; role: string; software?: { kind: string; version: string | null } | null; minecraftVersion?: string | null; iconEtag?: string | null }
 export interface HostDevice { deviceId: string; name: string; accountId: string; revoked: boolean; createdAt: string }
 export interface LinkResult { linkId: string; state: string; requestHash: string; deviceId?: string }
 /** A code the machine accepted. Pass the id to claim or link so the same exchange is reused. */
@@ -25,7 +26,42 @@ export interface ImportApply { planId: string; confirmation: string; acknowledge
 export type ImportState = 'planning' | 'review' | 'applying' | 'ready' | 'starting' | 'online' | 'blocked' | 'failed' | 'cancelled' | 'interrupted';
 export interface ImportJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: { filesDone: number; filesTotal: number; bytesDone: number; bytesTotal: number }; review: ImportReview | null; serverId: string | null }
 export interface ImportReview { planId: string; confirmation: string | null; expiresAt: string; blockers: string[]; warnings: string[]; source: { displayPath: string; snapshot: string; files: number; bytes: number }; detected: unknown; runtime: unknown; destination: { serverId: string; displayPath: string; freeBytes: number }; resources: { gamePort: number; memoryMiB: number }; processes: unknown[]; ports: unknown[]; inspection: unknown }
-export type HostAction = 'info' | 'update' | 'owners' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness';
+export type HostAction = 'info' | 'update' | 'owners' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness'
+  | 'catalogue_minecraft' | 'catalogue_software' | 'create_defaults' | 'create_restore_sources' | 'create_plan' | 'create_apply' | 'create_job' | 'create_cancel' | 'create_resume' | 'create_start';
+// Creating a server on the machine (create.md): new, from a modpack, or restored from a backup.
+export interface CatalogueVersion { id: string; stable: boolean; experimental: boolean; recommended: boolean }
+export interface MinecraftCatalogue { versions: CatalogueVersion[]; latestStable: string | null }
+/** `id` is an opaque selection id; a plan sends `build` and `loaderVersion`. */
+export interface CatalogueBuild { id: string; build: number | null; loaderVersion: string | null; stable: boolean; experimental: boolean; recommended: boolean }
+export interface CatalogueKind { kind: string; label: string; stable: boolean; experimental: boolean; recommended: boolean; available: boolean; builds: CatalogueBuild[] }
+export interface SoftwareCatalogue { minecraftVersion: string; kinds: CatalogueKind[] }
+/** Nulls let the machine pick the recommended build. */
+export interface CreateSoftware { kind: string; build: number | null; loaderVersion: string | null }
+export interface CreateDefaults { name: string; minecraftVersion: string; software: CreateSoftware; gamePort: number; memoryMiB: number; java: 'automatic' }
+export type CreateProvider = 'modrinth' | 'curseforge';
+export type CreateSource = { kind: 'provider'; provider: CreateProvider; projectId: string; versionId: string } | { kind: 'snapshot'; sourceId: string } | { kind: 'upload'; uploadId: string };
+interface CreateResources { name: string; gamePort: number | null; memoryMiB: number | null; eulaAccepted: false }
+export type CreatePlan =
+  | (CreateResources & { kind: 'new'; minecraftVersion: string; software: CreateSoftware })
+  | (CreateResources & { kind: 'modpack'; source: CreateSource })
+  | (CreateResources & { kind: 'restore'; source: CreateSource });
+export interface CreateApply { planId: string; confirmation: string; acknowledgedWarnings: string[]; eulaAccepted: true }
+export interface RestoreSource { sourceId: string; label: string; createdAt: string; minecraftVersion: string | null; software: { kind: string; version: string | null } | null; bytes: number }
+export interface PackIssue { code: string; message: string; blocking: boolean }
+export interface CreateSummary {
+  kind: 'new' | 'modpack' | 'restore';
+  name: string;
+  minecraftVersion: string | null;
+  software: { kind: string; version: string | null; build: number | null; loaderVersion: string | null } | null;
+  resources: { gamePort: number; memoryMiB: number };
+  runtime: { requiredMajor: number | null; downloadRequired: boolean; automatic: true } | null;
+  destination: { serverId: string; displayPath: string; freeBytes: number };
+  pack: { name: string; provider: string | null; projectId: string | null; versionId: string | null; minecraftVersion: string | null; loader: string | null; issues: PackIssue[] } | null;
+  restore: { sourceId: string; label: string; createdAt: string } | null;
+}
+export interface CreateReview { planId: string; confirmation: string | null; expiresAt: string; summary: CreateSummary; blockers: string[]; warnings: string[] }
+/** Same envelope and states as an import job; phases are `resolving`, `downloading_java`, `downloading_software`, `installing`, `registering`, `starting`. */
+export interface CreateJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: ImportJob['progress']; review: CreateReview | null; serverId: string | null }
 export interface HostRequestOptions { id?: string; body?: unknown; revision?: string; idempotencyKey?: string }
 const request = <T>(hostId: string, action: HostAction, options: HostRequestOptions = {}) => invoke<T>('host_request', { hostId, action, ...options });
 export const hostsNative = {
@@ -70,4 +106,15 @@ export const hostsNative = {
   importResume: (hostId: string, id: string, idempotencyKey: string) => request<ImportJob>(hostId, 'import_resume', { id, body: {}, idempotencyKey }),
   importStart: (hostId: string, id: string, idempotencyKey: string) => request<ImportJob>(hostId, 'import_start', { id, body: {}, idempotencyKey }),
   importReadiness: (hostId: string, id: string) => request<ImportJob>(hostId, 'import_readiness', { id }),
+  catalogueMinecraft: (hostId: string) => request<MinecraftCatalogue>(hostId, 'catalogue_minecraft'),
+  catalogueSoftware: (hostId: string, minecraftVersion: string) => request<SoftwareCatalogue>(hostId, 'catalogue_software', { body: { minecraftVersion } }),
+  /** Suggestions for a new server: the first free name and port, memory the machine can spare. */
+  createDefaults: (hostId: string) => request<CreateDefaults>(hostId, 'create_defaults'),
+  createRestoreSources: (hostId: string) => request<{ sources: RestoreSource[] }>(hostId, 'create_restore_sources'),
+  createPlan: (hostId: string, body: CreatePlan, idempotencyKey: string) => request<{ jobId: string; state: ImportState }>(hostId, 'create_plan', { body, idempotencyKey }),
+  createApply: (hostId: string, body: CreateApply, idempotencyKey: string) => request<{ jobId: string; serverId: string }>(hostId, 'create_apply', { body, idempotencyKey }),
+  createJob: (hostId: string, id: string) => request<CreateJob>(hostId, 'create_job', { id }),
+  createCancel: (hostId: string, id: string, idempotencyKey: string) => request<{ state: ImportState }>(hostId, 'create_cancel', { id, body: {}, idempotencyKey }),
+  createResume: (hostId: string, id: string, idempotencyKey: string) => request<CreateJob>(hostId, 'create_resume', { id, body: {}, idempotencyKey }),
+  createStart: (hostId: string, id: string, idempotencyKey: string) => request<CreateJob>(hostId, 'create_start', { id, body: {}, idempotencyKey }),
 };

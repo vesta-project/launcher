@@ -402,55 +402,6 @@ export function readFolderCheck(reply: unknown, typed: string): CheckOutcome {
 
 // ------------------------------------------------------------------ import: review
 
-export interface BlockerFix {
-  code: string;
-  message: MessageId;
-  /** A command to run on the machine, shown with a copy button. */
-  command?: string;
-  /** The fix is changing a setting under Customize. */
-  customize?: boolean;
-}
-
-const blockerMessages: Record<string, MessageId> = {
-  source_running: 'vesta-server.blocker.source-running',
-  source_state_unknown: 'vesta-server.blocker.source-unknown',
-  source_unreadable: 'vesta-server.blocker.permission',
-  game_port_in_use: 'vesta-server.blocker.port-in-use',
-  port_state_unknown: 'vesta-server.blocker.port-unknown',
-  port_unresolved: 'vesta-server.blocker.port-unknown',
-  insufficient_space: 'vesta-server.blocker.disk',
-  software_unresolved: 'vesta-server.blocker.software',
-  launch_unresolved: 'vesta-server.blocker.launch',
-  java_unresolved: 'vesta-server.blocker.java',
-  not_minecraft_server: 'vesta-server.blocker.not-minecraft',
-  memory_budget_exceeded: 'vesta-server.blocker.memory',
-  memory_invalid: 'vesta-server.blocker.memory',
-  memory_unresolved: 'vesta-server.blocker.memory-unknown',
-  source_changed: 'vesta-server.blocker.changed',
-  source_too_large: 'vesta-server.blocker.too-large',
-  unsafe_path: 'vesta-server.blocker.unsafe',
-  source_port_listening: 'vesta-server.blocker.source-listening',
-  source_recently_active: 'vesta-server.blocker.source-active',
-  world_outside_source: 'vesta-server.blocker.world-outside',
-  launch_arguments_unsupported: 'vesta-server.blocker.launch-arguments',
-};
-/** Every blocker code the machine documents; each has its own line above. */
-export const KNOWN_BLOCKERS = Object.keys(blockerMessages);
-
-const CUSTOMIZE = ['game_port_in_use', 'port_unresolved', 'port_state_unknown', 'memory_budget_exceeded', 'memory_invalid'];
-
-/** One plain fix per blocker code; unknown codes still get a readable line. */
-export function blockerFix(code: string, sourcePath: string, missing: readonly string[] = []): BlockerFix {
-  if (code === 'not_minecraft_server' && missing.length) {
-    const use = folderUse({ missing });
-    if (use && !use.usable) return { code, message: use.reason };
-  }
-  const message = blockerMessages[code] ?? 'vesta-server.blocker.other';
-  if (code === 'source_unreadable') return { code, message, command: importRootCommand(sourcePath) };
-  if (CUSTOMIZE.includes(code)) return { code, message, customize: true };
-  return { code, message };
-}
-
 const warningMessages: Record<string, MessageId> = {
   disable_amp_auto_restart: 'vesta-server.warning.auto-restart',
   rcon_disabled: 'vesta-server.warning.rcon',
@@ -494,21 +445,6 @@ export function reviewSummary(review: ImportReview): ReviewSummary {
 
 export const IMPORT_POLLING: readonly ImportState[] = ['planning', 'applying', 'starting'];
 export const importBusy = (state: ImportState | undefined) => !!state && IMPORT_POLLING.includes(state);
-
-/** Copy progress from 0 to 100, by bytes when known, else by files; null while unknown. */
-export function importPercent(progress: ImportJob['progress'] | null | undefined): number | null {
-  if (!progress) return null;
-  if (progress.bytesTotal > 0) return Math.min(100, (progress.bytesDone / progress.bytesTotal) * 100);
-  if (progress.filesTotal > 0) return Math.min(100, (progress.filesDone / progress.filesTotal) * 100);
-  return null;
-}
-
-/** What the machine is doing during a copy, in words. */
-export function importPhase(phase: string | null | undefined): MessageId {
-  if (phase === 'copy') return 'vesta-server.import.phase-copy';
-  if (phase === 'configure' || phase === 'register' || phase === 'start') return 'vesta-server.import.phase-finish';
-  return 'vesta-server.import.phase-check';
-}
 
 // Shown without review details, so none of these lines take arguments.
 const jobErrors: Record<string, MessageId> = {

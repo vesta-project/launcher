@@ -12,11 +12,12 @@ import { AddServer } from './add-server';
 import { HostGuide } from './onboarding';
 import { FirstServerSetup } from './first-server';
 import { addRoute } from '../../features/servers/onboarding-model';
-import { groupServers, importPercent } from '../../features/servers/host-model';
-import { activeImports, hostReach, hosts } from '../../features/servers/hosts-store';
+import { groupServers } from '../../features/servers/host-model';
+import { overallPercent } from '../../features/servers/host-add-model';
+import { activeAdds, hostReach, hosts } from '../../features/servers/hosts-store';
 import type { VestaHost } from '../../features/servers/native-hosts';
 import type { ServerSnapshot } from '../../features/servers/native';
-import { HostImport } from './host-import';
+import { HostAdd } from './host-add';
 import { HostSettings } from './host-settings';
 import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
@@ -29,7 +30,7 @@ import './vesta-server.css';
 
 /**
  * `/servers`, `/servers/setup` (also the old `/servers/add`), `/servers/add/<guide or connectionId>`,
- * `/servers/host/<hostId>[/import]` and `/servers/<connectionId>[/<tab>]`.
+ * `/servers/host/<hostId>[/add]` and `/servers/<connectionId>[/<tab>]`.
  */
 export function ServersPage() {
   const section = () => route().section;
@@ -41,8 +42,8 @@ export function ServersPage() {
         </Show>
       }>
         {(hostId) => (
-          <Show when={route().item === 'import'} fallback={<HostSettings hostId={hostId} />}>
-            <HostImport hostId={hostId} />
+          <Show when={route().item === 'add' || route().item === 'import'} fallback={<HostSettings hostId={hostId} />}>
+            <HostAdd hostId={hostId} />
           </Show>
         )}
       </Show>
@@ -89,11 +90,11 @@ function ServerList() {
         <p data-vesta="servers-preview-note">{t('servers.preview-note')}</p>
       </Show>
       <ServerErrorNote error={serversListError()} onRetry={() => void refreshServers()} />
-      <For each={activeImports()}>
+      <For each={activeAdds()}>
         {(task) => (
           <p data-vesta="server-callout" data-tone="neutral" class="vesta-import-banner">
-            <span>{t('vesta-server.list.importing', { name: task.name, percent: Math.floor(importPercent(task.job?.progress) ?? 0) })}</span>
-            <Button size="sm" onClick={() => transitionTo(`/servers/host/${task.hostId}/import`)}>{t('vesta-server.host.import-open')}</Button>
+            <span>{t('vesta-server.list.importing', { name: task.name, percent: overallPercent(task.mode, task.job) })}</span>
+            <Button size="sm" onClick={() => transitionTo(`/servers/host/${task.hostId}/add`)}>{t('vesta-server.host.import-open')}</Button>
           </p>
         )}
       </For>
@@ -154,7 +155,7 @@ function MachineEmpty(props: { host: VestaHost }) {
   return (
     <EmptyState icon="icons/content/server" title={props.host.name} status={<Reach hostId={props.host.id} />}
       description={t(hostReach(props.host.id) === 'offline' ? 'vesta-server.list.machine-offline' : 'vesta-server.list.machine-empty', { name: props.host.name })}>
-      <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/import`)}>{t('vesta-server.list.add-first')}</Button>
+      <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/add`)}>{t('vesta-server.list.add-first')}</Button>
       <Button variant="ghost" icon={<Icon name="icons/content/gear" />} onClick={() => transitionTo(`/servers/host/${props.host.id}`)}>{t('vesta-server.list.machine-settings')}</Button>
     </EmptyState>
   );
@@ -176,7 +177,7 @@ function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: stri
       <Show when={props.addTo !== undefined}>
         <li>
           <div data-vesta="library-card-slot">
-            <button type="button" data-vesta="server-add-tile" onClick={() => transitionTo(props.addTo ? `/servers/host/${props.addTo}/import` : '/servers/setup')}>
+            <button type="button" data-vesta="server-add-tile" onClick={() => transitionTo(props.addTo ? `/servers/host/${props.addTo}/add` : '/servers/setup')}>
               <Icon name="icons/actions/add" size={22} />
               <span>{props.addTo ? t('vesta-server.host.add-server') : t('vesta-server.setup.title')}</span>
             </button>

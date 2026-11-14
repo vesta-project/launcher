@@ -1,139 +1,32 @@
-// Add a server to a Vesta Server: pick a folder on that machine, let it check the folder,
-// review, copy (the original stays untouched), then start. The job itself lives in
-// hosts-store, so closing this page never stops a copy.
-import { Badge, Button, Checkbox, NumberField, Progress, TextField } from '@vesta/ui';
+// The Import way of adding a server: find a folder on the machine (found for you, a pasted
+// path, or browsing), and only hand it on once Vesta Server can read it and it is a server.
+import { Badge, Button, TextField } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal, createUniqueId, onSettled, untrack } from 'solid-js';
-import { Board } from '../../components/board';
-import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
-import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
-import type { MessageId } from '../../localization/messages';
-import { openExternal } from '../../features/links/external-links';
 import { formatBytes } from '../../features/settings/storage-model';
 import { toServerError } from '../../features/servers/errors';
+import { folderVerdict, readNearby, type NearbyFolder } from '../../features/servers/host-add-model';
 import {
-  blockerFix, folderName, folderUse, importBusy, importRootCommand, importPercent, importPhase, importProblem, isDriveRoot, joinPath, lastSegment, locate,
-  normalisePath, readCandidates, readFolderCheck, readNotServer, reviewSummary, splitPath, warningMessage,
-  type CheckOutcome, type FolderUse, type ImportCandidate,
+  folderName, folderUse, importProblem, importRootCommand, isDriveRoot, joinPath, lastSegment, locate, normalisePath, readCandidates, readFolderCheck,
+  splitPath, type CheckOutcome, type FolderUse, type ImportCandidate,
 } from '../../features/servers/host-model';
-import {
-  applyImport, cancelImport, clearImport, hostCommand, importTask, loadHostServers, planImport, recheckImport, resumeImport, startImport,
-  vestaHost, type ImportTask,
-} from '../../features/servers/hosts-store';
-import { hostConnectionId, type Folder, type FolderRoot, type ImportReview } from '../../features/servers/native-hosts';
+import { hostCommand } from '../../features/servers/hosts-store';
+import type { Folder, FolderRoot } from '../../features/servers/native-hosts';
 import type { ServerCommandError } from '../../features/servers/native';
-import { CommandLine, Steps, Working } from './vesta-parts';
+import { CommandLine, Working } from './vesta-parts';
 import './vesta-server.css';
 
-type Picked = ImportTask['folder'] & { name: string };
-type WizardStep = 'folder' | 'review' | 'copy';
-
-// Importing is the one way to add a server today. New, Modpack and Restore become modes here,
-// each with its own first step; the steps, panel and review stay the same.
-const steps = [
-  { id: 'folder', label: 'vesta-server.import.step-folder' },
-  { id: 'review', label: 'vesta-server.import.step-review' },
-  { id: 'copy', label: 'vesta-server.import.step-copy' },
-] as const satisfies readonly { id: WizardStep; label: MessageId }[];
+/** A folder on the machine that the person picked, with the name a server made from it gets. */
+/** `granted` means Vesta Server could only just read it, after a Check again. */
+export interface Picked { token: string; displayPath: string; name: string; granted?: boolean }
 
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-export function HostImport(props: { hostId: string }) {
-  const host = () => vestaHost(props.hostId);
-  return (
-    <Show when={host()} fallback={
-      <Board>
-        <EmptyState icon="icons/rail/servers" title={t('vesta-server.missing')}>
-          <Button onClick={() => transitionTo('/servers')}>{t('servers.done.all-servers')}</Button>
-        </EmptyState>
-      </Board>
-    }>
-      {(found) => <ImportFlow hostId={props.hostId} machine={found().name} />}
-    </Show>
-  );
-}
-
-function ImportFlow(props: { hostId: string; machine: string }) {
-  const task = () => importTask(props.hostId);
-  const state = () => task()?.job?.state;
-
-  // Reopened with a job in progress (or after a restart): read it once now.
-  onSettled(() => { if (untrack(task)?.jobId) recheckImport(props.hostId); });
-
-  const current = (): WizardStep | 'done' => {
-    const job = task();
-    if (!job) return 'folder';
-    switch (job.job?.state) {
-      case undefined: case 'planning': case 'review': case 'blocked': return 'review';
-      case 'online': return 'done';
-      default: return 'copy';
-    }
-  };
-
-  const pick = (folder: Picked) => void planImport(props.hostId, { folder: { token: folder.token, displayPath: folder.displayPath }, name: folder.name, gamePort: null, memoryMiB: null });
-  const startOver = () => clearImport(props.hostId);
-
-  return (
-    <Board class="servers-board">
-      <div data-vesta="server-add" data-wide>
-        <Steps steps={steps} current={current()} />
-        <Switch>
-          <Match when={!task()}>
-            <FolderStep hostId={props.hostId} machine={props.machine} onPick={pick} />
-          </Match>
-
-          <Match when={task() && !task()!.jobId && task()!.error}>
-            {/* The check could not even begin. */}
-            <div data-vesta="server-add-panel">
-              <h1>{t('vesta-server.import.check-failed')}</h1>
-              <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(task()!.error))}</p>
-              <footer>
-                <Button variant="ghost" onClick={startOver}>{t('vesta-server.import.start-over')}</Button>
-                <Button tone="accent" icon={<Icon name="icons/actions/refresh" />}
-                  onClick={() => void planImport(props.hostId, { folder: task()!.folder, name: task()!.name, gamePort: null, memoryMiB: null })}>
-                  {t('vesta-server.import.check-again')}
-                </Button>
-              </footer>
-            </div>
-          </Match>
-
-          <Match when={task() && (!task()!.job || state() === 'planning')}>
-            <div data-vesta="server-add-panel">
-              <h1>{t('vesta-server.import.checking-title', { name: task()!.name || props.machine })}</h1>
-              <Show when={task()!.error} fallback={<Working label={t('vesta-server.import.checking')} />}>
-                {(error) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(importProblem(error()))}</p>}
-              </Show>
-              <Show when={task()!.error}>
-                <footer><Button variant="ghost" onClick={startOver}>{t('vesta-server.import.start-over')}</Button></footer>
-              </Show>
-            </div>
-          </Match>
-
-          <Match when={(state() === 'review' || state() === 'blocked') && task()!.job!.review}>
-            {(review) => <Review hostId={props.hostId} machine={props.machine} task={task()!} review={review()} onBack={startOver} />}
-          </Match>
-
-          <Match when={(state() === 'review' || state() === 'blocked') && !task()!.job!.review}>
-            <div data-vesta="server-add-panel">
-              <h1>{t('vesta-server.import.check-failed')}</h1>
-              <footer><Button tone="accent" onClick={startOver}>{t('vesta-server.import.start-over')}</Button></footer>
-            </div>
-          </Match>
-
-          <Match when={task()}>
-            {(current) => <Progressing hostId={props.hostId} machine={props.machine} task={current()} onStartOver={startOver} />}
-          </Match>
-        </Switch>
-      </div>
-    </Board>
-  );
-}
 
 // ------------------------------------------------------------------ permission
 
 /** A folder Vesta Server can't read: why, the exact command for the machine, and Check again. */
-function PermissionHelp(props: { name: string; machine: string; command: string; checking: boolean; still: boolean; onCheck: () => void }) {
+export function PermissionHelp(props: { name: string; machine: string; command: string; checking: boolean; still: boolean; onCheck: () => void }) {
   return (
     <div data-vesta="server-callout" data-tone="warning" role="group">
       <p>{t('vesta-server.import.permission', { path: props.name, name: props.machine })}</p>
@@ -149,7 +42,7 @@ function PermissionHelp(props: { name: string; machine: string; command: string;
 }
 
 /** A folder check that can fail on older machines without the check route. */
-async function checkPath(hostId: string, path: string): Promise<CheckOutcome | { kind: 'unsupported' } | { kind: 'error'; error: ServerCommandError }> {
+export async function checkPath(hostId: string, path: string): Promise<CheckOutcome | { kind: 'unsupported' } | { kind: 'error'; error: ServerCommandError }> {
   try {
     return readFolderCheck(await hostCommand((client) => client.folderCheck(hostId, path)), path);
   } catch (reason) {
@@ -160,7 +53,7 @@ async function checkPath(hostId: string, path: string): Promise<CheckOutcome | {
 
 // ------------------------------------------------------------------ folder step
 
-function FolderStep(props: { hostId: string; machine: string; onPick: (folder: Picked) => void }) {
+export function ImportFolderStep(props: { hostId: string; machine: string; onPick: (folder: Picked) => void }) {
   const [candidates, setCandidates] = createSignal<ImportCandidate[] | null>(null, { name: 'host-import:candidates' });
   const [truncated, setTruncated] = createSignal(false, { name: 'host-import:truncated' });
   const [roots, setRoots] = createSignal<FolderRoot[] | null>(null, { name: 'host-import:roots' });
@@ -191,13 +84,7 @@ function FolderStep(props: { hostId: string; machine: string; onPick: (folder: P
   };
 
   return (
-    <div data-vesta="server-add-panel">
-      <header data-vesta="vesta-step-intro">
-        <h1>{t('vesta-server.import.title')}</h1>
-        <p>{t('vesta-server.import.intro', { name: props.machine })}</p>
-        <p data-vesta="vesta-soon">{t('vesta-server.import.more-soon')}</p>
-      </header>
-
+    <div data-vesta="add-import">
       <Show when={unavailable()}>
         <p data-vesta="server-callout" data-tone="warning">{t('vesta-server.import.unavailable')}</p>
       </Show>
@@ -227,10 +114,6 @@ function FolderStep(props: { hostId: string; machine: string; onPick: (folder: P
           </Show>
         </section>
       </Show>
-
-      <footer>
-        <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
-      </footer>
     </div>
   );
 }
@@ -246,7 +129,7 @@ function FoundList(props: { hostId: string; machine: string; candidates: ImportC
     setStill(false);
     const outcome = await checkPath(props.hostId, candidate.displayPath);
     setChecking(false);
-    if (outcome.kind === 'ok') props.onPick({ token: outcome.token, displayPath: outcome.path, name: lastSegment(outcome.path) });
+    if (outcome.kind === 'ok') props.onPick({ token: outcome.token, displayPath: outcome.path, name: lastSegment(outcome.path), granted: true });
     else if (outcome.kind === 'unsupported') props.onReload();
     else setStill(true);
   };
@@ -387,7 +270,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
   const [locked, setLocked] = createSignal<Locked | null>(null, { name: 'host-import:locked' });
   const [lockChecking, setLockChecking] = createSignal(false, { name: 'host-import:lock-checking' });
   const [lockStill, setLockStill] = createSignal(false, { name: 'host-import:lock-still' });
-  const [inspected, setInspected] = createSignal<{ token: string; use: FolderUse | 'checking' } | null>(null, { name: 'host-import:inspected' });
+  const [inspected, setInspected] = createSignal<{ token: string; use: FolderUse | 'checking'; nearby: NearbyFolder[] } | null>(null, { name: 'host-import:inspected' });
   const [active, setActive] = createSignal(0, { name: 'host-import:active-row' });
   const noteId = createUniqueId();
   let list: HTMLUListElement | undefined;
@@ -396,15 +279,21 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
   const place = () => { const current = view(); return current.kind === 'folder' ? current.place : null; };
 
   /** Ask the machine only when the listing didn't already say. */
-  const inspect = async (token: string) => {
-    setInspected({ token, use: 'checking' });
+  const inspect = async (target: Place) => {
+    const token = target.token;
+    setInspected({ token, use: 'checking', nearby: [] });
     try {
       const report = await hostCommand((client) => client.importInspect(props.hostId, token));
-      const read = readNotServer(report);
-      setInspected({ token, use: read.notServer ? folderUse({ missing: read.missing })! : { usable: true } });
+      const verdict = folderVerdict(report, target.path, target.entries);
+      if (verdict.kind === 'unreadable') {
+        setInspected({ token, use: { usable: false, reason: 'server-add.import.unreadable' }, nearby: [] });
+        setLocked({ name: folderName(target.path), path: target.path, command: verdict.command });
+      } else {
+        setInspected({ token, use: verdict.kind === 'server' ? { usable: true } : { usable: false, reason: verdict.reason }, nearby: verdict.kind === 'not-server' ? verdict.nearby : [] });
+      }
     } catch {
-      // Older machines can't inspect here; the review step will say what's wrong, if anything.
-      setInspected({ token, use: { usable: true } });
+      // Older machines can't inspect here. The folder is checked again before review.
+      setInspected({ token, use: { usable: true }, nearby: [] });
     }
   };
 
@@ -412,7 +301,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
     setView(next);
     setLocked(null);
     setActive(0);
-    if (next.kind === 'folder' && folderUse({ top: isDriveRoot(next.place.path), looksLikeServer: next.place.looksLikeServer }) === null) void inspect(next.place.token);
+    if (next.kind === 'folder' && folderUse({ top: isDriveRoot(next.place.path), looksLikeServer: next.place.looksLikeServer }) === null) void inspect(next.place);
     if (focusAfter) {
       focusAfter = false;
       requestAnimationFrame(() => list?.querySelector<HTMLElement>('[data-vesta="vesta-folder"]')?.focus());
@@ -520,6 +409,14 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
     return asked?.token === current.token ? asked.use : 'checking';
   };
   const usable = () => { const current = use(); return current !== 'checking' && current.usable; };
+  /** Not a server, but server folders sit right inside it: "Did you mean survival?". */
+  const nearby = (): NearbyFolder[] => {
+    const current = place();
+    const now = use();
+    if (!current || now === 'checking' || now.usable || isDriveRoot(current.path)) return [];
+    const asked = inspected();
+    return asked?.token === current.token && asked.nearby.length ? asked.nearby : readNearby(null, current.entries, current.path);
+  };
 
   const crumbs = () => {
     const current = place();
@@ -685,6 +582,18 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
               </Match>
             </Switch>
           </p>
+          <Show when={nearby().length > 0}>
+            <div data-vesta="add-nearby">
+              <For each={nearby()} keyed={(folder) => folder.token}>
+                {(folder) => (
+                  <Button size="sm" variant="outline" icon={<Icon name="icons/content/folder" />}
+                    onClick={() => props.onPick({ token: folder().token, displayPath: folder().path, name: lastSegment(folder().path) })}>
+                    {t('server-add.import.did-you-mean', { name: folder().name })}
+                  </Button>
+                )}
+              </For>
+            </div>
+          </Show>
           <Button tone="accent" disabled={loading() || !usable()} aria-describedby={noteId}
             onClick={() => { const current = place(); if (current) props.onPick({ token: current.token, displayPath: current.path, name: lastSegment(current.path) }); }}>
             {t('vesta-server.import.use-folder')}
@@ -695,205 +604,3 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
   );
 }
 
-// ------------------------------------------------------------------ review
-
-const MIB = 1024 * 1024;
-
-function Review(props: { hostId: string; machine: string; task: ImportTask; review: ImportReview; onBack: () => void }) {
-  const summary = createMemo(() => reviewSummary(props.review), { name: 'host-import:summary' });
-  const fixes = createMemo(() => {
-    const missing = readNotServer(props.review).missing;
-    const codes = props.review.blockers.length ? props.review.blockers : ['unknown'];
-    return codes.map((code) => blockerFix(code, props.review.source.displayPath, missing));
-  }, { name: 'host-import:fixes' });
-  const blocked = () => props.review.blockers.length > 0 || !props.review.confirmation;
-  const [name, setName] = createSignal(untrack(() => props.task.name), { name: 'host-import:name' });
-  const [port, setPort] = createSignal(untrack(() => summary().gamePort), { name: 'host-import:port' });
-  const reviewedGb = untrack(() => Math.round((summary().memoryMiB / 1024) * 2) / 2);
-  const [memoryGb, setMemoryGb] = createSignal(reviewedGb, { name: 'host-import:memory' });
-  const [customize, setCustomize] = createSignal(false, { name: 'host-import:customize' });
-  const [acknowledged, setAcknowledged] = createSignal<string[]>([], { name: 'host-import:acknowledged' });
-  const [stopped, setStopped] = createSignal(false, { name: 'host-import:stopped' });
-  const [eula, setEula] = createSignal(false, { name: 'host-import:eula' });
-
-  const changed = () => name().trim() !== props.task.name || port() !== summary().gamePort || memoryGb() !== reviewedGb;
-  const checkAgain = () => void planImport(props.hostId, {
-    folder: props.task.folder, name: name().trim() || props.task.name,
-    gamePort: port() !== summary().gamePort ? port() : props.task.request.gamePort,
-    memoryMiB: memoryGb() !== reviewedGb ? Math.round(memoryGb() * 1024) : props.task.request.memoryMiB,
-  });
-  const allAcknowledged = () => props.review.warnings.every((code) => acknowledged().includes(code));
-  const ready = () => !blocked() && !changed() && allAcknowledged() && stopped() && eula() && !props.task.sending;
-  const busy = () => props.task.sending !== null;
-  const values = () => ({ port: summary().gamePort, size: formatBytes(summary().bytes), free: formatBytes(summary().freeBytes), name: props.machine });
-
-  return (
-    <div data-vesta="server-add-panel">
-      <header data-vesta="vesta-step-intro">
-        <h1>{t('vesta-server.import.review-title', { name: props.task.name })}</h1>
-        <p data-vesta="vesta-from"><Icon name="icons/content/folder" size={14} /><code>{props.review.source.displayPath}</code></p>
-      </header>
-
-      <dl data-vesta="server-add-facts">
-        <dt>{t('vesta-server.import.software')}</dt><dd>{summary().software ?? t('vesta-server.import.unknown')}</dd>
-        <dt>{t('vesta-server.import.minecraft')}</dt><dd>{summary().minecraftVersion ?? t('vesta-server.import.unknown')}</dd>
-        <dt>{t('vesta-server.import.size')}</dt><dd>{formatBytes(summary().bytes)}</dd>
-        <dt>{t('vesta-server.import.port')}</dt><dd>{summary().gamePort}</dd>
-        <dt>{t('vesta-server.import.memory')}</dt><dd>{formatBytes(summary().memoryMiB * MIB)}</dd>
-        <dt>{t('vesta-server.import.java')}</dt><dd>{summary().javaMajor ? t('vesta-server.import.java-auto-version', { version: String(summary().javaMajor) }) : t('vesta-server.import.java-auto')}</dd>
-      </dl>
-
-      <Show when={blocked()} fallback={
-        <section data-vesta="vesta-section" aria-labelledby="vesta-confirm-heading">
-          <h2 id="vesta-confirm-heading">{t('vesta-server.import.before-copy')}</h2>
-          <div data-vesta="vesta-confirm">
-            <For each={props.review.warnings}>
-              {(code) => (
-                <Checkbox checked={acknowledged().includes(code)} label={t(warningMessage(code))}
-                  onChange={(checked) => setAcknowledged((current) => (checked ? [...current, code] : current.filter((entry) => entry !== code)))} />
-              )}
-            </For>
-            <Checkbox checked={stopped()} onChange={setStopped} label={t('vesta-server.import.stopped')} />
-            <div data-vesta="vesta-eula">
-              <Checkbox checked={eula()} onChange={setEula} label={t('vesta-server.import.eula')} />
-              <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void openExternal('https://aka.ms/MinecraftEULA'); }}>{t('servers.eula.read')}</a>
-            </div>
-          </div>
-          <p data-vesta="vesta-note" data-tone="success"><Icon name="icons/security/shield-check" size={16} />{t('vesta-server.import.untouched')}</p>
-        </section>
-      }>
-        <section data-vesta="vesta-section" aria-labelledby="vesta-blockers-heading">
-          <h2 id="vesta-blockers-heading">{t('vesta-server.import.blocked')}</h2>
-          <ul data-vesta="vesta-blockers">
-            <For each={fixes()}>
-              {(fix) => (
-                <li data-vesta="server-callout" data-tone="warning">
-                  <p>{t(fix.message, values())}</p>
-                  <Show when={fix.command}>{(command) => <CommandLine command={command()} />}</Show>
-                  <Show when={fix.customize}><Button size="sm" variant="outline" onClick={() => setCustomize(true)}>{t('vesta-server.import.customize')}</Button></Show>
-                </li>
-              )}
-            </For>
-          </ul>
-        </section>
-      </Show>
-
-      <details data-vesta="vesta-customize" open={customize()} onToggle={(event) => setCustomize(event.currentTarget.open)}>
-        <summary>{t('vesta-server.import.customize')}</summary>
-        <div data-vesta="vesta-customize-fields">
-          <TextField label={t('vesta-server.import.name')} value={name()} onChange={setName} />
-          <NumberField label={t('vesta-server.import.port')} value={port()} onChange={(value) => setPort(Number.isFinite(value) ? value : summary().gamePort)} min={1024} max={65535} formatOptions={{ useGrouping: false }} />
-          <NumberField label={t('vesta-server.import.memory-gb')} value={memoryGb()} onChange={(value) => setMemoryGb(Number.isFinite(value) ? value : reviewedGb)} min={0.5} max={256} step={0.5} />
-          <Show when={changed()}><p data-vesta="server-muted">{t('vesta-server.import.customize-help')}</p></Show>
-        </div>
-      </details>
-
-      <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(error()))}</p>}</Show>
-
-      <footer>
-        <Button variant="ghost" disabled={busy()} onClick={props.onBack}>{t('vesta-server.import.start-over')}</Button>
-        <Show when={blocked() || changed()} fallback={
-          <Button tone="accent" disabled={!ready()} onClick={() => void applyImport(props.hostId, acknowledged())}>
-            {props.task.sending === 'apply' ? t('vesta-server.import.copy-starting') : t('vesta-server.import.copy')}
-          </Button>
-        }>
-          <Button tone="accent" disabled={busy()} icon={<Icon name="icons/actions/refresh" />} onClick={checkAgain}>{t('vesta-server.import.check-again')}</Button>
-        </Show>
-      </footer>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ copy, start, online
-
-function Progressing(props: { hostId: string; machine: string; task: ImportTask; onStartOver: () => void }) {
-  const job = () => props.task.job;
-  const state = () => job()?.state;
-  const percent = () => importPercent(job()?.progress);
-  const progress = () => job()?.progress;
-  const name = () => props.task.name || props.machine;
-  const busy = () => props.task.sending !== null;
-  const [opening, setOpening] = createSignal(false, { name: 'host-import:opening' });
-
-  const open = async () => {
-    const serverId = job()?.serverId;
-    setOpening(true);
-    try { await loadHostServers(props.hostId); } catch { /* The list catches up on its own. */ }
-    finally { setOpening(false); }
-    clearImport(props.hostId);
-    transitionTo(serverId ? `/servers/${hostConnectionId({ hostId: props.hostId, serverId })}` : '/servers');
-  };
-  const finish = () => { clearImport(props.hostId); transitionTo('/servers'); };
-
-  return (
-    <div data-vesta="server-add-panel">
-      <Switch>
-        <Match when={state() === 'applying' || state() === 'interrupted'}>
-          <h1>{t(state() === 'interrupted' ? 'vesta-server.import.paused-title' : 'vesta-server.import.copying-title', { name: name() })}</h1>
-          <Progress value={percent() ?? undefined} label={t(importPhase(job()?.phase))} valueLabel={percent() == null ? undefined : `${Math.floor(percent()!)}%`} />
-          <Show when={progress()?.bytesTotal}>
-            <p data-vesta="server-muted">{t('vesta-server.import.copied-bytes', {
-              done: formatBytes(progress()!.bytesDone), total: formatBytes(progress()!.bytesTotal),
-              count: progress()!.filesDone, files: progress()!.filesTotal,
-            })}</p>
-          </Show>
-          <p>{t(state() === 'interrupted' ? 'vesta-server.import.paused-help' : 'vesta-server.import.keeps-going', { name: props.machine })}</p>
-        </Match>
-        <Match when={state() === 'ready'}>
-          <span data-vesta="server-add-done-icon"><Icon name="icons/controls/success" size={28} /></span>
-          <h1>{t('vesta-server.import.ready-title', { name: name() })}</h1>
-          <p>{t('vesta-server.import.ready-help')}</p>
-          <Show when={job()?.error}>{(error) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(importProblem(error()))}</p>}</Show>
-        </Match>
-        <Match when={state() === 'starting'}>
-          <h1>{t('vesta-server.import.starting-title', { name: name() })}</h1>
-          <Working label={t('vesta-server.import.starting')} />
-        </Match>
-        <Match when={state() === 'online'}>
-          <span data-vesta="server-add-done-icon"><Icon name="icons/controls/success" size={28} /></span>
-          <h1>{t('vesta-server.import.online-title')}</h1>
-          <p>{t('vesta-server.import.online-help', { name: name() })}</p>
-        </Match>
-        <Match when={state() === 'cancelled'}>
-          <h1>{t('vesta-server.import.cancelled-title')}</h1>
-          <p>{t('vesta-server.import.cancelled-help')}</p>
-        </Match>
-        <Match when={state() === 'failed'}>
-          <h1>{t('vesta-server.import.failed-title')}</h1>
-          <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(job()?.error ?? 'failed'))}</p>
-          <p>{t('vesta-server.import.cancelled-help')}</p>
-        </Match>
-      </Switch>
-
-      <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(importProblem(error()))}</p>}</Show>
-
-      <footer>
-        <Switch>
-          <Match when={state() === 'applying'}>
-            <Button variant="ghost" disabled={busy()} onClick={() => void cancelImport(props.hostId)}>{t('vesta-server.import.cancel-copy')}</Button>
-            <Button tone="accent" onClick={() => transitionTo('/servers')}>{t('vesta-server.import.close')}</Button>
-          </Match>
-          <Match when={state() === 'interrupted'}>
-            <Button variant="ghost" disabled={busy()} onClick={() => void cancelImport(props.hostId)}>{t('vesta-server.import.cancel-copy')}</Button>
-            <Button tone="accent" disabled={busy()} onClick={() => void resumeImport(props.hostId)}>{t('vesta-server.import.resume')}</Button>
-          </Match>
-          <Match when={state() === 'ready'}>
-            <Button variant="ghost" disabled={busy() || opening()} onClick={() => void open()}>{t('servers.open')}</Button>
-            <Button tone="accent" disabled={busy()} icon={<Icon name="icons/actions/play" />} onClick={() => void startImport(props.hostId)}>{t('vesta-server.import.start')}</Button>
-          </Match>
-          <Match when={state() === 'starting'}>
-            <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('vesta-server.import.close')}</Button>
-          </Match>
-          <Match when={state() === 'online'}>
-            <Button variant="ghost" onClick={finish}>{t('servers.done.all-servers')}</Button>
-            <Button tone="accent" disabled={opening()} onClick={() => void open()}>{t('servers.open')}</Button>
-          </Match>
-          <Match when={!importBusy(state())}>
-            <Button variant="ghost" onClick={finish}>{t('vesta-server.import.close')}</Button>
-            <Button tone="accent" onClick={props.onStartOver}>{t('vesta-server.import.start-over')}</Button>
-          </Match>
-        </Switch>
-      </footer>
-    </div>
-  );
-}

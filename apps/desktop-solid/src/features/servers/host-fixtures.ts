@@ -6,9 +6,14 @@
 //                           and servers) | 'two' (two machines) | 'offline' (a machine that isn't answering)
 //   vesta.fixtures.import = 'none' (nothing found automatically)
 //   vesta.fixtures.signin = 'no-access' (the account has no role on attic-pc) | 'approval' (attic-pc wants a link code)
+//   vesta.fixtures.create = see fixtures-create.ts
+import { createCreateFixtures } from './fixtures-create';
 import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, VestaHost } from './native-hosts';
 
 export type HostsApi = typeof hostsNative;
+
+/** What a current machine advertises to an owner. */
+const CAPABILITIES = ['folders', 'import-inspect', 'resource-plan', 'import-jobs'];
 
 /** A folder on the pretend machine. `has` lists the server parts inside; `files` are plain files. */
 interface FixtureDir { dirs?: Record<string, FixtureDir>; files?: string[]; has?: ('server_properties' | 'server_jar' | 'world')[]; locked?: boolean; hidden?: boolean; protected?: boolean }
@@ -42,18 +47,22 @@ const MACHINE: FixtureDir = {
 const SAVED_ROOT = '/home/eatham/h12-import-test/Minecraft';
 
 const pathParts = (path: string) => path.split('/').filter(Boolean);
-/** Walks a path: the folder, or why it stops (a locked folder on the way, a file, nothing). */
-function walk(path: string): { dir: FixtureDir } | { stop: 'locked' | 'missing' | 'file' | 'protected' } {
+/**
+ * Walks a path: the folder, or why it stops (a locked folder on the way, a file, nothing).
+ * `granted` holds locked folders a local admin has since opened up with `vesta import-root add`.
+ */
+function walk(path: string, granted: ReadonlySet<string> = new Set()): { dir: FixtureDir } | { stop: 'missing' | 'file' | 'protected' } | { stop: 'locked'; at: string } {
   let dir = MACHINE;
   const names = pathParts(path);
+  const locked = (index: number) => dir.locked && !granted.has(`/${names.slice(0, index).join('/')}`);
   for (const [index, name] of names.entries()) {
-    if (dir.locked) return { stop: 'locked' };
+    if (locked(index)) return { stop: 'locked', at: `/${names.slice(0, index).join('/')}` };
     const next = dir.dirs?.[name];
     if (!next || next.hidden) return { stop: index === names.length - 1 && dir.files?.includes(name) ? 'file' : 'missing' };
     if (next.protected) return { stop: 'protected' };
     dir = next;
   }
-  return dir.locked ? { stop: 'locked' } : { dir };
+  return locked(names.length) ? { stop: 'locked', at: `/${names.join('/')}` } : { dir };
 }
 const looksLikeServer = (dir: FixtureDir) => !!dir.has?.some((part) => part === 'server_properties' || part === 'server_jar');
 const missingParts = (dir: FixtureDir) => (['server_properties', 'server_jar', 'world'] as const).filter((part) => !dir.has?.includes(part));
@@ -68,7 +77,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface FixtureJob extends ImportJob { startedAt: number; folder: string; name: string; port: number | null; memory: number | null; checks: number }
 
-export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null } = {}): HostsApi {
+export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null } = {}): HostsApi {
   const lan: HostDiscovery[] = [
     { hostId: 'host-people', name: 'people-server', fingerprint: 'a'.repeat(64), address: '192.168.1.67:25500', state: 'unclaimed' },
     { hostId: 'host-attic', name: 'attic-pc', fingerprint: 'b'.repeat(64), address: '192.168.1.80:25500', state: 'claimed' },
@@ -88,13 +97,17 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
   const jobs = new Map<string, FixtureJob>();
   const links = new Map<string, { state: string; polls: number }>();
   let checks = 0;
+  // Locked folders open up once "Check again" is pressed a second time, as if the admin ran the command.
+  const granted = new Set<string>();
+  const permissionAsks = new Map<string, number>();
+  const creating = createCreateFixtures(options.create ?? null, { servers: (id) => servers.get(id), exists: (id) => hosts.some((entry) => entry.id === id) });
 
   const host = (id: string) => hosts.find((entry) => entry.id === id);
   const need = (id: string) => (host(id) ? Promise.resolve(host(id)!) : reject('not_found'));
   const find = (address: string) => lan.find((entry) => entry.address.startsWith(address.replace(/:25500$/, '')) || entry.name === address);
 
   const review = (job: FixtureJob): ImportReview => {
-    const found = walk(job.folder);
+    const found = walk(job.folder, granted);
     const notServer = 'dir' in found && !looksLikeServer(found.dir);
     const blockers = notServer ? ['not_minecraft_server'] : job.checks === 0 ? ['source_running'] : job.port === 25565 ? ['game_port_in_use'] : [];
     return {
@@ -165,7 +178,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     signIn: async (hostId) => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: ['imports'], role: 'primary_owner', revision: '1' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: CAPABILITIES, role: 'primary_owner', revision: '1' };
     },
     signInWithAccount: async (address, hostId, accountUuid, deviceName) => {
       await wait(900);
@@ -205,7 +218,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     info: async (hostId): Promise<HostInfo> => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: ['imports'], role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: CAPABILITIES, role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
     },
     update: async (hostId, body) => {
       const found = await need(hostId);
@@ -256,7 +269,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       await need(hostId);
       const base = rootId === 'top' ? '/' : SAVED_ROOT;
       const displayPath = relativePath ? joinFixture(base, relativePath) : base;
-      const found = walk(displayPath);
+      const found = walk(displayPath, granted);
       if (!('dir' in found)) return reject(found.stop === 'locked' ? 'forbidden' : 'not_found');
       return { folderToken: `token:${displayPath}`, displayPath, expiresAt: new Date(Date.now() + 600_000).toISOString() };
     },
@@ -264,13 +277,13 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       await need(hostId);
       await wait(250);
       const displayPath = tokenPath(folderToken);
-      const found = walk(displayPath);
+      const found = walk(displayPath, granted);
       if (!('dir' in found)) return reject('not_found');
       const entries = Object.entries(found.dir.dirs ?? {}).filter(([, dir]) => !dir.hidden && !dir.protected)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([name, dir]): Folder => {
           const path = joinFixture(displayPath, name);
-          return dir.locked
+          return dir.locked && !granted.has(path)
             ? { name, kind: 'directory', folderToken: null, readable: false, looksLikeServer: false, remediationCommand: commandFor(path) }
             : { name, kind: 'directory', folderToken: `token:${path}`, readable: true, looksLikeServer: looksLikeServer(dir) };
         });
@@ -279,7 +292,12 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     folderCheck: async (hostId, path): Promise<FolderCheck> => {
       await need(hostId);
       await wait(350);
-      const found = walk(path);
+      let found = walk(path, granted);
+      if ('at' in found) {
+        const asks = (permissionAsks.get(found.at) ?? 0) + 1;
+        permissionAsks.set(found.at, asks);
+        if (asks >= 2) { granted.add(found.at); found = walk(path, granted); }
+      }
       if ('dir' in found) return { path, status: 'ok', folderToken: `token:${path}`, remediationCommand: null };
       const status = found.stop === 'locked' ? 'permission_needed' : found.stop === 'file' ? 'not_directory' : found.stop === 'protected' ? 'protected' : 'not_found';
       return { path, status, folderToken: null, remediationCommand: status === 'permission_needed' ? commandFor(path) : null };
@@ -302,12 +320,12 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     importInspect: async (hostId, folderToken) => {
       await need(hostId);
       await wait(300);
-      const found = walk(tokenPath(folderToken));
+      const found = walk(tokenPath(folderToken), granted);
       if (!('dir' in found)) return reject('not_found');
       const missing = missingParts(found.dir);
       return looksLikeServer(found.dir) ? { blockers: [], missing, found: found.dir.has ?? [] } : { blockers: ['not_minecraft_server'], missing, found: found.dir.has ?? [] };
     },
-    importResources: async () => reject('unsupported'),
+    importResources: (hostId, gamePort, memoryMiB) => creating.resources(hostId, gamePort, memoryMiB),
     importPlan: async (hostId, body) => {
       await need(hostId);
       const jobId = `job-${Date.now()}`;
@@ -342,5 +360,15 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       return advance(job);
     },
     importReadiness: (hostId, id) => jobFor(hostId, id),
+    catalogueMinecraft: creating.catalogueMinecraft,
+    catalogueSoftware: creating.catalogueSoftware,
+    createDefaults: creating.createDefaults,
+    createRestoreSources: creating.createRestoreSources,
+    createPlan: creating.createPlan,
+    createApply: creating.createApply,
+    createJob: creating.createJob,
+    createCancel: creating.createCancel,
+    createResume: creating.createResume,
+    createStart: creating.createStart,
   };
 }

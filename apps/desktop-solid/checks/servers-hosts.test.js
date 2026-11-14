@@ -2,12 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  CODE_ALPHABET, CODE_GROUPS, CODE_LENGTH, HOST_PORT, backspaceCode, blockerFix, canonicalCode, codeChar, codeComplete, codeGroups, codeProblem, enrollProblemForFind,
-  formatCode, groupServers, hostIdOf, importPercent, setupProblem, typeIntoCode, waitSeconds, signInProblem, formatFingerprint, hostNameProblem, tidyHostName,
+  CODE_ALPHABET, CODE_GROUPS, CODE_LENGTH, HOST_PORT, backspaceCode, canonicalCode, codeChar, codeComplete, codeGroups, codeProblem, enrollProblemForFind,
+  formatCode, groupServers, hostIdOf, setupProblem, typeIntoCode, waitSeconds, signInProblem, formatFingerprint, hostNameProblem, tidyHostName,
   importRootCommand, keepKey, machineState, parseVestaAddress, readCandidates, reviewSummary, sortDiscovered,
-  KNOWN_BLOCKERS, KNOWN_IMPORT_ERRORS, KNOWN_WARNINGS, below, folderName, folderUse, importProblem, isDriveRoot, joinPath, lastSegment, locate,
+  KNOWN_IMPORT_ERRORS, KNOWN_WARNINGS, below, folderName, folderUse, importProblem, isDriveRoot, joinPath, lastSegment, locate,
   normalisePath, readFolderCheck, readNotServer, splitPath, warningMessage,
 } from '../src/features/servers/host-model';
+import { folderVerdict } from '../src/features/servers/host-add-model';
 import { createHostFixtures } from '../src/features/servers/host-fixtures';
 
 const root = join(import.meta.dir, '..');
@@ -180,15 +181,10 @@ describe('[hosts] discovery and enrollment', () => {
 });
 
 describe('[hosts] import review', () => {
-  test('every blocker has a plain fix; permission shows the exact command for the machine', () => {
-    expect(blockerFix('source_running', '/x').message).toBe('vesta-server.blocker.source-running');
-    expect(blockerFix('source_unreadable', '/home/games/Modded').command).toBe('sudo vesta import-root add /home/games/Modded');
+  test('the permission command quotes paths for the machine it runs on', () => {
+    expect(importRootCommand('/home/games/Modded')).toBe('sudo vesta import-root add /home/games/Modded');
     expect(importRootCommand('/srv/my server')).toBe('sudo vesta import-root add "/srv/my server"');
     expect(importRootCommand('D:\\mc\\survival')).toBe('vesta import-root add D:\\mc\\survival');
-    expect(blockerFix('game_port_in_use', '/x')).toMatchObject({ message: 'vesta-server.blocker.port-in-use', customize: true });
-    expect(blockerFix('insufficient_space', '/x').message).toBe('vesta-server.blocker.disk');
-    expect(blockerFix('software_unresolved', '/x').message).toBe('vesta-server.blocker.software');
-    expect(blockerFix('brand_new_code', '/x').message).toBe('vesta-server.blocker.other');
   });
 
   test('candidates list ready ones first, keep the permission command, and ignore machine wide warnings', () => {
@@ -210,14 +206,9 @@ describe('[hosts] import review', () => {
     expect(readCandidates(null)).toEqual({ candidates: [], truncated: false });
   });
 
-  test('every documented code has its own friendly line', () => {
-    const blockers = ['source_unreadable', 'source_running', 'source_state_unknown', 'game_port_in_use', 'port_state_unknown', 'source_changed', 'unsafe_path',
-      'launch_unresolved', 'java_unresolved', 'insufficient_space', 'memory_budget_exceeded', 'not_minecraft_server', 'software_unresolved', 'source_too_large',
-      'port_unresolved', 'memory_unresolved', 'memory_invalid'];
-    const routeErrors = ['eula_required', 'warnings_unacknowledged', 'source_stop_confirmation_required', 'import_job_not_found', 'conflict', 'idempotency_conflict',
+  test('every documented route error and warning has its own friendly line', () => {
+    const routeErrors =['eula_required', 'warnings_unacknowledged', 'source_stop_confirmation_required', 'import_job_not_found', 'conflict', 'idempotency_conflict',
       'plan_blocked', 'plan_expired', 'confirmation_invalid', 'server_capacity_reached', 'imports_unavailable', 'import_jobs_saturated', 'worker_unavailable', 'unavailable'];
-    expect(KNOWN_BLOCKERS).toEqual(expect.arrayContaining(blockers));
-    for (const code of blockers) expect(blockerFix(code, '/x').message, code).not.toBe('vesta-server.blocker.other');
     for (const code of ['disable_amp_auto_restart', 'rcon_disabled']) {
       expect(KNOWN_WARNINGS).toContain(code);
       expect(warningMessage(code), code).not.toBe('vesta-server.warning.other');
@@ -228,7 +219,6 @@ describe('[hosts] import review', () => {
       expect(importProblem({ code: 'conflict', reason: code }), code).toBe(importProblem(code));
     }
     expect(importProblem('something_new')).toBe('vesta-server.import.failed');
-    expect(blockerFix('memory_invalid', '/x').customize).toBe(true);
   });
 
   test('copy names the product, never a hosting panel', () => {
@@ -237,7 +227,7 @@ describe('[hosts] import review', () => {
     expect(source('src/pages/servers/host-import.tsx')).not.toMatch(/\bAMP\b|root\.label/);
   });
 
-  test('the summary reads software, version, size and port; progress prefers bytes', () => {
+  test('the summary reads software, version, size and port', () => {
     const review = {
       source: { displayPath: '/x', files: 10, bytes: 2048 }, destination: { freeBytes: 9 }, resources: { gamePort: 25566, memoryMiB: 4096 },
       detected: { minecraftVersion: '1.21.1', loader: 'fabric', instanceName: 'Survival' }, runtime: { requiredMajor: 21 },
@@ -245,9 +235,6 @@ describe('[hosts] import review', () => {
     expect(reviewSummary(review)).toMatchObject({ software: 'Fabric', minecraftVersion: '1.21.1', bytes: 2048, gamePort: 25566, javaMajor: 21 });
     expect(reviewSummary({ ...review, detected: { minecraftVersion: '1.20.1' } }).software).toBe('Vanilla');
     expect(reviewSummary({ ...review, detected: null, runtime: null }).software).toBeNull();
-    expect(importPercent({ filesDone: 1, filesTotal: 4, bytesDone: 50, bytesTotal: 100 })).toBe(50);
-    expect(importPercent({ filesDone: 1, filesTotal: 4, bytesDone: 0, bytesTotal: 0 })).toBe(25);
-    expect(importPercent(null)).toBeNull();
     expect(keepKey({ code: 'outcome_unknown' })).toBe(true);
     expect(keepKey({ code: 'conflict' })).toBe(false);
   });
@@ -292,7 +279,7 @@ describe('[hosts] folders on the machine', () => {
     expect(readNotServer({ blockers: ['not_minecraft_server'] })).toEqual({ notServer: true, missing: ['server_properties'] });
     expect(readNotServer({ blockers: [] })).toEqual({ notServer: false, missing: [] });
     expect(readNotServer(null).notServer).toBe(false);
-    expect(blockerFix('not_minecraft_server', '/x', ['world']).message).toBe('vesta-server.import.why-no-world');
+    expect(folderVerdict({ blockers: ['not_minecraft_server'], missing: ['world'] }, '/x')).toMatchObject({ kind: 'not-server', reason: 'vesta-server.import.why-no-world' });
   });
 
   test('a typed path reads as found, needs permission, or one plain problem', () => {
@@ -467,19 +454,22 @@ describe('[hosts] import store', () => {
   test('a plan started from the store is sent at once and followed until the machine answers', async () => {
     const store = await import('../src/features/servers/hosts-store');
     const lan = await store.hostCommand((client) => client.discover());
-    const ready = lan.find((entry) => entry.state === 'unclaimed');
-    const claimed = await store.hostCommand((client) => client.claim(ready.address, 'K7Q4MX29P3AB', 'uuid', 'Windows PC'));
+    const ready = lan.find((entry) => entry.hostId === 'host-people');
+    // Test files share the store, so another file may have set this machine up already.
+    await store.hostCommand((client) => client.claim(ready.address, 'K7Q4MX29P3AB', 'uuid', 'Windows PC')).catch(() => {});
     await store.refreshHosts();
-    expect(store.hosts().map((entry) => entry.id)).toContain(claimed.id);
+    const claimed = store.hosts().find((entry) => entry.id === ready.hostId);
+    expect(claimed).toBeTruthy();
 
     const folder = { token: 'token:/home/eatham/servers/Survival', displayPath: '/home/eatham/servers/Survival' };
-    await store.planImport(claimed.id, { folder, name: 'Survival', gamePort: null, memoryMiB: null });
-    expect(store.importTask(claimed.id)?.jobId).toBeTruthy();
-    const blocked = await until(() => store.importTask(claimed.id)?.job?.review && store.importTask(claimed.id));
+    const body = { folderToken: folder.token, name: 'Survival', gamePort: null, memoryMiB: null, launchChoice: null, minecraftVersion: null };
+    await store.planAdd(claimed.id, { mode: 'import', folder, body }, 'Survival');
+    expect(store.addTask(claimed.id)?.jobId).toBeTruthy();
+    const blocked = await until(() => store.addTask(claimed.id)?.job?.review && store.addTask(claimed.id));
     expect(blocked.job.state).toBe('blocked');
     // Still under review: nothing is being copied yet, so the Servers list shows no banner.
-    expect(store.activeImports()).toEqual([]);
-    store.clearImport(claimed.id);
-    expect(store.importTask(claimed.id)).toBeUndefined();
+    expect(store.activeAdds()).toEqual([]);
+    store.clearAdd(claimed.id);
+    expect(store.addTask(claimed.id)).toBeUndefined();
   }, 15_000);
 });
