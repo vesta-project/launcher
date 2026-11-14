@@ -116,8 +116,9 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const whitelist = useServerResource(id, whitelistResource);
   const ops = useServerResource(id, operatorsResource);
   const bans = useServerResource(id, bansResource);
-  const configVisible = () => gate(props.snapshot.capabilities, 'config.view') === 'allowed';
-  const properties = useServerResource(id, propertiesResource, { enabled: configVisible });
+  // Whitelist on or off only matters to people who can switch it (Game settings).
+  const changesWhitelist = () => gate(props.snapshot.capabilities, 'config.view') === 'allowed' && gate(props.snapshot.capabilities, 'config.edit') === 'allowed';
+  const properties = useServerResource(id, propertiesResource, { enabled: changesWhitelist });
   const moderate = () => gate(props.snapshot.capabilities, 'players.moderate') === 'allowed';
   const operator = () => gate(props.snapshot.capabilities, 'players.operator') === 'allowed';
   const live = () => running(props.snapshot);
@@ -132,7 +133,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
   const currentPage = () => Math.min(page(), Math.max(0, Math.ceil(shown().length / PLAYER_PAGE_SIZE) - 1));
   const loading = () => whitelist.loading() || ops.loading() || bans.loading();
   const listError = () => whitelist.error() ?? ops.error() ?? bans.error();
-  /** Whitelist on/off from server.properties, when this role can see it. */
+  /** Whitelist on/off from server.properties, for people who can change it. */
   const whitelistOn = () => {
     const file = properties.value();
     if (!file) return null;
@@ -143,7 +144,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
 
   return (
     <SettingsPage class="server-player-manager">
-      <Show when={whitelistOn() !== null}>
+      <Show when={changesWhitelist() && whitelistOn() !== null}>
         <div data-server-whitelist-status>
           <Icon name={whitelistOn() ? 'icons/security/shield-check' : 'icons/security/shield-off'} size={16} />
           <span>{whitelistOn() ? t('servers.people.whitelist-on') : t('servers.people.whitelist-off')}</span>

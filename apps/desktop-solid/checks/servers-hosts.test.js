@@ -476,3 +476,12 @@ describe('[hosts] import store', () => {
     expect(store.addTask(claimed.id)).toBeUndefined();
   }, 15_000);
 });
+
+describe('[hosts] players', () => {
+  test('the whitelist banner is only for people who can switch the whitelist', () => {
+    const page = source('src/pages/servers/tabs/players-tab.tsx');
+    expect(page).toContain("gate(props.snapshot.capabilities, 'config.edit') === 'allowed'");
+    expect(page).toContain('<Show when={changesWhitelist() && whitelistOn() !== null}>');
+    expect(page).toContain('useServerResource(id, propertiesResource, { enabled: changesWhitelist })');
+  });
+});
