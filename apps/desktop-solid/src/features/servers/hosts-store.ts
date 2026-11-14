@@ -4,7 +4,7 @@
 // restarts. Codes and review confirmations never leave memory.
 import { createSignal, onCleanup } from 'solid-js';
 import { toServerError } from './errors';
-import type { AddMode } from './host-add-model';
+import { awaitingStart, type AddMode } from './host-add-model';
 import { importBusy, keepKey } from './host-model';
 import {
   hostsNative, type CreateJob, type CreatePlan, type HostDiscovery, type HostInfo, type HostServer, type ImportJob, type ImportPlan, type VestaHost,
@@ -194,6 +194,9 @@ const newKey = () => globalThis.crypto.randomUUID();
 export const POLL_MS = 2000;
 const polls = new Map<string, ReturnType<typeof setTimeout>>();
 const lastRead = new Map<string, number>();
+/** Jobs seen installed but not started, and jobs the launcher already started itself. */
+const readyReads = new Map<string, boolean>();
+const autoStarted = new Set<string>();
 
 const readJob = (client: HostsApi, task: AddTask): Promise<AddJob> =>
   (task.mode === 'import' ? client.importJob(task.hostId, task.jobId!) : client.createJob(task.hostId, task.jobId!));
@@ -219,7 +222,21 @@ function poll(hostId: string, delay = POLL_MS) {
     try {
       const job = await hostCommand((client) => readJob(client, task));
       update(hostId, (current) => (current.jobId === task.jobId ? { ...current, job, error: null } : current));
-      if (importBusy(job.state) && addState[hostId]?.jobId === task.jobId) poll(hostId);
+      if (addState[hostId]?.jobId !== task.jobId) return;
+      if (awaitingStart(job)) {
+        // Newer machines start the server right after installing it. One that is still
+        // waiting at the next read stops there (older machines): start it, once.
+        if (readyReads.get(task.jobId!) && !autoStarted.has(task.jobId!) && !addState[hostId]?.sending) {
+          autoStarted.add(task.jobId!);
+          void startAdd(hostId);
+        } else if (!autoStarted.has(task.jobId!)) {
+          readyReads.set(task.jobId!, true);
+          poll(hostId);
+        }
+        return;
+      }
+      readyReads.delete(task.jobId!);
+      if (importBusy(job.state)) poll(hostId);
     } catch (reason) {
       const error = toServerError(reason);
       update(hostId, (current) => (current.jobId === task.jobId ? { ...current, error } : current));
@@ -337,7 +354,7 @@ export function clearAdd(hostId: string) {
 /** Read the job now (after reopening the wizard, or a failed poll), never sooner than two seconds after the last read. */
 export const recheckAdd = (hostId: string) => poll(hostId, 0);
 
-const MODES: readonly AddMode[] = ['new', 'modpack', 'restore', 'import'];
+const MODES: readonly AddMode[] = ['new', 'restore', 'import'];
 function readSaved(key: string): unknown[] {
   try {
     const saved = JSON.parse(globalThis.localStorage?.getItem(key) ?? '[]');
@@ -354,7 +371,8 @@ function restoreAdds() {
       const kept = value as { key?: unknown; intent?: unknown } | null;
       return !!kept && typeof kept.key === 'string' && typeof kept.intent === 'string';
     })) as AddTask['keys'];
-    const mode = MODES.includes(entry.mode as AddMode) ? entry.mode as AddMode : 'import';
+    // A job saved by a launcher that still offered Modpack is a create job, read like New.
+    const mode = MODES.includes(entry.mode as AddMode) ? entry.mode as AddMode : entry.mode === 'modpack' ? 'new' : 'import';
     const sourcePath = typeof entry.sourcePath === 'string' ? entry.sourcePath : typeof entry.displayPath === 'string' ? entry.displayPath : null;
     restored[entry.hostId] = {
       hostId: entry.hostId, mode, jobId: entry.jobId, name: typeof entry.name === 'string' ? entry.name : '', sourcePath,

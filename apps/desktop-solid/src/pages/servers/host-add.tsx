@@ -13,6 +13,7 @@ import { SoftwareMark } from '../../components/software-mark';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
+import { browseForServer } from '../../features/browse/browse-store';
 import { openExternal } from '../../features/links/external-links';
 import { formatBytes } from '../../features/settings/storage-model';
 import { toServerError } from '../../features/servers/errors';
@@ -43,11 +44,11 @@ interface Settings { name: string; port: number; memory: number; edited: Partial
 
 const EULA_URL = 'https://aka.ms/MinecraftEULA';
 
-const modeIcons: Record<AddMode, string> = { new: 'icons/actions/add', modpack: 'icons/content/modpack', restore: 'icons/content/history', import: 'icons/content/folder' };
-const modeLabels: Record<AddMode, MessageId> = { new: 'server-add.mode.new', modpack: 'server-add.mode.modpack', restore: 'server-add.mode.restore', import: 'server-add.mode.import' };
-const modeHints: Record<AddMode, MessageId> = { new: 'server-add.mode.new-hint', modpack: 'server-add.mode.modpack-hint', restore: 'server-add.mode.restore-hint', import: 'server-add.mode.import-hint' };
-const chooseLabels: Record<AddMode, MessageId> = { new: 'server-add.step.server', modpack: 'server-add.step.pack', restore: 'server-add.step.backup', import: 'vesta-server.import.step-folder' };
-const makeLabels: Record<AddMode, MessageId> = { new: 'server-add.step.create', modpack: 'server-add.step.create', restore: 'server-add.step.restore', import: 'vesta-server.import.step-copy' };
+const modeIcons: Record<AddMode, string> = { new: 'icons/actions/add', restore: 'icons/content/history', import: 'icons/content/folder' };
+const modeLabels: Record<AddMode, MessageId> = { new: 'server-add.mode.new', restore: 'server-add.mode.restore', import: 'server-add.mode.import' };
+const modeHints: Record<AddMode, MessageId> = { new: 'server-add.mode.new-hint', restore: 'server-add.mode.restore-hint', import: 'server-add.mode.import-hint' };
+const chooseLabels: Record<AddMode, MessageId> = { new: 'server-add.step.server', restore: 'server-add.step.backup', import: 'vesta-server.import.step-folder' };
+const makeLabels: Record<AddMode, MessageId> = { new: 'server-add.step.create', restore: 'server-add.step.restore', import: 'vesta-server.import.step-copy' };
 
 /** The software's mark on its tinted tile, or a server glyph when the software isn't known. */
 function Mark(props: { kind: string | null | undefined; size?: 'sm' | 'lg' }) {
@@ -708,7 +709,7 @@ function ReviewStep(props: { hostId: string; machine: string; task: AddTask; onE
 }
 
 const fixLabels: Record<Field, MessageId> = { name: 'server-add.fix.name', port: 'server-add.fix.port', memory: 'server-add.fix.memory' };
-const backLabels: Record<AddMode, MessageId> = { new: 'server-add.fix.version', modpack: 'server-add.fix.pack', restore: 'server-add.fix.backup', import: 'server-add.fix.folder' };
+const backLabels: Record<AddMode, MessageId> = { new: 'server-add.fix.version', restore: 'server-add.fix.backup', import: 'server-add.fix.folder' };
 
 function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onEdit: (field: Field | null, back?: boolean) => void }) {
   const facts = createMemo(() => reviewFacts(props.task.mode, props.task.job!.review!, props.task.name), { name: 'host-add:facts' });
@@ -860,16 +861,26 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
   const importing = () => props.task.mode === 'import';
   const [opening, setOpening] = createSignal(false, { name: 'host-add:opening' });
 
-  const open = async () => {
+  /** Leave for the new server (or a Browse aimed at it), once the servers list knows it. */
+  const leave = async (then: (connectionId: string | null) => void) => {
     const serverId = job().serverId;
     setOpening(true);
     try { await loadHostServers(props.hostId); } catch { /* The list catches up on its own. */ }
     finally { setOpening(false); }
     clearAdd(props.hostId);
-    transitionTo(serverId ? `/servers/${hostConnectionId({ hostId: props.hostId, serverId })}` : '/servers');
+    then(serverId ? hostConnectionId({ hostId: props.hostId, serverId }) : null);
   };
+  const open = () => leave((id) => transitionTo(id ? `/servers/${id}` : '/servers'));
+  /** A new server starts blank: its modpack comes from Browse, like any server's. */
+  const browsePacks = () => leave((id) => {
+    if (!id) { transitionTo('/servers'); return; }
+    browseForServer({ id, name: name(), type: 'modpack', destination: 'server', minecraftVersion: facts()?.minecraftVersion || null, loader: null });
+  });
   const finish = () => { clearAdd(props.hostId); transitionTo('/servers'); };
-  const working = () => state() === 'applying' || state() === 'interrupted';
+  /** The server installed but did not start, or the start could not be sent: try starting it again. */
+  const startProblem = () => (state() === 'ready' ? job().error ?? (props.task.sending ? null : props.task.error) : null);
+  // Installing runs straight on into starting: one list of steps until the server is online.
+  const working = () => state() === 'applying' || state() === 'interrupted' || state() === 'starting' || (state() === 'ready' && !startProblem());
   const line = () => t(state() === 'online' ? 'server-add.progress.online-line' : importing() ? 'server-add.progress.copy-line' : 'server-add.progress.line', { name: props.machine });
 
   return (
@@ -882,7 +893,7 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
             {(step, index) => (
               <li data-state={index() < at() ? 'done' : index() === at() ? (state() === 'interrupted' ? 'paused' : 'current') : 'next'}>
                 <span data-vesta="add-phase-mark" aria-hidden="true">
-                  <Show when={index() < at()} fallback={<Show when={index() === at() && state() === 'applying'}><span data-vesta="vesta-spinner" /></Show>}>
+                  <Show when={index() < at()} fallback={<Show when={index() === at() && state() !== 'interrupted'}><span data-vesta="vesta-spinner" /></Show>}>
                     <Icon name="icons/controls/check" size={12} />
                   </Show>
                 </span>
@@ -905,18 +916,11 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
         <Match when={state() === 'interrupted'}>
           <p data-vesta="server-callout" data-tone="warning" role="status">{t(importing() ? 'vesta-server.import.paused-help' : 'server-add.progress.paused', { name: props.machine })}</p>
         </Match>
-        <Match when={state() === 'ready'}>
-          <div data-vesta="add-done">
-            <span data-vesta="server-add-done-icon"><Icon name="icons/controls/success" size={28} /></span>
-            <div>
-              <strong>{t(importing() ? 'vesta-server.import.ready-title' : 'server-add.progress.ready-title', { name: name() })}</strong>
-              <p>{t('vesta-server.import.ready-help')}</p>
-            </div>
-          </div>
-          <Show when={job().error}>{(error) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(addProblem(error(), props.task.mode))}</p>}</Show>
+        <Match when={startProblem()}>
+          {(problem) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(addProblem(problem(), props.task.mode))}</p>}
         </Match>
-        <Match when={state() === 'starting'}>
-          <Working label={t('vesta-server.import.starting')} />
+        <Match when={state() === 'ready' || state() === 'starting'}>
+          <p data-vesta="add-note">{t('vesta-server.import.starting')}</p>
         </Match>
         <Match when={state() === 'online'}>
           <div data-vesta="add-done">
@@ -941,7 +945,7 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
         </Match>
       </Switch>
 
-      <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(addProblem(error(), props.task.mode))}</p>}</Show>
+      <Show when={state() !== 'ready' && props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(addProblem(error(), props.task.mode))}</p>}</Show>
 
       <footer data-vesta="add-footer">
         <Switch>
@@ -953,16 +957,18 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
             <Button variant="ghost" disabled={busy()} onClick={() => void cancelAdd(props.hostId)}>{t('common.cancel')}</Button>
             <Button tone="accent" disabled={busy()} onClick={() => void resumeAdd(props.hostId)}>{t('vesta-server.import.resume')}</Button>
           </Match>
-          <Match when={state() === 'ready'}>
-            <Button variant="ghost" disabled={busy() || opening()} onClick={() => void open()}>{t('servers.open')}</Button>
-            <Button tone="accent" disabled={busy()} icon={<Icon name="icons/actions/play" />} onClick={() => void startAdd(props.hostId)}>{t('vesta-server.import.start')}</Button>
+          <Match when={startProblem()}>
+            <Button variant="ghost" disabled={busy() || opening()} onClick={() => void open()}>{t('server-add.progress.view')}</Button>
+            <Button tone="accent" disabled={busy()} icon={<Icon name="icons/actions/refresh" />} onClick={() => void startAdd(props.hostId)}>{t('server-add.progress.try-again')}</Button>
           </Match>
-          <Match when={state() === 'starting'}>
+          <Match when={state() === 'ready' || state() === 'starting'}>
             <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('vesta-server.import.close')}</Button>
           </Match>
           <Match when={state() === 'online'}>
-            <Button variant="ghost" onClick={finish}>{t('servers.done.all-servers')}</Button>
-            <Button tone="accent" disabled={opening()} onClick={() => void open()}>{t('server-add.progress.open')}</Button>
+            <Show when={props.task.mode === 'new'}>
+              <Button variant="ghost" icon={<Icon name="icons/content/modpack" />} disabled={opening()} onClick={() => void browsePacks()}>{t('server-add.progress.browse-packs')}</Button>
+            </Show>
+            <Button tone="accent" disabled={opening()} onClick={() => void open()}>{t('server-add.progress.view')}</Button>
           </Match>
           <Match when={!importBusy(state())}>
             <Button variant="ghost" onClick={finish}>{t('vesta-server.import.close')}</Button>

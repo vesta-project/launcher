@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ADD_BLOCKERS, CREATE_ERRORS, CREATE_WARNINGS, acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, experimentalChoice,
+  ADD_BLOCKERS, awaitingStart, CREATE_ERRORS, CREATE_WARNINGS, acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, experimentalChoice,
   folderVerdict, formatMemory, keepKind, memoryRange, needsBuild, needsFreshPlan, notOffered, overallPercent, phaseAt, phaseProgress, phaseSteps, readDefaults,
   readNearby, readResources, readRestoreSources, recommendedBuild, reviewFacts, reviewProblems, settingsProblem, softwareChoice, softwareKinds, startVersion,
   supportedModes, unavailableKinds, versionOptions, waitingFor,
@@ -40,14 +40,15 @@ const importReview = (overrides = {}) => ({
 });
 
 describe('[add] ways to add a server', () => {
-  test('wizard order is New, Modpack, Restore, Import, and a way the machine can not do is left out', () => {
+  test('wizard order is New, Restore, Import, Modpack is not a way, and a way the machine can not do is left out', () => {
     expect(supportedModes({ new: true, modpack: true, restore: true, import: true })).toEqual(['new', 'restore', 'import']);
+    expect(supportedModes(addSupport({ capabilities: ['create-jobs', 'create-modpack', 'import-jobs'], defaults: true, restoreSources: 0 }))).toEqual(['new', 'import']);
     expect(supportedModes({ new: false, import: true })).toEqual(['import']);
     // Today's machine: create defaults answer, no backups, import jobs advertised.
     const today = addSupport({ capabilities: ['folders', 'import-jobs'], defaults: true, restoreSources: 0 });
     expect(supportedModes(today)).toEqual(['new', 'import']);
     // An older machine lists no capabilities but still imports.
-    expect(addSupport({ capabilities: [], defaults: false, restoreSources: null })).toMatchObject({ new: false, import: true, restore: false, modpack: false });
+    expect(addSupport({ capabilities: [], defaults: false, restoreSources: null })).toEqual({ new: false, import: true, restore: false });
     expect(addSupport({ capabilities: ['folders'], defaults: true, restoreSources: 2 })).toMatchObject({ import: false, restore: true });
   });
 
@@ -205,15 +206,23 @@ describe('[add] one review', () => {
 
 describe('[add] progress', () => {
   test('phases read in order, with byte or file progress and a whole job percentage', () => {
-    expect(phaseSteps('new').map((step) => step.id)).toEqual(['prepare', 'java', 'software', 'install', 'finish']);
+    expect(phaseSteps('new').map((step) => step.id)).toEqual(['prepare', 'java', 'software', 'install', 'finish', 'start']);
+    expect(phaseSteps('import').map((step) => step.id)).toEqual(['check', 'copy', 'finish', 'start']);
     expect(phaseAt('new', 'downloading_software', 'applying')).toBe(2);
+    // Installed runs straight on into starting: ready and starting are the last step, online is done.
     expect(phaseAt('new', 'registering', 'ready')).toBe(5);
+    expect(phaseAt('new', 'starting', 'starting')).toBe(5);
+    expect(phaseAt('new', 'starting', 'online')).toBe(6);
+    expect(awaitingStart({ state: 'ready', error: null })).toBe(true);
+    expect(awaitingStart({ state: 'ready', error: 'start_failed' })).toBe(false);
+    expect(awaitingStart({ state: 'starting', error: null })).toBe(false);
     expect(phaseAt('import', 'copy', 'applying')).toBe(1);
     expect(phaseProgress({ bytesDone: 25, bytesTotal: 100, filesDone: 0, filesTotal: 0 })).toEqual({ percent: 25, bytes: true, files: false });
     expect(phaseProgress({ bytesDone: 0, bytesTotal: 0, filesDone: 1, filesTotal: 4 })).toEqual({ percent: 25, bytes: false, files: true });
     expect(phaseProgress(null).percent).toBeNull();
-    expect(overallPercent('new', { phase: 'downloading_software', state: 'applying', progress: { bytesDone: 50, bytesTotal: 100, filesDone: 0, filesTotal: 0 } })).toBe(50);
-    expect(overallPercent('new', { phase: 'registering', state: 'ready', progress: null })).toBe(100);
+    expect(overallPercent('new', { phase: 'downloading_software', state: 'applying', progress: { bytesDone: 50, bytesTotal: 100, filesDone: 0, filesTotal: 0 } })).toBe(41);
+    expect(overallPercent('new', { phase: 'registering', state: 'ready', progress: null })).toBe(83);
+    expect(overallPercent('new', { phase: 'starting', state: 'online', progress: null })).toBe(100);
   });
 });
 
@@ -299,11 +308,37 @@ describe('[add] store', () => {
     }
   }, 30_000);
 
+  test('an older machine that stops at ready is started once, and the job follows on to online', async () => {
+    const store = await import('../src/features/servers/hosts-store');
+    await store.refreshHosts();
+    const hostId = store.hosts()[0].id;
+    const client = await store.hostCommand(async (api) => api);
+    const start = client.createStart;
+    let starts = 0;
+    client.createStart = async (...args) => { starts += 1; return start(...args); };
+    try {
+      const body = { kind: 'new', name: 'Autostart', minecraftVersion: '1.21.4', software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: 25580, memoryMiB: 2048, eulaAccepted: false };
+      await store.planAdd(hostId, { mode: 'new', body }, 'Autostart');
+      await until(() => store.addTask(hostId)?.job?.review?.confirmation, 20_000);
+      await store.applyAdd(hostId, store.addTask(hostId).job.review.warnings);
+      await until(() => store.addTask(hostId)?.job?.state === 'online', 40_000);
+      expect(starts).toBe(1);
+    } finally {
+      client.createStart = start;
+      store.clearAdd(hostId);
+    }
+  }, 60_000);
+
   test('the wizard offers modes in order, reattaches to jobs and never uses details triangles', () => {
     const wizard = source('src/pages/servers/host-add.tsx');
     expect(wizard).not.toMatch(/<details|<summary/);
     expect(source('src/pages/servers/host-import.tsx')).not.toMatch(/<details|<summary/);
     expect(wizard).toContain('recheckAdd(props.hostId)');
+    // No separate Start: the finished screen is View server, with Browse modpacks beside it for a new server.
+    expect(wizard).not.toContain("t('vesta-server.import.start')");
+    expect(wizard).toContain("t('server-add.progress.view')");
+    expect(wizard).toContain("type: 'modpack', destination: 'server'");
+    expect(wizard).not.toMatch(/modpack: 'server-add/);
     expect(source('src/pages/servers/servers-page.tsx')).toContain('activeAdds()');
   });
 

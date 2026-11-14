@@ -7,16 +7,13 @@ server-add-start-over = Start over
 
 server-add-mode-label = How to add it
 server-add-mode-new = New server
-server-add-mode-modpack = Modpack
 server-add-mode-restore = Restore
 server-add-mode-import = Import
 server-add-mode-new-hint = A fresh world on any Minecraft version.
-server-add-mode-modpack-hint = A modpack, set up as a server.
 server-add-mode-restore-hint = Bring a server back from a backup on { $name }.
 server-add-mode-import-hint = Copy a server that already lives on { $name }. The original stays untouched.
 
 server-add-step-server = Server
-server-add-step-pack = Modpack
 server-add-step-backup = Backup
 server-add-step-create = Create
 server-add-step-restore = Restore
@@ -81,7 +78,6 @@ server-add-fix-name = Change name
 server-add-fix-port = Change port
 server-add-fix-memory = Change memory
 server-add-fix-version = Change version
-server-add-fix-pack = Choose another pack
 server-add-fix-backup = Choose another backup
 server-add-fix-folder = Choose another folder
 
@@ -113,8 +109,8 @@ server-add-phase-java = Downloading Java
 server-add-phase-software = Downloading the server
 server-add-phase-software-restore = Downloading the server software
 server-add-phase-install = Setting up the server
-server-add-phase-install-pack = Installing the modpack
 server-add-phase-install-restore = Restoring the world
+server-add-phase-start = Starting it up
 
 server-add-progress-line = Being made on { $name }
 server-add-progress-copy-line = Being copied to its new home on { $name }
@@ -123,13 +119,12 @@ server-add-progress-bytes = { $done } of { $total }
 server-add-progress-files = { $count } of { $total } files
 server-add-progress-keeps-going = You can close this. { $name } keeps going.
 server-add-progress-paused = It stopped partway, maybe because { $name } restarted. Pick up where it left off.
-server-add-progress-ready-title = { $name } is ready
-server-add-progress-open = Open server
 server-add-progress-cancelled-title = Cancelled
 server-add-progress-cancelled-help = Nothing was added to { $name }.
 server-add-progress-failed-help = Nothing was added to { $name }. Try again, or change the settings.
 server-add-progress-try-again = Try again
 server-add-progress-change = Change settings
+server-add-progress-view = View server
 
 server-add-error-gone = Vesta Server no longer has this job. Start again.
 server-add-error-unavailable = This Vesta Server can't create servers yet. Update it on the machine and try again.
@@ -143,3 +138,5 @@ server-add-error-invalid = Vesta Server didn't accept that. Check the settings a
 server-add-error-cancelled = Cancelled.
 server-add-error-interrupted = It stopped partway. Pick up where it left off.
 server-add-error-step = Vesta Server couldn't finish this step. Try again.
+
+server-add-progress-browse-packs = Browse modpacks

@@ -11,35 +11,34 @@ import type {
 
 // ------------------------------------------------------------------ ways to add a server
 
-export type AddMode = 'new' | 'modpack' | 'restore' | 'import';
+/**
+ * A modpack is not a way to add a server: make one with New, then install a pack into it
+ * from Browse, like any server.
+ */
+export type AddMode = 'new' | 'restore' | 'import';
 /** The order the wizard offers them in. */
-export const ADD_MODES: readonly AddMode[] = ['new', 'modpack', 'restore', 'import'];
+export const ADD_MODES: readonly AddMode[] = ['new', 'restore', 'import'];
 
 /** What the machine answered when asked about each way. */
 export type AddSupport = Record<AddMode, boolean>;
 
-/** Ways this launcher has a first step for. A modpack source picker isn't built yet. */
-const BUILT: Record<AddMode, boolean> = { new: true, modpack: false, restore: true, import: true };
-
 /** Only the ways this machine can do, in wizard order. A way it can't do is left out, never greyed. */
-export const supportedModes = (support: Partial<AddSupport>): AddMode[] => ADD_MODES.filter((mode) => BUILT[mode] && support[mode] === true);
+export const supportedModes = (support: Partial<AddSupport>): AddMode[] => ADD_MODES.filter((mode) => support[mode] === true);
 
 /** Capability names a machine may advertise for each way. */
 const MODE_CAPABILITIES: Record<AddMode, readonly string[]> = {
-  new: ['create-jobs', 'create-new'], modpack: ['create-modpack'], restore: ['create-restore'], import: ['import-jobs'],
+  new: ['create-jobs', 'create-new'], restore: ['create-restore'], import: ['import-jobs'],
 };
 
 /**
  * Which ways a machine offers, from what it advertises and what it answered when asked.
  * Defaults answering means New works. Restore needs at least one backup to start from.
- * Modpack is only offered once the machine says so, since there is nothing to ask first.
  */
 export function addSupport(input: { capabilities?: readonly string[] | null; defaults: boolean; restoreSources: number | null }): AddSupport {
   const caps = input.capabilities ?? [];
   const says = (mode: AddMode) => MODE_CAPABILITIES[mode].some((name) => caps.includes(name));
   return {
     new: input.defaults,
-    modpack: says('modpack'),
     restore: (input.restoreSources ?? 0) > 0,
     // An older machine lists no capabilities at all but can still import.
     import: caps.length === 0 || says('import'),
@@ -365,7 +364,7 @@ export function reviewFacts(mode: AddMode, review: ImportReview | CreateReview, 
   const pack = summary.pack;
   const kind = software?.kind ?? pack?.loader ?? null;
   return {
-    mode: mode === 'import' ? summary.kind : mode, planId: review.planId, confirmation: review.confirmation, name: summary.name || fallbackName,
+    mode, planId: review.planId, confirmation: review.confirmation, name: summary.name || fallbackName,
     softwareKind: kind?.toLowerCase() ?? null, software: softwareLabel(kind),
     softwareVersion: software ? buildLabel(software) : null,
     minecraftVersion: summary.minecraftVersion ?? pack?.minecraftVersion ?? null,
@@ -546,29 +545,41 @@ export interface PhaseStep { id: string; label: MessageId; phases: readonly stri
 const importSteps: PhaseStep[] = [
   { id: 'check', label: 'vesta-server.import.phase-check', phases: ['inspect', 'conflicts', 'java', 'snapshot'] },
   { id: 'copy', label: 'vesta-server.import.phase-copy', phases: ['copy'] },
-  { id: 'finish', label: 'vesta-server.import.phase-finish', phases: ['configure', 'register', 'start'] },
+  { id: 'finish', label: 'vesta-server.import.phase-finish', phases: ['configure', 'register'] },
+  { id: 'start', label: 'server-add.phase.start', phases: ['start'] },
 ];
 const installLabel: Record<Exclude<AddMode, 'import'>, MessageId> = {
-  new: 'server-add.phase.install', modpack: 'server-add.phase.install-pack', restore: 'server-add.phase.install-restore',
+  new: 'server-add.phase.install', restore: 'server-add.phase.install-restore',
 };
 const createSteps = (mode: Exclude<AddMode, 'import'>): PhaseStep[] => [
   { id: 'prepare', label: 'server-add.phase.prepare', phases: ['resolving'] },
   { id: 'java', label: 'server-add.phase.java', phases: ['downloading_java'] },
   { id: 'software', label: mode === 'restore' ? 'server-add.phase.software-restore' : 'server-add.phase.software', phases: ['downloading_software'] },
   { id: 'install', label: installLabel[mode], phases: ['installing'] },
-  { id: 'finish', label: 'vesta-server.import.phase-finish', phases: ['registering', 'starting'] },
+  { id: 'finish', label: 'vesta-server.import.phase-finish', phases: ['registering'] },
+  { id: 'start', label: 'server-add.phase.start', phases: ['starting'] },
 ];
 
-/** What the machine works through, in order, for this way of adding a server. */
+/** What the machine works through, in order, for this way of adding a server. Every way ends by starting it. */
 export const phaseSteps = (mode: AddMode): PhaseStep[] => (mode === 'import' ? importSteps : createSteps(mode));
 
-/** Which step the machine is on; every step counts as done once the server is ready. */
+/**
+ * Which step the machine is on. Once installed (`ready`) the server starts on its own, so
+ * `ready` and `starting` are the last step and only `online` counts every step as done.
+ */
 export function phaseAt(mode: AddMode, phase: string | null | undefined, state: ImportJob['state'] | undefined): number {
   const steps = phaseSteps(mode);
-  if (state === 'ready' || state === 'starting' || state === 'online') return steps.length;
+  if (state === 'online') return steps.length;
+  if (state === 'ready' || state === 'starting') return steps.length - 1;
   const at = steps.findIndex((step) => step.phases.includes(phase ?? ''));
   return at < 0 ? 0 : at;
 }
+
+/**
+ * Installed and not started yet, with no start failure. Newer machines move on to `starting`
+ * by themselves; older ones wait here for a start, which the launcher then sends once.
+ */
+export const awaitingStart = (job: Pick<ImportJob, 'state' | 'error'> | null | undefined) => job?.state === 'ready' && !job.error;
 
 /** Progress within the current step, when the machine reports any. */
 export function phaseProgress(progress: ImportJob['progress'] | null | undefined): { percent: number | null; bytes: boolean; files: boolean } {
