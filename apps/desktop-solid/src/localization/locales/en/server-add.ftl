@@ -50,7 +50,6 @@ server-add-restore-action = Restore server
 
 server-add-import-checking = Checking { $name }
 server-add-import-not-server = { $name } isn't a Minecraft server.
-server-add-import-did-you-mean = Did you mean { $name }?
 server-add-import-unreadable = Vesta Server needs permission to read this folder.
 server-add-import-granted = Vesta Server can read this folder now.
 server-add-import-chosen = Folder to copy

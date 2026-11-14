@@ -485,3 +485,22 @@ describe('[hosts] players', () => {
     expect(page).toContain('useServerResource(id, propertiesResource, { enabled: changesWhitelist })');
   });
 });
+
+describe('[hosts] folder picker', () => {
+  test('one tidy picker: the path bar takes a typed path, no repeated notes, no guesses', () => {
+    const picker = source('src/pages/servers/host-import.tsx');
+    const wizard = source('src/pages/servers/host-add.tsx');
+    for (const page of [picker, wizard]) {
+      expect(page).not.toContain('vesta-server.import.remote');
+      expect(page).not.toContain('did-you-mean');
+    }
+    expect(picker).not.toContain('PathCheck');
+    // Clicking the trail or Ctrl+L types a path; Enter checks it on the machine, Esc goes back.
+    expect(picker).toContain("event.key.toLowerCase() === 'l'");
+    expect(picker).toContain('checkPath(props.hostId, path)');
+    expect(picker).toContain("event.key === 'Escape'");
+    // Found servers only show when there are some, and Continue waits until a folder is picked.
+    expect(picker).toContain('<Show when={candidates()?.length}>');
+    expect(wizard).toContain('<Show when={!picking()}>');
+  });
+});

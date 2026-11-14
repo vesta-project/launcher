@@ -297,6 +297,9 @@ function AddWizard(props: { hostId: string; machine: string }) {
     return minecraftVersion ? { mode: 'new', body: { kind: 'new', ...resources, minecraftVersion, software: softwareChoice(kind(), buildId()) } } : null;
   };
 
+  /** Import with no server folder chosen yet: the person is still in the folder browser. */
+  const picking = () => shownMode() === 'import' && (importChoice()?.state as FolderVerdict | undefined)?.kind !== 'server';
+
   const goToReview = () => {
     const next = request();
     if (!next || continueBlocker()) return;
@@ -392,10 +395,13 @@ function AddWizard(props: { hostId: string; machine: string }) {
               <footer data-vesta="add-footer">
                 {/* Continue always checks again and reviews, so one way back out is enough. */}
                 <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
-                <Show when={loaded() && continueBlocker()}>{(why) => <span data-vesta="add-why" id="add-continue-why">{t(why(), { name: kind() ? softwareLabel(kind()!.kind, kind()!.label)! : '' })}</span>}</Show>
-                <Button tone="accent" disabled={!loaded() || !!continueBlocker() || !!task()?.sending} aria-describedby={continueBlocker() ? 'add-continue-why' : undefined} onClick={goToReview}>
-                  {t('server-add.continue')}
-                </Button>
+                {/* Until a folder is picked, the folder browser's Use this folder is the one way on. */}
+                <Show when={!picking()}>
+                  <Show when={loaded() && continueBlocker()}>{(why) => <span data-vesta="add-why" id="add-continue-why">{t(why(), { name: kind() ? softwareLabel(kind()!.kind, kind()!.label)! : '' })}</span>}</Show>
+                  <Button tone="accent" disabled={!loaded() || !!continueBlocker() || !!task()?.sending} aria-describedby={continueBlocker() ? 'add-continue-why' : undefined} onClick={goToReview}>
+                    {t('server-add.continue')}
+                  </Button>
+                </Show>
               </footer>
             </div>
           </Match>
@@ -551,7 +557,6 @@ function ImportFields(props: { hostId: string; machine: string; choice: ImportCh
   return (
     <Show when={server() && props.choice} fallback={
       <div data-vesta="add-import-pick">
-        <p data-vesta="vesta-remote-note"><Icon name="icons/content/server" size={16} />{t('vesta-server.import.remote', { name: props.machine })}</p>
         <Show when={props.choice}>
           {(choice) => (
             <Switch>
@@ -568,18 +573,6 @@ function ImportFields(props: { hostId: string; machine: string; choice: ImportCh
                 {(other) => (
                   <div data-vesta="server-callout" data-tone="warning" role="status">
                     <p>{t('server-add.import.not-server', { name: choice().folder.name })} {t(other().reason)}</p>
-                    <Show when={other().nearby.length > 0}>
-                      <div data-vesta="add-nearby">
-                        <For each={other().nearby} keyed={(folder) => folder.token}>
-                          {(folder) => (
-                            <Button size="sm" variant="outline" icon={<Icon name="icons/content/folder" />}
-                              onClick={() => props.onPick({ token: folder().token, displayPath: folder().path, name: folder().name })}>
-                              {t('server-add.import.did-you-mean', { name: folder().name })}
-                            </Button>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
                   </div>
                 )}
               </Match>

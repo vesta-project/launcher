@@ -172,31 +172,23 @@ vesta-server-import-step-folder = Folder
 vesta-server-import-step-review = Review
 vesta-server-import-step-copy = Copy
 
-vesta-server-import-remote = Folders here are on { $name }, not this computer.
 vesta-server-import-found = Found on { $name }
-vesta-server-import-found-none = Nothing found automatically. Paste a path or browse below.
-vesta-server-import-looking = Looking for servers on { $name }
 vesta-server-import-needs-permission = Needs permission
 vesta-server-import-permission = Vesta Server needs permission to read { $path }. Run this on { $name }, then check again.
 vesta-server-import-permission-still = Still no access. Run the command, then check again.
 
-vesta-server-import-path-label = Know the path? Paste it here
-vesta-server-import-path-example = /srv/minecraft/my-server
-vesta-server-import-check = Check
 vesta-server-import-checking-path = Checking
-vesta-server-import-path-found = Found it. It's open below.
 vesta-server-import-path-not-found = There's nothing at that path on { $name }.
-vesta-server-import-path-not-folder = That's a file. Paste the path of the folder it's in.
+vesta-server-import-path-not-folder = That's a file. Type the path of the folder it's in.
 vesta-server-import-path-protected = Vesta Server keeps that folder private. Pick a different one.
-vesta-server-import-path-invalid = Paste the full path, starting from the top of the machine.
-vesta-server-import-path-unsupported = This Vesta Server can't check paths yet. Browse for the folder below.
+vesta-server-import-path-invalid = Type the full path, from the top of the machine.
+vesta-server-import-path-unsupported = This Vesta Server can't open typed paths yet. Browse to the folder instead.
 
-vesta-server-import-browse = Browse { $name }
 vesta-server-import-shortcuts = Shortcuts
 vesta-server-import-trail = Folder path
 vesta-server-import-folders = Folders in { $name }
 vesta-server-import-opening = Opening
-vesta-server-import-no-roots = Vesta Server can't see any folders on { $name } yet. Paste a path above, or update Vesta Server on the machine.
+vesta-server-import-no-roots = Vesta Server can't see any folders on { $name } yet. Click the bar above to type a path, or update Vesta Server on the machine.
 vesta-server-import-up = Up
 vesta-server-import-empty-folder = No folders here
 vesta-server-import-more = Show more
@@ -205,9 +197,9 @@ vesta-server-import-use-folder = Use this folder
 vesta-server-import-folder-checking = Checking this folder
 vesta-server-import-folder-ready = This looks like a Minecraft server.
 vesta-server-import-why-top = Open the folder your server is in.
-vesta-server-import-why-no-server-file = This folder has no server file. Open the folder that contains server.properties.
-vesta-server-import-why-no-jar = There's no server jar here. Open the folder that has the server jar in it.
-vesta-server-import-why-no-world = There's no world here. Open the folder that has your world in it.
+vesta-server-import-why-no-server-file = No server.properties in this folder.
+vesta-server-import-why-no-jar = No server jar in this folder.
+vesta-server-import-why-no-world = No world in this folder.
 vesta-server-import-unavailable = This Vesta Server can't import servers yet. Update it on the machine and try again.
 
 vesta-server-import-check-again = Check again
@@ -275,3 +267,6 @@ vesta-server-import-confirm-all = Tick each box above to continue.
 vesta-server-import-fix-first = Fix the items above, then check again.
 vesta-server-import-out-of-date = Something changed since the last check. Check again.
 vesta-server-import-full = This Vesta Server can't take more servers right now.
+
+vesta-server-import-type-path = Type a path
+vesta-server-import-go = Open

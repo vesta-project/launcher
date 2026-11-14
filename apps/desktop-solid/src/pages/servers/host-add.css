@@ -53,8 +53,6 @@
 
   /* Import: the folder picked */
   :where([data-vesta="add-import"], [data-vesta="add-import-pick"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); }
-  :where([data-vesta="add-nearby"]) { display: flex; flex-wrap: wrap; gap: var(--vesta-space-2); flex-basis: 100%; }
-  :where([data-vesta="vesta-use"]) :where([data-vesta="add-nearby"]) { flex-basis: auto; }
   :where([data-vesta="add-chosen"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
   :where([data-vesta="add-chosen-folder"]) {
     display: grid;

@@ -189,8 +189,6 @@
   :where([data-vesta="vesta-step-intro"]) { display: flex; flex-direction: column; gap: var(--vesta-space-1-5); }
   :where([data-vesta="vesta-soon"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-sm); }
   :where([data-vesta="vesta-section"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
-  :where([data-vesta="vesta-remote-note"]) { display: flex; align-items: center; gap: var(--vesta-space-2); font-size: var(--vesta-text-sm); }
-  :where([data-vesta="vesta-remote-note"]) > [data-vesta="icon"] { color: var(--vesta-color-accent-text); }
   :where([data-vesta="vesta-from"]) { display: flex; align-items: center; gap: var(--vesta-space-1-5); min-inline-size: 0; }
   :where([data-vesta="vesta-from"]) code { overflow-wrap: anywhere; font-family: var(--vesta-font-mono); font-size: var(--vesta-text-xs); }
 
@@ -244,7 +242,38 @@
     padding: var(--vesta-space-1-5) var(--vesta-space-2) var(--vesta-space-1-5) var(--vesta-space-3);
     border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
   }
-  :where([data-vesta="vesta-browser-bar"]) > nav { min-inline-size: 0; }
+  /* The trail fills the bar, so its empty part is somewhere to click and type a path. */
+  :where([data-vesta="vesta-browser-bar"]) > nav { flex: 1; align-self: stretch; display: flex; align-items: center; min-inline-size: 0; cursor: text; }
+  :where([data-vesta="vesta-browser-bar"]) > nav button { cursor: default; }
+  :where([data-vesta="vesta-browser-bar-actions"]) { display: flex; flex: none; align-items: center; gap: var(--vesta-space-1); }
+  :where([data-vesta="vesta-browser-bar"][data-typing]) { gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-browser-bar"][data-typing]) > [data-vesta="icon"] { flex: none; color: var(--vesta-color-text-muted); }
+  :where([data-vesta="vesta-path-input"]) {
+    flex: 1;
+    min-inline-size: 0;
+    padding: 2px var(--vesta-space-1);
+    border: 0;
+    border-radius: var(--vesta-radius-sm);
+    outline: none;
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font: inherit;
+  }
+  :where([data-vesta="vesta-path-input"]:focus-visible) { box-shadow: inset 0 0 0 var(--vesta-focus-width) var(--vesta-color-focus); }
+  :where([data-vesta="vesta-path-input"][aria-invalid="true"]) { box-shadow: inset 0 0 0 var(--vesta-border-width) var(--vesta-color-danger); }
+  :where([data-vesta="vesta-browser-note"]) {
+    margin: 0;
+    padding: var(--vesta-space-1-5) var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-sm);
+  }
+  /* Found servers: one tight row each, name and path side by side. */
+  :where([data-vesta="vesta-found"][data-compact]) { gap: var(--vesta-space-1); }
+  :where([data-vesta="vesta-found"][data-compact]) :where([data-vesta="vesta-machine"]) { gap: var(--vesta-space-2); padding: var(--vesta-space-2) var(--vesta-space-3); }
+  :where([data-vesta="vesta-found"][data-compact]) :where([data-vesta="vesta-machine-text"]) { flex-direction: row; align-items: baseline; gap: var(--vesta-space-2); }
+  :where([data-vesta="vesta-found"][data-compact]) :where([data-vesta="vesta-machine-text"]) > strong { flex: none; }
+  :where([data-vesta="vesta-found"][data-compact]) :where([data-vesta="vesta-machine-text"]) > span { font-size: var(--vesta-text-xs); }
   :where([data-vesta="vesta-browser-bar"] button[data-vesta="breadcrumb-link"]) {
     padding: 2px var(--vesta-space-1);
     border: 0;
