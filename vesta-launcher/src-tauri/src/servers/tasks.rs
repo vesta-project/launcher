@@ -2,7 +2,26 @@
 use super::*;
 use tauri::Manager;
 
+const STOP_TIMEOUT_DETAIL: &str = "Minecraft may still be saving. Check the current server status.";
+
+fn stop_confirmation_timed_out(operation: &ServerOperation) -> bool {
+    operation.outcome.as_deref() == Some("timeout")
+        && (matches!(
+            operation.summary.as_deref(),
+            Some(OperationSummary::Lifecycle {
+                action: LifecycleAction::Stop,
+                ..
+            })
+        ) || matches!(
+            operation.intent.as_deref().or(operation.kind.as_deref()),
+            Some("lifecycle.stop")
+        ))
+}
+
 fn operation_title(operation: &ServerOperation) -> String {
+    if stop_confirmation_timed_out(operation) {
+        return "Stop confirmation timed out".into();
+    }
     match operation.summary.as_deref() {
         Some(OperationSummary::Lifecycle { action, .. }) => match action {
             LifecycleAction::Start => "Start server",
@@ -63,10 +82,15 @@ fn activity(
         "cancelled" => "cancelled",
         _ => "running",
     };
+    let detail = if stop_confirmation_timed_out(operation) {
+        STOP_TIMEOUT_DETAIL
+    } else {
+        operation.outcome.as_deref().unwrap_or(&operation.state)
+    };
     crate::tasks::activity::publish(
         app,
         "core://task-state",
-        json!({"id":activity_id,"attempt":operation.operation_id,"title":title,"state":state,"step":operation.outcome.as_deref().unwrap_or(&operation.state),"progress":operation.progress_percent.map(i32::from).unwrap_or(-1),"cancellable":false}),
+        json!({"id":activity_id,"attempt":operation.operation_id,"title":title,"state":state,"step":detail,"progress":operation.progress_percent.map(i32::from).unwrap_or(-1),"cancellable":false}),
     );
 }
 fn notify_failure(app: &AppHandle, id: &str, operation: &ServerOperation) {
@@ -80,11 +104,19 @@ fn notify_failure(app: &AppHandle, id: &str, operation: &ServerOperation) {
     if let Some(notifications) = app.try_state::<NotificationManager>() {
         let _ = notifications.create(CreateNotificationInput {
             client_key: Some(format!("server:{id}:{}", operation.operation_id)),
-            title: Some(format!("{} needs attention", operation_title(operation))),
-            description: Some(format!(
-                "Result: {}. Review this server's console and Activity for details.",
-                operation.outcome.as_deref().unwrap_or(&operation.state)
-            )),
+            title: Some(if stop_confirmation_timed_out(operation) {
+                operation_title(operation)
+            } else {
+                format!("{} needs attention", operation_title(operation))
+            }),
+            description: Some(if stop_confirmation_timed_out(operation) {
+                STOP_TIMEOUT_DETAIL.into()
+            } else {
+                format!(
+                    "Result: {}. Review this server's console and Activity for details.",
+                    operation.outcome.as_deref().unwrap_or(&operation.state)
+                )
+            }),
             severity: Some("warning".into()),
             notification_type: Some(NotificationType::Patient),
             ..Default::default()
