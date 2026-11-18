@@ -805,6 +805,9 @@ servers-access-rename-title = Rename device
 servers-access-device-name = Device name
 servers-access-device-name-long = Use 64 characters or fewer.
 servers-access-device-name-invalid = Device names can't contain control characters.
+servers-access-machine-owner = Owner of { $name }
+servers-access-machine-devices = Devices link to { $name }, so each one works for every server there.
+servers-access-manage-devices = Manage devices
 
 # Specific agent failures and their next steps.
 servers-cause-permission-denied = Your account cannot make this change; ask the server owner for access.

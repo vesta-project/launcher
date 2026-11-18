@@ -1,5 +1,8 @@
 import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, Switch as Toggle, TextField, toast } from '@vesta/ui';
-import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
+import { For, Show, createMemo, createSignal, onSettled, untrack } from 'solid-js';
+import { transitionTo } from '../../../app/transition';
+import { canManageHost, hostIdOf } from '../../../features/servers/host-model';
+import { hostInfo, loadHostInfo, vestaHost } from '../../../features/servers/hosts-store';
 import { Icon } from '../../../components/icon';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
@@ -78,8 +81,13 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   const renamed = (device: ServerDevice, name: string) =>
     seedServerResource(id(), devicesResource, (devices.value() ?? []).map((entry) => (entry.id === device.id ? { ...entry, name } : entry)));
   const loaded = () => !!(users.value() || devices.value());
+  // On a Vesta Server, devices belong to the whole machine and its owners are managed there.
+  const hostId = () => hostIdOf(props.snapshot);
+  const machine = () => { const id = hostId(); return id ? vestaHost(id)?.name ?? null : null; };
+  const ownsMachine = () => { const id = hostId(); return !!id && canManageHost(hostInfo(id)?.role); };
+  onSettled(() => { const id = untrack(hostId); if (id && !hostInfo(id)) loadHostInfo(id).catch(() => undefined); });
   const Person = (row: { entry: AccessPerson }) => (
-    <PersonRow snapshot={props.snapshot} person={row.entry} roles={roles()} canManage={canManage()} canRevoke={can('devices.revoke')}
+    <PersonRow snapshot={props.snapshot} person={row.entry} roles={roles()} canManage={canManage()} canRevoke={can('devices.revoke')} machine={machine()}
       allDevices={devices.value() ?? []} onRole={setEditing} onRevoke={target => {
         const connection = id();
         const previous = devices.value() ?? [];
@@ -113,6 +121,18 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
                 <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
               </Show>
             </div>
+            <Show when={machine()}>
+              {(name) => (
+                <div data-vesta="server-access-machine-note">
+                  <p data-vesta="server-muted">{t('servers.access.machine-devices', { name: name() })}</p>
+                  <Show when={ownsMachine()}>
+                    <Button size="sm" variant="ghost" icon={<Icon name="icons/content/monitor" />} onClick={() => transitionTo(`/servers/host/${hostId()}`)}>
+                      {t('servers.access.manage-devices')}
+                    </Button>
+                  </Show>
+                </div>
+              )}
+            </Show>
           </Show>
         </SettingsPanel>
       </SettingsColumns>
@@ -130,10 +150,14 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
 /** One person: avatar, roles and role change, with their devices nested underneath. */
 function PersonRow(props: {
   snapshot: ServerSnapshot; person: AccessPerson; roles: RoleSummary[]; canManage: boolean; canRevoke: boolean; allDevices: ServerDevice[];
+  /** The Vesta Server's name when this server runs on one. */
+  machine: string | null;
   onRole: (user: ServerUser) => void; onRevoke: (device: ServerDevice) => void; onRename: (device: ServerDevice) => void;
 }) {
   const now = useServersClock();
   const user = () => props.person.user;
+  /** Owners of the machine are owners everywhere on it: not demoted or removed from one server. */
+  const machineOwner = () => (props.machine && user()?.machineOwner ? props.machine : null);
   const count = () => user()?.deviceCount ?? activeDevices(props.person);
   return (
     <div data-vesta="server-access-person" data-self={props.person.self ? '' : undefined}>
@@ -144,12 +168,16 @@ function PersonRow(props: {
             <span data-vesta="setting-row-label">
               {props.person.name || t('servers.access.unknown-person')}
               <Show when={props.person.self}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.you')}</Badge></Show>
-              <For each={user()?.roles ?? []}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
+              <Show when={machineOwner()} fallback={
+                <For each={user()?.roles ?? []}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
+              }>
+                {(name) => <Badge size="sm" variant="soft" tone="accent">{t('servers.access.machine-owner', { name: name() })}</Badge>}
+              </Show>
             </span>
             <span data-vesta="setting-row-description">{t('servers.access.devices-count', { count: count() })}</span>
           </div>
         </div>
-        <Show when={user() && props.canManage && user()!.rank < myRank(props.snapshot, props.roles)}>
+        <Show when={user() && !machineOwner() && props.canManage && user()!.rank < myRank(props.snapshot, props.roles)}>
           <div data-vesta="setting-row-control">
             <Button size="sm" variant="outline" onClick={() => props.onRole(user()!)}>{t('servers.access.change-role')}</Button>
           </div>

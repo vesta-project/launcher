@@ -984,12 +984,25 @@ async fn restore_token_stays_native_is_consumed_once_and_prepare_is_never_retrie
 }
 
 #[tokio::test]
+async fn host_backed_users_mark_machine_owners() {
+    let _owner = OWNER.lock().await;
+    let a = Agent::start().await;
+    let mut owner = user();
+    owner["machine_owner"] = json!(true);
+    a.set("GET", "/api/v3/manage/users?offset=0&limit=100", json!({"users":[owner],"next_offset":null}));
+    let page = a.client.users(0).await.unwrap();
+    assert_eq!(page.users[0].machine_owner, Some(true));
+    assert_eq!(page.users[0].device_count, 2);
+}
+
+#[tokio::test]
 async fn users_roles_devices_invitations_and_access_mutations_match_wire() {
     let _owner = OWNER.lock().await;
     let a = Agent::start().await;
     users(&a);
     let page = a.client.users(0).await.unwrap();
     assert_eq!(page.users[0].version, "opaque-user");
+    assert_eq!(page.users[0].machine_owner, None);
     assert_eq!(
         page.users[0].roles[0].role.capabilities[0].capability,
         "status.view"

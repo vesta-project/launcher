@@ -78,6 +78,8 @@ export interface ServerUser {
   roles: { role: RoleSummary; expiresAtMs: number | null }[];
   rank: number;
   deviceCount: number;
+  /** An owner of the Vesta Server this server runs on; absent or null elsewhere. Changed only on the machine page. */
+  machineOwner?: boolean | null;
   /** Opaque optimistic-concurrency token for role changes. */
   version: string;
 }

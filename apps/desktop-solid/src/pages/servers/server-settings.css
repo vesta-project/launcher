@@ -389,6 +389,9 @@
  */
 @layer launcher {
   :where([data-vesta="server-access-people"]) { display: flex; flex-direction: column; }
+  /* On a Vesta Server: devices belong to the machine, said once under the list */
+  :where([data-vesta="server-access-machine-note"]) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--vesta-space-2); padding-block-start: var(--vesta-space-3); }
+  :where([data-vesta="server-access-machine-note"]) > p { margin: 0; font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-access-person"]) + :where([data-vesta="server-access-person"]) {
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }

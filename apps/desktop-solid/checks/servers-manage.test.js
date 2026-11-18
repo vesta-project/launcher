@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { createFixtureServers } from '../src/features/servers/fixtures';
+import { createManageFixtures } from '../src/features/servers/fixtures-manage';
 
 const api = () => createFixtureServers({ latencyMs: 0 });
 const settle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,6 +45,26 @@ describe('[access] delegation stays below the caller', () => {
     await expect(servers.revokeDevice('fixture-survival', devices.find((device) => device.current).id, 'i11')).rejects.toMatchObject({ code: 'invalid_input' });
     await servers.revokeDevice('fixture-survival', 'd-laptop', 'i12');
     expect((await servers.devices('fixture-survival')).find((device) => device.id === 'd-laptop').revoked).toBe(true);
+  });
+});
+
+describe('[access] servers on a Vesta Server', () => {
+  const manageFor = (signInMethod) => createManageFixtures({
+    server: () => ({ snapshot: { backupsConfigured: true, status: { state: 'online' }, pack: null, connection: { role: 'owner', signInMethod } } }),
+    requireOnline() {}, requireCapability() {}, record() { return {}; }, publish() {}, wait: async () => undefined,
+  });
+  test('the machine owner is marked with every device it linked, other servers mark no one', async () => {
+    const hosted = (await manageFor('host').users('h:s', 0)).users;
+    expect(hosted.find((user) => user.id === 'p-self')).toMatchObject({ machineOwner: true, deviceCount: 3 });
+    expect(hosted.filter((user) => user.machineOwner)).toHaveLength(1);
+    expect((await manageFor('pairing').users('x', 0)).users.some((user) => user.machineOwner)).toBe(false);
+  });
+  test('People says Owner of the machine, never offers a role change for them, and links owners to devices', () => {
+    const tab = readFileSync(new URL('../src/pages/servers/tabs/access-tab.tsx', import.meta.url), 'utf8');
+    expect(tab).toContain("t('servers.access.machine-owner', { name: name() })");
+    expect(tab).toContain('<Show when={user() && !machineOwner() && props.canManage');
+    expect(tab).toContain('<Show when={ownsMachine()}>');
+    expect(tab).toContain('transitionTo(`/servers/host/${hostId()}`)');
   });
 });
 

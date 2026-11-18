@@ -81,7 +81,9 @@ dto!(RoleSummary { id: String, name: String, rank: i32, builtin: bool, capabilit
 dto!(MinecraftAccount { uuid: String, name: Option<String> });
 dto!(RoleAssignment { role: RoleSummary, expires_at_ms: Option<i64> });
 dto!(ServerUser { id: String, display_name: String, minecraft_accounts: Vec<MinecraftAccount>,
-    roles: Vec<RoleAssignment>, rank: i32, device_count: u32, version: String });
+    roles: Vec<RoleAssignment>, rank: i32, device_count: u32, version: String,
+    // Host-backed servers mark the machine's owners; absent elsewhere.
+    machine_owner: Option<bool> });
 dto!(UsersPage { users: Vec<ServerUser>, next_offset: Option<u32> });
 dto!(ServerDevice { id: String, name: String, revoked: bool, current: bool,
     user_id: Option<String>, user_name: Option<String>, last_seen_at_ms: Option<i64> });

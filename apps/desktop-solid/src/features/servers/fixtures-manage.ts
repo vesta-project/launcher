@@ -14,7 +14,7 @@ import type { BackupHistory, BackupPoint } from './native-backup-history';
 export interface ManageHost {
   /** Throws `not_found` for unknown connections. */
   server(id: ConnectionId): {
-    snapshot: { backupsConfigured?: boolean | null; status: { state: string } | null; pack: { hostedRevision: string | null; minimumRevision: string | null; status: 'published' | 'unpublished' } | null; connection: { role: string | null } };
+    snapshot: { backupsConfigured?: boolean | null; status: { state: string } | null; pack: { hostedRevision: string | null; minimumRevision: string | null; status: 'published' | 'unpublished' } | null; connection: { role: string | null; signInMethod?: string } };
   };
   requireOnline(target: ReturnType<ManageHost['server']>): void;
   requireCapability(target: ReturnType<ManageHost['server']>, capability: string): void;
@@ -138,6 +138,8 @@ export function createManageFixtures(host: ManageHost) {
         value.profiles = []; value.jobs = []; value.snapshots = {}; value.lineage = new Map(); value.safetyPoints = []; value.head = null; value.repositoryInitialized = false;
         value.backupLimits = { maxSnapshots: null, maxRepositoryBytes: null, minFreeBytes: 1_073_741_824 };
       }
+      // On a Vesta Server, the machine's owner is marked and counts every device it linked to the machine.
+      if (target.snapshot.connection.signInMethod === 'host') value.users = value.users.map((user) => (user.id === 'p-self' ? { ...user, machineOwner: true, deviceCount: 3 } : user));
       states.set(id, value);
     }
     return value;
