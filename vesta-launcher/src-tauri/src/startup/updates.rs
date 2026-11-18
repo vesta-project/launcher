@@ -2,11 +2,43 @@ use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationAction, NotificationType};
 use crate::utils::config::get_app_config;
 use crate::utils::version_tracking::VersionTrackingRepository;
+use std::sync::OnceLock;
 use tauri::{Emitter, Manager};
 
+/// The launcher version recorded before this launch, captured before anything updates it.
+/// `None` means no earlier launch was ever recorded (a fresh install).
+static PREVIOUS_LAUNCHER_VERSION: OnceLock<Option<String>> = OnceLock::new();
+
 pub fn initialize_version_tracking() {
+    let previous =
+        VersionTrackingRepository::get_last_seen_version("launcher").unwrap_or_else(|error| {
+            log::error!("Failed to read the previous launcher version: {}", error);
+            None
+        });
+    let _ = PREVIOUS_LAUNCHER_VERSION.set(previous);
     if let Err(error) = VersionTrackingRepository::initialize_defaults() {
         log::error!("Failed to initialize version tracking defaults: {}", error);
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct LaunchVersions {
+    previous: Option<String>,
+    current: String,
+}
+
+/// Lets the interface tell a fresh install, an update and an ordinary launch apart, so it can
+/// show what is new once. The seeded placeholder version counts as a fresh install.
+#[tauri::command]
+pub fn get_launch_versions(app_handle: tauri::AppHandle) -> LaunchVersions {
+    let previous = PREVIOUS_LAUNCHER_VERSION
+        .get()
+        .cloned()
+        .flatten()
+        .filter(|version| version != "0.1.0-alpha.0");
+    LaunchVersions {
+        previous,
+        current: app_handle.package_info().version.to_string(),
     }
 }
 

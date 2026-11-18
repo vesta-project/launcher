@@ -13,6 +13,7 @@ import { refreshConfig, setting, updateSetting, flushSettings } from '../setting
 import { OnboardingFlow, isAuthenticated, type FlowState, type SetupAccount, type SetupConfig } from './flow';
 import { createFirstInstance, prefetchFirstInstance } from './first-instance';
 import { fixtureHost, fixtureLogin } from './onboarding-fixtures';
+import { tour } from './tour';
 export type { OnboardingStep } from './flow';
 export type { FeaturedPack, DetectedLauncher } from './types';
 
@@ -32,7 +33,22 @@ const host = native ? {
   complete: () => localized(invoke<void>('complete_onboarding'), 'onboarding.finish-error'),
   guest: () => invoke<void>('start_guest_session'),
 } : fixtureHost;
-const [state, setState] = createSignal<FlowState>({ status: 'loading', step: 'splash', direction: 1, loginOnly: false, guest: false }, { name: 'onboardingFlow' });
+const [state, setFlowState] = createSignal<FlowState>({ status: 'loading', step: 'splash', direction: 1, loginOnly: false, guest: false }, { name: 'onboardingFlow' });
+/**
+ * Leaving setup for the app plays the warp (App.tsx). It is raised in the same write as the
+ * status change, so the welcome screen is never unmounted for a frame before the exit begins.
+ */
+const [exiting, setExiting] = createSignal(false, { name: 'onboardingExiting' });
+/** Whether that exit came out of first-run setup or guest entry (not a returning sign-in). */
+let freshExit = false;
+const setState = (next: FlowState) => {
+  const previous = untrack(state);
+  if (previous.status === 'active' && next.status === 'done') {
+    freshExit = !previous.loginOnly || next.guest;
+    setExiting(true);
+  }
+  setFlowState(next);
+};
 const [online, setOnline] = createSignal(typeof navigator === 'undefined' || navigator.onLine, { name: 'onboardingOnline' });
 interface SignInState {
   phase: 'idle' | 'starting' | 'waiting' | 'error' | 'done';
@@ -106,6 +122,14 @@ export const onboarding = {
     catch { throw new Error(t('onboarding.guest-error')); }
   },
   guest: () => state().guest,
+  /** True from leaving setup until the warp into the app has finished. */
+  exiting,
+  /** Ends the warp; new arrivals then get the tour (once, see `tour.offer`). */
+  endExit: () => {
+    setExiting(false);
+    if (freshExit) tour.offer();
+    freshExit = false;
+  },
   signInFromGuest: () => flow.signInFromGuest(),
   finish: () => flow.finish(),
   telemetry: () => setting('telemetry_enabled'),
@@ -115,6 +139,8 @@ export const onboarding = {
 export async function resetOnboarding() {
   await flow.reset();
   resetFirstInstance();
+  // The host clears its tutorial flag together with setup; keep the local copy in step.
+  updateSetting('tutorial_completed', false);
 }
 let startup: Promise<void> | undefined;
 /** Mount once from App, retaining network listeners for exactly the App lifetime. */
@@ -158,5 +184,9 @@ export function startOnboarding(): () => void {
 }
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   const dev = window as unknown as { vestaDev?: Record<string, unknown> };
-  dev.vestaDev = { ...dev.vestaDev, onboarding: resetOnboarding };
+  dev.vestaDev = {
+    ...dev.vestaDev,
+    onboarding: resetOnboarding,
+    tour: () => tour.replay(),
+  };
 }

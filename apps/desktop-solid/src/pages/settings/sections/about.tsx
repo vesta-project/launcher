@@ -8,6 +8,7 @@ import { Icon } from '../../../components/icon';
 import { openExternal } from '../../../features/links/external-links';
 import { SettingRow } from '../../../components/setting-row';
 import { resetOnboarding } from '../../../features/onboarding';
+import { tour } from '../../../features/onboarding/tour';
 import { resetConfig, setting, updateSetting } from '../../../features/settings/config';
 import { updateStatus, checkForUpdates } from '../../../features/settings/updates';
 import { t } from '../../../localization';
@@ -117,10 +118,8 @@ export function AboutSettings() {
             {t('prefs.about.open')}
           </Button>
         </SettingRow>
-        <SettingRow label={t('prefs.about.tutorial')} description={t('prefs.about.tutorial-description')}>
-          <Button variant="outline" disabled title={t('prefs.coming-soon')}>
-            {t('prefs.about.run')}
-          </Button>
+        <SettingRow label={t('tour.replay')} description={t('tour.replay-description')}>
+          <Button variant="outline" onClick={tour.replay}>{t('tour.replay-action')}</Button>
         </SettingRow>
         <SettingRow label={t('prefs.about.importer')} description={t('prefs.about.importer-description')}>
           <Button variant="outline" onClick={() => openImport('launchers')}>

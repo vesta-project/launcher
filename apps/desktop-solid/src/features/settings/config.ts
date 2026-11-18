@@ -33,6 +33,8 @@ export interface LauncherConfig {
   servers_privacy_mode: boolean;
   /** Local-only: sites whose links open without asking first (see features/links). */
   trusted_link_domains: string[];
+  /** The first-visit tour has been finished or skipped (host field, reset with onboarding). */
+  tutorial_completed: boolean;
 
   max_download_threads: number;
   artifact_cache_max_bytes: number;
@@ -90,6 +92,7 @@ export const configDefaults: LauncherConfig = {
   servers_in_rail: true,
   servers_privacy_mode: false,
   trusted_link_domains: [],
+  tutorial_completed: false,
 
   max_download_threads: 4,
   artifact_cache_max_bytes: 1024 * 1024 * 1024,

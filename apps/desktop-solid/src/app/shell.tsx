@@ -7,7 +7,7 @@ import { useNativeDropZone, watchFileDrag } from '../features/file-drop/zone';
 import { FileDragHint } from '../features/file-drop/drag-hint';
 import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
 import { startNativeFileDrop } from '../features/file-drop/native-bridge';
-import { createMemo, onSettled } from 'solid-js';
+import { createMemo, onSettled, untrack } from 'solid-js';
 import { Match, Switch, Show, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/catalog';
@@ -36,6 +36,10 @@ import './shell.css';
 import '../styles/reduced-motion.css';
 import { useInstanceShortcutRuntime } from '../features/instances/shortcut-runtime';
 import { useShortcutRuntime } from '../features/settings/shortcut-runtime';
+import { onboarding } from '../features/onboarding';
+import { whatsNew } from '../features/whats-new';
+import { Tour } from './tour/tour';
+import { WhatsNew } from './whats-new/whats-new';
 
 const platform = detectPlatform();
 
@@ -46,6 +50,7 @@ const platform = detectPlatform();
  */
 export function Shell() {
   onSettled(() => startNativeFileDrop());
+  onSettled(() => { if (!untrack(onboarding.exiting)) void whatsNew.check(); });
   onSettled(() => watchFileDrag());
   useNavigationPreloading();
   useAccountSync();
@@ -87,6 +92,8 @@ export function Shell() {
       <NativeImportDialog />
       <GlobalImportDialog />
       <InstanceDeleteDialog />
+      <Tour />
+      <WhatsNew />
       <div data-vesta="shell-body">
         <Rail />
         <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>

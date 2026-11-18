@@ -375,6 +375,7 @@ pub fn run(context: tauri::Context) {
             commands::app::get_default_instance_dir,
             commands::app::path_exists,
             commands::github::get_changelog,
+            crate::startup::updates::get_launch_versions,
             commands::app::get_network_status,
             commands::app::get_sandbox_host_support,
             commands::app::set_network_status,

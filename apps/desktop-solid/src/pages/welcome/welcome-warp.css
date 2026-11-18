@@ -1,0 +1,136 @@
+/*
+ * The warp out of setup into the app (welcome-warp.tsx). Timeline, about 1.1s:
+ *   0 to 0.6s     the card dips, then rushes towards you and fades
+ *   0.12 to 0.9s  streaks of accent light shoot out from the centre
+ *   0.35 to 0.9s  a soft flash blooms in the middle
+ *   0.48 to 1s    the welcome screen fades away
+ *   0.42 to 1.1s  the shell arrives from slightly behind
+ * Only transform and opacity animate, so it stays smooth while the shell mounts underneath.
+ *
+ * Hooks:  html[data-vesta-warp], [data-vesta=welcome-warp], -warp-flash, -warp-streak
+ * Knobs:  --warp-angle, --warp-delay, --warp-length, --warp-thickness (set inline per streak)
+ */
+@layer launcher {
+  html[data-vesta-warp] :where([data-vesta='welcome'], [data-vesta='welcome-back']) {
+    z-index: 1000;
+    pointer-events: none;
+    animation: welcome-warp-fade 0.52s ease-in 0.48s both;
+  }
+
+  html[data-vesta-warp] :where([data-vesta='welcome-stage'], [data-vesta='welcome-back-stage']) {
+    animation: welcome-warp-card 0.6s cubic-bezier(0.5, 0, 0.75, 0) both;
+  }
+
+  html[data-vesta-warp] :where([data-vesta='welcome-bar'], [data-vesta='welcome-telemetry']) {
+    animation: welcome-warp-fade 0.2s ease-out both;
+  }
+
+  html[data-vesta-warp] :where([data-vesta='welcome-atmosphere']) {
+    animation: welcome-warp-rush 1s cubic-bezier(0.55, 0, 0.9, 0.4) both;
+  }
+
+  html[data-vesta-warp] :where([data-vesta='shell']) {
+    animation: welcome-warp-arrive 0.68s cubic-bezier(0.22, 1, 0.36, 1) 0.42s both;
+  }
+
+  :where([data-vesta='welcome-warp']) {
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  :where([data-vesta='welcome-warp-flash']) {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60vmax;
+    height: 60vmax;
+    margin: -30vmax 0 0 -30vmax;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--vesta-color-accent) 55%, transparent) 0%,
+      color-mix(in oklab, var(--vesta-color-accent) 18%, transparent) 35%,
+      transparent 65%
+    );
+    animation: welcome-warp-flash 0.55s ease-out 0.35s both;
+  }
+
+  :where([data-vesta='welcome-warp-streak']) {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--warp-length);
+    height: var(--warp-thickness);
+    margin-top: calc(var(--warp-thickness) / -2);
+    border-radius: var(--vesta-radius-full);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--vesta-color-accent) 70%, transparent) 55%,
+      var(--vesta-color-accent-text)
+    );
+    transform-origin: 0 50%;
+    animation: welcome-warp-streak 0.62s cubic-bezier(0.55, 0, 0.9, 0.4) var(--warp-delay) both;
+  }
+
+  @keyframes welcome-warp-card {
+    18% {
+      transform: scale(0.97);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+  }
+
+  @keyframes welcome-warp-fade {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes welcome-warp-rush {
+    to {
+      transform: scale(1.8);
+    }
+  }
+
+  @keyframes welcome-warp-flash {
+    from {
+      transform: scale(0.15);
+      opacity: 0;
+    }
+    35% {
+      opacity: 1;
+    }
+    to {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+
+  @keyframes welcome-warp-streak {
+    from {
+      transform: rotate(var(--warp-angle)) translateX(4vmin) scaleX(0.04);
+      opacity: 0;
+    }
+    30% {
+      opacity: 1;
+    }
+    to {
+      transform: rotate(var(--warp-angle)) translateX(80vmax) scaleX(1);
+      opacity: 0;
+    }
+  }
+
+  @keyframes welcome-warp-arrive {
+    from {
+      transform: scale(0.94);
+      opacity: 0;
+    }
+  }
+}

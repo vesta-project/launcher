@@ -172,3 +172,56 @@
     .changelog-release-link { grid-row: auto; grid-column: auto; justify-self: start; }
   }
 }
+
+/* A release with highlights offers to play them (app/whats-new). */
+@layer launcher {
+  :where([data-vesta='changelog-highlights']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    width: 100%;
+    margin-block: var(--vesta-space-3);
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 1px solid color-mix(in oklab, var(--vesta-color-accent) 40%, var(--vesta-color-border));
+    border-radius: var(--vesta-radius-lg);
+    color: var(--vesta-color-text);
+    background:
+      radial-gradient(80% 140% at 0% 50%, color-mix(in oklab, var(--vesta-color-accent) 18%, transparent), transparent 70%),
+      var(--vesta-color-surface);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  :where([data-vesta='changelog-highlights']:hover) {
+    border-color: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='changelog-highlights']:focus-visible) {
+    outline: 2px solid var(--vesta-color-focus);
+    outline-offset: 2px;
+  }
+
+  :where([data-vesta='changelog-highlights-art']) {
+    display: flex;
+  }
+
+  :where([data-vesta='changelog-highlights-art']) > span {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-inline-end: -6px;
+    border: 2px solid var(--vesta-color-surface);
+    border-radius: 9px;
+    color: var(--vesta-color-on-accent);
+    background: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='changelog-highlights-label']) {
+    flex: 1;
+    margin-inline-start: var(--vesta-space-2);
+    font-weight: 600;
+  }
+}

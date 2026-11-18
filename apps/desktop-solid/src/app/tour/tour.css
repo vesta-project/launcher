@@ -1,0 +1,205 @@
+/*
+ * First-visit tour: a dimmed window with one lit "spot" around what the step talks about,
+ * and a small card beside it. Centred steps (welcome, finish) close the spot to a point.
+ *
+ * Hooks:  [data-vesta=tour] (data-ready, data-centred), -spot, -card (data-step), -content,
+ *         -dots, -dot (data-state done | current), -title, -body, -actions, -actions-spacer
+ *         demo cards: [data-tour-demo] on the library grid, -demo-card (--tour-demo-index)
+ * Knobs:  --tour-scrim, --tour-glide
+ *
+ * The spot and the card both glide between steps with `translate`, so moving from the rail
+ * to the titlebar reads as one motion. Colours come from theme tokens only.
+ */
+@layer launcher {
+  :where([data-vesta='tour']) {
+    --tour-scrim: color-mix(in oklab, var(--vesta-color-canvas) 62%, transparent);
+    --tour-glide: 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    /* The app underneath is only on show: it can be seen and hovered, not clicked. */
+    cursor: default;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  :where([data-vesta='tour'][data-ready]) {
+    opacity: 1;
+  }
+
+  :where([data-vesta='tour-spot']) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: var(--vesta-radius-lg);
+    box-shadow:
+      0 0 0 2px color-mix(in oklab, var(--vesta-color-accent) 70%, transparent),
+      0 0 24px 2px color-mix(in oklab, var(--vesta-color-accent) 35%, transparent),
+      0 0 0 200vmax var(--tour-scrim);
+    pointer-events: none;
+    transition:
+      translate 0s,
+      width 0s,
+      height 0s,
+      box-shadow 0.3s ease;
+    animation: tour-spot-breathe 2.4s ease-in-out 0.5s infinite;
+  }
+
+  /* Centred steps: the spot shrinks to nothing and the whole window dims a little more. */
+  :where([data-vesta='tour'][data-centred]) :where([data-vesta='tour-spot']) {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 0 transparent,
+      0 0 0 200vmax color-mix(in oklab, var(--vesta-color-canvas) 72%, transparent);
+    animation: none;
+  }
+
+  :where([data-vesta='tour-card']) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: min(320px, calc(100vw - 24px));
+    padding: var(--vesta-space-4);
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container, var(--vesta-radius-lg));
+    background: var(--vesta-color-overlay);
+    color: var(--vesta-color-text);
+    box-shadow: var(--vesta-shadow-lg);
+    transition: none;
+  }
+
+  :where([data-vesta='tour'][data-centred]) :where([data-vesta='tour-card']) {
+    width: min(380px, calc(100vw - 24px));
+    padding: var(--vesta-space-6) var(--vesta-space-6) var(--vesta-space-5);
+    text-align: center;
+  }
+
+  :where([data-vesta='tour-content']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    animation: tour-content-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='tour-dots']) {
+    display: flex;
+    gap: 5px;
+    margin: 0 0 var(--vesta-space-1);
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='tour-dot']) {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-fill-active);
+    transition: width 0.3s ease, background-color 0.3s ease;
+  }
+
+  :where([data-vesta='tour-dot'][data-state='done']) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 55%, var(--vesta-color-fill));
+  }
+
+  :where([data-vesta='tour-dot'][data-state='current']) {
+    width: 18px;
+    background: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='tour-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
+    letter-spacing: -0.01em;
+  }
+
+  :where([data-vesta='tour'][data-centred]) :where([data-vesta='tour-title']) {
+    font-size: var(--vesta-text-xl);
+    font-weight: var(--vesta-weight-bold);
+  }
+
+  :where([data-vesta='tour-body']) {
+    margin: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    line-height: 1.5;
+  }
+
+  :where([data-vesta='tour-actions']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-1);
+    margin-top: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='tour-actions-spacer']) {
+    flex: 1;
+  }
+
+  :where([data-vesta='tour'][data-centred]) :where([data-vesta='tour-actions']) {
+    justify-content: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='tour'][data-centred]) :where([data-vesta='tour-actions-spacer']) {
+    display: none;
+  }
+
+  .tour-skip {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  /* Pretend instances rise into the empty library one after another. */
+  :where([data-tour-demo]) :where([data-vesta='tour-demo-card']) {
+    animation: tour-demo-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) calc(0.15s + var(--tour-demo-index) * 0.08s) both;
+  }
+
+  @keyframes tour-demo-in {
+    from {
+      opacity: 0;
+      translate: 0 14px;
+      scale: 0.96;
+    }
+  }
+
+  @keyframes tour-content-in {
+    from {
+      opacity: 0;
+      translate: 0 4px;
+    }
+  }
+
+  @keyframes tour-spot-breathe {
+    50% {
+      box-shadow:
+        0 0 0 3px color-mix(in oklab, var(--vesta-color-accent) 85%, transparent),
+        0 0 32px 4px color-mix(in oklab, var(--vesta-color-accent) 45%, transparent),
+        0 0 0 200vmax var(--tour-scrim);
+    }
+  }
+}
+
+@layer launcher {
+  /* Glides only once placed: the first step appears where it belongs. */
+  :where([data-vesta='tour'][data-placed]) :where([data-vesta='tour-spot']) {
+    transition:
+      translate var(--tour-glide),
+      width var(--tour-glide),
+      height var(--tour-glide),
+      box-shadow 0.3s ease;
+  }
+
+  :where([data-vesta='tour'][data-placed]) :where([data-vesta='tour-card']) {
+    transition: translate var(--tour-glide), width var(--tour-glide);
+  }
+}
+
+@layer launcher {
+  /* The status step: an idle pill is a hidden dot, so bring it out while the tour points at it. */
+  html:has([data-vesta='tour-card'][data-step='status']) [data-vesta='status-pill'][data-collapsed] {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+}

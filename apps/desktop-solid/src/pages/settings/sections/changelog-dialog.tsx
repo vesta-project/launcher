@@ -2,6 +2,7 @@ import { Button, Dialog, Select, Skeleton } from '@vesta/ui';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { loadReleases, sameVersion, type Release } from '../../../features/changelog/changelog';
+import { highlightsFor, whatsNew } from '../../../features/whats-new';
 import { openExternal } from '../../../features/links/external-links';
 import { formatDate, t } from '../../../localization';
 import { RichTextView } from '../../browse/project/rich-text-view';
@@ -115,6 +116,26 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
                           {t('prefs.about.changelog-github')}
                         </Button>
                       </header>
+                      <Show when={highlightsFor(release().tag)}>
+                        {(featured) => (
+                          <button
+                            type="button"
+                            data-vesta="changelog-highlights"
+                            onClick={() => {
+                              props.onOpenChange(false);
+                              whatsNew.show(featured().version);
+                            }}
+                          >
+                            <span data-vesta="changelog-highlights-art" aria-hidden="true">
+                              <For each={featured().highlights.slice(0, 4)}>
+                                {(highlight) => <span><Icon name={highlight.art.icon} size={14} /></span>}
+                              </For>
+                            </span>
+                            <span data-vesta="changelog-highlights-label">{t('whats-new.watch')}</span>
+                            <Icon name="icons/actions/play" size={12} />
+                          </button>
+                        )}
+                      </Show>
                       <Show
                         when={release().body.trim()}
                         fallback={<p data-vesta="changelog-release-empty">{t('prefs.about.changelog-no-notes')}</p>}

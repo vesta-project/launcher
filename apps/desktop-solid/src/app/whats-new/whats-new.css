@@ -1,0 +1,471 @@
+/*
+ * What's new (whats-new.tsx, highlight-reel.tsx).
+ *
+ * Hooks:  [data-vesta=whats-new] -scrim, -card, -head, -kicker, -title
+ *         [data-vesta=welcome-back] -stage (data-scene), -scene (data-wide), -avatar, -title,
+ *         -lede, -actions, -kept, -kept-row (--row), -kept-icon, -kept-tick
+ *         [data-vesta=reel] (data-auto), -stage, -media (data-active), -clip, -art, -art-glow,
+ *         -art-hero, -art-orb (--orb), -segments, -segment (data-state), -segment-fill,
+ *         -copy, -count, -title, -body, -actions
+ * Knobs:  --reel-dwell (per highlight, set inline)
+ *
+ * The welcome back screen sits where setup does (z 1000) so the warp (welcome-warp.css) can
+ * carry it away. Colours come from theme tokens only.
+ */
+@layer launcher {
+  /* ---------- After an update: a card over the app ---------- */
+  :where([data-vesta='whats-new']) {
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    display: grid;
+    place-items: center;
+    padding: var(--vesta-space-4);
+  }
+
+  :where([data-vesta='whats-new-scrim']) {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklab, var(--vesta-color-canvas) 62%, transparent);
+    backdrop-filter: blur(6px);
+    animation: whats-new-fade 0.3s ease both;
+  }
+
+  :where([data-vesta='whats-new-card']) {
+    position: relative;
+    display: grid;
+    gap: var(--vesta-space-4);
+    width: min(680px, 100%);
+    max-height: calc(100vh - 2 * var(--vesta-space-4));
+    overflow: auto;
+    padding: var(--vesta-space-5);
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-xl, 16px);
+    background: var(--vesta-color-panel);
+    box-shadow: var(--vesta-shadow-lg);
+    animation: whats-new-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='whats-new-head']) {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 2px var(--vesta-space-3);
+  }
+
+  :where([data-vesta='whats-new-head']) .whats-new-close {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  :where([data-vesta='whats-new-kicker']) {
+    color: var(--vesta-color-accent-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  :where([data-vesta='whats-new-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: 650;
+  }
+
+  /* ---------- The reel ---------- */
+  :where([data-vesta='reel']) {
+    display: grid;
+    gap: var(--vesta-space-4);
+  }
+
+  :where([data-vesta='reel-stage']) {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background:
+      radial-gradient(120% 90% at 50% 110%, color-mix(in oklab, var(--vesta-color-accent) 22%, transparent), transparent 60%),
+      var(--vesta-color-surface-sunken);
+  }
+
+  :where([data-vesta='reel-media']) {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: scale(1.03);
+    transition:
+      opacity 0.45s ease,
+      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  :where([data-vesta='reel-media'][data-active]) {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  :where([data-vesta='reel-clip']) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* The icon scene: a lit hero tile with smaller tiles drifting round it. */
+  :where([data-vesta='reel-art']) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background-image: radial-gradient(color-mix(in oklab, var(--vesta-color-text) 14%, transparent) 1px, transparent 1.5px);
+    background-size: 18px 18px;
+    background-position: center;
+  }
+
+  :where([data-vesta='reel-art-glow']) {
+    position: absolute;
+    width: 46%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--vesta-color-accent) 45%, transparent), transparent 68%);
+    animation: reel-breathe 4s ease-in-out infinite;
+  }
+
+  :where([data-vesta='reel-art-hero']) {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 96px;
+    border: 1px solid color-mix(in oklab, var(--vesta-color-accent) 55%, var(--vesta-color-border));
+    border-radius: 26px;
+    color: var(--vesta-color-on-accent);
+    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-accent) 85%, white), var(--vesta-color-accent));
+    box-shadow:
+      0 18px 40px -12px color-mix(in oklab, var(--vesta-color-accent) 70%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 35%, transparent);
+  }
+
+  [data-vesta='reel-media'][data-active] :where([data-vesta='reel-art-hero']) {
+    animation: reel-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  :where([data-vesta='reel-art-orb']) {
+    --orb-angle: calc(var(--orb) * 120deg - 30deg);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    border: 1px solid var(--vesta-color-border);
+    border-radius: 14px;
+    color: var(--vesta-color-text);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: var(--vesta-shadow-md);
+    transform: rotate(var(--orb-angle)) translateX(min(150px, 24vw)) rotate(calc(-1 * var(--orb-angle)));
+  }
+
+  [data-vesta='reel-media'][data-active] :where([data-vesta='reel-art-orb']) {
+    animation:
+      reel-orb-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(0.12s + var(--orb) * 0.08s) both,
+      reel-bob 3.6s ease-in-out calc(0.9s + var(--orb) * 0.6s) infinite;
+  }
+
+  :where([data-vesta='reel-segments']) {
+    position: absolute;
+    inset: var(--vesta-space-3) var(--vesta-space-3) auto;
+    display: flex;
+    gap: 6px;
+  }
+
+  :where([data-vesta='reel-segment']) {
+    position: relative;
+    flex: 1;
+    height: 4px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-text) 18%, transparent);
+    cursor: default;
+  }
+
+  /* A taller invisible hit area, so the thin bars are easy to click. */
+  :where([data-vesta='reel-segment'])::before {
+    content: '';
+    position: absolute;
+    inset: -8px 0;
+  }
+
+  :where([data-vesta='reel-segment-fill']) {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--vesta-color-accent);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+
+  :where([data-vesta='reel-segment'][data-state='done']) :where([data-vesta='reel-segment-fill']) {
+    transform: none;
+  }
+
+  :where([data-vesta='reel'][data-auto]) :where([data-vesta='reel-segment'][data-state='current']) :where([data-vesta='reel-segment-fill']) {
+    animation: reel-fill var(--reel-dwell) linear both;
+  }
+
+  /* Without auto-advance the current bar is simply full. */
+  :where([data-vesta='reel']:not([data-auto])) :where([data-vesta='reel-segment'][data-state='current']) :where([data-vesta='reel-segment-fill']) {
+    transform: none;
+  }
+
+  /* Pointing at the picture holds the reel still. */
+  :where([data-vesta='reel-stage']:hover) :where([data-vesta='reel-segment-fill']) {
+    animation-play-state: paused;
+  }
+
+  :where([data-vesta='reel-copy']) {
+    display: grid;
+    gap: var(--vesta-space-1);
+    min-height: 5.6em;
+    animation: whats-new-copy 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='reel-count']) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='reel-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-lg);
+    font-weight: 650;
+  }
+
+  :where([data-vesta='reel-body']) {
+    margin: 0;
+    max-width: 52ch;
+    color: var(--vesta-color-text-muted);
+    line-height: 1.5;
+  }
+
+  :where([data-vesta='reel-actions']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='reel-spacer']) {
+    flex: 1;
+  }
+
+  /* ---------- From the old launcher: the welcome back stage ---------- */
+  :where([data-vesta='welcome-back']) {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    overflow: hidden auto;
+    padding: var(--vesta-space-5) var(--vesta-space-4);
+    background: var(--vesta-color-canvas);
+    animation: whats-new-fade 0.5s ease both;
+  }
+
+  :where([data-vesta='welcome-back-stage']) {
+    position: relative;
+    width: min(460px, 100%);
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :where([data-vesta='welcome-back-stage'][data-scene='reel']) {
+    width: min(680px, 100%);
+  }
+
+  :where([data-vesta='welcome-back-scene']) {
+    display: grid;
+    justify-items: center;
+    gap: var(--vesta-space-3);
+    text-align: center;
+    animation: whats-new-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  :where([data-vesta='welcome-back-scene'][data-wide]) {
+    justify-items: stretch;
+    text-align: start;
+    padding: var(--vesta-space-5);
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-xl, 16px);
+    background: color-mix(in oklab, var(--vesta-color-panel) 88%, transparent);
+    box-shadow: var(--vesta-shadow-lg);
+    backdrop-filter: blur(12px);
+  }
+
+  :where([data-vesta='welcome-back-avatar']) {
+    display: grid;
+    place-items: center;
+    width: 88px;
+    height: 88px;
+    overflow: hidden;
+    border-radius: 22px;
+    color: var(--vesta-color-on-accent);
+    background: var(--vesta-color-accent);
+    box-shadow:
+      0 0 0 6px color-mix(in oklab, var(--vesta-color-accent) 22%, transparent),
+      0 20px 50px -14px color-mix(in oklab, var(--vesta-color-accent) 75%, transparent);
+    animation: reel-pop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+  }
+
+  :where([data-vesta='welcome-back-avatar']) img {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  :where([data-vesta='welcome-back-title']) {
+    margin: var(--vesta-space-2) 0 0;
+    font-size: clamp(1.6rem, 4vw, 2.25rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  :where([data-vesta='welcome-back-scene'][data-wide]) :where([data-vesta='welcome-back-title']) {
+    margin: 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: 650;
+  }
+
+  :where([data-vesta='welcome-back-lede']) {
+    margin: 0;
+    max-width: 40ch;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-md, 1rem);
+    line-height: 1.55;
+  }
+
+  [data-scene='hello'] :where([data-vesta='welcome-back-title']) {
+    animation: whats-new-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+  }
+
+  [data-scene='hello'] :where([data-vesta='welcome-back-lede']) {
+    animation: whats-new-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both;
+  }
+
+  [data-scene='hello'] :where([data-vesta='welcome-back-actions']) {
+    animation: whats-new-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+  }
+
+  :where([data-vesta='welcome-back-actions']) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    margin-top: var(--vesta-space-3);
+  }
+
+  :where([data-vesta='welcome-back-kept']) {
+    display: grid;
+    gap: var(--vesta-space-2);
+    width: 100%;
+    margin: var(--vesta-space-2) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='welcome-back-kept-row']) {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    padding: var(--vesta-space-3) var(--vesta-space-4);
+    border: 1px solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: color-mix(in oklab, var(--vesta-color-panel) 85%, transparent);
+    text-align: start;
+    animation: whats-new-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) calc(0.15s + var(--row) * 0.18s) both;
+  }
+
+  :where([data-vesta='welcome-back-kept-icon']) {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--vesta-radius-md);
+    color: var(--vesta-color-accent-text);
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+  }
+
+  :where([data-vesta='welcome-back-kept-tick']) {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: var(--vesta-color-on-accent);
+    background: var(--vesta-color-accent);
+    animation: reel-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) calc(0.45s + var(--row) * 0.18s) both;
+  }
+
+  /* ---------- Motion ---------- */
+  @keyframes whats-new-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes whats-new-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.98);
+    }
+  }
+
+  @keyframes whats-new-copy {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  @keyframes reel-fill {
+    to {
+      transform: none;
+    }
+  }
+
+  @keyframes reel-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes reel-breathe {
+    50% {
+      transform: scale(1.12);
+      opacity: 0.8;
+    }
+  }
+
+  @keyframes reel-orb-in {
+    from {
+      opacity: 0;
+      transform: rotate(var(--orb-angle)) translateX(20px) rotate(calc(-1 * var(--orb-angle))) scale(0.5);
+    }
+  }
+
+  @keyframes reel-bob {
+    50% {
+      translate: 0 -6px;
+    }
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='reel-media']) {
+    transition: opacity 0.2s ease;
+    transform: none;
+  }
+}

@@ -26,6 +26,8 @@ import { InstancePage } from './instance/instance-page';
 import './library-page.css';
 import { useNativeDropZone } from '../../features/file-drop/zone';
 import { importNativePaths } from '../../features/instances/native-import-dialog';
+import { tour } from '../../features/onboarding/tour';
+import { TourDemoCards } from '../../app/tour/demo-cards';
 
 const store = libraryLayoutStore;
 
@@ -423,9 +425,9 @@ export function LibraryPage() {
   return (
     <>
       <Show when={route().section} keyed fallback={
-        <Board showcase={(!nativeInstances || instancesLoaded()) && instances().length > 0}>
+        <Board showcase={(!nativeInstances || instancesLoaded()) && (instances().length > 0 || tour.open())}>
           <Show when={!nativeInstances || instancesLoaded()} fallback={<p role="status">{t('management.loading')}</p>}>
-          <Show when={instances().length > 0} fallback={<LibraryEmpty />}>
+          <Show when={instances().length > 0} fallback={<Show when={tour.open()} fallback={<LibraryEmpty />}><TourDemoCards /></Show>}>
             <LibraryGrid />
           </Show></Show>
         </Board>

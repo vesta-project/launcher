@@ -14,6 +14,7 @@ import { useThemeRuntime } from './features/settings/theme-runtime';
 import { useWindowEffects } from './features/settings/window-effects';
 import { onboarding, startOnboarding } from './features/onboarding';
 import { WelcomePage } from './pages/welcome/welcome-page';
+import { WelcomeWarp } from './pages/welcome/welcome-warp';
 
 if (import.meta.env.DEV) void import('./features/activity/activity-fixtures');
 
@@ -38,7 +39,10 @@ export default function App() {
   );
   return (
     <Show when={onboarding.status() !== 'loading'} fallback={<div style={{ position: 'fixed', inset: '0', background: 'var(--vesta-color-canvas)' }} />}>
-      <Show when={onboarding.status() === 'active'} fallback={<Shell />}><WelcomePage /></Show>
+      <Show when={onboarding.status() === 'done'}><Shell /></Show>
+      {/* Leaving setup keeps the welcome screen up for the warp, over the arriving shell. */}
+      <Show when={onboarding.status() === 'active' || onboarding.exiting()}><WelcomePage /></Show>
+      <Show when={onboarding.exiting()}><WelcomeWarp /></Show>
     </Show>
   );
 }
