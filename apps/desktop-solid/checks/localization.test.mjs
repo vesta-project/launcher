@@ -67,6 +67,7 @@ const args = {
   files: 1200,
   percent: 45,
   address: "192.168.1.67:25500",
+  machine: "people-server",
 };
 
 describe("localization catalogs", () => {

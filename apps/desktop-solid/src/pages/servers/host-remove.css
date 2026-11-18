@@ -1,0 +1,9 @@
+/* Removing a server from its Vesta Server: the confirm field, then one line when the machine says no. */
+@layer launcher {
+  :where([data-vesta="host-remove"]) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-3);
+  }
+  :where([data-vesta="host-remove"]) > [data-vesta="server-callout"] { margin: 0; }
+}

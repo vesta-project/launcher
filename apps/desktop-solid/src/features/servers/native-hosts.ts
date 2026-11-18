@@ -27,7 +27,7 @@ export type ImportState = 'planning' | 'review' | 'applying' | 'ready' | 'starti
 export interface ImportJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: { filesDone: number; filesTotal: number; bytesDone: number; bytesTotal: number }; review: ImportReview | null; serverId: string | null }
 export interface ImportReview { planId: string; confirmation: string | null; expiresAt: string; blockers: string[]; warnings: string[]; source: { displayPath: string; snapshot: string; files: number; bytes: number }; detected: unknown; runtime: unknown; destination: { serverId: string; displayPath: string; freeBytes: number }; resources: { gamePort: number; memoryMiB: number }; processes: unknown[]; ports: unknown[]; inspection: unknown }
 export type HostAction = 'info' | 'update' | 'owners' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness'
-  | 'catalogue_minecraft' | 'catalogue_software' | 'create_defaults' | 'create_restore_sources' | 'create_plan' | 'create_apply' | 'create_job' | 'create_cancel' | 'create_resume' | 'create_start';
+  | 'catalogue_minecraft' | 'catalogue_software' | 'create_defaults' | 'create_restore_sources' | 'create_plan' | 'create_apply' | 'create_job' | 'create_cancel' | 'create_resume' | 'create_start' | 'server_remove';
 // Creating a server on the machine (create.md): new, from a modpack, or restored from a backup.
 export interface CatalogueVersion { id: string; stable: boolean; experimental: boolean; recommended: boolean }
 export interface MinecraftCatalogue { versions: CatalogueVersion[]; latestStable: string | null }
@@ -62,6 +62,8 @@ export interface CreateSummary {
 export interface CreateReview { planId: string; confirmation: string | null; expiresAt: string; summary: CreateSummary; blockers: string[]; warnings: string[] }
 /** Same envelope and states as an import job; phases are `resolving`, `downloading_java`, `downloading_software`, `installing`, `registering`, `starting`. */
 export interface CreateJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: ImportJob['progress']; review: CreateReview | null; serverId: string | null }
+/** The machine's receipt for a removed server; `restoreUntil` is when it can no longer be brought back. */
+export interface ServerRemoved { serverId: string; removedAt: string; restoreUntil: string }
 export interface HostRequestOptions { id?: string; body?: unknown; revision?: string; idempotencyKey?: string }
 const request = <T>(hostId: string, action: HostAction, options: HostRequestOptions = {}) => invoke<T>('host_request', { hostId, action, ...options });
 export const hostsNative = {
@@ -117,4 +119,10 @@ export const hostsNative = {
   createCancel: (hostId: string, id: string, idempotencyKey: string) => request<{ state: ImportState }>(hostId, 'create_cancel', { id, body: {}, idempotencyKey }),
   createResume: (hostId: string, id: string, idempotencyKey: string) => request<CreateJob>(hostId, 'create_resume', { id, body: {}, idempotencyKey }),
   createStart: (hostId: string, id: string, idempotencyKey: string) => request<CreateJob>(hostId, 'create_start', { id, body: {}, idempotencyKey }),
+  /**
+   * Owners only: stop a server and remove it from the machine, recoverable there for 7 days.
+   * `confirmName` is the server's current name exactly as typed; one key per attempt.
+   */
+  removeServer: (hostId: string, serverId: string, confirmName: string, idempotencyKey: string) =>
+    request<ServerRemoved>(hostId, 'server_remove', { id: serverId, body: { confirmName }, idempotencyKey }),
 };

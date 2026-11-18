@@ -14,6 +14,7 @@ import type { ServerCommandError, ServerSnapshot } from '../../../features/serve
 import { serverCommand, serverIcon, setServerIcon } from '../../../features/servers/store';
 import { ServerErrorNote } from '../parts';
 import { SaveBar, SettingsPage, SettingsPanel } from '../settings-parts';
+import { HostRemoveRow } from '../host-remove-dialog';
 
 const NAME_LIMIT = 128;
 const DESCRIPTION_LIMIT = 1024;
@@ -149,6 +150,7 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
             </div>
           </div>
         </Show>
+        <HostRemoveRow snapshot={props.snapshot} />
       </SettingsPanel>
     </SettingsPage>
   );

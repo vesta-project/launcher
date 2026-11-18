@@ -18,6 +18,7 @@ import { KillDialog, StartKillButton } from './kill';
 import { Sensitive } from './parts';
 import { refreshServerWithFeedback } from './refresh-button';
 import { RemoveServerDialog } from './remove-dialog';
+import { HostRemoveDialog, machineRemoval } from './host-remove-dialog';
 
 
 /**
@@ -29,6 +30,9 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
   const now = useServersClock();
   const [removing, setRemoving] = createSignal(false, { name: 'server-header:removing' });
   const [copied, setCopied] = createSignal(false, { name: 'server-header:copied' });
+  const [removingFromMachine, setRemovingFromMachine] = createSignal(false, { name: 'server-header:removing-from-machine' });
+  /** The machine's name when this server lives on a Vesta Server this person owns and it offers removal here. */
+  const machineRemove = () => machineRemoval(props.snapshot);
   const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const art = () => serverArt(props.snapshot.connection.serverId || id());
@@ -97,7 +101,10 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
               </MenuItem>
             </Show>
             <MenuSeparator />
-            <MenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</MenuItem>
+            {/* An owner of the server's Vesta Server removes it there. Everyone else forgets it on this device. */}
+            <Show when={machineRemove()} fallback={<MenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</MenuItem>}>
+              {(where) => <MenuItem tone="danger" onSelect={() => setRemovingFromMachine(true)}>{t('servers.host-remove.menu', { machine: where() })}</MenuItem>}
+            </Show>
           </Menu>
           <LifecycleBar snapshot={props.snapshot} lifecycle={lifecycle} />
         </div>
@@ -128,6 +135,8 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
         )}
       </Show>
       <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
+      {/* Kept mounted: a "needs a newer Vesta Server" reply hides the menu item but stays readable here. */}
+      <HostRemoveDialog snapshot={props.snapshot} open={removingFromMachine()} onOpenChange={setRemovingFromMachine} />
     </header>
   );
 }

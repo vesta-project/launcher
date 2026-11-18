@@ -19,7 +19,7 @@ const fixtureScenario = (key: string) => globalThis.localStorage?.getItem(`vesta
 const api = (): Promise<HostsApi> => (nativeServers
   ? Promise.resolve(hostsNative)
   : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures({
-    hosts: fixtureScenario('hosts'), found: fixtureScenario('import'), signin: fixtureScenario('signin'), create: fixtureScenario('create'),
+    hosts: fixtureScenario('hosts'), found: fixtureScenario('import'), signin: fixtureScenario('signin'), create: fixtureScenario('create'), remove: fixtureScenario('remove'),
   }))));
 
 /** Run a host command, normalizing rejections into the closed error model. */
@@ -391,4 +391,29 @@ export function useHostSync() {
   void Promise.resolve().then(restoreAdds);
   const timer = setInterval(() => void refreshHosts(), 5 * 60_000);
   onCleanup(() => clearInterval(timer));
+}
+
+// ------------------------------------------------------------------ removing a server from the machine
+
+/** The machine lists removal among its capabilities (older Vesta Servers don't, so they never offer it). */
+export const hostOffersRemove = (hostId: string) => !!hostInfo(hostId)?.capabilities?.includes('server-remove');
+
+const infoReads = new Set<string>();
+/** Read the machine's info once when nothing has yet, so its role and capabilities are known. */
+export function ensureHostInfo(hostId: string) {
+  if (hostInfo(hostId) || infoReads.has(hostId)) return;
+  infoReads.add(hostId);
+  // The write lands after the await, never inside the reading scope.
+  void loadHostInfo(hostId).catch(() => undefined).finally(() => infoReads.delete(hostId));
+}
+
+/**
+ * Owners only: the machine stops the server and removes it (recoverable there for 7 days).
+ * Then the machine's server list is read again. Throws the machine's refusal unchanged.
+ */
+export async function removeHostServer(hostId: string, serverId: string, confirmName: string, idempotencyKey: string) {
+  const receipt = await hostCommand((client) => client.removeServer(hostId, serverId, confirmName, idempotencyKey));
+  patch(setHostServerLists, hostId, hostServers(hostId).filter((server) => server.serverId !== serverId));
+  void loadHostServers(hostId).catch(() => { /* The list catches up on its own. */ });
+  return receipt;
 }

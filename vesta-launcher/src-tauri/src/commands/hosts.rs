@@ -154,6 +154,7 @@ pub enum HostAction {
     CreateCancel,
     CreateResume,
     CreateStart,
+    ServerRemove,
 }
 /// A Minecraft version id for a catalogue query: short, and only characters a version uses.
 fn version_query(body: Option<&Value>) -> Result<String> {
@@ -168,6 +169,30 @@ fn version_query(body: Option<&Value>) -> Result<String> {
         })
         .map(str::to_owned)
         .ok_or_else(|| Error::new(ErrorCode::InvalidInput))
+}
+/// Removing a server: the name typed to confirm (exactly as typed, case and all) and the
+/// attempt's idempotency key, so a retry of the same attempt gets the same receipt.
+fn remove_body(body: Option<&Value>, idempotency_key: &str) -> Result<Value> {
+    let name = body
+        .and_then(|body| body.get("confirmName"))
+        .and_then(Value::as_str)
+        .filter(|name| !name.is_empty() && name.len() <= 256)
+        .ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
+    Ok(json!({ "confirmName": name, "idempotencyKey": idempotency_key }))
+}
+#[cfg(test)]
+mod remove_tests {
+    use super::*;
+    #[test]
+    fn remove_body_keeps_the_typed_name_and_the_attempt_key() {
+        let body = json!({ "confirmName": "Lobby ", "idempotencyKey": "ignored", "extra": 1 });
+        assert_eq!(
+            remove_body(Some(&body), "k-1").unwrap(),
+            json!({ "confirmName": "Lobby ", "idempotencyKey": "k-1" })
+        );
+        assert!(remove_body(Some(&json!({ "confirmName": "" })), "k").is_err());
+        assert!(remove_body(None, "k").is_err());
+    }
 }
 /// Closed route selection: frontend cannot provide arbitrary URLs or authorization.
 #[tauri::command]
@@ -299,10 +324,18 @@ async fn dispatch(
         CreateCancel => ("POST", format!("/creates/jobs/{}/cancel", id()?)),
         CreateResume => ("POST", format!("/creates/jobs/{}/resume", id()?)),
         CreateStart => ("POST", format!("/creates/jobs/{}/start", id()?)),
+        ServerRemove => ("DELETE", format!("/servers/{}", id()?)),
         _ => unreachable!(),
     };
     // Reads carry no body: a catalogue query travels in the path.
-    let body = if method == "GET" { None } else { body };
+    let body = if method == "GET" {
+        None
+    } else if matches!(action, ServerRemove) {
+        // Built here: only the typed name travels from the page, the key is this attempt's.
+        Some(remove_body(body.as_ref(), &idempotency_key)?)
+    } else {
+        body
+    };
     session
         .call(
             method,

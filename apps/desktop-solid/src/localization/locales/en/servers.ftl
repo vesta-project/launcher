@@ -920,3 +920,22 @@ servers-host-intro = Vesta Server runs your Minecraft servers on a computer that
 
 servers-host-set-up = Set it up from here
 servers-host-set-up-help = When it finishes it shows a setup code. Choose Set up a Vesta Server and enter it.
+
+## Removing a server from its Vesta Server, owners only
+
+servers-host-remove-menu = Remove from { $machine }
+servers-host-remove-title = Remove { $name }?
+servers-host-remove-description = Vesta Server stops it and removes it from { $machine }. You can bring it back on { $machine } within 7 days.
+servers-host-remove-type = Type { $name } to confirm
+servers-host-remove-action = Remove server
+servers-host-remove-removing = Removing
+servers-host-remove-done = { $name } was removed from { $machine }
+servers-host-remove-done-help = You can bring it back on { $machine } within 7 days.
+servers-host-remove-your-machine = your Vesta Server
+servers-host-remove-error-name = That isn't the name exactly. Check capital letters and spaces.
+servers-host-remove-error-busy = { $name } is busy with a job on { $machine }. Try again when it finishes.
+servers-host-remove-error-forbidden = Only owners of { $machine } can remove its servers.
+servers-host-remove-error-older = Removing servers from here needs a newer Vesta Server. Update it on { $machine }.
+servers-host-remove-error-other = Vesta Server couldn't remove it. Try again.
+servers-host-remove-setting = Remove server
+servers-host-remove-setting-help = Stops it and removes it from { $machine }. You can bring it back there within 7 days.

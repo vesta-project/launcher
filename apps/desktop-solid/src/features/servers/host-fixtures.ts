@@ -7,6 +7,7 @@
 //   vesta.fixtures.import = 'none' (nothing found automatically)
 //   vesta.fixtures.signin = 'no-access' (the account has no role on attic-pc) | 'approval' (attic-pc wants a link code)
 //   vesta.fixtures.create = see fixtures-create.ts
+//   vesta.fixtures.remove = 'busy' (the server has a job running, so removing it waits) | 'old' (a machine that can't remove from here)
 import { createCreateFixtures } from './fixtures-create';
 import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, VestaHost } from './native-hosts';
 
@@ -77,7 +78,10 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface FixtureJob extends ImportJob { startedAt: number; folder: string; name: string; port: number | null; memory: number | null; checks: number }
 
-export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null } = {}): HostsApi {
+export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null; remove?: string | null } = {}): HostsApi {
+  const removals = new Map<string, { serverId: string; removedAt: string; restoreUntil: string }>();
+  // An older machine doesn't list removal, so the launcher never offers it there.
+  const capabilities = () => (options.remove === 'old' ? CAPABILITIES : [...CAPABILITIES, 'server-remove']);
   const lan: HostDiscovery[] = [
     { hostId: 'host-people', name: 'people-server', fingerprint: 'a'.repeat(64), address: '192.168.1.67:25500', state: 'unclaimed' },
     { hostId: 'host-attic', name: 'attic-pc', fingerprint: 'b'.repeat(64), address: '192.168.1.80:25500', state: 'claimed' },
@@ -178,7 +182,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     signIn: async (hostId) => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: CAPABILITIES, role: 'primary_owner', revision: '1' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: capabilities(), role: 'primary_owner', revision: '1' };
     },
     signInWithAccount: async (address, hostId, accountUuid, deviceName) => {
       await wait(900);
@@ -218,7 +222,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     info: async (hostId): Promise<HostInfo> => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: CAPABILITIES, role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: capabilities(), role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
     },
     update: async (hostId, body) => {
       const found = await need(hostId);
@@ -370,5 +374,23 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     createCancel: creating.createCancel,
     createResume: creating.createResume,
     createStart: creating.createStart,
+    removeServer: async (hostId, serverId, confirmName, idempotencyKey) => {
+      await need(hostId);
+      await wait(700);
+      const done = removals.get(idempotencyKey);
+      if (done) return done;
+      if (options.remove === 'old') return reject('not_found');
+      const list = servers.get(hostId) ?? [];
+      // The machine server the servers fixtures open as its owner lives there, not in this list.
+      const name = list.find((server) => server.serverId === serverId)?.name ?? (serverId === 'srv-lobby' ? 'Lobby' : null);
+      if (!name) return reject('not_found', 'not_found');
+      if (confirmName !== name) return reject('invalid_input', 'confirm_name_mismatch');
+      if (options.remove === 'busy') return reject('server_busy', 'server_busy');
+      servers.set(hostId, list.filter((server) => server.serverId !== serverId));
+      const removedAt = new Date();
+      const receipt = { serverId, removedAt: removedAt.toISOString(), restoreUntil: new Date(removedAt.getTime() + 7 * 86_400_000).toISOString() };
+      removals.set(idempotencyKey, receipt);
+      return receipt;
+    },
   };
 }
