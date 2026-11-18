@@ -86,6 +86,11 @@
     margin: var(--vesta-space-2) var(--instance-gutter) 0;
   }
 
+  /* Why mods and plugins can't be added, with the way to change the software beside it */
+  .server-content-software-note > p {
+    flex: 1 1 18rem;
+  }
+
   @container pane (max-width: 640px) {
     .server-content-table [data-vesta="table-row"] {
       grid-template-columns: minmax(0, 1fr) 56px calc(var(--instance-gutter) + 32px);

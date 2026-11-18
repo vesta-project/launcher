@@ -3756,6 +3756,8 @@ export const messageIds = [
   "server-content.datapack-disabling",
   "server-content.truncated",
   "server-content.software-unknown",
+  "server-content.software-vanilla",
+  "server-content.change-software",
   "server-content.error-mods-unsupported",
   "server-content.error-plugins-unsupported",
   "server-content.error-stale",

@@ -369,3 +369,14 @@ export function contentSide(entry: Pick<ServerContentEntry, 'kind' | 'declared'>
   if (env?.client_requirement && env.server_requirement) return 'server-content.side-both';
   return 'server-content.side-unknown';
 }
+
+/**
+ * Why mods and plugins can't be added: Vanilla loads datapacks only, and software the server
+ * can't name is said as such. Null when the software loads mods or plugins.
+ */
+export function softwareNote(inventory: Pick<ServerContentInventory, 'software' | 'capabilities'> | null | undefined): 'vanilla' | 'unknown' | null {
+  if (!inventory || inventory.capabilities.modsSupported || inventory.capabilities.pluginsSupported) return null;
+  const software = inventory.software?.toLowerCase() ?? null;
+  if (software === 'vanilla') return 'vanilla';
+  return !software || software === 'unknown' ? 'unknown' : null;
+}

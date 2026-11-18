@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { seedContentInventory, createContentFixtures } from '../src/features/servers/fixtures-content.ts';
+import { softwareNote } from '../src/features/servers/content-model.ts';
+import { readFileSync } from 'node:fs';
 
 describe('server content inventory and staging', () => {
   test('covers Fabric, Paper, vanilla, unidentified jars and pending changes', () => {
@@ -47,4 +49,20 @@ test('resource sides use declarations and explicit provider requirements, never 
  expect(contentSide(mod,{environment:{client:true,server:true}})).toBe('server-content.side-unknown');
  expect(contentSide(mod,{environment:{client:true,server:true,client_requirement:'required',server_requirement:'optional'}})).toBe('server-content.side-both');
  expect(contentSide(mod,{environment:{client:false,server:true,client_requirement:'unsupported',server_requirement:'required'}})).toBe('server-content.side-server');
+});
+
+describe('server content software note', () => {
+  test('Vanilla says datapacks only, unknown keeps its line, modded and plugin servers say nothing', () => {
+    expect(softwareNote(seedContentInventory('vanilla'))).toBe('vanilla');
+    expect(softwareNote(seedContentInventory('unknown'))).toBe('unknown');
+    expect(softwareNote({ software: null, capabilities: { modsSupported: false, pluginsSupported: false } })).toBe('unknown');
+    expect(softwareNote(seedContentInventory('fabric'))).toBe(null);
+    expect(softwareNote(seedContentInventory('paper'))).toBe(null);
+    expect(softwareNote(null)).toBe(null);
+    // The way to change it shows only for people who may open Settings > Software.
+    const tab = readFileSync(new URL('../src/pages/servers/tabs/resources-tab.tsx', import.meta.url), 'utf8');
+    expect(tab).toContain("visibleSections(props.snapshot).some((section) => section.id === 'software')");
+    expect(tab).toContain('<Show when={canChangeSoftware()}>');
+    expect(tab).toContain('/settings/software');
+  });
 });

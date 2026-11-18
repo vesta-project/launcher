@@ -15,10 +15,11 @@ import { gate } from '../../../features/servers/capabilities';
 import { stableConnectionId } from '../../../features/servers/connection-id';
 import {
   contentErrorMessage, contentGates, contentKinds, contentModels, contentUpdate, groupContentRows, reuseContentModels, searchContentRows, datapackId, groupLabel, isModpackOwned, kindLabel, mutationRequest,
-  pendingSummary, primaryKind, rowActions, updateRequest,
+  pendingSummary, primaryKind, rowActions, softwareNote, updateRequest,
   type ContentFilter, type ContentListRow, type ContentRowModel,
 } from '../../../features/servers/content-model';
 import { lifecycleControls, newIntentId } from '../../../features/servers/model';
+import { visibleSections } from '../../../features/servers/shell-model';
 import { linkProvider, serverModpackPath } from '../../../features/servers/modpack-area-model';
 import type { ContentChange, ServerContentEntry, ServerContentInventory } from '../../../features/servers/native-content';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
@@ -49,6 +50,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
   const content = useServerResource(id, contentResource, { enabled: () => !!summaryContent.value() || !!summaryContent.error() });
   // The server modpack link names the files it owns; reading it needs pack.edit.
   const pack = useServerResource(id, packWorkspaceResource, { enabled: () => gate(props.snapshot.capabilities, 'pack.edit') === 'allowed' });
+  const canChangeSoftware = () => visibleSections(props.snapshot).some((section) => section.id === 'software');
   const owned = createMemo(() => new Set(Object.keys(pack.value()?.serverModpack?.files ?? {})), { name: 'server-content:owned' });
   const modpackSource = () => pack.value()?.serverModpack?.source ?? null;
   createEffect(() => { const value = linkProvider(modpackSource()); return value ? `${value.provider}:${value.projectId}` : null; }, (key) => {
@@ -468,8 +470,18 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
       <Show when={inventory()?.truncated}>
         <p data-vesta="server-callout" data-tone="warning" class="server-content-note">{t('server-content.truncated')}</p>
       </Show>
-      <Show when={inventory() && !inventory()!.software && !inventory()!.capabilities.modsSupported && !inventory()!.capabilities.pluginsSupported}>
-        <p data-vesta="server-callout" data-tone="neutral" class="server-content-note">{t('server-content.software-unknown')}</p>
+      <Show when={softwareNote(inventory())}>
+        {(note) => (
+          <div data-vesta="server-callout" data-tone="neutral" class="server-content-note server-content-software-note">
+            <p>{t(note() === 'vanilla' ? 'server-content.software-vanilla' : 'server-content.software-unknown')}</p>
+            {/* Only people who can change the software are sent there. */}
+            <Show when={canChangeSoftware()}>
+              <Button size="sm" variant="outline" icon={<Icon name="icons/content/cube" />} onClick={() => navigate(`/servers/${id()}/settings/software`)}>
+                {t('server-content.change-software')}
+              </Button>
+            </Show>
+          </div>
+        )}
       </Show>
 
       <div data-vesta="resources-list" tabindex={0} ref={setViewport}>
