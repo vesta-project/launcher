@@ -34,7 +34,6 @@ server-add-software-reason-soon = Coming soon
 server-add-software-reason-other = Not available
 
 server-add-settings-title = Settings
-server-add-settings-memory-free = Up to { $value } free on { $name }
 server-add-settings-port-range = Pick a port from 1024 to 65535.
 server-add-settings-port-busy = Something on { $name } already uses this port.
 
@@ -139,3 +138,11 @@ server-add-error-interrupted = It stopped partway. Pick up where it left off.
 server-add-error-step = Vesta Server couldn't finish this step. Try again.
 
 server-add-progress-browse-packs = Browse modpacks
+server-add-defaults-failed = { $name } couldn't suggest settings this time, so these are starting values.
+server-add-memory-free = { $value } not used by other servers on { $name }
+server-add-memory-unknown = How much { $name } gives this server while it runs
+server-add-memory-chosen = This server
+server-add-memory-most = Up to { $amount }
+server-add-memory-most-label = Most it can have
+server-add-memory-suggested-preset = Suggested { $amount }
+server-add-memory-over-free = More than { $name } has free right now. That's fine while not every server runs at once.

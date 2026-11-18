@@ -7,6 +7,7 @@ import {
   getMemoryWarningThresholdMb,
   type MemoryRecommendation,
 } from "../../features/installation/memory-policy";
+import "./memory-card.css";
 
 /** Original install memory model: selected/default comparison, then opt-in editing. */
 export function InstallMemoryCard(props: {

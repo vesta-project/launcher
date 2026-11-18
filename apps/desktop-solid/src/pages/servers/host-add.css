@@ -29,6 +29,25 @@
   }
   :where([data-vesta="add-note"][data-tone="warning"]) { color: var(--vesta-color-warning-text); }
   :where([data-vesta="add-note"]) > [data-vesta="icon"] { flex: none; }
+  /* New with local starting values: one quiet line and Retry, never a missing way */
+  :where([data-vesta="add-defaults-note"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="add-fact-warning"]) {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--vesta-space-1);
+    margin-block-start: 2px;
+    color: var(--vesta-color-warning-text);
+    font-size: var(--vesta-text-xs);
+  }
+  :where([data-vesta="add-fact-warning"]) > [data-vesta="icon"] { flex: none; margin-block-start: 2px; }
 
   :where([data-vesta="add-settings"]) {
     display: flex;
@@ -44,11 +63,12 @@
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     gap: var(--vesta-space-3) var(--vesta-space-4);
   }
-  :where([data-vesta="add-settings-grid"]) > [data-field="memory"] { grid-column: 1 / -1; }
+
 
   /* Footer: secondary, the reason the main button waits, then the main button */
   :where([data-vesta="add-footer"]) { align-items: center; flex-wrap: wrap; }
   :where([data-vesta="add-footer"]) > :first-child { margin-inline-end: auto; }
+  :where([data-vesta="add-footer-start"]) { display: flex; align-items: center; gap: var(--vesta-space-1); }
   :where([data-vesta="add-why"]) { color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); text-align: end; }
 
   /* Import: the folder picked */

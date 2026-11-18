@@ -32,13 +32,14 @@ const MODE_CAPABILITIES: Record<AddMode, readonly string[]> = {
 
 /**
  * Which ways a machine offers, from what it advertises and what it answered when asked.
- * Defaults answering means New works. Restore needs at least one backup to start from.
+ * Defaults or the catalogue answering, or the capability, means New works. Restore needs at least one backup.
  */
-export function addSupport(input: { capabilities?: readonly string[] | null; defaults: boolean; restoreSources: number | null }): AddSupport {
+export function addSupport(input: { capabilities?: readonly string[] | null; defaults: boolean; catalogue?: boolean; restoreSources: number | null }): AddSupport {
   const caps = input.capabilities ?? [];
   const says = (mode: AddMode) => MODE_CAPABILITIES[mode].some((name) => caps.includes(name));
   return {
-    new: input.defaults,
+    // Defaults can fail for a passing reason (memory, a port): a machine that creates still offers New.
+    new: input.defaults || says('new') || input.catalogue === true,
     restore: (input.restoreSources ?? 0) > 0,
     // An older machine lists no capabilities at all but can still import.
     import: caps.length === 0 || says('import'),
@@ -189,12 +190,16 @@ export const MEMORY_STEP = 256;
 export const MEMORY_MIN = 512;
 
 export interface ResourceCheck {
-  /** What the machine can spare for one more server; null when it didn't say. */
+  /** Memory no other server has reserved; null when the machine didn't say. Going above it is allowed. */
   availableMiB: number | null;
+  /** The most one server may have (all memory minus what the system keeps); null on older machines. */
+  budgetMiB: number | null;
   totalMiB: number | null;
   /** The port the machine would pick, and why a chosen one can't be used. */
   suggestedPort: number | null;
   portProblem: 'in-use' | null;
+  /** Codes such as `memory_overcommitted` and `game_port_in_use`. */
+  warnings: string[];
 }
 
 /** The machine's resource preview (`/imports/resources`): memory to spare and whether a port is free. */
@@ -202,23 +207,52 @@ export function readResources(reply: unknown): ResourceCheck {
   const value = record(reply);
   const memory = record(value.memory);
   const port = record(value.port);
+  const warnings = list(value.warnings).filter((code): code is string => typeof code === 'string');
   return {
     availableMiB: count(memory.availableMib) ?? count(memory.availableMiB),
+    budgetMiB: count(memory.budgetMib) ?? count(memory.budgetMiB),
     totalMiB: count(memory.totalMib) ?? count(memory.totalMiB),
     suggestedPort: count(port.gamePort),
-    portProblem: port.blocker === 'game_port_in_use' ? 'in-use' : null,
+    portProblem: port.blocker === 'game_port_in_use' || warnings.includes('game_port_in_use') ? 'in-use' : null,
+    warnings,
   };
 }
 
-/** The memory slider's range: up to what the machine can spare, or a sensible ceiling when unknown. */
-export function memoryRange(availableMiB: number | null, chosen: number): { min: number; max: number; step: number } {
-  const ceiling = availableMiB && availableMiB >= MEMORY_MIN ? availableMiB : Math.max(16_384, chosen);
-  const max = Math.max(MEMORY_MIN, Math.floor(ceiling / MEMORY_STEP) * MEMORY_STEP);
+/** Kept for the system when an older machine only says its total. */
+const systemReserve = (total: number) => Math.max(1024, Math.round(total / 8));
+const MEMORY_UNKNOWN = 16_384;
+
+/**
+ * The most one server can have: the machine's budget, else its total minus a reserve for the
+ * system, else 16 GB when nothing is known. Other servers' reservations don't lower it, because
+ * a stopped server uses no memory.
+ */
+export function memoryBudget(resources: Pick<ResourceCheck, 'budgetMiB' | 'totalMiB'> | null | undefined): number {
+  const budget = resources?.budgetMiB;
+  if (budget && budget >= MEMORY_MIN) return budget;
+  const total = resources?.totalMiB;
+  if (total && total - systemReserve(total) >= MEMORY_MIN) return total - systemReserve(total);
+  return MEMORY_UNKNOWN;
+}
+
+/** The memory slider's range: 512 MB up to the budget. */
+export function memoryRange(resources: Pick<ResourceCheck, 'budgetMiB' | 'totalMiB'> | null | undefined): { min: number; max: number; step: number } {
+  const max = Math.max(MEMORY_MIN, Math.floor(memoryBudget(resources) / MEMORY_STEP) * MEMORY_STEP);
   return { min: MEMORY_MIN, max, step: MEMORY_STEP };
 }
 
 export const clampMemory = (value: number, range: { min: number; max: number; step: number }) =>
   Math.min(range.max, Math.max(range.min, Math.round(value / range.step) * range.step));
+
+/** More than the other servers leave free: allowed (stopped servers use none), said as a soft warning. */
+export const memoryOverFree = (value: number, resources: Pick<ResourceCheck, 'availableMiB'> | null | undefined) =>
+  typeof resources?.availableMiB === 'number' && value > resources.availableMiB;
+
+/** What a new server starts with when the machine couldn't suggest anything. */
+export const LOCAL_MEMORY = 2048;
+export function localDefaults(resources: ResourceCheck | null | undefined): { name: string; gamePort: number; memoryMiB: number } {
+  return { name: 'Minecraft Server', gamePort: resources?.suggestedPort ?? 25565, memoryMiB: Math.min(LOCAL_MEMORY, memoryRange(resources).max) };
+}
 
 /** "4 GB", "5.5 GB", "512 MB". */
 export function formatMemory(mib: number): string {
@@ -514,11 +548,14 @@ export const acknowledgementLine = (code: string): MessageId => warningLines[cod
 /** Promises the "original server is stopped and won't restart" tick already makes: never asked twice. */
 const COVERED_BY_STOPPED = ['source_process_unknown', 'disable_amp_auto_restart'];
 
+/** Warnings said on their own review row instead of as a tick: more memory than is free is allowed. */
+export const SHOWN_ON_ROW = ['memory_overcommitted'];
+
 /** What the person ticks, in order: the machine's warnings, the stopped source (import), then the EULA. */
 export function acknowledgements(facts: ReviewFacts): Acknowledgement[] {
   const importing = facts.mode === 'import';
   const rows: Acknowledgement[] = facts.warnings
-    .filter((code) => !(importing && COVERED_BY_STOPPED.includes(code)))
+    .filter((code) => !(importing && COVERED_BY_STOPPED.includes(code)) && !SHOWN_ON_ROW.includes(code))
     .map((code) => ({ id: code, message: acknowledgementLine(code) }));
   if (importing) rows.push({ id: 'source-stopped', message: 'vesta-server.import.stopped' });
   rows.push({ id: 'eula', message: 'vesta-server.import.eula' });

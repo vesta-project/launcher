@@ -7,6 +7,8 @@
 //   'fail'      installing fails, so the job ends with an error
 //   'restore'   the machine also has backups to restore from
 //   'old'       an older machine that can only import
+//   'busy'      other servers already reserve most of the memory, and the machine can't suggest
+//               settings (an older machine's failing defaults), so New starts from local values
 import type {
   CatalogueKind, CreateApply, CreateJob, CreatePlan, CreateReview, HostServer, ImportState, MinecraftCatalogue, RestoreSource, SoftwareCatalogue,
 } from './native-hosts';
@@ -97,7 +99,8 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     ...[...jobs.values()].filter((job) => job.state !== 'cancelled' && job.state !== 'failed' && job.serverId).map((job) => job.plan.gamePort ?? 0)]);
   const reservedMemory = (hostId: string) => [...jobs.values()].filter((job) => job.serverId && job.state !== 'cancelled' && job.state !== 'failed')
     .reduce((sum, job) => sum + (job.plan.memoryMiB ?? 0), 0)
-    + (host.servers(hostId) ?? []).filter((server) => ![...jobs.values()].some((job) => job.serverId === server.serverId)).length * 2048;
+    + (host.servers(hostId) ?? []).filter((server) => ![...jobs.values()].some((job) => job.serverId === server.serverId)).length * 2048
+    + (scenario === 'busy' ? 9216 : 0);
   const freePort = (hostId: string) => { const taken = reservedPorts(hostId); let port = 25565; while (taken.has(port)) port += 1; return port; };
   const freeName = (hostId: string) => {
     const names = new Set([...(host.servers(hostId) ?? []).map((server) => server.name), ...[...jobs.values()].filter((job) => job.serverId).map((job) => job.plan.name)]);
@@ -106,6 +109,8 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     return name;
   };
   const available = (hostId: string) => Math.max(0, BUDGET_MIB - reservedMemory(hostId));
+  /** Never refused for memory: at least 2 GB is suggested even when others reserve the rest. */
+  const suggestMemory = (hostId: string) => Math.min(4096, Math.max(2048, available(hostId)));
   const need = (hostId: string) => (host.exists(hostId) ? Promise.resolve() : reject('not_found'));
   const findJob = (hostId: string, id: string) => {
     const job = jobs.get(id);
@@ -115,13 +120,13 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
   const review = (hostId: string, job: CreateFixtureJob): CreateReview => {
     const plan = job.plan;
     const port = plan.gamePort ?? freePort(hostId);
-    const memory = plan.memoryMiB ?? Math.min(4096, available(hostId));
+    const memory = plan.memoryMiB ?? suggestMemory(hostId);
     const blockers: string[] = [];
     const names = new Set((host.servers(hostId) ?? []).map((server) => server.name));
     if (names.has(plan.name.trim())) blockers.push('name_in_use');
     if (reservedPorts(hostId).has(port)) blockers.push('game_port_in_use');
     if (memory < 512) blockers.push('memory_invalid');
-    else if (memory > available(hostId)) blockers.push('memory_budget_exceeded');
+    else if (memory > BUDGET_MIB) blockers.push('memory_budget_exceeded');
     const version = plan.kind === 'new' ? plan.minecraftVersion : '1.21.1';
     const software = plan.kind === 'new' ? plan.software : { kind: 'fabric', build: null, loaderVersion: '0.16.9' };
     const kinds = catalogue(version).kinds;
@@ -133,6 +138,8 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     // Mojang publishes SHA-1 digests only, so Vanilla always carries this.
     if (!blockers.length && software.kind === 'vanilla') warnings.push('legacy_checksum');
     if (plan.kind === 'restore' && !blockers.length) warnings.push('restore_version_unknown');
+    // More than the other servers leave free is allowed: stopped servers use no memory.
+    if (!blockers.length && memory > available(hostId)) warnings.push('memory_overcommitted');
     const serverId = `srv-${job.jobId}`;
     return {
       planId: `plan-${job.jobId}`, confirmation: blockers.length ? null : `confirm-${job.jobId}`, expiresAt: new Date(Date.now() + 600_000).toISOString(),
@@ -219,7 +226,8 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
       await need(hostId);
       await wait(300);
       if (scenario === 'old') return reject('not_found', 'not_found');
-      return { name: freeName(hostId), minecraftVersion: VERSIONS.latestStable!, software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: freePort(hostId), memoryMiB: Math.min(4096, available(hostId)), java: 'automatic' as const };
+      if (scenario === 'busy') return reject('conflict', 'memory_budget_exceeded');
+      return { name: freeName(hostId), minecraftVersion: VERSIONS.latestStable!, software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: freePort(hostId), memoryMiB: suggestMemory(hostId), java: 'automatic' as const };
     },
     createRestoreSources: async (hostId: string) => {
       await need(hostId);
@@ -234,8 +242,9 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
       const port = gamePort ?? freePort(hostId);
       const memory = memoryMiB ?? Math.min(4096, spare);
       return {
-        memory: { totalMib: TOTAL_MIB, osReserveMib: TOTAL_MIB - BUDGET_MIB, budgetMib: BUDGET_MIB, reservedMib: reservedMemory(hostId), availableMib: spare, memoryMib: memory, status: 'resolved', blocker: memory < 512 ? 'memory_invalid' : memory > spare ? 'memory_budget_exceeded' : null },
+        memory: { totalMib: TOTAL_MIB, osReserveMib: TOTAL_MIB - BUDGET_MIB, budgetMib: BUDGET_MIB, reservedMib: reservedMemory(hostId), availableMib: spare, memoryMib: memory, status: 'resolved', blocker: memory < 512 ? 'memory_invalid' : memory > BUDGET_MIB ? 'memory_budget_exceeded' : null },
         port: { gamePort: port, status: 'resolved', blocker: reservedPorts(hostId).has(port) ? 'game_port_in_use' : null },
+        warnings: [...(memory > spare && memory <= BUDGET_MIB ? ['memory_overcommitted'] : []), ...(reservedPorts(hostId).has(port) ? ['game_port_in_use'] : [])],
       };
     },
     createPlan: async (hostId: string, body: CreatePlan) => {

@@ -2,7 +2,7 @@
 // machine's own suggestions, so the quickest path is Continue, tick the EULA, Create. Restore
 // and Import share the same settings, the same review and the same progress screen. The job
 // itself lives in hosts-store, so leaving this page never stops the machine.
-import { Button, Checkbox, Combobox, NumberField, Progress, SegmentedControl, Skeleton, Slider, Switch as Toggle, TextField } from '@vesta/ui';
+import { Button, Checkbox, Combobox, NumberField, Progress, SegmentedControl, Skeleton, Switch as Toggle, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
@@ -18,8 +18,8 @@ import { openExternal } from '../../features/links/external-links';
 import { formatBytes } from '../../features/settings/storage-model';
 import { toServerError } from '../../features/servers/errors';
 import {
-  acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, experimentalChoice, findVersion, folderVerdict, formatMemory,
-  keepKind, memoryRange, needsBuild, needsFreshPlan, notOffered, packNotices, phaseAt, phaseProgress, phaseSteps, primaryLabel, readDefaults, readResources,
+  acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, clampMemory, experimentalChoice, findVersion, folderVerdict, formatMemory,
+  keepKind, localDefaults, memoryRange, needsBuild, needsFreshPlan, notOffered, packNotices, phaseAt, phaseProgress, phaseSteps, primaryLabel, readDefaults, readResources,
   readRestoreSources, recommendedBuild, reviewFacts, reviewProblems, settingsProblem, softwareChoice, softwareKinds, softwareLabel, startVersion,
   supportedModes, unavailableKinds, validPort, versionOptions, waitingFor,
   type AddMode, type FolderVerdict, type Problem, type ResourceCheck, type ReviewFacts,
@@ -35,6 +35,7 @@ import { softwareIcon, softwareVersionKind } from '../../features/servers/softwa
 import type { SoftwareId } from '../../features/servers/hosting-native';
 import { ImportFolderStep, PermissionHelp, checkPath, type Picked } from './host-import';
 import { CommandLine, Steps, Working } from './vesta-parts';
+import { ServerMemoryCard } from './server-memory-card';
 import './vesta-server.css';
 import './host-add.css';
 
@@ -97,6 +98,8 @@ function AddWizard(props: { hostId: string; machine: string }) {
   const [resources, setResources] = createSignal<ResourceCheck | null>(null, { name: 'host-add:resources' });
   const [loaded, setLoaded] = createSignal(false, { name: 'host-add:loaded' });
   const [loadError, setLoadError] = createSignal<ServerCommandError | null>(null, { name: 'host-add:load-error' });
+  /** The machine creates servers but couldn't suggest settings this time: New still shows, with local ones. */
+  const [defaultsError, setDefaultsError] = createSignal<ServerCommandError | null>(null, { name: 'host-add:defaults-error' });
   let disposed = false;
   onCleanup(() => { disposed = true; });
 
@@ -139,6 +142,23 @@ function AddWizard(props: { hostId: string; machine: string }) {
     memory: current.edited.memory || values.memory === undefined ? current.memory : values.memory,
   }));
 
+  /** The machine's suggestions, or calm local ones (and a line saying so) when it couldn't give any. */
+  const applyDefaults = (answer: PromiseSettledResult<unknown>, spare: ResourceCheck | null) => {
+    if (answer.status === 'fulfilled') {
+      const read = readDefaults(answer.value);
+      setDefaults(read);
+      setDefaultsError(null);
+      suggest(setCreateSettings, { name: read.name, port: read.gamePort, memory: read.memoryMiB });
+      suggest(setImportSettings, { port: read.gamePort, memory: read.memoryMiB });
+      return;
+    }
+    setDefaults('none');
+    setDefaultsError(notOffered(answer.reason) ? null : toServerError(answer.reason));
+    const local = localDefaults(spare);
+    suggest(setCreateSettings, { name: local.name, port: local.gamePort, memory: local.memoryMiB });
+    suggest(setImportSettings, { port: spare?.suggestedPort ?? undefined });
+  };
+
   const load = async () => {
     setLoadError(null);
     const [info, suggested, backups, catalogue, spare] = await Promise.allSettled([
@@ -150,34 +170,37 @@ function AddWizard(props: { hostId: string; machine: string }) {
     ]);
     if (disposed) return;
     if (info.status === 'fulfilled') setCapabilities(info.value.capabilities ?? []);
-    if (suggested.status === 'fulfilled') {
-      const read = readDefaults(suggested.value);
-      setDefaults(read);
-      suggest(setCreateSettings, { name: read.name, port: read.gamePort, memory: read.memoryMiB });
-      suggest(setImportSettings, { port: read.gamePort, memory: read.memoryMiB });
-    } else {
-      setDefaults('none');
-      // Nothing answered at all: the machine is out of reach, not merely older.
-      if (info.status === 'rejected' && !notOffered(suggested.reason)) setLoadError(toServerError(suggested.reason));
-    }
+    const read = spare.status === 'fulfilled' ? readResources(spare.value) : null;
+    setResources(read);
+    applyDefaults(suggested, read);
+    // Nothing answered at all: the machine is out of reach, not merely older.
+    if (suggested.status === 'rejected' && info.status === 'rejected' && !notOffered(suggested.reason)) setLoadError(toServerError(suggested.reason));
     setSources(backups.status === 'fulfilled' ? readRestoreSources(backups.value) : []);
     if (catalogue.status === 'fulfilled') setVersions(catalogue.value);
-    if (spare.status === 'fulfilled') {
-      const read = readResources(spare.value);
-      setResources(read);
-      if (suggested.status === 'rejected') suggest(setImportSettings, { port: read.suggestedPort ?? undefined });
-    }
     setLoaded(true);
   };
   onSettled(() => void load());
 
-  const support = createMemo(() => addSupport({ capabilities: capabilities(), defaults: typeof defaults() === 'object' && defaults() !== null, restoreSources: sources().length }), { name: 'host-add:support' });
+  /** "Try again" on the line under New: only the suggestions are asked again. */
+  const [retrying, setRetrying] = createSignal(false, { name: 'host-add:defaults-retrying' });
+  const retryDefaults = async () => {
+    setRetrying(true);
+    const [answer] = await Promise.allSettled([hostCommand((client) => client.createDefaults(props.hostId))]);
+    if (disposed) return;
+    setRetrying(false);
+    applyDefaults(answer, untrack(resources));
+  };
+
+  const support = createMemo(() => addSupport({
+    capabilities: capabilities(), defaults: typeof defaults() === 'object' && defaults() !== null, catalogue: versions() !== null, restoreSources: sources().length,
+  }), { name: 'host-add:support' });
   const modes = createMemo(() => supportedModes(support()), { name: 'host-add:modes' });
   const shownMode = (): AddMode => (modes().includes(mode()) ? mode() : modes()[0] ?? mode());
 
   // ---------------------------------------------------------------- New: version and software
 
   const suggestedVersion = () => { const value = defaults(); return value && value !== 'none' ? value.minecraftVersion : null; };
+  const suggestedMemory = () => { const value = defaults(); return value && value !== 'none' ? value.memoryMiB : null; };
   const chosenVersion = () => version() ?? startVersion(versions(), suggestedVersion());
   const catalogueFor = (id: string | null) => (id ? catalogues()[id] : undefined);
   const softwareCatalogue = () => { const value = catalogueFor(chosenVersion()); return value && value !== 'loading' && !('code' in value) ? value : null; };
@@ -278,6 +301,8 @@ function AddWizard(props: { hostId: string; machine: string }) {
   const request = (): AddRequest | null => {
     const current = shownMode();
     const values = settings();
+    // The amount is never above the most one server can have on this machine.
+    const memory = clampMemory(values.memory, memoryRange(resources()));
     const name = values.name.trim();
     if (current === 'import') {
       const choice = importChoice();
@@ -285,16 +310,16 @@ function AddWizard(props: { hostId: string; machine: string }) {
       return {
         mode: 'import', folder: { token: choice.folder.token, displayPath: choice.folder.displayPath },
         // Untouched values are left to the machine, which may keep what the folder already uses.
-        body: { folderToken: choice.folder.token, name, gamePort: values.edited.port ? values.port : null, memoryMiB: values.edited.memory ? values.memory : null, launchChoice: null, minecraftVersion: null },
+        body: { folderToken: choice.folder.token, name, gamePort: values.edited.port ? values.port : null, memoryMiB: values.edited.memory ? memory : null, launchChoice: null, minecraftVersion: null },
       };
     }
-    const resources = { name, gamePort: values.port, memoryMiB: values.memory, eulaAccepted: false as const };
+    const fields = { name, gamePort: values.port, memoryMiB: memory, eulaAccepted: false as const };
     if (current === 'restore') {
       const sourceId = restoreId();
-      return sourceId ? { mode: 'restore', body: { kind: 'restore', ...resources, source: { kind: 'snapshot', sourceId } } } : null;
+      return sourceId ? { mode: 'restore', body: { kind: 'restore', ...fields, source: { kind: 'snapshot', sourceId } } } : null;
     }
     const minecraftVersion = chosenVersion();
-    return minecraftVersion ? { mode: 'new', body: { kind: 'new', ...resources, minecraftVersion, software: softwareChoice(kind(), buildId()) } } : null;
+    return minecraftVersion ? { mode: 'new', body: { kind: 'new', ...fields, minecraftVersion, software: softwareChoice(kind(), buildId()) } } : null;
   };
 
   /** Import with no server folder chosen yet: the person is still in the folder browser. */
@@ -315,7 +340,40 @@ function AddWizard(props: { hostId: string; machine: string }) {
     setFocus(field);
     setEditing(true);
   };
-  const startOver = () => { clearAdd(props.hostId); setEditing(true); };
+
+  // ---------------------------------------------------------------- start over from a fresh New
+
+  /** Something from last time was brought back, or the person changed something here. */
+  const [restored, setRestored] = createSignal(initial !== undefined, { name: 'host-add:restored' });
+  const [changed, setChanged] = createSignal(false, { name: 'host-add:changed' });
+  const touch = () => setChanged(true);
+  /** A job the machine is already working on is resumed, never thrown away from here. */
+  const working = () => { const state = task()?.job?.state; return !!state && !['planning', 'review', 'blocked'].includes(state); };
+  const canDiscard = () => (restored() || changed()) && !working() && !task()?.sending;
+  /** Forget the draft, the folder, every edit and any plan not yet applied, then New with fresh suggestions. */
+  const reset = () => {
+    clearAdd(props.hostId);
+    setMode('new');
+    setVersion(null);
+    setSnapshots(false);
+    setWantedKind('vanilla');
+    setPickedBuild(null);
+    setRestoreId(null);
+    setImportChoice(null);
+    setPortBusy(null);
+    setFocus(null);
+    setCreateSettings(blank);
+    setImportSettings(blank);
+    const known = untrack(defaults);
+    applyDefaults(known && known !== 'none' ? { status: 'fulfilled', value: known } : { status: 'rejected', reason: untrack(defaultsError) ?? { code: 'not_found' } }, untrack(resources));
+    setRestored(false);
+    setChanged(false);
+    setEditing(false);
+  };
+  /** The quiet footer action: only for a draft that came back or changed, never a job already running. */
+  const discard = () => { if (canDiscard()) reset(); };
+  /** The machine lost the job, or it ended: the same fresh start. */
+  const startOver = reset;
 
   const stage = (): Stage => {
     const current = task();
@@ -362,39 +420,49 @@ function AddWizard(props: { hostId: string; machine: string }) {
                   <div data-vesta="add-modes">
                     <SegmentedControl aria-label={t('server-add.mode.label')} value={shownMode()} fill
                       options={modes().map((value) => ({ value, label: t(modeLabels[value]), icon: <Icon name={modeIcons[value]} size={16} /> }))}
-                      onChange={(value) => setMode(value as AddMode)} />
+                      onChange={(value) => { touch(); setMode(value as AddMode); }} />
                     <p>{t(modeHints[shownMode()], { name: props.machine })}</p>
                   </div>
                 </Show>
 
                 <Switch>
                   <Match when={shownMode() === 'new'}>
+                    <Show when={defaultsError()}>
+                      <p data-vesta="add-defaults-note" role="status">
+                        <span>{t('server-add.defaults.failed', { name: props.machine })}</span>
+                        <Button size="sm" variant="ghost" disabled={retrying()} onClick={() => void retryDefaults()}>{t('common.retry')}</Button>
+                      </p>
+                    </Show>
                     <NewServerFields
-                      versions={versions()} snapshots={snapshots()} onSnapshots={setSnapshots}
-                      version={chosenVersion()} onVersion={(id) => { setVersion(id); setPickedBuild(null); }}
+                      versions={versions()} snapshots={snapshots()} onSnapshots={(on) => { touch(); setSnapshots(on); }}
+                      version={chosenVersion()} onVersion={(id) => { touch(); setVersion(id); setPickedBuild(null); }}
                       catalogue={softwareCatalogue()} catalogueError={softwareError()} onRetry={() => { const id = chosenVersion(); if (id) void loadSoftware(id); }}
-                      kindId={kindId()} onKind={(id) => { setWantedKind(id); setPickedBuild(null); }}
-                      buildId={buildId()} onBuild={(id) => setPickedBuild({ key: buildKey(), id })} />
+                      kindId={kindId()} onKind={(id) => { touch(); setWantedKind(id); setPickedBuild(null); }}
+                      buildId={buildId()} onBuild={(id) => { touch(); setPickedBuild({ key: buildKey(), id }); }} />
                   </Match>
                   <Match when={shownMode() === 'restore'}>
                     <RestoreFields machine={props.machine} sources={sources()} selected={restoreId()}
-                      onSelect={(source) => { setRestoreId(source.sourceId); suggest(setCreateSettings, { name: source.label }); }} />
+                      onSelect={(source) => { touch(); setRestoreId(source.sourceId); suggest(setCreateSettings, { name: source.label }); }} />
                   </Match>
                   <Match when={shownMode() === 'import'}>
-                    <ImportFields hostId={props.hostId} machine={props.machine} choice={importChoice()} onPick={(folder) => void inspectFolder(folder, !!folder.granted)}
+                    <ImportFields hostId={props.hostId} machine={props.machine} choice={importChoice()} onPick={(folder) => { touch(); void inspectFolder(folder, !!folder.granted); }}
                       onRecheck={() => void recheckFolder()} onClear={() => setImportChoice(null)} />
                   </Match>
                 </Switch>
 
                 <Show when={shownMode() !== 'import' || (importChoice()?.state as FolderVerdict | undefined)?.kind === 'server'}>
-                  <SettingsGroup machine={props.machine} value={settings()} onChange={changeSettings} available={resources()?.availableMiB ?? null}
-                    portBusy={portBusy() === settings().port} focus={focus()} onFocused={() => setFocus(null)} />
+                  <SettingsGroup machine={props.machine} value={settings()} onChange={(next) => { touch(); changeSettings(next); }} resources={resources()}
+                    suggested={suggestedMemory()} portBusy={portBusy() === settings().port} focus={focus()} onFocused={() => setFocus(null)} />
                 </Show>
               </Show>
 
               <footer data-vesta="add-footer">
-                {/* Continue always checks again and reviews, so one way back out is enough. */}
-                <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
+                <div data-vesta="add-footer-start">
+                  {/* Continue always checks again and reviews, so one way back out is enough. */}
+                  <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.cancel')}</Button>
+                  {/* Last time's choices come back by themselves: this is the quiet way to drop them. */}
+                  <Show when={loaded()}><DiscardButton onDiscard={canDiscard() ? discard : undefined} /></Show>
+                </div>
                 {/* Until a folder is picked, the folder browser's Use this folder is the one way on. */}
                 <Show when={!picking()}>
                   <Show when={loaded() && continueBlocker()}>{(why) => <span data-vesta="add-why" id="add-continue-why">{t(why(), { name: kind() ? softwareLabel(kind()!.kind, kind()!.label)! : '' })}</span>}</Show>
@@ -431,7 +499,7 @@ function AddWizard(props: { hostId: string; machine: string }) {
           </Match>
 
           <Match when={stage() === 'review' && task()}>
-            {(current) => <ReviewStep hostId={props.hostId} machine={props.machine} task={current()} onEdit={edit} />}
+            {(current) => <ReviewStep hostId={props.hostId} machine={props.machine} task={current()} onEdit={edit} onDiscard={restored() && canDiscard() ? discard : undefined} />}
           </Match>
 
           <Match when={stage() === 'progress' && task()}>
@@ -613,7 +681,7 @@ function ImportFields(props: { hostId: string; machine: string; choice: ImportCh
 // ------------------------------------------------------------------ name, port and memory
 
 function SettingsGroup(props: {
-  machine: string; value: Settings; onChange: (next: Settings) => void; available: number | null; portBusy: boolean;
+  machine: string; value: Settings; onChange: (next: Settings) => void; resources: ResourceCheck | null; suggested: number | null; portBusy: boolean;
   focus: Field | null; onFocused: () => void;
 }) {
   let root: HTMLElement | undefined;
@@ -633,7 +701,6 @@ function SettingsGroup(props: {
     setTimeout(attempt, 0);
   });
   const set = (field: Field, value: string | number) => props.onChange({ ...props.value, [field]: value, edited: { ...props.value.edited, [field]: true } });
-  const range = () => memoryRange(props.available, props.value.memory);
   const portError = () => (!validPort(props.value.port) ? t('server-add.settings.port-range') : props.portBusy ? t('server-add.settings.port-busy', { name: props.machine }) : undefined);
   return (
     <section ref={(element) => (root = element)} data-vesta="add-settings" aria-labelledby="add-settings-heading">
@@ -647,12 +714,10 @@ function SettingsGroup(props: {
           <NumberField label={t('vesta-server.import.port')} value={props.value.port} min={1024} max={65535} formatOptions={{ useGrouping: false }}
             onChange={(value) => set('port', Number.isFinite(value) ? Math.round(value) : props.value.port)} error={portError()} />
         </div>
-        <div data-field="memory">
-          <Slider label={t('vesta-server.import.memory')} value={[Math.min(props.value.memory, range().max)]} min={range().min} max={range().max} step={range().step}
-            getValueLabel={(value) => formatMemory(value[0] ?? props.value.memory)}
-            description={props.available ? t('server-add.settings.memory-free', { value: formatMemory(props.available), name: props.machine }) : undefined}
-            onChange={(value) => set('memory', value[0] ?? props.value.memory)} />
-        </div>
+      </div>
+      <div data-field="memory">
+        <ServerMemoryCard machine={props.machine} value={props.value.memory} suggested={props.suggested} resources={props.resources}
+          startOpen={untrack(() => props.focus) === 'memory'} onChange={(value) => set('memory', value)} />
       </div>
     </section>
   );
@@ -681,7 +746,7 @@ const softwareText = (facts: Pick<ReviewFacts, 'software' | 'softwareKind' | 'so
     : `${facts.software} ${facts.softwareVersion}`;
 };
 
-function ReviewStep(props: { hostId: string; machine: string; task: AddTask; onEdit: (field: Field | null, back?: boolean) => void }) {
+function ReviewStep(props: { hostId: string; machine: string; task: AddTask; onEdit: (field: Field | null, back?: boolean) => void; onDiscard?: () => void }) {
   const review = () => (props.task.job?.state === 'planning' ? null : props.task.job?.review ?? null);
   return (
     <Show when={review()?.planId} keyed fallback={
@@ -692,11 +757,23 @@ function ReviewStep(props: { hostId: string; machine: string; task: AddTask; onE
         </Show>
         <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="warning" role="alert">{t(addProblem(error(), props.task.mode))}</p>}</Show>
         <footer data-vesta="add-footer">
-          <Button variant="ghost" onClick={() => props.onEdit(null)}>{t('common.back')}</Button>
+          <div data-vesta="add-footer-start">
+            <Button variant="ghost" onClick={() => props.onEdit(null)}>{t('common.back')}</Button>
+            <DiscardButton onDiscard={props.onDiscard} />
+          </div>
         </footer>
       </div>
     }>
-      {(_planId) => <ReviewBody hostId={props.hostId} machine={props.machine} task={props.task} onEdit={props.onEdit} />}
+      {(_planId) => <ReviewBody hostId={props.hostId} machine={props.machine} task={props.task} onEdit={props.onEdit} onDiscard={props.onDiscard} />}
+    </Show>
+  );
+}
+
+/** The quiet way to drop last time's choices; shown only when there is something to drop. */
+function DiscardButton(props: { onDiscard?: () => void }) {
+  return (
+    <Show when={props.onDiscard}>
+      {(onDiscard) => <Button variant="ghost" icon={<Icon name="icons/actions/refresh" />} onClick={() => onDiscard()()}>{t('server-add.start-over')}</Button>}
     </Show>
   );
 }
@@ -704,7 +781,7 @@ function ReviewStep(props: { hostId: string; machine: string; task: AddTask; onE
 const fixLabels: Record<Field, MessageId> = { name: 'server-add.fix.name', port: 'server-add.fix.port', memory: 'server-add.fix.memory' };
 const backLabels: Record<AddMode, MessageId> = { new: 'server-add.fix.version', restore: 'server-add.fix.backup', import: 'server-add.fix.folder' };
 
-function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onEdit: (field: Field | null, back?: boolean) => void }) {
+function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onEdit: (field: Field | null, back?: boolean) => void; onDiscard?: () => void }) {
   const facts = createMemo(() => reviewFacts(props.task.mode, props.task.job!.review!, props.task.name), { name: 'host-add:facts' });
   const problems = createMemo(() => reviewProblems(facts()), { name: 'host-add:problems' });
   const notices = createMemo(() => packNotices(facts()), { name: 'host-add:notices' });
@@ -733,7 +810,16 @@ function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onE
         <div><dt>{t('management.minecraft')}</dt><dd>{facts().minecraftVersion ?? t('vesta-server.import.unknown')}</dd></div>
         <div><dt>{t('vesta-server.import.software')}</dt><dd>{softwareText(facts()) ?? t('vesta-server.import.unknown')}</dd></div>
         <div><dt>{t('vesta-server.import.port')}</dt><dd>{facts().gamePort}</dd></div>
-        <div><dt>{t('vesta-server.import.memory')}</dt><dd>{formatMemory(facts().memoryMiB)}</dd></div>
+        <div>
+          <dt>{t('vesta-server.import.memory')}</dt>
+          <dd>
+            {formatMemory(facts().memoryMiB)}
+            {/* Allowed: stopped servers use no memory. Said here instead of as one more tick. */}
+            <Show when={facts().warnings.includes('memory_overcommitted')}>
+              <span data-vesta="add-fact-warning"><Icon name="icons/controls/warning" size={12} />{t('server-add.memory.over-free', { name: props.machine })}</span>
+            </Show>
+          </dd>
+        </div>
         <div><dt>{t('vesta-server.import.java')}</dt><dd>{facts().javaMajor ? t('vesta-server.import.java-auto-version', { version: String(facts().javaMajor) }) : t('vesta-server.import.java-auto')}</dd></div>
         <Show when={facts().freeBytes !== null}>
           <div><dt>{t('server-add.review.space')}</dt><dd>{t('server-add.review.free', { free: formatBytes(facts().freeBytes!) })}</dd></div>
@@ -795,7 +881,10 @@ function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onE
       <Show when={props.task.error}>{(error) => <p data-vesta="server-callout" data-tone="danger" role="alert">{t(addProblem(error(), props.task.mode))}</p>}</Show>
 
       <footer data-vesta="add-footer">
-        <Button variant="ghost" disabled={busy()} onClick={() => props.onEdit(null)}>{t('common.back')}</Button>
+        <div data-vesta="add-footer-start">
+          <Button variant="ghost" disabled={busy()} onClick={() => props.onEdit(null)}>{t('common.back')}</Button>
+          <Show when={!busy()}><DiscardButton onDiscard={props.onDiscard} /></Show>
+        </div>
         <Switch>
           <Match when={blocked() || stale()}>
             <Show when={props.task.request} fallback={

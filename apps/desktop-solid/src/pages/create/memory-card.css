@@ -1,0 +1,108 @@
+/* The install memory card: shared by the instance install page and the add server wizard. */
+@layer launcher {
+  :where([data-vesta="install-memory-card"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface);
+  }
+  :where([data-vesta="install-memory-card"]) > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  :where([data-vesta="install-memory-card"]) h2 {
+    margin: 0;
+    font-size: var(--vesta-text-xs);
+    font-weight: 700;
+    color: var(--vesta-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  :where([data-vesta="install-memory-card"]) header p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="memory-comparison"]) {
+    display: grid;
+    grid-template-columns: minmax(130px, 1.35fr) minmax(92px, 1fr);
+    gap: 8px;
+    padding-block-start: 8px;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="memory-comparison"]) > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+    padding: 8px 10px;
+  }
+  :where([data-vesta="memory-comparison"]) > div[data-selected] {
+    border: var(--vesta-border-width) solid var(--memory-selected-border, color-mix(in oklab, var(--vesta-color-accent) 28%, var(--vesta-color-border)));
+    border-radius: var(--vesta-radius-container);
+    background: var(--memory-selected-bg, color-mix(in oklab, var(--vesta-color-accent) 11%, var(--vesta-color-surface-sunken)));
+  }
+  :where([data-vesta="memory-comparison"]) span {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--vesta-color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  :where([data-vesta="memory-comparison"]) strong {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  :where([data-vesta="memory-comparison"]) button {
+    inline-size: fit-content;
+    margin-block-start: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.05;
+    cursor: default;
+  }
+  :where([data-vesta="memory-comparison"]) button:focus-visible {
+    outline: 2px solid var(--vesta-color-focus);
+    outline-offset: 3px;
+  }
+  :where([data-vesta="memory-controls"]) {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-block-start: 8px;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+  :where([data-vesta="memory-readout"]) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--vesta-color-text-muted);
+  }
+  :where([data-vesta="memory-readout"]) strong {
+    color: var(--vesta-color-text);
+    font-size: 13px;
+  }
+  :where([data-vesta="memory-presets"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  :where([data-vesta="memory-warning"]) {
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+    color: var(--vesta-color-warning-text);
+  }
+}
+

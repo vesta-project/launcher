@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   ADD_BLOCKERS, awaitingStart, CREATE_ERRORS, CREATE_WARNINGS, acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, experimentalChoice,
-  folderVerdict, formatMemory, keepKind, memoryRange, needsBuild, needsFreshPlan, notOffered, overallPercent, phaseAt, phaseProgress, phaseSteps, readDefaults,
+  folderVerdict, formatMemory, keepKind, localDefaults, memoryBudget, memoryOverFree, memoryRange, needsBuild, needsFreshPlan, notOffered, overallPercent, phaseAt, phaseProgress, phaseSteps, readDefaults,
   readNearby, readResources, readRestoreSources, recommendedBuild, reviewFacts, reviewProblems, settingsProblem, softwareChoice, softwareKinds, startVersion,
   supportedModes, unavailableKinds, versionOptions, waitingFor,
 } from '../src/features/servers/host-add-model';
@@ -50,6 +50,16 @@ describe('[add] ways to add a server', () => {
     // An older machine lists no capabilities but still imports.
     expect(addSupport({ capabilities: [], defaults: false, restoreSources: null })).toEqual({ new: false, import: true, restore: false });
     expect(addSupport({ capabilities: ['folders'], defaults: true, restoreSources: 2 })).toMatchObject({ import: false, restore: true });
+  });
+
+  test('New stays when the suggestions fail on a machine that creates servers', () => {
+    // The owner's machine refused defaults because memory looked used up: New must not vanish.
+    expect(supportedModes(addSupport({ capabilities: ['create-jobs', 'import-jobs'], defaults: false, restoreSources: 1 }))).toEqual(['new', 'restore', 'import']);
+    expect(addSupport({ capabilities: ['folders', 'import-jobs'], defaults: false, catalogue: true, restoreSources: 0 }).new).toBe(true);
+    expect(addSupport({ capabilities: ['folders', 'import-jobs'], defaults: false, catalogue: false, restoreSources: 0 }).new).toBe(false);
+    // Local starting values: a name, the machine's free port when it said one, 2 GB.
+    expect(localDefaults(null)).toEqual({ name: 'Minecraft Server', gamePort: 25565, memoryMiB: 2048 });
+    expect(localDefaults({ availableMiB: 0, budgetMiB: 12288, totalMiB: 16384, suggestedPort: 25567, portProblem: null, warnings: [] })).toMatchObject({ gamePort: 25567, memoryMiB: 2048 });
   });
 
   test('a missing route reads as not offered, a failure does not', () => {
@@ -108,13 +118,29 @@ describe('[add] catalogue', () => {
     expect(buildOptions(kind('fabric', [build('0.16.9')])).map((o) => o.label)).toEqual(['0.16.9']);
   });
 
+  test('memory goes from 512 MB to the budget, and above what is free is only a warning', () => {
+    // The budget wins, even when other servers leave nothing free.
+    expect(memoryRange({ budgetMiB: 12288, totalMiB: 16384 })).toEqual({ min: 512, max: 12288, step: 256 });
+    expect(memoryBudget({ budgetMiB: 0, totalMiB: 8192 })).toBe(8192 - 1024);
+    expect(memoryBudget({ budgetMiB: null, totalMiB: 32768 })).toBe(32768 - 4096);
+    expect(memoryBudget(null)).toBe(16384);
+    expect(memoryRange({ budgetMiB: 6000, totalMiB: null }).max).toBe(5888);
+    expect(memoryOverFree(4096, { availableMiB: 3072 })).toBe(true);
+    expect(memoryOverFree(2048, { availableMiB: 3072 })).toBe(false);
+    expect(memoryOverFree(99999, { availableMiB: null })).toBe(false);
+    // Said on the memory row of the review, not as one more tick.
+    const facts = reviewFacts('new', createReview({ warnings: ['memory_overcommitted'] }));
+    expect(acknowledgements(facts).map((row) => row.id)).toEqual(['eula']);
+    expect(acknowledgedWarnings(facts)).toEqual(['memory_overcommitted']);
+  });
+
   test('defaults and the resource preview are read defensively', () => {
     expect(readDefaults({ name: 'Minecraft Server 2', minecraftVersion: '1.21.4', gamePort: 25566, memoryMiB: 3072 })).toMatchObject({ name: 'Minecraft Server 2', gamePort: 25566, memoryMiB: 3072, software: { kind: 'vanilla' } });
     expect(readDefaults(null)).toMatchObject({ name: 'Minecraft Server', gamePort: 25565, memoryMiB: 4096 });
     expect(readResources({ memory: { availableMib: 12288, totalMib: 16384 }, port: { gamePort: 25565, blocker: 'game_port_in_use' } }))
-      .toEqual({ availableMiB: 12288, totalMiB: 16384, suggestedPort: 25565, portProblem: 'in-use' });
-    expect(memoryRange(12288, 4096)).toEqual({ min: 512, max: 12288, step: 256 });
-    expect(memoryRange(null, 4096).max).toBe(16384);
+      .toEqual({ availableMiB: 12288, budgetMiB: null, totalMiB: 16384, suggestedPort: 25565, portProblem: 'in-use', warnings: [] });
+    expect(readResources({ memory: { availableMib: 0, budgetMib: 12288 }, warnings: ['memory_overcommitted', 'game_port_in_use', 7] }))
+      .toMatchObject({ availableMiB: 0, budgetMiB: 12288, portProblem: 'in-use', warnings: ['memory_overcommitted', 'game_port_in_use'] });
     expect(formatMemory(4096)).toBe('4 GB');
     expect(formatMemory(5632)).toBe('5.5 GB');
     expect(settingsProblem({ name: ' ', gamePort: 25565, memoryMiB: 4096 })).toBe('name');
@@ -250,6 +276,22 @@ describe('[add] preview machine', () => {
       .rejects.toMatchObject({ reason: 'not_supported_yet' });
   });
 
+  test('a busy machine refuses its suggestions but still plans above free memory with a warning', async () => {
+    const { api, hostId } = await claimed('busy');
+    await expect(api.createDefaults(hostId)).rejects.toMatchObject({ reason: 'memory_budget_exceeded' });
+    const spare = readResources(await api.importResources(hostId, null, 4096));
+    expect(spare.availableMiB).toBeLessThan(4096);
+    expect(spare.budgetMiB).toBe(12288);
+    expect(spare.warnings).toContain('memory_overcommitted');
+    const body = { kind: 'new', name: 'Survival', minecraftVersion: '1.21.4', software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: 25570, memoryMiB: 4096, eulaAccepted: false };
+    const { jobId } = await api.createPlan(hostId, body, 'k1');
+    const review = await settle(api, hostId, jobId, (job) => job.state !== 'planning');
+    expect(review.state).toBe('review');
+    expect(review.review.warnings).toContain('memory_overcommitted');
+    const over = await api.createPlan(hostId, { ...body, memoryMiB: 13312 }, 'k2');
+    expect((await settle(api, hostId, over.jobId, (job) => job.state !== 'planning')).review.blockers).toEqual(['memory_budget_exceeded']);
+  });
+
   test('an interrupted job waits to resume, then finishes and can start', async () => {
     const { api, hostId } = await claimed('interrupt');
     const body = { kind: 'new', name: 'Survival', minecraftVersion: '1.21.4', software: { kind: 'paper', build: null, loaderVersion: null }, gamePort: 25566, memoryMiB: 4096, eulaAccepted: false };
@@ -340,6 +382,22 @@ describe('[add] store', () => {
     expect(wizard).toContain("type: 'modpack', destination: 'server'");
     expect(wizard).not.toMatch(/modpack: 'server-add/);
     expect(source('src/pages/servers/servers-page.tsx')).toContain('activeAdds()');
+  });
+
+  test('the wizard never drops New quietly, offers Start over, and uses the install memory card', () => {
+    const wizard = source('src/pages/servers/host-add.tsx');
+    // Failing suggestions fall back to local ones with a retry line.
+    expect(wizard).toContain('localDefaults(spare)');
+    expect(wizard).toContain("t('server-add.defaults.failed'");
+    expect(wizard).toContain('catalogue: versions() !== null');
+    // Start over only when something came back or changed, and never while a job runs.
+    expect(wizard).toContain('const canDiscard = () => (restored() || changed()) && !working()');
+    expect(wizard.slice(wizard.indexOf('const reset = '), wizard.indexOf('const stage = '))).not.toContain('cancelAdd');
+    // One memory control everywhere the wizard asks, the install page's card.
+    expect(wizard).toContain('<ServerMemoryCard');
+    expect(wizard).not.toContain('<Slider');
+    expect(source('src/pages/servers/server-memory-card.tsx')).toContain('data-vesta="install-memory-card"');
+    expect(source('src/pages/create/memory-card.tsx')).toContain("import \"./memory-card.css\"");
   });
 
   test('copy has no dashes, semicolons or arrows and never says agent', () => {
