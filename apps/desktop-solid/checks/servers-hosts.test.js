@@ -9,6 +9,7 @@ import {
   normalisePath, readFolderCheck, readNotServer, splitPath, warningMessage,
 } from '../src/features/servers/host-model';
 import { folderVerdict } from '../src/features/servers/host-add-model';
+import { fixtureClock } from './fixture-clock';
 import { createHostFixtures } from '../src/features/servers/host-fixtures';
 
 const root = join(import.meta.dir, '..');
@@ -423,7 +424,8 @@ describe('[hosts] account sign in', () => {
 
 describe('[hosts] fixture flow', () => {
   test('claim, check a running server, check again, copy and cancel', async () => {
-    const api = createHostFixtures();
+    const clock = fixtureClock();
+    const api = createHostFixtures({}, clock);
     const lan = await api.discover();
     const ready = lan.find((entry) => entry.state === 'unclaimed');
     // A complete code is checked on its own, before any account step.
@@ -439,18 +441,21 @@ describe('[hosts] fixture flow', () => {
     const { candidates } = readCandidates(await api.importCandidates(claimed.id));
     const plan = (port = null) => api.importPlan(claimed.id, { folderToken: candidates[0].folderToken, name: 'Survival01', gamePort: port, memoryMiB: null, launchChoice: null, minecraftVersion: null }, 'key');
     const first = await plan();
-    const blocked = await until(async () => { const job = await api.importJob(claimed.id, first.jobId); return job.state !== 'planning' && job; });
+    expect((await api.importJob(claimed.id, first.jobId)).state).toBe('planning');
+    clock.advance(1201);
+    const blocked = await api.importJob(claimed.id, first.jobId);
     expect(blocked.state).toBe('blocked');
     expect(blocked.review.blockers).toEqual(['source_running']);
     expect(blocked.review.confirmation).toBeNull();
 
     const second = await plan();
-    const review = await until(async () => { const job = await api.importJob(claimed.id, second.jobId); return job.state !== 'planning' && job; });
+    clock.advance(1201);
+    const review = await api.importJob(claimed.id, second.jobId);
     expect(review.state).toBe('review');
     const applied = await api.importApply(claimed.id, { planId: review.review.planId, confirmation: review.review.confirmation, acknowledgedWarnings: review.review.warnings, eulaAccepted: true, sourceStoppedConfirmed: true }, 'apply');
     expect((await api.importJob(claimed.id, applied.jobId)).state).toBe('applying');
     expect(await api.importCancel(claimed.id, applied.jobId, 'cancel')).toEqual({ state: 'cancelled' });
-  }, 15_000);
+  });
 });
 
 describe('[hosts] import store', () => {

@@ -8,7 +8,7 @@
 //   vesta.fixtures.signin = 'no-access' (the account has no role on attic-pc) | 'approval' (attic-pc wants a link code)
 //   vesta.fixtures.create = see fixtures-create.ts
 //   vesta.fixtures.remove = 'busy' (the server has a job running, so removing it waits) | 'old' (a machine that can't remove from here)
-import { createCreateFixtures } from './fixtures-create';
+import { createCreateFixtures, realFixtureClock, type FixtureClock } from './fixtures-create';
 import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, VestaHost } from './native-hosts';
 
 export type HostsApi = typeof hostsNative;
@@ -74,11 +74,10 @@ const joinFixture = (base: string, name: string) => (base === '/' ? `/${name}` :
 const SETUP_CODE = 'K7Q4MX29P3AB';
 const reject = (code: string, reason?: string) => Promise.reject({ code, ...(reason ? { reason } : {}) });
 const clean = (code: string) => code.toUpperCase().replace(/[^0-9A-Z]/g, '');
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface FixtureJob extends ImportJob { startedAt: number; folder: string; name: string; port: number | null; memory: number | null; checks: number }
 
-export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null; remove?: string | null } = {}): HostsApi {
+export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null; remove?: string | null } = {}, clock: FixtureClock = realFixtureClock): HostsApi {
   const removals = new Map<string, { serverId: string; removedAt: string; restoreUntil: string }>();
   // An older machine doesn't list removal, so the launcher never offers it there.
   const capabilities = () => (options.remove === 'old' ? CAPABILITIES : [...CAPABILITIES, 'server-remove']);
@@ -94,7 +93,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     found.state = 'claimed';
     hosts.push({ id: found.hostId, name: found.name ?? found.address, fingerprint: found.fingerprint, endpoints: [found.address], deviceId: 'device-self', keyReference: 'fixture', accountId: 'fixture-account', authRevision: '1' });
     servers.set(found.hostId, []);
-    devices.set(found.hostId, [{ deviceId: 'device-self', name: 'Windows PC', accountId: 'fixture-account', revoked: false, createdAt: new Date().toISOString() }]);
+    devices.set(found.hostId, [{ deviceId: 'device-self', name: 'Windows PC', accountId: 'fixture-account', revoked: false, createdAt: new Date(clock.now()).toISOString() }]);
   }
   const offline = options.hosts === 'offline';
   const signInPolicy = new Map<string, NewDeviceSignIn>();
@@ -104,7 +103,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
   // Locked folders open up once "Check again" is pressed a second time, as if the admin ran the command.
   const granted = new Set<string>();
   const permissionAsks = new Map<string, number>();
-  const creating = createCreateFixtures(options.create ?? null, { servers: (id) => servers.get(id), exists: (id) => hosts.some((entry) => entry.id === id) });
+  const creating = createCreateFixtures(options.create ?? null, { servers: (id) => servers.get(id), exists: (id) => hosts.some((entry) => entry.id === id) }, clock);
 
   const host = (id: string) => hosts.find((entry) => entry.id === id);
   const need = (id: string) => (host(id) ? Promise.resolve(host(id)!) : reject('not_found'));
@@ -116,7 +115,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     const blockers = notServer ? ['not_minecraft_server'] : job.checks === 0 ? ['source_running'] : job.port === 25565 ? ['game_port_in_use'] : [];
     return {
       planId: `plan-${job.jobId}-${job.checks}`, confirmation: blockers.length ? null : `confirm-${job.jobId}`,
-      expiresAt: new Date(Date.now() + 600_000).toISOString(), blockers, warnings: blockers.length ? [] : ['disable_amp_auto_restart'],
+      expiresAt: new Date(clock.now() + 600_000).toISOString(), blockers, warnings: blockers.length ? [] : ['disable_amp_auto_restart'],
       source: { displayPath: job.folder, snapshot: 'f'.repeat(64), files: 1200, bytes: 1_843_200_000 },
       detected: { kind: 'minecraft', instanceName: job.name, minecraftVersion: '1.21.1', loader: 'fabric' },
       runtime: { requiredMajor: 21, downloadRequired: true, verified: true },
@@ -128,7 +127,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
 
   /** Moves a fixture job along by wall clock time, as the machine would. */
   const advance = (hostId: string, job: FixtureJob): FixtureJob => {
-    const age = Date.now() - job.startedAt;
+    const age = clock.now() - job.startedAt;
     if (job.state === 'planning' && age > 1200) {
       job.review = review(job);
       job.state = job.review.blockers.length ? 'blocked' : 'review';
@@ -156,8 +155,8 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
   };
 
   return {
-    discover: async () => { await wait(700); return lan.map((entry) => ({ ...entry })); },
-    probe: async (address) => { await wait(400); return find(address) ?? reject('unreachable'); },
+    discover: async () => { await clock.wait(700); return lan.map((entry) => ({ ...entry })); },
+    probe: async (address) => { await clock.wait(400); return find(address) ?? reject('unreachable'); },
     list: async () => hosts.map((entry) => ({ ...entry, endpoints: [...entry.endpoints] })),
     remove: async (hostId) => {
       const index = hosts.findIndex((entry) => entry.id === hostId);
@@ -165,15 +164,15 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       hosts.splice(index, 1);
     },
     verifyCode: async (address, code, purpose) => {
-      await wait(700);
+      await clock.wait(700);
       const found = find(address);
       if (!found) return reject('unreachable');
       if (purpose === 'claim' && found.state === 'claimed') return reject('conflict', 'host_already_claimed');
       if (purpose === 'claim' ? clean(code) !== SETUP_CODE : clean(code).length !== 12) return reject('credentials_rejected', 'pairing_failed');
-      return { verificationId: 'verified-' + Date.now(), hostId: found.hostId, name: found.name };
+      return { verificationId: 'verified-' + clock.now(), hostId: found.hostId, name: found.name };
     },
     claim: async (address, code, accountUuid, deviceName) => {
-      await wait(900);
+      await clock.wait(900);
       const found = find(address);
       if (!found) return reject('unreachable');
       if (found.state === 'claimed') return reject('conflict', 'host_already_claimed');
@@ -181,7 +180,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       found.state = 'claimed';
       const added: VestaHost = { id: found.hostId, name: found.name ?? address, fingerprint: found.fingerprint, endpoints: [found.address], deviceId: 'device-self', keyReference: 'fixture', accountId: accountUuid, authRevision: '1' };
       hosts.push(added);
-      devices.set(added.id, [{ deviceId: 'device-self', name: deviceName, accountId: accountUuid, revoked: false, createdAt: new Date().toISOString() }]);
+      devices.set(added.id, [{ deviceId: 'device-self', name: deviceName, accountId: accountUuid, revoked: false, createdAt: new Date(clock.now()).toISOString() }]);
       servers.set(added.id, []);
       return { ...added };
     },
@@ -190,7 +189,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: capabilities(), role: 'primary_owner', revision: '1' };
     },
     signInWithAccount: async (address, hostId, accountUuid, deviceName) => {
-      await wait(900);
+      await clock.wait(900);
       const found = find(address);
       if (!found) return reject('unreachable');
       if (hostId && found.hostId !== hostId) return reject('fingerprint_mismatch', 'host_identity_changed');
@@ -200,17 +199,17 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const added: VestaHost = { id: found.hostId, name: found.name ?? address, fingerprint: found.fingerprint, endpoints: [found.address], deviceId: 'device-self', keyReference: 'fixture', accountId: accountUuid, authRevision: '2' };
       hosts.splice(0, hosts.length, ...hosts.filter((entry) => entry.id !== added.id), added);
       devices.set(added.id, [
-        { deviceId: 'device-owner', name: 'ATTIC-PC', accountId: 'owner-account', revoked: false, createdAt: new Date(Date.now() - 86_400_000).toISOString() },
-        { deviceId: 'device-self', name: deviceName, accountId: accountUuid, revoked: false, createdAt: new Date().toISOString() },
+        { deviceId: 'device-owner', name: 'ATTIC-PC', accountId: 'owner-account', revoked: false, createdAt: new Date(clock.now() - 86_400_000).toISOString() },
+        { deviceId: 'device-self', name: deviceName, accountId: accountUuid, revoked: false, createdAt: new Date(clock.now()).toISOString() },
       ]);
       servers.set(added.id, [{ serverId: 'srv-attic', name: 'Attic Survival', gamePort: 25565, state: 'running', role: 'admin' }]);
       return { ...added };
     },
     linkStart: async (address, code) => {
-      await wait(700);
+      await clock.wait(700);
       if (!find(address)) return reject('unreachable');
       if (clean(code).length !== 12) return reject('credentials_rejected', 'pairing_failed');
-      const linkId = `link-${Date.now()}`;
+      const linkId = `link-${clock.now()}`;
       links.set(linkId, { state: 'requested', polls: 0 });
       return { linkId, state: 'requested', requestHash: 'hash' };
     },
@@ -222,7 +221,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     servers: async (hostId) => {
       await need(hostId);
-      if (offline) { await wait(600); return reject('unreachable'); }
+      if (offline) { await clock.wait(600); return reject('unreachable'); }
       return { servers: [...(servers.get(hostId) ?? [])], nextCursor: null };
     },
     info: async (hostId): Promise<HostInfo> => {
@@ -231,7 +230,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     update: async (hostId, body) => {
       const found = await need(hostId);
-      await wait(300);
+      await clock.wait(300);
       if (body.name !== undefined) {
         const name = body.name.replace(/\s+/g, ' ').trim();
         if (!name || new TextEncoder().encode(name).length > 63) return reject('invalid_input', 'invalid_request');
@@ -247,7 +246,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       return { owners: [{ accountId: found.accountId, role: 'primary_owner', name: 'PlayerOne' }, { accountId: 'owner-rae', role: 'owner', name: null }] };
     },
     devices: async (hostId) => { await need(hostId); return { devices: [...(devices.get(hostId) ?? [])], nextCursor: null }; },
-    linkCode: async (hostId) => { await need(hostId); const linkId = `issued-${Date.now()}`; links.set(linkId, { state: 'waiting', polls: 0 }); return { linkId, code: 'R2D2C3P0BB8X', expiresAt: new Date(Date.now() + 600_000).toISOString() }; },
+    linkCode: async (hostId) => { await need(hostId); const linkId = `issued-${clock.now()}`; links.set(linkId, { state: 'waiting', polls: 0 }); return { linkId, code: 'R2D2C3P0BB8X', expiresAt: new Date(clock.now() + 600_000).toISOString() }; },
     linkStatus: async (hostId, id) => {
       await need(hostId);
       const link = links.get(id);
@@ -261,7 +260,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const link = links.get(id);
       if (!link) return reject('not_found');
       link.state = 'approved';
-      devices.get(hostId)?.push({ deviceId: `device-${id}`, name: 'Laptop', accountId: host(hostId)!.accountId, revoked: false, createdAt: new Date().toISOString() });
+      devices.get(hostId)?.push({ deviceId: `device-${id}`, name: 'Laptop', accountId: host(hostId)!.accountId, revoked: false, createdAt: new Date(clock.now()).toISOString() });
     },
     deviceRevoke: async (hostId, id) => {
       await need(hostId);
@@ -280,11 +279,11 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const displayPath = relativePath ? joinFixture(base, relativePath) : base;
       const found = walk(displayPath, granted);
       if (!('dir' in found)) return reject(found.stop === 'locked' ? 'forbidden' : 'not_found');
-      return { folderToken: `token:${displayPath}`, displayPath, expiresAt: new Date(Date.now() + 600_000).toISOString() };
+      return { folderToken: `token:${displayPath}`, displayPath, expiresAt: new Date(clock.now() + 600_000).toISOString() };
     },
     folderList: async (hostId, folderToken) => {
       await need(hostId);
-      await wait(250);
+      await clock.wait(250);
       const displayPath = tokenPath(folderToken);
       const found = walk(displayPath, granted);
       if (!('dir' in found)) return reject('not_found');
@@ -300,7 +299,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     folderCheck: async (hostId, path): Promise<FolderCheck> => {
       await need(hostId);
-      await wait(350);
+      await clock.wait(350);
       let found = walk(path, granted);
       if ('at' in found) {
         const asks = (permissionAsks.get(found.at) ?? 0) + 1;
@@ -313,7 +312,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     importCandidates: async (hostId) => {
       await need(hostId);
-      await wait(500);
+      await clock.wait(500);
       // An older machine also warns about default locations it can't read; the launcher ignores those.
       const warnings = [{ code: 'source_unreadable', displayPath: '/home', remediation: { command: commandFor('/home'), alternative: null } }];
       if (options.found === 'none') return { candidates: [], warnings };
@@ -328,7 +327,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     importInspect: async (hostId, folderToken) => {
       await need(hostId);
-      await wait(300);
+      await clock.wait(300);
       const found = walk(tokenPath(folderToken), granted);
       if (!('dir' in found)) return reject('not_found');
       const missing = missingParts(found.dir);
@@ -337,15 +336,15 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     importResources: (hostId, gamePort, memoryMiB) => creating.resources(hostId, gamePort, memoryMiB),
     importPlan: async (hostId, body) => {
       await need(hostId);
-      const jobId = `job-${Date.now()}`;
-      jobs.set(jobId, { jobId, state: 'planning', phase: 'inspect', error: null, progress: { filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0 }, review: null, serverId: null, startedAt: Date.now(), folder: body.folderToken.replace(/^token:/, ''), name: body.name, port: body.gamePort, memory: body.memoryMiB, checks: checks++ });
+      const jobId = `job-${clock.now()}-${checks + 1}`;
+      jobs.set(jobId, { jobId, state: 'planning', phase: 'inspect', error: null, progress: { filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0 }, review: null, serverId: null, startedAt: clock.now(), folder: body.folderToken.replace(/^token:/, ''), name: body.name, port: body.gamePort, memory: body.memoryMiB, checks: checks++ });
       return { jobId, state: 'planning' };
     },
     importApply: async (hostId, body) => {
       await need(hostId);
       const job = [...jobs.values()].find((entry) => entry.review?.planId === body.planId);
       if (!job || job.review?.confirmation !== body.confirmation) return reject('conflict', 'source_changed');
-      Object.assign(job, { state: 'applying', phase: 'copy', startedAt: Date.now(), serverId: job.review.destination.serverId });
+      Object.assign(job, { state: 'applying', phase: 'copy', startedAt: clock.now(), serverId: job.review.destination.serverId });
       return { jobId: job.jobId, serverId: job.serverId! };
     },
     importJob: (hostId, id) => jobFor(hostId, id),
@@ -358,13 +357,13 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     importResume: async (hostId, id) => {
       const job = jobs.get(id);
       if (!job || !host(hostId)) return reject('not_found', 'import_job_not_found');
-      Object.assign(job, { state: 'applying', startedAt: Date.now() });
+      Object.assign(job, { state: 'applying', startedAt: clock.now() });
       return advance(hostId, job);
     },
     importStart: async (hostId, id) => {
       const job = jobs.get(id);
       if (!job || !host(hostId)) return reject('not_found', 'import_job_not_found');
-      Object.assign(job, { state: 'starting', phase: 'start', startedAt: Date.now() });
+      Object.assign(job, { state: 'starting', phase: 'start', startedAt: clock.now() });
       return advance(hostId, job);
     },
     importReadiness: (hostId, id) => jobFor(hostId, id),
@@ -380,7 +379,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     createStart: creating.createStart,
     removeServer: async (hostId, serverId, confirmName, idempotencyKey) => {
       await need(hostId);
-      await wait(700);
+      await clock.wait(700);
       const done = removals.get(idempotencyKey);
       if (done) return done;
       if (options.remove === 'old') return reject('not_found');
@@ -391,7 +390,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       if (confirmName !== name) return reject('invalid_input', 'confirm_name_mismatch');
       if (options.remove === 'busy') return reject('server_busy', 'server_busy');
       servers.set(hostId, list.filter((server) => server.serverId !== serverId));
-      const removedAt = new Date();
+      const removedAt = new Date(clock.now());
       const receipt = { serverId, removedAt: removedAt.toISOString(), restoreUntil: new Date(removedAt.getTime() + 7 * 86_400_000).toISOString() };
       removals.set(idempotencyKey, receipt);
       return receipt;

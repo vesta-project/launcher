@@ -14,7 +14,15 @@ import type {
 } from './native-hosts';
 
 const reject = (code: string, reason?: string) => Promise.reject({ code, ...(reason ? { reason } : {}) });
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export interface FixtureClock {
+  now: () => number;
+  wait: (ms: number) => Promise<void>;
+}
+
+export const realFixtureClock: FixtureClock = {
+  now: Date.now,
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
 const MIB = 1024 * 1024;
 
 const VERSIONS: MinecraftCatalogue = {
@@ -87,7 +95,7 @@ export interface CreateFixtureHost {
   exists: (hostId: string) => boolean;
 }
 
-export function createCreateFixtures(scenario: string | null, host: CreateFixtureHost) {
+export function createCreateFixtures(scenario: string | null, host: CreateFixtureHost, clock: FixtureClock) {
   const jobs = new Map<string, CreateFixtureJob>();
   let sequence = 0;
   /** Another program on the machine already listens here. */
@@ -142,7 +150,7 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     if (!blockers.length && memory > available(hostId)) warnings.push('memory_overcommitted');
     const serverId = `srv-${job.jobId}`;
     return {
-      planId: `plan-${job.jobId}`, confirmation: blockers.length ? null : `confirm-${job.jobId}`, expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      planId: `plan-${job.jobId}`, confirmation: blockers.length ? null : `confirm-${job.jobId}`, expiresAt: new Date(clock.now() + 600_000).toISOString(),
       blockers, warnings,
       summary: {
         kind: plan.kind, name: plan.name, minecraftVersion: version,
@@ -158,7 +166,7 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
 
   /** Moves a job along by wall clock time, as the machine would. */
   const advance = (hostId: string, job: CreateFixtureJob): CreateJob => {
-    const age = Date.now() - job.startedAt;
+    const age = clock.now() - job.startedAt;
     if (job.state === 'planning' && age > 1200) {
       job.review = review(hostId, job);
       job.state = job.review.blockers.length ? 'blocked' : 'review';
@@ -215,16 +223,16 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
   ];
 
   return {
-    catalogueMinecraft: async (hostId: string) => { await need(hostId); await wait(250); return structuredClone(VERSIONS); },
+    catalogueMinecraft: async (hostId: string) => { await need(hostId); await clock.wait(250); return structuredClone(VERSIONS); },
     catalogueSoftware: async (hostId: string, minecraftVersion: string) => {
       await need(hostId);
-      await wait(700);
+      await clock.wait(700);
       if (!VERSIONS.versions.some((version) => version.id === minecraftVersion)) return reject('invalid_input', 'invalid_request');
       return catalogue(minecraftVersion);
     },
     createDefaults: async (hostId: string) => {
       await need(hostId);
-      await wait(300);
+      await clock.wait(300);
       if (scenario === 'old') return reject('not_found', 'not_found');
       if (scenario === 'busy') return reject('conflict', 'memory_budget_exceeded');
       return { name: freeName(hostId), minecraftVersion: VERSIONS.latestStable!, software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: freePort(hostId), memoryMiB: suggestMemory(hostId), java: 'automatic' as const };
@@ -237,7 +245,7 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     /** The resource preview the import routes already have, shared with creating. */
     resources: async (hostId: string, gamePort: number | null, memoryMiB: number | null) => {
       await need(hostId);
-      await wait(150);
+      await clock.wait(150);
       const spare = available(hostId);
       const port = gamePort ?? freePort(hostId);
       const memory = memoryMiB ?? Math.min(4096, spare);
@@ -249,26 +257,26 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     },
     createPlan: async (hostId: string, body: CreatePlan) => {
       await need(hostId);
-      await wait(200);
+      await clock.wait(200);
       if (body.kind === 'modpack' || (body.kind === 'restore' && body.source.kind === 'upload')) return reject('unsupported', 'not_supported_yet');
       if (!body.name.trim()) return reject('invalid_input', 'invalid_request');
       const jobId = `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`;
       jobs.set(jobId, {
         jobId, state: 'planning', phase: 'resolving', error: null, progress: { filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0 }, review: null, serverId: null,
-        startedAt: Date.now(), plan: structuredClone(body), doneMs: 0, interrupted: false,
+        startedAt: clock.now(), plan: structuredClone(body), doneMs: 0, interrupted: false,
       });
       return { jobId, state: 'planning' as const };
     },
     createApply: async (hostId: string, body: CreateApply) => {
       await need(hostId);
-      await wait(250);
+      await clock.wait(250);
       if (!body.eulaAccepted) return reject('invalid_input', 'eula_required');
       const job = [...jobs.values()].find((entry) => entry.review?.planId === body.planId);
       if (!job || job.state !== 'review') return reject('conflict', 'plan_expired');
       if (job.review?.confirmation !== body.confirmation) return reject('conflict', 'confirmation_invalid');
       if (!job.review.warnings.every((code) => body.acknowledgedWarnings.includes(code))) return reject('invalid_input', 'warnings_unacknowledged');
       const serverId = job.review.summary.destination.serverId;
-      Object.assign(job, { state: 'applying', phase: 'resolving', startedAt: Date.now(), doneMs: 0, serverId, review: { ...job.review, confirmation: null } });
+      Object.assign(job, { state: 'applying', phase: 'resolving', startedAt: clock.now(), doneMs: 0, serverId, review: { ...job.review, confirmation: null } });
       return { jobId: job.jobId, serverId };
     },
     createJob: async (hostId: string, id: string) => {
@@ -284,8 +292,8 @@ export function createCreateFixtures(scenario: string | null, host: CreateFixtur
     },
     createResume: (hostId: string, id: string) => {
       const job = findJob(hostId, id);
-      return transition(hostId, id, ['interrupted'], { state: 'applying', error: null, startedAt: Date.now(), doneMs: job?.doneMs ?? 0 });
+      return transition(hostId, id, ['interrupted'], { state: 'applying', error: null, startedAt: clock.now(), doneMs: job?.doneMs ?? 0 });
     },
-    createStart: (hostId: string, id: string) => transition(hostId, id, ['ready'], { state: 'starting', phase: 'starting', error: null, startedAt: Date.now() }),
+    createStart: (hostId: string, id: string) => transition(hostId, id, ['ready'], { state: 'starting', phase: 'starting', error: null, startedAt: clock.now() }),
   };
 }

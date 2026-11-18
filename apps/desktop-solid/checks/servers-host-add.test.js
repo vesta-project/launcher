@@ -7,6 +7,7 @@ import {
   readNearby, readResources, readRestoreSources, recommendedBuild, reviewFacts, reviewProblems, settingsProblem, softwareChoice, softwareKinds, startVersion,
   supportedModes, unavailableKinds, versionOptions, waitingFor,
 } from '../src/features/servers/host-add-model';
+import { fixtureClock } from './fixture-clock';
 import { createHostFixtures } from '../src/features/servers/host-fixtures';
 
 const root = join(import.meta.dir, '..');
@@ -254,21 +255,23 @@ describe('[add] progress', () => {
 
 describe('[add] preview machine', () => {
   const claimed = async (create = null) => {
-    const api = createHostFixtures({ hosts: 'one', create });
+    const clock = fixtureClock();
+    const api = createHostFixtures({ hosts: 'one', create }, clock);
     const [host] = await api.list();
-    return { api, hostId: host.id };
+    return { api, hostId: host.id, clock };
   };
-  const settle = (api, hostId, jobId, done) => until(async () => { const job = await api.createJob(hostId, jobId); return done(job) && job; });
 
   test('defaults suggest a free port beside the one in use, and 25565 is a port conflict', async () => {
-    const { api, hostId } = await claimed();
+    const { api, hostId, clock } = await claimed();
     const defaults = await api.createDefaults(hostId);
     expect(defaults).toMatchObject({ name: 'Minecraft Server', gamePort: 25566, minecraftVersion: '1.21.4' });
     const catalogue = await api.catalogueSoftware(hostId, '1.21.4');
     expect(unavailableKinds(catalogue).map((group) => group.names).flat()).toContain('Forge');
     const body = { kind: 'new', name: 'Survival', minecraftVersion: '1.21.4', software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: 25565, memoryMiB: 4096, eulaAccepted: false };
     const { jobId } = await api.createPlan(hostId, body, 'k1');
-    const blocked = await settle(api, hostId, jobId, (job) => job.state !== 'planning');
+    expect((await api.createJob(hostId, jobId)).state).toBe('planning');
+    clock.advance(1201);
+    const blocked = await api.createJob(hostId, jobId);
     expect(blocked.state).toBe('blocked');
     expect(blocked.review.blockers).toEqual(['game_port_in_use']);
     expect(blocked.review.confirmation).toBeNull();
@@ -277,7 +280,7 @@ describe('[add] preview machine', () => {
   });
 
   test('a busy machine refuses its suggestions but still plans above free memory with a warning', async () => {
-    const { api, hostId } = await claimed('busy');
+    const { api, hostId, clock } = await claimed('busy');
     await expect(api.createDefaults(hostId)).rejects.toMatchObject({ reason: 'memory_budget_exceeded' });
     const spare = readResources(await api.importResources(hostId, null, 4096));
     expect(spare.availableMiB).toBeLessThan(4096);
@@ -285,27 +288,37 @@ describe('[add] preview machine', () => {
     expect(spare.warnings).toContain('memory_overcommitted');
     const body = { kind: 'new', name: 'Survival', minecraftVersion: '1.21.4', software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: 25570, memoryMiB: 4096, eulaAccepted: false };
     const { jobId } = await api.createPlan(hostId, body, 'k1');
-    const review = await settle(api, hostId, jobId, (job) => job.state !== 'planning');
+    clock.advance(1201);
+    const review = await api.createJob(hostId, jobId);
     expect(review.state).toBe('review');
     expect(review.review.warnings).toContain('memory_overcommitted');
     const over = await api.createPlan(hostId, { ...body, memoryMiB: 13312 }, 'k2');
-    expect((await settle(api, hostId, over.jobId, (job) => job.state !== 'planning')).review.blockers).toEqual(['memory_budget_exceeded']);
+    clock.advance(1201);
+    expect((await api.createJob(hostId, over.jobId)).review.blockers).toEqual(['memory_budget_exceeded']);
   });
 
   test('an interrupted job waits to resume, then finishes and can start', async () => {
-    const { api, hostId } = await claimed('interrupt');
+    const { api, hostId, clock } = await claimed('interrupt');
     const body = { kind: 'new', name: 'Survival', minecraftVersion: '1.21.4', software: { kind: 'paper', build: null, loaderVersion: null }, gamePort: 25566, memoryMiB: 4096, eulaAccepted: false };
     const { jobId } = await api.createPlan(hostId, body, 'k');
-    const review = await settle(api, hostId, jobId, (job) => job.state === 'review');
+    clock.advance(1201);
+    const review = await api.createJob(hostId, jobId);
+    expect(review.state).toBe('review');
     await expect(api.createApply(hostId, { planId: review.review.planId, confirmation: review.review.confirmation, acknowledgedWarnings: [], eulaAccepted: false }, 'a')).rejects.toMatchObject({ reason: 'eula_required' });
     await api.createApply(hostId, { planId: review.review.planId, confirmation: review.review.confirmation, acknowledgedWarnings: [], eulaAccepted: true }, 'a');
-    const paused = await settle(api, hostId, jobId, (job) => job.state === 'interrupted');
+    clock.advance(9001);
+    const paused = await api.createJob(hostId, jobId);
+    expect(paused.state).toBe('interrupted');
     expect(paused.error).toBe('interrupted');
+    clock.advance(60_000);
+    expect((await api.createJob(hostId, jobId)).state).toBe('interrupted');
     await api.createResume(hostId, jobId, 'r');
-    const ready = await settle(api, hostId, jobId, (job) => job.state === 'ready');
+    clock.advance(9000);
+    const ready = await api.createJob(hostId, jobId);
+    expect(ready.state).toBe('ready');
     expect((await api.servers(hostId)).servers.map((server) => server.name)).toContain('Survival');
     expect((await api.createStart(hostId, ready.jobId, 's')).state).toBe('starting');
-  }, 30_000);
+  });
 });
 
 describe('[add] store', () => {
