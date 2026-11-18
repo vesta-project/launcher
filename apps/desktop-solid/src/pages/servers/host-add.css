@@ -1,7 +1,6 @@
 /* Add a server wizard: mode choice, the New step, shared settings, review and progress.
    Tokens only. Builds on the add panel, callouts and lists in servers.css and vesta-server.css. */
 @layer launcher {
-  :where([data-vesta="add-loading"]) { display: flex; flex-direction: column; gap: var(--vesta-space-3); }
 
   /* Mode choice */
   :where([data-vesta="add-modes"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }

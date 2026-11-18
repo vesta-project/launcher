@@ -179,7 +179,7 @@ function ServerGroup(props: { host: VestaHost | null; other: boolean; servers: S
 
 function showAddJob(task: AddTask | undefined, registered: boolean) {
   if (!task || task.job?.state === 'cancelled') return false;
-  return !registered || !task.job || ['applying', 'interrupted', 'starting'].includes(task.job.state) || task.job.state === 'ready' && !task.job.error && !task.error;
+  return !registered || !task.job || ['applying', 'interrupted', 'starting'].includes(task.job.state) || task.job.state === 'ready' && task.mode !== 'import' && !task.job.error && !task.error;
 }
 
 function ServerDestination(props: { id: string }) {

@@ -127,7 +127,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
   };
 
   /** Moves a fixture job along by wall clock time, as the machine would. */
-  const advance = (job: FixtureJob): FixtureJob => {
+  const advance = (hostId: string, job: FixtureJob): FixtureJob => {
     const age = Date.now() - job.startedAt;
     if (job.state === 'planning' && age > 1200) {
       job.review = review(job);
@@ -137,17 +137,22 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const done = Math.min(total, Math.round((age / 6000) * total));
       job.progress = { filesDone: Math.round((done / total) * 1200), filesTotal: 1200, bytesDone: done, bytesTotal: total };
       job.phase = done < total ? 'copy' : 'register';
-      if (done >= total) job.state = 'ready';
+      if (done >= total) {
+        job.state = 'ready';
+        servers.get(hostId)?.push({ serverId: job.serverId!, name: job.name, gamePort: job.review!.resources.gamePort, state: 'stopped', role: 'owner' });
+      }
     } else if (job.state === 'starting' && age > 2500) {
       job.state = 'online';
       job.phase = 'start';
+      const server = servers.get(hostId)?.find((entry) => entry.serverId === job.serverId);
+      if (server) server.state = 'running';
     }
     return { ...job, review: job.review };
   };
 
   const jobFor = (hostId: string, id: string) => {
     const job = jobs.get(id);
-    return job && host(hostId) ? Promise.resolve(advance(job)) : reject('not_found', 'import_job_not_found');
+    return job && host(hostId) ? Promise.resolve(advance(hostId, job)) : reject('not_found', 'import_job_not_found');
   };
 
   return {
@@ -354,14 +359,13 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       const job = jobs.get(id);
       if (!job || !host(hostId)) return reject('not_found', 'import_job_not_found');
       Object.assign(job, { state: 'applying', startedAt: Date.now() });
-      return advance(job);
+      return advance(hostId, job);
     },
     importStart: async (hostId, id) => {
       const job = jobs.get(id);
       if (!job || !host(hostId)) return reject('not_found', 'import_job_not_found');
       Object.assign(job, { state: 'starting', phase: 'start', startedAt: Date.now() });
-      servers.get(hostId)?.push({ serverId: job.serverId!, name: job.name, gamePort: job.review!.resources.gamePort, state: 'running', role: 'owner' });
-      return advance(job);
+      return advance(hostId, job);
     },
     importReadiness: (hostId, id) => jobFor(hostId, id),
     catalogueMinecraft: creating.catalogueMinecraft,

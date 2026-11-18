@@ -112,6 +112,7 @@ server-add-phase-start = Starting it up
 
 server-add-progress-line = Being made on { $name }
 server-add-progress-copy-line = Being copied to its new home on { $name }
+server-add-progress-copied-line = Copied to { $name }
 server-add-progress-online-line = Running on { $name }
 server-add-progress-bytes = { $done } of { $total }
 server-add-progress-files = { $count } of { $total } files

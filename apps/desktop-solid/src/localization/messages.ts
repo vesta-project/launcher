@@ -3884,6 +3884,7 @@ export const messageIds = [
   "server-add.progress.cancelled-help",
   "server-add.progress.cancelled-title",
   "server-add.progress.change",
+  "server-add.progress.copied-line",
   "server-add.progress.copy-line",
   "server-add.progress.failed-help",
   "server-add.progress.files",

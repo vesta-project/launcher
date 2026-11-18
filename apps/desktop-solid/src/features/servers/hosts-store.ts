@@ -42,11 +42,19 @@ export { hosts, hostsLoaded, discovered, discovering };
 export const vestaHost = (id: string | undefined) => (id ? hosts().find((host) => host.id === id) : undefined);
 export const hostInfo = (id: string) => hostInfos()[id];
 export const hostProblem = (id: string) => hostProblems()[id];
-/** Whether the machine answered its last servers read. */
+/** Whether the machine answered its latest host info or servers read. */
 export const hostReach = (id: string): 'checking' | 'online' | 'offline' => {
   const answered = hostAnswers()[id];
   return answered === undefined ? 'checking' : answered ? 'online' : 'offline';
 };
+let readSequence = 0;
+const lastReachRead = new Map<string, number>();
+function reportReach(hostId: string, read: number, error?: ServerCommandError) {
+  if (read < (lastReachRead.get(hostId) ?? 0)) return;
+  lastReachRead.set(hostId, read);
+  patch(setHostProblems, hostId, error);
+  patch(setHostAnswers, hostId, !error || !NO_ANSWER.includes(error.code));
+}
 const NO_ANSWER = ['unreachable', 'timeout', 'tls_failed', 'fingerprint_mismatch'];
 const [hostServerLists, setHostServerLists] = createSignal<Record<string, HostServer[]>>({}, { name: 'vestaHostServerLists' });
 const NO_SERVERS: HostServer[] = [];
@@ -63,25 +71,31 @@ const patch = <T>(set: (next: (current: Record<string, T>) => Record<string, T>)
 
 /** Ask the machine for its servers; native code turns each into a normal server card. */
 export async function loadHostServers(hostId: string) {
+  const read = ++readSequence;
   try {
     const reply = await hostCommand((client) => client.servers(hostId));
-    patch(setHostProblems, hostId, undefined);
-    patch(setHostAnswers, hostId, true);
+    reportReach(hostId, read);
     patch(setHostServerLists, hostId, reply.servers);
     return reply.servers;
   } catch (reason) {
     const error = toServerError(reason);
-    patch(setHostProblems, hostId, error);
-    patch(setHostAnswers, hostId, !NO_ANSWER.includes(error.code));
+    reportReach(hostId, read, error);
     throw reason;
   }
 }
 
 /** Fresh host info: name, role and revision. Also renews the machine's sign in. */
 export async function loadHostInfo(hostId: string) {
-  const info = await hostCommand((client) => client.info(hostId));
-  patch(setHostInfos, hostId, info);
-  return info;
+  const read = ++readSequence;
+  try {
+    const info = await hostCommand((client) => client.info(hostId));
+    patch(setHostInfos, hostId, info);
+    reportReach(hostId, read);
+    return info;
+  } catch (reason) {
+    reportReach(hostId, read, toServerError(reason));
+    throw reason;
+  }
 }
 
 let listSequence = 0;
@@ -172,7 +186,7 @@ export const activeAdds = () => Object.values(adds()).filter(isActiveAdd);
 export function isActiveAdd(task: AddTask | undefined) {
   return !!task?.serverId && !['not_found', 'forbidden'].includes(task.error?.code ?? '')
     && PAST_REVIEW.includes(task.job?.state ?? 'applying')
-    && !(task.job?.state === 'ready' && (task.job.error || task.error));
+    && !(task.job?.state === 'ready' && (task.mode === 'import' || task.job.error || task.error));
 }
 export const serverAddJobs = () => Object.values(adds()).filter((task) => task.serverId && task.error?.code !== 'not_found');
 export const serverAddJob = (id: string) => serverAddJobs().find((task) => addConnectionId(task) === id);
@@ -183,7 +197,7 @@ function publishAddActivity(task: AddTask) {
   const id = addConnectionId(task);
   if (!id || !task.jobId) return;
   const job = task.job;
-  const state = job?.state === 'online' || job?.state === 'ready' && (job.error || task.error) ? 'done'
+  const state = job?.state === 'online' || job?.state === 'ready' && (task.mode === 'import' || job.error || task.error) ? 'done'
     : job?.state === 'failed' || job?.state === 'interrupted' || task.error?.code === 'not_found' || task.error?.code === 'forbidden' ? 'failed'
     : job?.state === 'cancelled' ? 'cancelled' : 'running';
   receiveActivity({
@@ -262,7 +276,7 @@ function poll(hostId: string, delay = POLL_MS) {
       const job = await hostCommand((client) => readJob(client, task));
       update(hostId, (current) => (current.jobId === task.jobId ? { ...current, job, serverId: job.serverId ?? current.serverId, error: null } : current));
       if (addState[hostId]?.jobId !== task.jobId) return;
-      if (awaitingStart(job)) {
+      if (task.mode !== 'import' && awaitingStart(job)) {
         // Newer machines start the server right after installing it. One that is still
         // waiting at the next read stops there (older machines): start it, once.
         if (readyReads.get(task.jobId!) && !autoStarted.has(task.jobId!) && !addState[hostId]?.sending) {

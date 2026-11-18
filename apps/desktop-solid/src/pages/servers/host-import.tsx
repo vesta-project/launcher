@@ -2,7 +2,7 @@
 // you or by browsing. The browser's path bar doubles as an address bar for a known path.
 // A folder is only handed on once Vesta Server can read it and it is a server.
 import { Badge, Button, IconButton, Menu, MenuItem } from '@vesta/ui';
-import { For, Match, Show, Switch, createMemo, createSignal, createUniqueId, onSettled, untrack } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, createSignal, createUniqueId, onCleanup, onSettled, untrack } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
@@ -62,19 +62,30 @@ export function ImportFolderStep(props: { hostId: string; machine: string; onPic
   const [here, setHere] = createSignal<string | null>(null, { name: 'host-import:here' });
   const suggestions = () => (candidates() ?? []).filter((candidate) => !samePath(candidate.displayPath, here()));
 
-  const load = async () => {
+  let loadRevision = 0;
+  onCleanup(() => { loadRevision++; });
+  const load = () => {
+    const revision = ++loadRevision;
     setError(null);
-    const [found, shared] = await Promise.allSettled([
-      hostCommand((client) => client.importCandidates(props.hostId)),
-      hostCommand((client) => client.folderRoots(props.hostId)),
-    ]);
-    if (found.status === 'fulfilled') {
-      const read = readCandidates(found.value);
+    void hostCommand((client) => client.importCandidates(props.hostId)).then((value) => {
+      if (revision !== loadRevision) return;
+      const read = readCandidates(value);
       setCandidates(read.candidates);
       setTruncated(read.truncated);
-    } else { setCandidates([]); setError(toServerError(found.reason)); }
-    if (shared.status === 'fulfilled') setRoots(shared.value.roots);
-    else { setRoots([]); if (found.status === 'fulfilled') setError(toServerError(shared.reason)); }
+    }, (reason: unknown) => {
+      if (revision !== loadRevision) return;
+      setCandidates([]);
+      if (!roots()) setError(toServerError(reason));
+    });
+    void hostCommand((client) => client.folderRoots(props.hostId)).then((value) => {
+      if (revision !== loadRevision) return;
+      setRoots(value.roots);
+      setError(null);
+    }, (reason: unknown) => {
+      if (revision !== loadRevision) return;
+      setRoots([]);
+      setError(toServerError(reason));
+    });
   };
   onSettled(() => void load());
 

@@ -383,6 +383,75 @@ describe('[add] store', () => {
     }
   }, 60_000);
 
+  test('refreshing host info clears an offline status and ignores an older failure', async () => {
+    const store = await import('../src/features/servers/hosts-store');
+    await store.refreshHosts();
+    const hostId = store.hosts()[0].id;
+    const client = await store.hostCommand(async (api) => api);
+    const servers = client.servers;
+    try {
+      client.servers = async () => { throw { code: 'timeout' }; };
+      await expect(store.loadHostServers(hostId)).rejects.toMatchObject({ code: 'timeout' });
+      expect(store.hostReach(hostId)).toBe('offline');
+      expect(store.hostProblem(hostId)?.code).toBe('timeout');
+
+      let failOlder;
+      const sent = Promise.withResolvers();
+      client.servers = () => {
+        const reply = Promise.withResolvers();
+        failOlder = reply.reject;
+        sent.resolve();
+        return reply.promise;
+      };
+      const older = store.loadHostServers(hostId).catch(() => undefined);
+      await sent.promise;
+      await store.loadHostInfo(hostId);
+      failOlder({ code: 'timeout' });
+      await older;
+      expect(store.hostReach(hostId)).toBe('online');
+      expect(store.hostProblem(hostId)).toBeUndefined();
+    } finally {
+      client.servers = servers;
+    }
+  });
+
+  test('a completed import stays stopped and its installation task finishes', async () => {
+    const store = await import('../src/features/servers/hosts-store');
+    const activity = await import('../src/features/activity/activity-store');
+    const client = await store.hostCommand(async (api) => api);
+    const fixture = createHostFixtures({ hosts: 'one' });
+    const [host] = await fixture.list();
+    const hostId = host.id;
+    const original = { importPlan: client.importPlan, importJob: client.importJob, importApply: client.importApply, importStart: client.importStart, servers: client.servers };
+    let starts = 0;
+    Object.assign(client, {
+      importPlan: fixture.importPlan, importJob: fixture.importJob, importApply: fixture.importApply, servers: fixture.servers,
+      importStart: async (...args) => { starts += 1; return fixture.importStart(...args); },
+    });
+    try {
+      const displayPath = '/home/eatham/servers/Survival';
+      const { folderToken: token } = await fixture.folderCheck(hostId, displayPath);
+      expect(token).toBeTruthy();
+      const folder = { displayPath, token };
+      const body = { folderToken: token, name: 'Imported', gamePort: 25582, memoryMiB: 2048, launchChoice: null, minecraftVersion: null };
+      await store.planAdd(hostId, { mode: 'import', folder, body }, body.name);
+      await until(() => store.addTask(hostId)?.job?.state === 'blocked');
+      await store.replanAdd(hostId);
+      await until(() => store.addTask(hostId)?.job?.review?.confirmation);
+      const id = await store.applyAdd(hostId, store.addTask(hostId).job.review.warnings);
+      expect(id).toBeTruthy();
+      await until(() => store.addTask(hostId)?.job?.state === 'ready');
+      const task = store.addTask(hostId);
+      expect(store.isActiveAdd(task)).toBe(false);
+      expect(activity.activities().find((entry) => entry.id === `server-add:${hostId}:${task.jobId}`)?.state).toBe('done');
+      await until(() => store.hostServers(hostId).some((server) => server.serverId === task.serverId && server.state === 'stopped'));
+      expect(starts).toBe(0);
+    } finally {
+      Object.assign(client, original);
+      store.clearAdd(hostId);
+    }
+  }, 30_000);
+
   test('the wizard offers modes in order, reattaches to jobs and never uses details triangles', () => {
     const wizard = source('src/pages/servers/host-add.tsx');
     expect(wizard).not.toMatch(/<details|<summary/);
