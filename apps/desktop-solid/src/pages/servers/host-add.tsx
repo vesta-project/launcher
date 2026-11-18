@@ -2,7 +2,7 @@
 // machine's own suggestions, so the quickest path is Continue, tick the EULA, Create. Restore
 // and Import share the same settings, the same review and the same progress screen. The job
 // itself lives in hosts-store, so leaving this page never stops the machine.
-import { Button, Checkbox, Combobox, NumberField, Progress, SegmentedControl, Skeleton, Switch as Toggle, TextField } from '@vesta/ui';
+import { Button, Checkbox, Combobox, NumberField, SegmentedControl, Skeleton, Switch as Toggle, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { OptionCards } from '../../components/option-cards';
 import { SoftwareMark } from '../../components/software-mark';
+import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
 import type { MessageId } from '../../localization/messages';
@@ -19,14 +20,14 @@ import { formatBytes } from '../../features/settings/storage-model';
 import { toServerError } from '../../features/servers/errors';
 import {
   acknowledgedWarnings, acknowledgements, addProblem, addSupport, buildOptions, chosenBuild, clampMemory, experimentalChoice, findVersion, folderVerdict, formatMemory,
-  keepKind, localDefaults, memoryRange, needsBuild, needsFreshPlan, notOffered, packNotices, phaseAt, phaseProgress, phaseSteps, primaryLabel, readDefaults, readResources,
+  keepKind, localDefaults, memoryRange, needsBuild, needsFreshPlan, notOffered, packNotices, phaseAt, phaseSteps, primaryLabel, readDefaults, readResources,
   readRestoreSources, recommendedBuild, reviewFacts, reviewProblems, settingsProblem, softwareChoice, softwareKinds, softwareLabel, startVersion,
   supportedModes, unavailableKinds, validPort, versionOptions, waitingFor,
   type AddMode, type FolderVerdict, type Problem, type ResourceCheck, type ReviewFacts,
 } from '../../features/servers/host-add-model';
 import { importBusy } from '../../features/servers/host-model';
 import {
-  addTask, applyAdd, cancelAdd, clearAdd, hostCommand, hostInfo, loadHostServers, planAdd, recheckAdd, replanAdd, resumeAdd, startAdd, vestaHost,
+  addTask, applyAdd, cancelAdd, clearAdd, hostCommand, hostInfo, isActiveAdd, loadHostServers, planAdd, recheckAdd, replanAdd, resumeAdd, startAdd, vestaHost,
   type AddRequest, type AddTask,
 } from '../../features/servers/hosts-store';
 import { hostConnectionId, type CreateDefaults, type ImportJob, type MinecraftCatalogue, type RestoreSource, type SoftwareCatalogue } from '../../features/servers/native-hosts';
@@ -47,7 +48,6 @@ const EULA_URL = 'https://aka.ms/MinecraftEULA';
 
 const modeIcons: Record<AddMode, string> = { new: 'icons/actions/add', restore: 'icons/content/history', import: 'icons/content/folder' };
 const modeLabels: Record<AddMode, MessageId> = { new: 'server-add.mode.new', restore: 'server-add.mode.restore', import: 'server-add.mode.import' };
-const modeHints: Record<AddMode, MessageId> = { new: 'server-add.mode.new-hint', restore: 'server-add.mode.restore-hint', import: 'server-add.mode.import-hint' };
 const chooseLabels: Record<AddMode, MessageId> = { new: 'server-add.step.server', restore: 'server-add.step.backup', import: 'vesta-server.import.step-folder' };
 const makeLabels: Record<AddMode, MessageId> = { new: 'server-add.step.create', restore: 'server-add.step.restore', import: 'vesta-server.import.step-copy' };
 
@@ -86,9 +86,13 @@ interface ImportChoice {
 function AddWizard(props: { hostId: string; machine: string }) {
   const task = () => addTask(props.hostId);
   const initial = untrack(task);
-  const planned = initial?.request ?? null;
+  const stillWorking = () => isActiveAdd(task());
+  const planned = initial?.serverId ? null : initial?.request ?? null;
   // Reopened while the machine works (or after a restart): read the job again.
-  onSettled(() => { if (untrack(task)?.jobId) recheckAdd(props.hostId); });
+  onSettled(() => {
+    const current = untrack(task);
+    if (current?.jobId && !current.job) recheckAdd(props.hostId);
+  });
 
   // What the machine offers, asked once each time the wizard opens.
   const [defaults, setDefaults] = createSignal<CreateDefaults | 'none' | null>(null, { name: 'host-add:defaults' });
@@ -103,7 +107,7 @@ function AddWizard(props: { hostId: string; machine: string }) {
   let disposed = false;
   onCleanup(() => { disposed = true; });
 
-  const [mode, setMode] = createSignal<AddMode>(initial?.mode ?? 'new', { name: 'host-add:mode' });
+  const [mode, setMode] = createSignal<AddMode>(initial?.serverId ? 'new' : initial?.mode ?? 'new', { name: 'host-add:mode' });
   const [editing, setEditing] = createSignal(false, { name: 'host-add:editing' });
   const [focus, setFocus] = createSignal<Field | null>(null, { name: 'host-add:focus' });
 
@@ -344,11 +348,13 @@ function AddWizard(props: { hostId: string; machine: string }) {
   // ---------------------------------------------------------------- start over from a fresh New
 
   /** Something from last time was brought back, or the person changed something here. */
-  const [restored, setRestored] = createSignal(initial !== undefined, { name: 'host-add:restored' });
-  const [changed, setChanged] = createSignal(false, { name: 'host-add:changed' });
-  const touch = () => setChanged(true);
+  const [restoredMode, setRestoredMode] = createSignal(initial?.serverId ? undefined : initial?.mode, { name: 'host-add:restored' });
+  const restored = () => restoredMode() === shownMode();
+  const [editedModes, setEditedModes] = createSignal<Partial<Record<AddMode, boolean>>>({}, { name: 'host-add:changed' });
+  const changed = () => !!editedModes()[shownMode()];
+  const touch = () => { const current = shownMode(); setEditedModes((edits) => ({ ...edits, [current]: true })); };
   /** A job the machine is already working on is resumed, never thrown away from here. */
-  const working = () => { const state = task()?.job?.state; return !!state && !['planning', 'review', 'blocked'].includes(state); };
+  const working = stillWorking;
   const canDiscard = () => (restored() || changed()) && !working() && !task()?.sending;
   /** Forget the draft, the folder, every edit and any plan not yet applied, then New with fresh suggestions. */
   const reset = () => {
@@ -366,8 +372,8 @@ function AddWizard(props: { hostId: string; machine: string }) {
     setImportSettings(blank);
     const known = untrack(defaults);
     applyDefaults(known && known !== 'none' ? { status: 'fulfilled', value: known } : { status: 'rejected', reason: untrack(defaultsError) ?? { code: 'not_found' } }, untrack(resources));
-    setRestored(false);
-    setChanged(false);
+    setRestoredMode(undefined);
+    setEditedModes({});
     setEditing(false);
   };
   /** The quiet footer action: only for a draft that came back or changed, never a job already running. */
@@ -377,7 +383,7 @@ function AddWizard(props: { hostId: string; machine: string }) {
 
   const stage = (): Stage => {
     const current = task();
-    if (!current || editing()) return 'choose';
+    if (!current || current.serverId || !current.job && !current.request || editing()) return 'choose';
     if (!current.jobId || !current.job) return 'sending';
     const state = current.job.state;
     return state === 'planning' || state === 'review' || state === 'blocked' ? 'review' : 'progress';
@@ -404,7 +410,7 @@ function AddWizard(props: { hostId: string; machine: string }) {
             <div data-vesta="server-add-panel">
               <header data-vesta="vesta-step-intro">
                 <h1>{t('vesta-server.import.title')}</h1>
-                <p>{t('server-add.intro', { name: props.machine })}</p>
+                <span data-vesta="add-machine"><Icon name="icons/content/server" size={14} />{props.machine}</span>
               </header>
 
               <Show when={loaded()} fallback={<div data-vesta="add-loading"><Skeleton height={40} radius={10} /><Skeleton height={160} radius={12} /></div>}>
@@ -420,8 +426,8 @@ function AddWizard(props: { hostId: string; machine: string }) {
                   <div data-vesta="add-modes">
                     <SegmentedControl aria-label={t('server-add.mode.label')} value={shownMode()} fill
                       options={modes().map((value) => ({ value, label: t(modeLabels[value]), icon: <Icon name={modeIcons[value]} size={16} /> }))}
-                      onChange={(value) => { touch(); setMode(value as AddMode); }} />
-                    <p>{t(modeHints[shownMode()], { name: props.machine })}</p>
+                      onChange={(value) => setMode(value as AddMode)} />
+
                   </div>
                 </Show>
 
@@ -466,7 +472,10 @@ function AddWizard(props: { hostId: string; machine: string }) {
                 {/* Until a folder is picked, the folder browser's Use this folder is the one way on. */}
                 <Show when={!picking()}>
                   <Show when={loaded() && continueBlocker()}>{(why) => <span data-vesta="add-why" id="add-continue-why">{t(why(), { name: kind() ? softwareLabel(kind()!.kind, kind()!.label)! : '' })}</span>}</Show>
-                  <Button tone="accent" disabled={!loaded() || !!continueBlocker() || !!task()?.sending} aria-describedby={continueBlocker() ? 'add-continue-why' : undefined} onClick={goToReview}>
+                  <Show when={stillWorking() && task()?.serverId}>
+                    {(serverId) => <Button variant="ghost" onClick={() => transitionTo(`/servers/${hostConnectionId({ hostId: props.hostId, serverId: serverId() })}`)}>{t('server-add.progress.view')}</Button>}
+                  </Show>
+                  <Button tone="accent" disabled={!loaded() || !!continueBlocker() || !!task()?.sending || stillWorking()} aria-describedby={continueBlocker() ? 'add-continue-why' : undefined} onClick={goToReview}>
                     {t('server-add.continue')}
                   </Button>
                 </Show>
@@ -896,7 +905,11 @@ function ReviewBody(props: { hostId: string; machine: string; task: AddTask; onE
           <Match when={true}>
             <Show when={waiting()}>{(why) => <span data-vesta="add-why" id="add-apply-why">{t(why())}</span>}</Show>
             <Button tone="accent" disabled={!!waiting() || busy()} aria-describedby={waiting() ? 'add-apply-why' : undefined}
-              onClick={() => void applyAdd(props.hostId, acknowledgedWarnings(facts()))}>
+              onClick={() => void applyAdd(props.hostId, acknowledgedWarnings(facts())).then((id) => {
+                if (id && route().section === 'host' && route().detail === props.hostId && ['add', 'import'].includes(route().item ?? '')) {
+                  transitionTo(`/servers/${id}`);
+                }
+              })}>
               {props.task.sending === 'apply' ? t('server-add.review.sending') : t(primaryLabel(props.task.mode))}
             </Button>
           </Match>
@@ -932,7 +945,7 @@ function ProblemRow(props: { problem: Problem; mode: AddMode; values: Record<str
 
 // ------------------------------------------------------------------ one progress screen for every way
 
-function ProgressStep(props: { hostId: string; machine: string; task: AddTask; onStartOver: () => void }) {
+export function ProgressStep(props: { hostId: string; machine: string; task: AddTask; onStartOver: () => void }) {
   const job = () => props.task.job!;
   const state = () => job().state;
   const facts = () => (job().review ? reviewFacts(props.task.mode, job().review!, props.task.name) : null);
@@ -949,7 +962,8 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
     setOpening(true);
     try { await loadHostServers(props.hostId); } catch { /* The list catches up on its own. */ }
     finally { setOpening(false); }
-    clearAdd(props.hostId);
+    const { refreshServers } = await import('../../features/servers/store');
+    await refreshServers();
     then(serverId ? hostConnectionId({ hostId: props.hostId, serverId }) : null);
   };
   const open = () => leave((id) => transitionTo(id ? `/servers/${id}` : '/servers'));
@@ -981,9 +995,6 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
                 </span>
                 <div>
                   <span>{t(step.label)}</span>
-                  <Show when={index() === at() && state() === 'applying'}>
-                    <PhaseBar progress={job().progress} />
-                  </Show>
                 </div>
               </li>
             )}
@@ -1003,15 +1014,6 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
         </Match>
         <Match when={state() === 'ready' || state() === 'starting'}>
           <p data-vesta="add-note">{t('vesta-server.import.starting')}</p>
-        </Match>
-        <Match when={state() === 'online'}>
-          <div data-vesta="add-done">
-            <span data-vesta="server-add-done-icon"><Icon name="icons/controls/success" size={28} /></span>
-            <div>
-              <strong>{t('vesta-server.import.online-title')}</strong>
-              <p>{t('vesta-server.import.online-help', { name: name() })}</p>
-            </div>
-          </div>
         </Match>
         <Match when={state() === 'cancelled'}>
           <div data-vesta="add-done" data-tone="neutral">
@@ -1058,27 +1060,14 @@ function ProgressStep(props: { hostId: string; machine: string; task: AddTask; o
               <Button tone="accent" onClick={() => props.onStartOver()}>{t('server-add.start-over')}</Button>
             }>
               <Button variant="outline" onClick={() => props.onStartOver()}>{t('server-add.progress.change')}</Button>
-              <Button tone="accent" icon={<Icon name="icons/actions/refresh" />} onClick={() => void replanAdd(props.hostId)}>{t('server-add.progress.try-again')}</Button>
+              <Button tone="accent" icon={<Icon name="icons/actions/refresh" />} onClick={() => {
+                void replanAdd(props.hostId);
+                transitionTo(`/servers/host/${props.hostId}/add`);
+              }}>{t('server-add.progress.try-again')}</Button>
             </Show>
           </Match>
         </Switch>
       </footer>
-    </div>
-  );
-}
-
-/** Progress within one step: a bar, and how many bytes or files when the machine says. */
-function PhaseBar(props: { progress: ImportJob['progress'] }) {
-  const read = () => phaseProgress(props.progress);
-  const detail = () => {
-    const progress = props.progress;
-    if (read().bytes) return t('server-add.progress.bytes', { done: formatBytes(progress.bytesDone), total: formatBytes(progress.bytesTotal) });
-    if (read().files) return t('server-add.progress.files', { count: progress.filesDone, total: progress.filesTotal });
-    return undefined;
-  };
-  return (
-    <div data-vesta="add-phase-bar">
-      <Progress size="sm" value={read().percent ?? undefined} label={detail() ?? ''} valueLabel={read().percent === null ? undefined : `${Math.floor(read().percent!)}%`} />
     </div>
   );
 }

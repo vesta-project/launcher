@@ -352,6 +352,7 @@ describe('[add] store', () => {
 
   test('an older machine that stops at ready is started once, and the job follows on to online', async () => {
     const store = await import('../src/features/servers/hosts-store');
+    const activity = await import('../src/features/activity/activity-store');
     await store.refreshHosts();
     const hostId = store.hosts()[0].id;
     const client = await store.hostCommand(async (api) => api);
@@ -362,9 +363,20 @@ describe('[add] store', () => {
       const body = { kind: 'new', name: 'Autostart', minecraftVersion: '1.21.4', software: { kind: 'vanilla', build: null, loaderVersion: null }, gamePort: 25580, memoryMiB: 2048, eulaAccepted: false };
       await store.planAdd(hostId, { mode: 'new', body }, 'Autostart');
       await until(() => store.addTask(hostId)?.job?.review?.confirmation, 20_000);
-      await store.applyAdd(hostId, store.addTask(hostId).job.review.warnings);
+      const destination = await store.applyAdd(hostId, store.addTask(hostId).job.review.warnings);
+      expect(destination).toBeTruthy();
+      expect(store.serverAddJob(destination)?.job?.state).toBe('applying');
+      const activityId = `server-add:${hostId}:${store.addTask(hostId).jobId}`;
+      activity.flushActivityProgress();
+      expect(activity.activities().find((entry) => entry.id === activityId)).toMatchObject({
+        state: 'running', target: { route: `/servers/${destination}` },
+      });
       await until(() => store.addTask(hostId)?.job?.state === 'online', 40_000);
       expect(starts).toBe(1);
+      expect(store.activeAdds().some((task) => task.hostId === hostId)).toBe(false);
+      expect(activity.activities().find((entry) => entry.id === activityId)?.state).toBe('done');
+      const { serverSnapshot } = await import('../src/features/servers/store');
+      await until(() => serverSnapshot(destination)?.connection.name === 'Autostart');
     } finally {
       client.createStart = start;
       store.clearAdd(hostId);
@@ -381,7 +393,7 @@ describe('[add] store', () => {
     expect(wizard).toContain("t('server-add.progress.view')");
     expect(wizard).toContain("type: 'modpack', destination: 'server'");
     expect(wizard).not.toMatch(/modpack: 'server-add/);
-    expect(source('src/pages/servers/servers-page.tsx')).toContain('activeAdds()');
+    expect(source('src/pages/servers/servers-page.tsx')).toContain('<InstallingServerCard');
   });
 
   test('the wizard never drops New quietly, offers Start over, and uses the install memory card', () => {

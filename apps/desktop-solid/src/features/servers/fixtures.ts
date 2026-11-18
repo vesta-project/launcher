@@ -7,6 +7,7 @@ import type {
   BanEntry, ConnectionId, ConsoleLine, Discovery, ModerationAction, ModerationResult, OperatorEntry, Page, PlayersView,
   ServerCommandError, ServerConnection, ServerEvent, ServerOperation, ServerSnapshot, ServerStatus, ServerTopic, WhitelistEntry,
 } from './native';
+import { hostConnectionId, type HostServer, type VestaHost } from './native-hosts';
 import type { ServersApi, Unsubscribe } from './service';
 import { createFileFixtures } from './fixtures-files';
 import { createManageFixtures, type ManageHost } from './fixtures-manage';
@@ -177,13 +178,38 @@ export function machineServer(): FixtureServer {
   };
 }
 
-export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number; backupsConfigured?: boolean; machineServer?: boolean } = {}): ServersApi {
+export function createFixtureServers(options: { seeded?: boolean; latencyMs?: number; backupsConfigured?: boolean; machineServer?: boolean; hostInventory?: () => { host: VestaHost; servers: HostServer[] }[] } = {}): ServersApi {
   const seeded = options.seeded ?? true ? seed() : [];
   if (options.machineServer) seeded.push(machineServer());
   const servers = new Map<ConnectionId, FixtureServer>(seeded.map((server) => [server.snapshot.connection.id, server]));
   if (options.backupsConfigured !== undefined) {
     const target = servers.get('fixture-survival');
     if (target) target.snapshot.backupsConfigured = options.backupsConfigured;
+  }
+  const projected = new Set<ConnectionId>();
+  function syncHostInventory() {
+    if (!options.hostInventory) return;
+    const seen = new Set<ConnectionId>();
+    for (const { host, servers: entries } of options.hostInventory()) {
+      for (const entry of entries) {
+        const id = hostConnectionId({ hostId: host.id, serverId: entry.serverId });
+        seen.add(id);
+        if (servers.has(id)) continue;
+        const fixture = machineServer();
+        const snapshot = fixture.snapshot;
+        snapshot.connection = { ...snapshot.connection, id, name: entry.name, serverId: entry.serverId, endpoint: host.endpoints[0] ?? '' };
+        if (snapshot.info) snapshot.info = { ...snapshot.info, name: entry.name, serverId: entry.serverId, minecraftVersion: entry.minecraftVersion ?? '' };
+        if (snapshot.status) snapshot.status = { ...snapshot.status, state: entry.state === 'running' ? 'running' : 'stopped', playerCount: 0 };
+        snapshot.joinAddress = null;
+        fixture.online = [];
+        servers.set(id, fixture);
+        projected.add(id);
+      }
+    }
+    for (const id of projected) if (!seen.has(id)) {
+      projected.delete(id);
+      servers.delete(id);
+    }
   }
   const discoveries = new Map<string, Discovery & { address: string }>();
   const offlineReceipts = new Map<string, { payload: string; sha256: string }>();
@@ -309,7 +335,7 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
     ...content,
     ...pack,
     ...createPackSyncFixtures({ server, publishedManifest: pack.fixturePublishedManifest }),
-    async list() { await wait(60); return [...servers.values()].map((entry) => clone(entry.snapshot)); },
+    async list() { await wait(60); syncHostInventory(); return [...servers.values()].map((entry) => clone(entry.snapshot)); },
 
     async discover(address) {
       await wait(500);

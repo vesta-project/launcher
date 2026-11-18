@@ -1,22 +1,21 @@
 import { Button, IconButton } from '@vesta/ui';
-import { For, Match, Show, Switch, createMemo } from 'solid-js';
+import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { Board } from '../../components/board';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { route } from '../../app/router';
 import { transitionTo } from '../../app/transition';
 import { t } from '../../localization';
-import { usingFixtures } from '../../features/servers/service';
-import { refreshServers, serverSnapshots, serversListError, serversLoaded, useServersClock } from '../../features/servers/store';
+import { refreshServers, serverSnapshot, serverSnapshots, serversListError, serversLoaded, useServersClock } from '../../features/servers/store';
 import { AddServer } from './add-server';
 import { HostGuide } from './onboarding';
 import { addRoute } from '../../features/servers/onboarding-model';
 import { groupServers } from '../../features/servers/host-model';
-import { overallPercent } from '../../features/servers/host-add-model';
-import { activeAdds, hostReach, hosts } from '../../features/servers/hosts-store';
+import { serverArt } from '../../features/servers/art';
+import { addConnectionId, clearAdd, hostReach, hosts, serverAddJob, serverAddJobs, vestaHost, type AddTask } from '../../features/servers/hosts-store';
 import type { VestaHost } from '../../features/servers/native-hosts';
 import type { ServerSnapshot } from '../../features/servers/native';
-import { HostAdd } from './host-add';
+import { HostAdd, ProgressStep } from './host-add';
 import { HostSettings } from './host-settings';
 import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
@@ -37,7 +36,7 @@ export function ServersPage() {
     <Show when={section() !== 'setup' && section() !== 'add'} fallback={<AddPage />}>
       <Show when={section() === 'host' ? route().detail : undefined} keyed fallback={
         <Show when={section() !== 'host' ? section() : undefined} keyed fallback={<ServerList />}>
-          {(id) => <ServerWorkspace id={id} />}
+          {(id) => <ServerDestination id={id} />}
         </Show>
       }>
         {(hostId) => (
@@ -77,21 +76,20 @@ function ServerList() {
   const now = useServersClock();
   const groups = createMemo(() => groupServers(serverSnapshots(), hosts()), { name: 'servers:groups' });
   const single = () => (hosts().length === 1 ? hosts()[0] : undefined);
-  const empty = () => serverSnapshots().length === 0;
+  const empty = () => serverSnapshots().length === 0 && serverAddJobs().length === 0;
   return (
     <Board>
-      <Show when={usingFixtures}>
-        <p data-vesta="servers-preview-note">{t('servers.preview-note')}</p>
+      <Show when={hosts().length > 0 && !(empty() && single())}>
+        <header data-vesta="vesta-group-header" data-list-header>
+          <Show when={single()}>
+            {(host) => <Button size="sm" variant="ghost" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>
+              {host().name}<Reach hostId={host().id} />
+            </Button>}
+          </Show>
+          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.list.set-up-another')}</Button>
+        </header>
       </Show>
       <ServerErrorNote error={serversListError()} onRetry={() => void refreshServers()} />
-      <For each={activeAdds()}>
-        {(task) => (
-          <p data-vesta="server-callout" data-tone="neutral" class="vesta-import-banner">
-            <span>{t('vesta-server.list.importing', { name: task.name, percent: overallPercent(task.mode, task.job) })}</span>
-            <Button size="sm" onClick={() => transitionTo(`/servers/host/${task.hostId}/add`)}>{t('vesta-server.host.import-open')}</Button>
-          </p>
-        )}
-      </For>
       <Switch>
         <Match when={empty() && hosts().length === 0}>
           <Show when={serversLoaded()}>
@@ -106,40 +104,13 @@ function ServerList() {
         <Match when={true}>
           <For each={groups()} keyed={(group) => group.key}>
             {(group) => (
-              <section data-vesta="vesta-server-group" aria-label={group().host?.name ?? (group().key === 'other' ? t('vesta-server.list.other') : t('servers.title'))}>
-                <Show when={group().host}>
-                  {(host) => (
-                    <header data-vesta="vesta-group-header">
-                      <h2><Icon name="icons/content/server" size={16} />{host().name}</h2>
-                      <Reach hostId={host().id} />
-                      <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: host().name })} icon={<Icon name="icons/content/gear" />}
-                        onClick={() => transitionTo(`/servers/host/${host().id}`)} />
-                    </header>
-                  )}
-                </Show>
-                <Show when={group().key === 'other'}>
-                  <header data-vesta="vesta-group-header"><h2>{t('vesta-server.list.other')}</h2></header>
-                </Show>
-                <ServerGrid servers={group().servers} now={now()} label={group().host?.name ?? t('servers.title')}
-                  addTo={group().host?.id ?? (group().key === 'all' ? single()?.id ?? null : undefined)} />
-              </section>
+              <ServerGroup host={group().host} other={group().key === 'other'} servers={group().servers} now={now()}
+                hostId={group().host?.id ?? single()?.id}
+                addTo={group().host?.id ?? (group().key === 'all' ? single()?.id ?? null : undefined)} />
             )}
           </For>
         </Match>
       </Switch>
-      <Show when={hosts().length > 0}>
-        <footer data-vesta="vesta-list-footer">
-          <Show when={!empty() ? single() : undefined}>
-            {(host) => (
-              <Button size="sm" variant="ghost" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}
-                aria-label={t('vesta-server.list.settings', { name: host().name })}>
-                {host().name}<Reach hostId={host().id} />
-              </Button>
-            )}
-          </Show>
-          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.list.set-up-another')}</Button>
-        </footer>
-      </Show>
     </Board>
   );
 }
@@ -156,10 +127,10 @@ function MachineEmpty(props: { host: VestaHost }) {
 }
 
 /** Cards, then one add tile: add a server to this machine, or set up a new machine. */
-function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: string; addTo: string | null | undefined }) {
+function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: string; hostId?: string; addTo: string | null | undefined }) {
   return (
     <ul data-vesta="library-grid" aria-label={props.label}>
-      <For each={props.servers} keyed={(snapshot) => snapshot.connection.id}>
+      <For each={props.servers.filter((snapshot) => !showAddJob(serverAddJob(snapshot.connection.id), true))} keyed={(snapshot) => snapshot.connection.id}>
         {(snapshot) => (
           <li>
             <div data-vesta="library-card-slot">
@@ -167,6 +138,10 @@ function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: stri
             </div>
           </li>
         )}
+      </For>
+      <For each={serverAddJobs().filter((task) => task.hostId === props.hostId && showAddJob(task, props.servers.some((s) => s.connection.id === addConnectionId(task))))}
+        keyed={(task) => task.jobId}>
+        {(task) => <li><div data-vesta="library-card-slot"><InstallingServerCard task={task()} /></div></li>}
       </For>
       <Show when={props.addTo !== undefined}>
         <li>
@@ -179,5 +154,63 @@ function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: stri
         </li>
       </Show>
     </ul>
+  );
+}
+
+function ServerGroup(props: { host: VestaHost | null; other: boolean; servers: ServerSnapshot[]; now: number; hostId?: string; addTo: string | null | undefined }) {
+  const [expanded, setExpanded] = createSignal(true);
+  const label = () => props.host?.name ?? t(props.other ? 'vesta-server.list.other' : 'servers.title');
+  return (
+    <section data-vesta="vesta-server-group" aria-label={label()}>
+      <Show when={props.host} fallback={<Show when={props.other}><header data-vesta="vesta-group-header"><h2>{label()}</h2></header></Show>}>
+        {(host) => <header data-vesta="vesta-group-header">
+          <h2><Button size="sm" variant="ghost" aria-expanded={expanded() ? 'true' : 'false'}
+            icon={<Icon name={expanded() ? 'icons/controls/chevron-down' : 'icons/controls/chevron-right'} size={14} />}
+            onClick={() => setExpanded(!expanded())}>{label()}</Button></h2>
+          <Reach hostId={host().id} />
+          <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: label() })} icon={<Icon name="icons/content/gear" />}
+            onClick={() => transitionTo(`/servers/host/${host().id}`)} />
+        </header>}
+      </Show>
+      <Show when={expanded()}><ServerGrid servers={props.servers} now={props.now} label={label()} hostId={props.hostId} addTo={props.addTo} /></Show>
+    </section>
+  );
+}
+
+function showAddJob(task: AddTask | undefined, registered: boolean) {
+  if (!task || task.job?.state === 'cancelled') return false;
+  return !registered || !task.job || ['applying', 'interrupted', 'starting'].includes(task.job.state) || task.job.state === 'ready' && !task.job.error && !task.error;
+}
+
+function ServerDestination(props: { id: string }) {
+  const job = () => serverAddJob(props.id);
+  return (
+    <Show when={showAddJob(job(), !!serverSnapshot(props.id)) && job()} fallback={<ServerWorkspace id={props.id} />}>
+      {(task) => <Board class="servers-board"><div data-vesta="server-add" data-wide>
+        <Show when={task().job} fallback={<p role="status">{t('instance.op.installing')}</p>}>
+          <ProgressStep hostId={task().hostId} machine={vestaHost(task().hostId)?.name ?? task().hostId} task={task()}
+            onStartOver={() => { clearAdd(task().hostId); transitionTo(`/servers/host/${task().hostId}/add`); }} />
+        </Show>
+      </div></Board>}
+    </Show>
+  );
+}
+
+function InstallingServerCard(props: { task: AddTask }) {
+  const id = () => addConnectionId(props.task);
+  const state = () => props.task.job?.state;
+  const label = () => t(state() === 'online' || state() === 'ready' ? 'server-add.progress.view'
+    : state() === 'starting' ? 'servers.card.starting'
+    : state() === 'failed' || state() === 'interrupted' ? 'servers.card.attention' : 'instance.op.installing');
+  return (
+    <button type="button" data-vesta="instance-card" data-server-card data-add-card
+      style={{ '--instance-card-image': `url("${serverArt(id() ?? props.task.name)}")` }}
+      onClick={() => transitionTo(`/servers/${id()}`)}>
+      <div data-vesta="instance-card-overlay" data-tone="neutral">
+        <Show when={!state() || state() === 'applying' || state() === 'starting'}><span data-vesta="instance-card-spinner" aria-hidden="true" /></Show>
+        <h3 data-vesta="instance-card-overlay-name">{props.task.name}</h3>
+        <p data-vesta="instance-card-overlay-text">{label()}</p>
+      </div>
+    </button>
   );
 }

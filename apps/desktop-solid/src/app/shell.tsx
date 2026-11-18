@@ -25,6 +25,7 @@ import { SettingsPage } from '../pages/settings/settings-page';
 import { ServersPage } from '../pages/servers/servers-page';
 import { useServerSync } from '../features/servers/store';
 import { useHostSync } from '../features/servers/hosts-store';
+import { locale, t } from '../localization';
 import { Rail } from './rail';
 import { route } from './router';
 import { Titlebar } from './titlebar';
@@ -53,7 +54,7 @@ export function Shell() {
   prefetchSettingsWhenIdle();
   useInstanceSync();
   useServerSync();
-  useHostSync();
+  useHostSync(t, locale);
   useInstanceShortcutRuntime();
   useMouseBack();
   let visitedCreate = false;

@@ -13,7 +13,7 @@ import { copyText } from '../../platform/clipboard';
 import { age } from '../../features/servers/model';
 import { toServerError } from '../../features/servers/errors';
 import { canManageHost, formatCode, hostIdOf, hostNameProblem, hostRoleLabel, importProblem, tidyHostName } from '../../features/servers/host-model';
-import { forgetHost, hostCommand, hostInfo, hostProblem, addTask, loadHostInfo, refreshHosts, vestaHost } from '../../features/servers/hosts-store';
+import { forgetHost, hostCommand, hostInfo, hostProblem, loadHostInfo, refreshHosts, vestaHost } from '../../features/servers/hosts-store';
 import type { HostDevice, HostOwner, VestaHost } from '../../features/servers/native-hosts';
 import type { ServerCommandError } from '../../features/servers/native';
 import { refreshServers, serverSnapshots, useServersClock } from '../../features/servers/store';
@@ -53,7 +53,6 @@ function HostSettingsContent(props: { host: VestaHost }) {
   const [renaming, setRenaming] = createSignal(false, { name: 'host-settings:renaming' });
   const [draft, setDraft] = createSignal('', { name: 'host-settings:name-draft' });
   const [saving, setSaving] = createSignal<'name' | 'approval' | null>(null, { name: 'host-settings:saving' });
-  const importing = () => addTask(id());
   const nameProblem = () => hostNameProblem(draft());
 
   const loadDevices = async () => {
@@ -122,12 +121,6 @@ function HostSettingsContent(props: { host: VestaHost }) {
         </header>
         <Show when={error() ?? hostProblem(id())}>
           {(problem) => <ServerErrorNote error={problem()} onRetry={() => void load()} />}
-        </Show>
-        <Show when={importing()?.jobId}>
-          <p data-vesta="server-callout" data-tone="neutral">
-            <span>{t('vesta-server.host.import-running', { name: importing()!.name })}</span>
-            <Button size="sm" onClick={() => transitionTo(`/servers/host/${id()}/add`)}>{t('vesta-server.host.import-open')}</Button>
-          </p>
         </Show>
         <SettingsColumns aside={
           <Panel title={t('vesta-server.host.danger')} danger>

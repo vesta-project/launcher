@@ -5,7 +5,21 @@
 
   /* Mode choice */
   :where([data-vesta="add-modes"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
-  :where([data-vesta="add-modes"]) > p { font-size: var(--vesta-text-sm); }
+  :where([data-vesta="server-add-panel"] > [data-vesta="vesta-step-intro"]) {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-2);
+  }
+  :where([data-vesta="add-machine"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+  :where([data-vesta="add-modes"] [data-vesta="segmented-control"]) { max-inline-size: 100%; }
 
   /* Fields shared by New and the settings group */
   :where([data-vesta="add-software"]) { display: flex; flex-direction: column; gap: var(--vesta-space-4); }

@@ -4,10 +4,12 @@
 // restarts. Codes and review confirmations never leave memory.
 import { createSignal, onCleanup } from 'solid-js';
 import { toServerError } from './errors';
-import { awaitingStart, type AddMode } from './host-add-model';
+import { receiveActivity } from '../activity/activity-store';
+import { formatActivityText } from '../activity/activity-text';
+import { awaitingStart, overallPercent, type AddMode } from './host-add-model';
 import { importBusy, keepKey } from './host-model';
 import {
-  hostsNative, type CreateJob, type CreatePlan, type HostDiscovery, type HostInfo, type HostServer, type ImportJob, type ImportPlan, type VestaHost,
+  hostConnectionId, hostsNative, type CreateJob, type CreatePlan, type HostDiscovery, type HostInfo, type HostServer, type ImportJob, type ImportPlan, type VestaHost,
 } from './native-hosts';
 import { nativeServers, type ServerCommandError } from './native';
 import type { HostsApi } from './host-fixtures';
@@ -135,6 +137,8 @@ export interface AddTask {
   hostId: string;
   mode: AddMode;
   jobId: string | null;
+  serverId?: string;
+  startedAt?: number;
   /** The server's name: shown while the machine works. */
   name: string;
   /** Import only: where the original lives. */
@@ -163,13 +167,47 @@ const setAdds = (next: Record<string, AddTask>) => {
 };
 export const addTask = (hostId: string): AddTask | undefined => adds()[hostId];
 const PAST_REVIEW: readonly string[] = ['applying', 'interrupted', 'ready', 'starting'];
-/** Servers being made: downloading, copying, paused, made or starting. A restored job counts until read. */
-export const activeAdds = () => Object.values(adds()).filter((task) => task.jobId && task.error?.code !== 'not_found' && PAST_REVIEW.includes(task.job?.state ?? 'applying'));
+export const addConnectionId = (task: AddTask) => task.serverId ? hostConnectionId({ hostId: task.hostId, serverId: task.serverId }) : null;
+export const activeAdds = () => Object.values(adds()).filter(isActiveAdd);
+export function isActiveAdd(task: AddTask | undefined) {
+  return !!task?.serverId && !['not_found', 'forbidden'].includes(task.error?.code ?? '')
+    && PAST_REVIEW.includes(task.job?.state ?? 'applying')
+    && !(task.job?.state === 'ready' && (task.job.error || task.error));
+}
+export const serverAddJobs = () => Object.values(adds()).filter((task) => task.serverId && task.error?.code !== 'not_found');
+export const serverAddJob = (id: string) => serverAddJobs().find((task) => addConnectionId(task) === id);
+
+let activityText: ((name: string, starting: boolean) => Partial<ReturnType<typeof formatActivityText>>) | undefined;
+
+function publishAddActivity(task: AddTask) {
+  const id = addConnectionId(task);
+  if (!id || !task.jobId) return;
+  const job = task.job;
+  const state = job?.state === 'online' || job?.state === 'ready' && (job.error || task.error) ? 'done'
+    : job?.state === 'failed' || job?.state === 'interrupted' || task.error?.code === 'not_found' || task.error?.code === 'forbidden' ? 'failed'
+    : job?.state === 'cancelled' ? 'cancelled' : 'running';
+  receiveActivity({
+    id: `server-add:${task.hostId}:${task.jobId}`, kind: 'task', state,
+    title: task.name,
+    ...activityText?.(task.name, job?.state === 'starting'),
+    startedAt: task.startedAt ?? Date.now(),
+    finishedAt: state === 'running' ? undefined : Date.now(),
+    overallProgress: state === 'done' ? 1 : job ? overallPercent(task.mode, job) / 100 : undefined,
+    cancellable: false, action: 'open', target: { route: `/servers/${id}` },
+  }, state === 'running');
+}
+
+async function refreshAddedServer(hostId: string) {
+  await loadHostServers(hostId).catch(() => undefined);
+  const { refreshServers } = await import('./store');
+  await refreshServers();
+}
 
 function remember(next: Record<string, AddTask>) {
   try {
     const saved = Object.values(next).filter((task) => task.jobId).map((task) => ({
       hostId: task.hostId, mode: task.mode, jobId: task.jobId, name: task.name, sourcePath: task.sourcePath,
+      serverId: task.serverId, startedAt: task.startedAt,
       keys: { apply: task.keys.apply, start: task.keys.start, resume: task.keys.resume, cancel: task.keys.cancel },
     }));
     globalThis.localStorage?.removeItem(LEGACY_STORAGE_KEY);
@@ -187,6 +225,7 @@ function update(hostId: string, change: (task: AddTask) => AddTask | null) {
   else delete next[hostId];
   setAdds(next);
   remember(next);
+  if (changed) publishAddActivity(changed);
 }
 
 const newKey = () => globalThis.crypto.randomUUID();
@@ -221,7 +260,7 @@ function poll(hostId: string, delay = POLL_MS) {
     lastRead.set(hostId, Date.now());
     try {
       const job = await hostCommand((client) => readJob(client, task));
-      update(hostId, (current) => (current.jobId === task.jobId ? { ...current, job, error: null } : current));
+      update(hostId, (current) => (current.jobId === task.jobId ? { ...current, job, serverId: job.serverId ?? current.serverId, error: null } : current));
       if (addState[hostId]?.jobId !== task.jobId) return;
       if (awaitingStart(job)) {
         // Newer machines start the server right after installing it. One that is still
@@ -236,6 +275,7 @@ function poll(hostId: string, delay = POLL_MS) {
         return;
       }
       readyReads.delete(task.jobId!);
+      if (job.state === 'online' || job.state === 'ready') void refreshAddedServer(hostId);
       if (importBusy(job.state)) poll(hostId);
     } catch (reason) {
       const error = toServerError(reason);
@@ -280,7 +320,7 @@ const NO_PROGRESS = { filesDone: 0, filesTotal: 0, bytesDone: 0, bytesTotal: 0 }
  */
 export async function planAdd(hostId: string, request: AddRequest, name: string) {
   const previous = addState[hostId];
-  if (previous?.jobId && PAST_REVIEW.includes(previous.job?.state ?? '')) return;
+  if (previous?.sending || isActiveAdd(previous)) return;
   stopPolling(hostId);
   const task: AddTask = {
     hostId, mode: request.mode, jobId: null, name, sourcePath: request.mode === 'import' ? request.folder.displayPath : null, request,
@@ -317,10 +357,11 @@ export async function applyAdd(hostId: string, acknowledgedWarnings: string[]) {
   if (!reply) return;
   const phase = mode === 'import' ? 'snapshot' : 'resolving';
   update(hostId, (current) => ({
-    ...current, jobId: reply.jobId,
+    ...current, jobId: reply.jobId, serverId: reply.serverId, startedAt: Date.now(),
     job: current.job ? { ...current.job, jobId: reply.jobId, state: 'applying', phase, error: null, progress: NO_PROGRESS, serverId: reply.serverId } : current.job,
   }));
   poll(hostId);
+  return hostConnectionId({ hostId, serverId: reply.serverId });
 }
 
 const jobCommand = (action: 'cancel' | 'resume' | 'start') => async (hostId: string) => {
@@ -376,16 +417,25 @@ function restoreAdds() {
     const sourcePath = typeof entry.sourcePath === 'string' ? entry.sourcePath : typeof entry.displayPath === 'string' ? entry.displayPath : null;
     restored[entry.hostId] = {
       hostId: entry.hostId, mode, jobId: entry.jobId, name: typeof entry.name === 'string' ? entry.name : '', sourcePath,
+      serverId: typeof entry.serverId === 'string' ? entry.serverId : undefined,
+      startedAt: typeof entry.startedAt === 'number' ? entry.startedAt : Date.now(),
       request: null, keys, job: null, error: null, sending: null,
     };
   }
   setAdds(restored);
   remember(restored);
-  for (const hostId of Object.keys(restored)) poll(hostId, 0);
+  for (const task of Object.values(restored)) {
+    publishAddActivity(task);
+    poll(task.hostId, 0);
+  }
 }
 
 /** Loads machines once per window, refreshes them every few minutes, and picks up jobs left running. */
-export function useHostSync() {
+export function useHostSync(translate: Parameters<typeof formatActivityText>[1], locale: () => string) {
+  activityText = (name, starting) => ({
+    ...formatActivityText({ kind: 'instance_install', subject: { name }, stage: 'installing' }, translate, locale()),
+    ...(starting ? { stageLabel: translate('vesta-server.import.starting') } : {}),
+  });
   void refreshHosts();
   // Signal writes wait until the calling component has finished setting up.
   void Promise.resolve().then(restoreAdds);
@@ -413,6 +463,7 @@ export function ensureHostInfo(hostId: string) {
  */
 export async function removeHostServer(hostId: string, serverId: string, confirmName: string, idempotencyKey: string) {
   const receipt = await hostCommand((client) => client.removeServer(hostId, serverId, confirmName, idempotencyKey));
+  if (addState[hostId]?.serverId === serverId) clearAdd(hostId);
   patch(setHostServerLists, hostId, hostServers(hostId).filter((server) => server.serverId !== serverId));
   void loadHostServers(hostId).catch(() => { /* The list catches up on its own. */ });
   return receipt;
