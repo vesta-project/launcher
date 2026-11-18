@@ -5,29 +5,17 @@
  *        server-settings-search|server-copy-value|server-motd*|server-player*]
  */
 @layer launcher {
-  .server-player-manager > :where([data-vesta="instance-settings-scroll"]) > * {
-    max-inline-size: 1100px;
-  }
-  .server-player-manager :where([data-server-whitelist-status]) {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--vesta-space-2);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-  .server-player-manager :where([data-vesta="server-settings-bar"]) {
+  .server-player-manager { --content-max-width: var(--content-wide-max-width); }
+  .server-player-manager :where([data-server-player-toolbar]) {
     padding: var(--vesta-space-3);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-surface-raised);
   }
-  .server-player-manager :where([data-server-player-results]) {
-    min-block-size: 220px;
+  .server-player-manager :where([data-server-player-results] > [data-vesta="empty-state"]) {
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
     background: var(--vesta-color-surface-raised);
-    padding: var(--vesta-space-4);
   }
   /* ---- Page: fills the pane; room for the save bar is always reserved ---- */
   :where([data-server-settings-page]) { block-size: 100%; }
@@ -389,7 +377,7 @@
  */
 @layer launcher {
   :where([data-vesta="server-access-people"]) { display: flex; flex-direction: column; }
-  :where([data-server-panel="access-machine-devices"] [data-vesta="prefs-card-header"]) {
+  :where(:is([data-server-panel="access-machine-devices"], [data-server-panel="player-whitelist"]) [data-vesta="prefs-card-header"]) {
     padding-block-end: var(--vesta-space-3);
     overflow-wrap: anywhere;
   }

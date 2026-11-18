@@ -20,7 +20,7 @@ import { agentReachable } from '../../../features/servers/shell-model';
 import { putOperations, serverCommand, serverPlayers, useServersClock } from '../../../features/servers/store';
 import type { ModerationAction, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { CopyValue, SectionLink, SettingsPage, SettingsSearch } from '../settings-parts';
+import { CopyValue, SectionLink, SettingsColumns, SettingsPage, SettingsPanel, SettingsSearch } from '../settings-parts';
 
 type Action = ModerationAction['action'];
 type Request = { action: Action; player: string; choices?: Action[] };
@@ -144,70 +144,69 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
 
   return (
     <SettingsPage class="server-player-manager">
-      <Show when={changesWhitelist() && whitelistOn() !== null}>
-        <div data-server-whitelist-status>
-          <Icon name={whitelistOn() ? 'icons/security/shield-check' : 'icons/security/shield-off'} size={16} />
-          <span>{whitelistOn() ? t('servers.people.whitelist-on') : t('servers.people.whitelist-off')}</span>
-          <span data-vesta="server-toolbar-spacer" />
-          <SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>
+      <SettingsColumns aside={
+        <Show when={changesWhitelist() && whitelistOn() !== null}>
+          <SettingsPanel title={t('servers.players.whitelist')} name="player-whitelist"
+            description={t(whitelistOn() ? 'servers.people.whitelist-on' : 'servers.people.whitelist-off')}
+            action={<SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>} />
+        </Show>
+      }>
+        <div data-vesta="server-settings-bar" data-server-player-toolbar>
+          <SegmentedControl
+            size="md"
+            aria-label={t('servers.tab.players')}
+            value={filter()}
+            onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
+            options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
+          />
+          {/* Search and Add player travel together, so a wrap never strands the button on its own row. */}
+          <div data-vesta="server-settings-bar-end">
+            <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
+            <Show when={moderate() || operator()}>
+              <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
+                {t('servers.people.add')}
+              </Button>
+            </Show>
+          </div>
         </div>
-      </Show>
-      <div data-vesta="server-settings-bar">
-        <SegmentedControl
-          size="md"
-          aria-label={t('servers.tab.players')}
-          value={filter()}
-          onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
-          options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
-        />
-        {/* Search and Add player travel together, so a wrap never strands the button on its own row. */}
-        <div data-vesta="server-settings-bar-end">
-          <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
-          <Show when={moderate() || operator()}>
-            <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
-              {t('servers.people.add')}
-            </Button>
-          </Show>
-        </div>
-      </div>
-      <section data-server-player-results>
-        <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
+        <section data-server-player-results>
+          <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
-        <Show when={!loading() || players().length > 0} fallback={<EmptyLine role="status">{t('servers.loading')}</EmptyLine>}>
-          <Show
-            when={players().length > 0}
-            fallback={
-              <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
-            }
-          >
-            <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
-              <ul data-vesta="server-player-list">
-                <For each={playerPage(shown(), page())}>
-                  {(player) => (
-                    <PlayerRow
-                      player={player}
-                      open={expanded() === player.key}
-                      onToggle={() => setExpanded((current) => (current === player.key ? null : player.key))}
-                      chips={playerChips(player, dateText)}
-                      canAct={canAct}
-                      onAction={(action) => ask({ action, player: player.name })}
-                      date={dateText}
-                    />
-                  )}
-                </For>
-              </ul>
-              <Show when={shown().length > PLAYER_PAGE_SIZE}>
-                <div data-vesta="server-settings-bar">
-                  <Button disabled={currentPage() === 0} onClick={() => setPage(Math.max(0, currentPage() - 1))}>{t('servers.people.previous-page')}</Button>
-                  <span role="status">{currentPage() + 1} / {Math.ceil(shown().length / PLAYER_PAGE_SIZE)}</span>
-                  <Button disabled={(currentPage() + 1) * PLAYER_PAGE_SIZE >= shown().length} onClick={() => setPage(currentPage() + 1)}>{t('servers.people.next-page')}</Button>
-                </div>
+          <Show when={!loading() || players().length > 0} fallback={<EmptyLine role="status">{t('servers.loading')}</EmptyLine>}>
+            <Show
+              when={players().length > 0}
+              fallback={
+                <EmptyState variant="inline" icon="icons/content/people" title={t('servers.people.empty-title')} description={t('servers.people.empty-description')} />
+              }
+            >
+              <Show when={shown().length > 0} fallback={<EmptyLine role="status">{query().trim() ? t('servers.people.no-match') : t('servers.people.filter-empty')}</EmptyLine>}>
+                <ul data-vesta="server-player-list">
+                  <For each={playerPage(shown(), page())}>
+                    {(player) => (
+                      <PlayerRow
+                        player={player}
+                        open={expanded() === player.key}
+                        onToggle={() => setExpanded((current) => (current === player.key ? null : player.key))}
+                        chips={playerChips(player, dateText)}
+                        canAct={canAct}
+                        onAction={(action) => ask({ action, player: player.name })}
+                        date={dateText}
+                      />
+                    )}
+                  </For>
+                </ul>
+                <Show when={shown().length > PLAYER_PAGE_SIZE}>
+                  <div data-vesta="server-settings-bar">
+                    <Button disabled={currentPage() === 0} onClick={() => setPage(Math.max(0, currentPage() - 1))}>{t('servers.people.previous-page')}</Button>
+                    <span role="status">{currentPage() + 1} / {Math.ceil(shown().length / PLAYER_PAGE_SIZE)}</span>
+                    <Button disabled={(currentPage() + 1) * PLAYER_PAGE_SIZE >= shown().length} onClick={() => setPage(currentPage() + 1)}>{t('servers.people.next-page')}</Button>
+                  </div>
+                </Show>
               </Show>
             </Show>
           </Show>
-        </Show>
-
-      </section>
+        </section>
+      </SettingsColumns>
       <Show when={dialog()} keyed>
         {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
