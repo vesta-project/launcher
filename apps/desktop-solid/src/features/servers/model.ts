@@ -185,11 +185,12 @@ export function lifecycleControls(snapshot: ServerSnapshot): LifecycleControls {
 
 /** The quick action a card or pin offers: the header's primary, never Force kill. */export function quickAction(snapshot: ServerSnapshot): Exclude<LifecycleAction, 'kill' | 'restart'> | null {  const primary = lifecycleControls(snapshot).primary;  return primary && primary !== 'kill' && primary !== 'restart' ? primary : null;}
 /** Small status dot for the rail and server list. */
-export type Dot = 'online' | 'starting' | 'sleeping' | 'stopped' | 'problem' | 'offline';
+export type Dot = 'online' | 'starting' | 'sleeping' | 'stopped' | 'problem' | 'offline' | 'unknown';
 
 export function statusDot(snapshot: ServerSnapshot): Dot {
   if (snapshot.state.access === 'fingerprint_changed' || snapshot.state.access === 'credentials_rejected') return 'problem';
-  if (snapshot.state.phase !== 'online') return 'offline';
+  if (snapshot.state.phase === 'unreachable') return 'offline';
+  if (snapshot.state.phase !== 'online' || (!snapshot.status && !snapshot.publicLifecycle)) return 'unknown';
   const fact = minecraftFact(snapshot.status, snapshot.publicLifecycle);
   if (fact.tone === 'danger' || fact.tone === 'warning') return 'problem';
   if (fact.message === 'servers.minecraft.ready') return 'online';

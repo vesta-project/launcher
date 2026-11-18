@@ -146,6 +146,13 @@ describe('[authorization] capability gating is a hint, never authority', () => {
 });
 
 describe('[state] connection, access and Minecraft are separate facts', () => {
+  test('a server awaiting a fresh observation is not labelled unreachable', () => {
+    const value = snapshot();
+    for (const phase of ['disconnected', 'connecting', 'backoff']) {
+      expect(statusDot({ ...value, state: { ...value.state, phase } })).toBe('unknown');
+    }
+    expect(statusDot({ ...value, state: { ...value.state, phase: 'unreachable' } })).toBe('offline');
+  });
   test('player-only public lifecycle shows game state without inventing process details', () => {
     const value = snapshot({ status: null, publicLifecycle: 'offline' });
     expect(minecraftFact(value.status, value.publicLifecycle).message).toBe('servers.minecraft.stopped');

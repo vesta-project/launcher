@@ -111,8 +111,8 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         <h3 data-vesta="instance-card-name">{props.snapshot.connection.name}</h3>
         <div data-vesta="instance-card-meta">
           <Show when={props.snapshot.info?.minecraftVersion}>{(version) => <span>{version()}</span>}</Show>
-          <Show when={props.snapshot.status?.state === 'running'}
-            fallback={<span>{t(minecraftFact(props.snapshot.status).message)}</span>}>
+          <Show when={props.snapshot.state.phase === 'online' && props.snapshot.status?.state === 'running'}
+            fallback={<span>{t(minecraftFact(props.snapshot.status, props.snapshot.publicLifecycle).message)}</span>}>
             <span data-vesta="server-card-players" role="img" aria-label={t(players().message, players().args)} title={t(players().message, players().args)}>
               <Icon name="icons/content/people" size={13} />{players().args?.count ?? '?'}
             </span>

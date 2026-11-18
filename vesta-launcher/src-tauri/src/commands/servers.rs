@@ -89,7 +89,11 @@ pub async fn server_snapshot(
     manager: Manager<'_>,
     connection_id: String,
     refresh: bool,
+    background: Option<bool>,
 ) -> Result<ServerSnapshot> {
+    if refresh && background == Some(true) {
+        return manager.background_snapshot(&app, &connection_id).await;
+    }
     manager.snapshot(&app, &connection_id, refresh).await
 }
 #[tauri::command]

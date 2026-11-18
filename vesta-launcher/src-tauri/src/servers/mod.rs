@@ -956,22 +956,46 @@ impl ServerManager {
         }
         Ok(account_snapshot(&self.record(id).await?))
     }
+    pub async fn background_snapshot(&self, app: &AppHandle, id: &str) -> Result<ServerSnapshot> {
+        // An open workspace already has a status owner. Card reads should
+        // neither open realtime streams nor use interactive request priority.
+        if !self.demanded(id, ServerTopic::Status) {
+            self.refresh(app, id, false).await?;
+        }
+        Ok(account_snapshot(&self.record(id).await?))
+    }
     pub async fn refresh(&self, app: &AppHandle, id: &str, interactive: bool) -> Result<()> {
-        self.client(id).await?;
+        let scope = account_scope();
+        let initial = self.record(id).await?;
+        if !account_matches(
+            initial.account_uuid.as_deref(),
+            selected_account().as_deref(),
+        ) {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
+        }
         let slot = self.slot(id)?;
         let started = Instant::now();
         let _gate = slot.refresh.lock().await;
         let mut snapshot = self.record(id).await?.snapshot;
+        let client = match self.client(id).await {
+            Ok(client) => client,
+            Err(error) => {
+                if account_scope() == scope && !error.local_pressure {
+                    snapshot
+                        .state
+                        .observe_request_failure(&error, vesta_server_client::now_ms());
+                    self.publish_observation(app, snapshot).await?;
+                }
+                return Err(error);
+            }
+        };
         // Followers of one refresh consume its last observation, no extra HTTP.
-        if slot.client.lock().await.is_some()
-            && snapshot.status_observed_at_ms.is_some_and(|at| {
-                at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
-            })
-        {
+        if snapshot.status_observed_at_ms.is_some_and(|at| {
+            at >= vesta_server_client::now_ms() - started.elapsed().as_millis() as i64 - 250
+        }) {
             return Ok(());
         }
         let result = async {
-            let client = self.client(id).await?;
             // Learn effective access before requesting any privileged metadata.
             // Minecraft enrollment can be player-only, with no management grants.
             if !slot
@@ -1066,6 +1090,9 @@ impl ServerManager {
                     snapshot.state.retry_at_ms = Some(until);
                 }
             }
+        }
+        if account_scope() != scope {
+            return Err(Error::new(ErrorCode::CredentialsRejected));
         }
         self.publish_observation(app, snapshot).await?;
         result

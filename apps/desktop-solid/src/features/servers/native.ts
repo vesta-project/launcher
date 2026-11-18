@@ -387,8 +387,8 @@ export const serversNative = {
   /** Forget the connection and delete its device key. Does not touch the server. */
   remove: (connectionId: ConnectionId) => call<void>('server_connection_remove', { connectionId }),
   /** Last-known snapshot; `refresh` asks native code to re-read status within the request budget. */
-  snapshot: (connectionId: ConnectionId, refresh = false) =>
-    call<ServerSnapshot>('server_snapshot', { connectionId, refresh }),
+  snapshot: (connectionId: ConnectionId, refresh = false, background = false) =>
+    call<ServerSnapshot>('server_snapshot', { connectionId, refresh, background }),
   /** Open a topic subscription. Native code shares one stream per server across windows. */
   subscribe: (connectionId: ConnectionId, topic: ServerTopic, channel: Channel<ServerEvent>) =>
     call<string>('server_subscribe', { connectionId, topic, channel }),

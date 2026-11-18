@@ -76,11 +76,18 @@ const refreshes = new Map<ConnectionId, Promise<void>>();
 export const serverRefreshing = (id: ConnectionId) => refreshing.get(id);
 
 /** One explicit observation per server, even when several views request it. */
-export function refreshServer(id: ConnectionId): Promise<void> {
+export function refreshServer(id: ConnectionId, background = false): Promise<void> {
   const pending = refreshes.get(id);
-  if (pending) return pending;
-  const request = serverCommand((client) => client.snapshot(id, true))
-    .then((snapshot) => { if (untrack(() => snapshots.get(id))) putSnapshot(snapshot); })
+  if (pending) {
+    if (!background) refreshing.update(id, () => true);
+    return pending;
+  }
+  const previous = untrack(() => snapshots.get(id));
+  const request = serverCommand((client) => client.snapshot(id, true, background))
+    .then((snapshot) => {
+      const current = untrack(() => snapshots.get(id));
+      if (refreshes.get(id) === request && current && current === previous) putSnapshot(snapshot);
+    })
     .finally(() => {
       if (refreshes.get(id) === request) {
         refreshes.delete(id);
@@ -88,7 +95,7 @@ export function refreshServer(id: ConnectionId): Promise<void> {
       }
     });
   refreshes.set(id, request);
-  refreshing.update(id, () => true);
+  if (!background) refreshing.update(id, () => true);
   return request;
 }
 const METRIC_HISTORY = 90;
@@ -144,6 +151,7 @@ function forget(id: ConnectionId) {
   consoleVersions.delete(id);
   consoles.delete(id);
   players.delete(id);
+  refreshes.delete(id);
   refreshing.delete(id);
   icons.delete(id);
   iconRequests.delete(id);
@@ -190,15 +198,23 @@ let listSequence = 0;
 /** Re-read saved connections. Only the newest response applies, so a slow reply can't restore removed servers. */
 export async function refreshServers() {
   const sequence = ++listSequence;
+  const before = untrack(() => new Map(order().map((id) => [id, snapshots.get(id)])));
   try {
     const list = await serverCommand((client) => client.list());
     if (sequence !== listSequence) return;
-    const ids = list.map((snapshot) => snapshot.connection.id);
-    for (const id of untrack(order)) if (!ids.includes(id)) forget(id);
+    const incoming = new Set(list.map((snapshot) => snapshot.connection.id));
+    const ids: ConnectionId[] = [];
     for (const snapshot of list) {
-      // Unchanged snapshots keep their identity so readers don't rerun.
-      const current = untrack(() => snapshots.get(snapshot.connection.id));
-      if (!current || JSON.stringify(current) !== JSON.stringify(snapshot)) putSnapshot(snapshot);
+      const id = snapshot.connection.id;
+      const current = untrack(() => snapshots.get(id));
+      // A status event, explicit refresh or removal can beat this cached reply.
+      if (current === before.get(id)) putSnapshot(snapshot);
+      if (current || !before.has(id)) ids.push(id);
+    }
+    for (const id of untrack(order)) {
+      if (incoming.has(id)) continue;
+      if (before.has(id)) forget(id);
+      else ids.push(id);
     }
     setOrder(ids);
     setListError(null);
@@ -207,6 +223,55 @@ export async function refreshServers() {
   } finally {
     if (sequence === listSequence) setLoaded(true);
   }
+}
+
+const CARD_STATUS_INTERVAL_MS = 10_000;
+const CARD_STATUS_CONCURRENCY = 4;
+const sameIds = (a: readonly ConnectionId[], b: readonly ConnectionId[]) => a.length === b.length && a.every((id, index) => id === b[index]);
+
+/** Keep card and rail snapshots current using bounded reads. An open workspace owns the live stream. */
+export function useServerStatusSync(showList: () => boolean, workspace: () => ConnectionId | undefined) {
+  const demand = createMemo(() => {
+    const selected = workspace();
+    return (showList() ? serverSnapshots() : pinnedServers())
+      .map((snapshot) => snapshot.connection.id)
+      .filter((id) => id !== selected);
+  }, { name: 'server-card-status:demand', equals: sameIds });
+  const nextReads = new Map<ConnectionId, number>();
+  let inFlight = 0;
+  let closed = false;
+  function poll(ids: readonly ConnectionId[]) {
+    if (closed || inFlight >= CARD_STATUS_CONCURRENCY) return;
+    const now = Date.now();
+    const queued = [...ids].sort((a, b) => (nextReads.get(a) ?? 0) - (nextReads.get(b) ?? 0));
+    for (const id of queued) {
+      if (inFlight >= CARD_STATUS_CONCURRENCY) break;
+      if (refreshes.has(id) || (nextReads.get(id) ?? 0) > now) continue;
+      const snapshot = untrack(() => snapshots.get(id));
+      if (!snapshot || snapshot.state.access === 'fingerprint_changed' || snapshot.state.access === 'credentials_rejected') continue;
+      const { rateLimitedUntilMs, retryAtMs } = snapshot.state;
+      if (Math.max(rateLimitedUntilMs ?? 0, retryAtMs ?? 0) > now) continue;
+      const next = now + CARD_STATUS_INTERVAL_MS;
+      nextReads.set(id, next);
+      inFlight++;
+      void refreshServer(id, true).catch((error: ServerCommandError) => {
+        if (nextReads.get(id) === next && error.retryAfterMs) {
+          nextReads.set(id, Math.max(next, Date.now() + error.retryAfterMs));
+        }
+      }).finally(() => {
+        inFlight--;
+        poll(untrack(demand));
+      });
+    }
+  }
+  createEffect(demand, (ids) => {
+    for (const id of nextReads.keys()) if (!ids.includes(id)) nextReads.delete(id);
+    poll(ids);
+    if (ids.length === 0) return;
+    const timer = setInterval(() => poll(untrack(demand)), 1000);
+    return () => clearInterval(timer);
+  }, { name: 'server-card-status:poll' });
+  onCleanup(() => { closed = true; nextReads.clear(); });
 }
 
 /** Hide a connection during the shared undo window without releasing its state. */

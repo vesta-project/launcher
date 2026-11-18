@@ -151,7 +151,8 @@ async function buildHarness() {
         export const counts = { opened: 0, closed: 0 };
         export const replies = [];
         export const refreshCalls = [];
-        const api = { list: async () => [], onChanged: () => () => {}, subscribe: async () => { counts.opened++; return () => counts.closed++; }, snapshot: (id, refresh) => { refreshCalls.push({ id, refresh }); return new Promise((resolve, reject) => replies.push({ resolve, reject })); }, remove: async () => {} };
+        export const listReplies = [];
+        const api = { list: async () => listReplies.shift()?.() ?? [], onChanged: () => () => {}, subscribe: async () => { counts.opened++; return () => counts.closed++; }, snapshot: (id, refresh, background) => { refreshCalls.push({ id, refresh, ...(background ? { background } : {}) }); return new Promise((resolve, reject) => replies.push({ resolve, reject })); }, remove: async () => {} };
         export const serversApi = async () => api;
       ` }));
       build.onResolve({ filter: /^vesta-server-reactivity-check$/ }, () => ({ path: 'check', namespace: 'server-check' }));
@@ -164,11 +165,11 @@ async function buildHarness() {
         export { ConsoleBuffer, clearConsoleDisplay, consoleDisplayBoundary } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-model.ts', import.meta.url)))};
         export { serverConsoleView, toLogEntries } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/console-view.ts', import.meta.url)))};
         import { useServerTopic } from ${JSON.stringify(storePath)};
-        export { refreshServer, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations, serverCommand, useServerSync } from ${JSON.stringify(storePath)};
+        export { refreshServer, refreshServers, serverRefreshing, putSnapshot, serverSnapshot, removeServer, putPlayers, serverPlayers, useServerRoster, putOperations, serverOperations, serverCommand, useServerSync, useServerStatusSync } from ${JSON.stringify(storePath)};
         export { setActiveAccount } from ${JSON.stringify(fileURLToPath(new URL('../src/features/accounts/accounts.ts', import.meta.url)))};
         export { serverResource, readServerResource, useServerResource, applyResourceChanges, resourceEditor } from ${JSON.stringify(fileURLToPath(new URL('../src/features/servers/resources.ts', import.meta.url)))};
         import { counts } from ${JSON.stringify(servicePath)};
-        export { counts, replies, refreshCalls } from ${JSON.stringify(servicePath)};
+        export { counts, replies, refreshCalls, listReplies } from ${JSON.stringify(servicePath)};
         export { captureArtifact, expectNoDiagnostics };
         export function scenario(assert) {
           const owner = createRoot(dispose => {
@@ -217,6 +218,118 @@ async function buildHarness() {
     return await import(pathToFileURL(path).href);
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
+
+test('a delayed saved list cannot roll a newer server observation back', async () => {
+  const check = await harness();
+  const id = 'stale-server-list';
+  const offline = { connection: { id }, state: { phase: 'unreachable', access: 'paired' }, status: null };
+  const online = { ...offline, state: { ...offline.state, phase: 'online' }, status: { state: 'running' } };
+  let resolve;
+  const reply = new Promise(done => { resolve = done; });
+  try {
+    check.putSnapshot(offline);
+    check.flush();
+    check.listReplies.push(() => reply);
+    const refresh = check.refreshServers();
+    await settleReactive(check);
+    check.putSnapshot(online);
+    check.flush();
+    resolve([offline]);
+    await refresh;
+    check.flush();
+    expect(check.untrack(() => check.serverSnapshot(id))).toEqual(online);
+  } finally { await check.removeServer(id); check.flush(); }
+});
+
+test('grid status refreshes before opening a server and leaves the open workspace to its live stream', async () => {
+  const check = await harness();
+  const { artifact } = await check.captureArtifact(async () => {
+    const ids = Array.from({ length: 6 }, (_, i) => `grid-status-${i}`);
+    const disconnected = (id) => ({ connection: { id }, state: { phase: 'disconnected', access: 'paired' }, status: null });
+    const online = (id) => ({ ...disconnected(id), state: { phase: 'online', access: 'paired' }, status: { state: 'running' } });
+    for (const id of ids) check.putSnapshot(disconnected(id));
+    check.flush();
+    const callsAt = check.refreshCalls.length;
+    const subscriptions = check.counts.opened;
+    const owner = check.createRoot(dispose => {
+      const [showList, setShowList] = check.createSignal(true, { name: 'card-status-test:list' });
+      const [workspace, setWorkspace] = check.createSignal(undefined, { name: 'card-status-test:workspace' });
+      check.useServerStatusSync(showList, workspace);
+      return { dispose, setShowList, setWorkspace };
+    });
+    const read = id => check.untrack(() => check.serverSnapshot(id));
+    try {
+      await waitForReactive(check, () => check.replies.length === 4, 'four concurrent card requests');
+      expect(check.refreshCalls.slice(callsAt)).toEqual(ids.slice(0, 4).map(id => ({ id, refresh: true, background: true })));
+      expect(check.counts.opened).toBe(subscriptions);
+      check.replies.shift().resolve(online(ids[0]));
+      await waitForReactive(check, () => read(ids[0])?.state.phase === 'online' && check.refreshCalls.length === callsAt + 5, 'grid status and fifth request');
+      expect(read(ids[0]).status.state).toBe('running');
+
+      // Opening a card keeps the same value and stops grid demand for other unpinned servers.
+      owner.setShowList(false);
+      owner.setWorkspace(ids[0]);
+      check.flush();
+      expect(read(ids[0])).toEqual(online(ids[0]));
+      for (const id of ids.slice(1, 5)) check.replies.shift().resolve(online(id));
+      await settleReactive(check);
+      expect(check.refreshCalls.length).toBe(callsAt + 5);
+      expect(read(ids[5]).state.phase).toBe('disconnected');
+    } finally {
+      owner.dispose();
+      for (const id of ids) await check.removeServer(id);
+      check.flush();
+    }
+  }, { scenario: 'bounded-card-status-before-navigation' });
+  check.expectNoDiagnostics(artifact);
+});
+
+test('card polling observes later game changes and respects the status retry deadline', async () => {
+  const check = await harness();
+  const id = 'card-status-retry';
+  const running = { connection: { id }, state: { phase: 'online', access: 'paired' }, status: { state: 'running' } };
+  const stopped = { ...running, status: { state: 'stopped' } };
+  const originalNow = Date.now;
+  const originalSet = globalThis.setInterval;
+  const originalClear = globalThis.clearInterval;
+  let now = originalNow();
+  let pulse;
+  const timer = Symbol('card polling');
+  Date.now = () => now;
+  globalThis.setInterval = (callback, delay, ...args) => {
+    if (delay !== 1000) return originalSet(callback, delay, ...args);
+    pulse = callback;
+    return timer;
+  };
+  globalThis.clearInterval = (handle) => {
+    if (handle === timer) pulse = undefined;
+    else originalClear(handle);
+  };
+  check.putSnapshot(running);
+  check.flush();
+  const owner = check.createRoot(dispose => { check.useServerStatusSync(() => true, () => undefined); return { dispose }; });
+  const tick = async (advance) => { now += advance; pulse(); await settleReactive(check); };
+  try {
+    await waitForReactive(check, () => check.replies.length === 1, 'initial card status read');
+    check.replies.shift().reject({ code: 'rate_limited', retryAfterMs: 25_000 });
+    await settleReactive(check);
+    await tick(10_000);
+    expect(check.replies).toHaveLength(0);
+    await tick(15_000);
+    expect(check.replies).toHaveLength(1);
+    check.replies.shift().resolve(stopped);
+    await waitForReactive(check, () => check.untrack(() => check.serverSnapshot(id))?.status?.state === 'stopped', 'new Minecraft state in the grid');
+    owner.dispose();
+    expect(pulse).toBeUndefined();
+  } finally {
+    owner.dispose();
+    Date.now = originalNow;
+    globalThis.setInterval = originalSet;
+    globalThis.clearInterval = originalClear;
+    await check.removeServer(id);
+    check.flush();
+  }
+});
 
 test('live status updates preserve sleep drafts and errors without refetching policy', async () => {
   const check = await harness();

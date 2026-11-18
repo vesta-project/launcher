@@ -23,7 +23,7 @@ import { CreatePage } from '../pages/create/create-page';
 import { LibraryPage } from '../pages/library/library-page';
 import { SettingsPage } from '../pages/settings/settings-page';
 import { ServersPage } from '../pages/servers/servers-page';
-import { useServerSync } from '../features/servers/store';
+import { useServerStatusSync, useServerSync } from '../features/servers/store';
 import { useHostSync } from '../features/servers/hosts-store';
 import { locale, t } from '../localization';
 import { Rail } from './rail';
@@ -54,6 +54,13 @@ export function Shell() {
   prefetchSettingsWhenIdle();
   useInstanceSync();
   useServerSync();
+  useServerStatusSync(
+    () => route().page === 'servers' && !route().section,
+    () => {
+      const { page, section } = route();
+      return page === 'servers' && section !== 'host' && section !== 'setup' && section !== 'add' ? section : undefined;
+    },
+  );
   useHostSync(t, locale);
   useInstanceShortcutRuntime();
   useMouseBack();
