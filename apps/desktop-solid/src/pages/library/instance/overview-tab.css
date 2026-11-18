@@ -214,6 +214,9 @@
 
   /* Play sits on the art's corner: always there on the latest, on hover for the rest. */
   :where(.overview-world-play) {
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
     position: absolute;
     inset-block-start: var(--vesta-space-3);
     inset-inline-end: var(--vesta-space-3);

@@ -365,6 +365,8 @@
     -webkit-box-orient: vertical;
   }
 
+  :where([data-vesta='server-card-players']) { display: inline-flex; align-items: center; gap: 3px; }
+
   :where([data-vesta='instance-card-meta']) {
     display: flex;
     align-items: center;
