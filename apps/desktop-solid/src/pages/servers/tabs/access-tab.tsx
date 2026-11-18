@@ -101,15 +101,31 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   return (
     <>
       <SettingsColumns aside={
-        <Show when={groups().packUsers.length}>
-          <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
-            summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
-            <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
-            <div data-vesta="server-access-people">
-              <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-            </div>
-          </SettingsGroup>
-        </Show>
+        <>
+          <Show when={machine()}>
+            {(name) => (
+              <SettingsPanel title={t('servers.access.devices')} name="access-machine-devices"
+                description={t('servers.access.machine-devices', { name: name() })}
+                action={
+                  <Show when={ownsMachine()}>
+                    <Button size="sm" variant="ghost" icon={<Icon name="icons/content/monitor" />} onClick={() => transitionTo(`/servers/host/${hostId()}`)}>
+                      {t('servers.access.manage-devices')}
+                    </Button>
+                  </Show>
+                }
+              />
+            )}
+          </Show>
+          <Show when={groups().packUsers.length}>
+            <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
+              summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
+              <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
+              <div data-vesta="server-access-people">
+                <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+              </div>
+            </SettingsGroup>
+          </Show>
+        </>
       }>
         <SettingsPanel title={t('servers.access.people')} name="access-people">
           <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
@@ -121,18 +137,6 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
                 <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
               </Show>
             </div>
-            <Show when={machine()}>
-              {(name) => (
-                <div data-vesta="server-access-machine-note">
-                  <p data-vesta="server-muted">{t('servers.access.machine-devices', { name: name() })}</p>
-                  <Show when={ownsMachine()}>
-                    <Button size="sm" variant="ghost" icon={<Icon name="icons/content/monitor" />} onClick={() => transitionTo(`/servers/host/${hostId()}`)}>
-                      {t('servers.access.manage-devices')}
-                    </Button>
-                  </Show>
-                </div>
-              )}
-            </Show>
           </Show>
         </SettingsPanel>
       </SettingsColumns>

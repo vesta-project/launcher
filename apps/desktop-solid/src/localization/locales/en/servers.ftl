@@ -806,7 +806,7 @@ servers-access-device-name = Device name
 servers-access-device-name-long = Use 64 characters or fewer.
 servers-access-device-name-invalid = Device names can't contain control characters.
 servers-access-machine-owner = Owner of { $name }
-servers-access-machine-devices = Devices link to { $name }, so each one works for every server there.
+servers-access-machine-devices = Linked devices work across all servers on { $name }.
 servers-access-manage-devices = Manage devices
 
 # Specific agent failures and their next steps.
