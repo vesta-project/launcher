@@ -37,7 +37,6 @@
     align-items: center;
     gap: var(--vesta-space-2);
     min-inline-size: 0;
-    animation: resources-bar-in 180ms var(--vesta-ease-out) both;
   }
 
   /* Selecting tints the whole strip, so the mode change is obvious at a glance. */
@@ -58,13 +57,6 @@
     display: flex;
     gap: var(--vesta-space-2);
     margin-inline-start: auto;
-  }
-
-  @keyframes resources-bar-in {
-    from {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
   }
 
   .resources-type {
@@ -418,9 +410,4 @@
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    :where(.resources-bar) {
-      animation: none;
-    }
-  }
 }

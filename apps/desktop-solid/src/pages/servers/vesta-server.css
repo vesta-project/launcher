@@ -334,7 +334,8 @@
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);
-    padding: var(--vesta-space-5) var(--library-grid-padding, 40px) 0;
+    padding: var(--vesta-space-5) var(--library-grid-padding, 40px) var(--vesta-space-2);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
   }
   :where([data-vesta="vesta-group-header"]) h2 {
     display: flex;
@@ -347,6 +348,9 @@
   }
   :where([data-vesta="vesta-group-header"][data-list-header]) { justify-content: space-between; flex-wrap: wrap; }
   :where([data-list-header]) > :last-child { margin-inline-start: auto; }
+  :where([data-list-header]) :where([data-vesta="vesta-reach"]) { margin-inline-start: var(--vesta-space-2); }
+  :where([data-vesta="vesta-server-group"] > [data-vesta="library-grid"]) { padding-block-start: var(--vesta-space-4); }
+  :where([data-vesta="server-card-players"]) { display: inline-flex; align-items: center; gap: var(--vesta-space-1); }
   :where(button[data-add-card]) { inline-size: 100%; text-align: start; font: inherit; }
   :where([data-vesta="vesta-machine"][role="radio"]:hover:not(:disabled),
     [data-vesta="vesta-found"] [data-vesta="vesta-machine"]:hover:not(:disabled)) {
