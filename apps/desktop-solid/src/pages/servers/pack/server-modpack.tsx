@@ -76,8 +76,8 @@ function LinkCard() {
   const label = useVersionLabel();
   const [check, setCheck] = createSignal<UpdateCheck>({ step: 'idle' }, { name: 'modpack-server:update' });
   const [unlinking, setUnlinking] = createSignal(false, { name: 'modpack-server:unlinking' });
-  let disposed = false;
-  onCleanup(() => { disposed = true; });
+  let checkRevision = 0;
+  onCleanup(() => { checkRevision++; });
   const source = () => area.link().source!;
   const kind = () => linkSourceKind(source());
   const provider = () => linkProvider(source());
@@ -87,12 +87,17 @@ function LinkCard() {
   const canManage = () => area.gates().installOnServer;
 
   const runCheck = async () => {
+    const revision = ++checkRevision;
     if (!untrack(area.link).canChange) { setCheck({ step: 'pending' }); return; }
+    const serverId = area.id();
+    const current = () => revision === checkRevision && serverId === area.id();
     setCheck({ step: 'checking' });
     try {
-      const update = await serverCommand((api) => api.serverModpackUpdate(area.id()));
-      if (!disposed) setCheck(updateCheckOutcome(update));
-    } catch (reason) { if (!disposed) setCheck({ step: 'failed', error: reason as ServerCommandError }); }
+      const update = await serverCommand((api) => api.serverModpackUpdate(serverId));
+      if (current()) setCheck(updateCheckOutcome(update));
+    } catch (reason) {
+      if (current()) setCheck({ step: 'failed', error: reason as ServerCommandError });
+    }
   };
   // Provider links are checked once on open, like a linked instance; files have nothing to find.
   onSettled(() => { if (provider() && canManage()) void runCheck(); });
@@ -158,7 +163,7 @@ function LinkCard() {
         </Show>
       </>}>
       <Show when={check().step === 'failed' ? (check() as Extract<UpdateCheck, { step: 'failed' }>).error : undefined}>
-        {(failure) => <div data-vesta="modpack-link-error"><ServerErrorNote error={failure()} onRetry={() => void runCheck()} /></div>}
+        {(failure) => <div data-vesta="modpack-link-error"><ServerErrorNote error={failure()} onRetry={() => void runCheck()} variant="inline" /></div>}
       </Show>
       <Show when={unlinking()}><UnlinkDialog name={name()} onClose={() => setUnlinking(false)} /></Show>
     </ModpackLinkCard>
