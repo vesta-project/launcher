@@ -500,7 +500,21 @@ describe('[hosts] folder picker', () => {
     expect(picker).toContain('checkPath(props.hostId, path)');
     expect(picker).toContain("event.key === 'Escape'");
     // Found servers only show when there are some, and Continue waits until a folder is picked.
-    expect(picker).toContain('<Show when={candidates()?.length}>');
+    expect(picker).toContain('<Show when={suggestions().length}>');
     expect(wizard).toContain('<Show when={!picking()}>');
+  });
+
+  test('one browser: roots live in the first crumb, a suggestion for the open folder is not repeated', () => {
+    const picker = source('src/pages/servers/host-import.tsx');
+    // No separate row of root chips above the browser.
+    expect(picker).not.toContain('vesta-shortcut');
+    expect(source('src/pages/servers/vesta-server.css')).not.toContain('vesta-shortcut');
+    // Several roots: the first crumb is a menu of them. One root: a plain crumb.
+    expect(picker).toContain('<Show when={props.roots.length < 2} fallback={');
+    expect(picker).toContain('data-root-menu');
+    expect(picker).toContain('onSelect={() => openRoot(root)}');
+    // The found list leaves out the folder the browser has open.
+    expect(picker).toContain('!samePath(candidate.displayPath, here())');
+    expect(picker).toContain('onPlace={setHere}');
   });
 });

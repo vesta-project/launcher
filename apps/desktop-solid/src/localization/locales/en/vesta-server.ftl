@@ -184,7 +184,7 @@ vesta-server-import-path-protected = Vesta Server keeps that folder private. Pic
 vesta-server-import-path-invalid = Type the full path, from the top of the machine.
 vesta-server-import-path-unsupported = This Vesta Server can't open typed paths yet. Browse to the folder instead.
 
-vesta-server-import-shortcuts = Shortcuts
+vesta-server-import-roots = Places on { $name }
 vesta-server-import-trail = Folder path
 vesta-server-import-folders = Folders in { $name }
 vesta-server-import-opening = Opening

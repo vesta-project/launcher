@@ -1,7 +1,7 @@
 // The Import way of adding a server: pick a folder on the machine, from the ones found for
 // you or by browsing. The browser's path bar doubles as an address bar for a known path.
 // A folder is only handed on once Vesta Server can read it and it is a server.
-import { Badge, Button, IconButton } from '@vesta/ui';
+import { Badge, Button, IconButton, Menu, MenuItem } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal, createUniqueId, onSettled, untrack } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
@@ -58,6 +58,9 @@ export function ImportFolderStep(props: { hostId: string; machine: string; onPic
   const [truncated, setTruncated] = createSignal(false, { name: 'host-import:truncated' });
   const [roots, setRoots] = createSignal<FolderRoot[] | null>(null, { name: 'host-import:roots' });
   const [error, setError] = createSignal<ServerCommandError | null>(null, { name: 'host-import:error' });
+  /** The folder the browser has open, so a suggestion for that same folder isn't said twice. */
+  const [here, setHere] = createSignal<string | null>(null, { name: 'host-import:here' });
+  const suggestions = () => (candidates() ?? []).filter((candidate) => !samePath(candidate.displayPath, here()));
 
   const load = async () => {
     setError(null);
@@ -92,17 +95,24 @@ export function ImportFolderStep(props: { hostId: string; machine: string; onPic
           )}
         </Show>
 
-        <Show when={candidates()?.length}>
-          <FoundList hostId={props.hostId} machine={props.machine} candidates={candidates()!} truncated={truncated()} onPick={props.onPick} onReload={() => void load()} />
+        <Show when={suggestions().length}>
+          <FoundList hostId={props.hostId} machine={props.machine} candidates={suggestions()} truncated={truncated()} onPick={props.onPick} onReload={() => void load()} />
         </Show>
 
         <Show when={roots()} fallback={<Working label={t('vesta-server.import.opening')} />}>
-          {(list) => <FolderBrowser hostId={props.hostId} machine={props.machine} roots={list()} onPick={props.onPick} />}
+          {(list) => <FolderBrowser hostId={props.hostId} machine={props.machine} roots={list()} onPick={props.onPick} onPlace={setHere} />}
         </Show>
       </Show>
     </div>
   );
 }
+
+/** The same folder, whichever slashes or trailing separator each side used. */
+const samePath = (a: string, b: string | null) => {
+  if (b === null) return false;
+  const tidy = (path: string) => path.replace(/\\/g, '/').replace(/(.)\/+$/, '$1');
+  return tidy(a) === tidy(b);
+};
 
 /** Likely servers the machine found, one compact row each, for a one click choice. */
 function FoundList(props: { hostId: string; machine: string; candidates: ImportCandidate[]; truncated: boolean; onPick: (folder: Picked) => void; onReload: () => void }) {
@@ -184,7 +194,7 @@ const typedProblem = (outcome: Exclude<Awaited<ReturnType<typeof checkPath>>, { 
  * carry a badge; folders Vesta Server can't read show a lock and how to fix that. Clicking the
  * trail (or Ctrl+L) turns it into a box to type or paste a path, like a file manager.
  */
-function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRoot[]; onPick: (folder: Picked) => void }) {
+function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRoot[]; onPick: (folder: Picked) => void; onPlace?: (path: string | null) => void }) {
   const drives = createMemo(() => props.roots.filter((root) => isDriveRoot(root.displayPath)), { name: 'host-import:drives' });
   const shortcuts = createMemo(() => props.roots.filter((root) => !isDriveRoot(root.displayPath)), { name: 'host-import:shortcuts' });
   // The top of the machine: one drive opens straight away, several (or none, on older machines) list here.
@@ -232,6 +242,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
 
   const show = (next: View) => {
     setView(next);
+    props.onPlace?.(next.kind === 'folder' ? next.place.path : null);
     setLocked(null);
     setActive(0);
     if (next.kind === 'folder' && folderUse({ top: isDriveRoot(next.place.path), looksLikeServer: next.place.looksLikeServer }) === null) void inspect(next.place);
@@ -403,28 +414,34 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
 
   return (
     <div data-vesta="vesta-browser" aria-busy={loading() ? 'true' : undefined} onKeyDown={onBrowserKey}>
-      <Show when={shortcuts().length > 0 && drives().length > 0}>
-        <div data-vesta="vesta-shortcuts" role="group" aria-label={t('vesta-server.import.shortcuts')}>
-          <For each={shortcuts()} keyed={(root) => root.rootId}>
-            {(root) => (
-              <button type="button" data-vesta="vesta-shortcut" title={root().displayPath} disabled={!root().readable || loading()} onClick={() => openRoot(root())}>
-                <Icon name="icons/content/folder" size={14} />
-                <strong>{folderName(root().displayPath)}</strong>
-                <span>{root().displayPath}</span>
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
-
       <div data-vesta="vesta-browser-frame">
         <Show when={typing() !== null} fallback={
           <div data-vesta="vesta-browser-bar">
             {/* Clicking the empty part of the trail starts typing a path. */}
             <nav data-vesta="breadcrumbs" aria-label={t('vesta-server.import.trail')}
-              onClick={(event) => { if (!(event.target as HTMLElement).closest('button')) startTyping(); }}>
+              onClick={(event) => { if (!(event.target as HTMLElement).closest('button, [role="menu"], [role="menuitem"]')) startTyping(); }}>
               <ol data-vesta="breadcrumb-list">
                 <li data-vesta="breadcrumb-item">
+                  <Show when={props.roots.length < 2} fallback={
+                    // Several places to start from: the first crumb is the menu of them, never a second row.
+                    <>
+                      <Menu trigger={(menuProps) => (
+                        <button {...menuProps} type="button" data-vesta="breadcrumb-link" data-root-menu disabled={loading()} aria-label={t('vesta-server.import.roots', { name: props.machine })}>
+                          <Icon name="icons/content/server" size={14} />{props.machine}<Icon name="icons/controls/chevron-down" size={12} />
+                        </button>
+                      )}>
+                        <For each={props.roots}>
+                          {(root) => (
+                            <MenuItem icon={<Icon name={isDriveRoot(root.displayPath) ? 'icons/content/server' : 'icons/content/folder'} />} disabled={!root.readable}
+                              shortcut={isDriveRoot(root.displayPath) ? undefined : root.displayPath} onSelect={() => openRoot(root)}>
+                              {isDriveRoot(root.displayPath) ? root.displayPath : folderName(root.displayPath)}
+                            </MenuItem>
+                          )}
+                        </For>
+                      </Menu>
+                      <Show when={place()}><span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span></Show>
+                    </>
+                  }>
                   <Show when={crumbs().length > 0 || (view().kind === 'folder' && !single())} fallback={
                     <span data-vesta="breadcrumb-link" data-current aria-current="location"><Icon name="icons/content/server" size={14} />{props.machine}</span>
                   }>
@@ -432,6 +449,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
                       <Icon name="icons/content/server" size={14} />{props.machine}
                     </button>
                     <span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span>
+                  </Show>
                   </Show>
                 </li>
                 <Show when={place() && !single()}>

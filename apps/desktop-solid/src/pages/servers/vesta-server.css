@@ -209,24 +209,6 @@
 
   /* Folder browser */
   :where([data-vesta="vesta-browser"]) { display: flex; flex-direction: column; gap: var(--vesta-space-2); }
-  :where([data-vesta="vesta-shortcuts"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1-5); }
-  :where([data-vesta="vesta-shortcuts"]) > span { margin-inline-end: var(--vesta-space-1); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
-  :where([data-vesta="vesta-shortcut"]) {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--vesta-space-1-5);
-    max-inline-size: 100%;
-    padding: var(--vesta-space-1) var(--vesta-space-2);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-control);
-    background: transparent;
-    color: var(--vesta-color-text);
-    font: inherit;
-    font-size: var(--vesta-text-sm);
-    cursor: default;
-  }
-  :where([data-vesta="vesta-shortcut"]) > span { overflow: hidden; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="vesta-shortcut"]:hover:not(:disabled)) { background: var(--vesta-color-fill-hover); }
   :where([data-vesta="vesta-browser-frame"]) {
     overflow: hidden;
     border: var(--vesta-border-width) solid var(--vesta-color-border);
