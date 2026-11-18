@@ -59,13 +59,14 @@ const LEGACY: readonly KeepRule[] = [
   { field: 'keepHourly', lead: 'servers.backup-setup.keep-hourly', unit: 'servers.backup-setup.unit-hours' },
 ];
 
-/** Name, mode, retention and scope of one profile, in two columns. */
+/** Name, mode, retention and scope of one profile, grouped by what gets copied and kept. */
 function ProfileFields(props: { connectionId: string; row: Row; others: readonly BackupProfileConfig[]; readOnly?: boolean; onChange: (patch: Partial<Row>) => void }) {
   const profile = () => fromRow(props.row);
   const problems = () => profileProblems(profile(), props.others);
   const has = (problem: ProfileProblem) => problems().includes(problem);
   const patch = (next: Partial<BackupProfileConfig>) => props.onChange({ profile: { ...props.row.profile, ...next } });
   // Advanced starts open when the profile already keeps daily or weekly backups.
+  const [showSkip, setShowSkip] = createSignal(untrack(() => !!props.row.excludeText.trim()), { name: 'server-backup-fields:skip' });
   const [advanced, setAdvanced] = createSignal(untrack(() => retentionAdvanced(props.row.profile)), { name: 'server-backup-fields:advanced' });
   // Legacy tiers stay listed for the whole edit once shown, so clearing one doesn't move the rows.
   const legacy = LEGACY.filter((rule) => (untrack(() => props.row.profile[rule.field]) ?? 0) > 0);
@@ -91,12 +92,38 @@ function ProfileFields(props: { connectionId: string; row: Row; others: readonly
   );
   return (
     <div data-vesta="backup-form">
-      <div data-vesta="backup-form-column">
+      <div data-vesta="backup-form-name">
         <TextField size="sm" label={t('servers.backup-setup.name')} value={props.row.profile.name}
           disabled={props.readOnly} autocomplete="off" spellcheck="false"
           error={has('name') ? t(problemText.name) : has('name-taken') ? t(problemText['name-taken']) : undefined}
           onChange={(next: string) => patch({ name: next.toLowerCase().replace(/\s+/g, '-') })} />
-
+      </div>
+      <div data-vesta="backup-form-column">
+        <div data-vesta="backup-form-field">
+          <span data-vesta="backup-form-label">{t('servers.backup-setup.scope')}</span>
+          <SegmentedControl size="sm" aria-label={t('servers.backup-setup.scope')} value={props.row.scope} disabled={props.readOnly}
+            onChange={(value) => props.onChange({ scope: value as Row['scope'] })}
+            options={[{ value: 'all', label: t('servers.backup-setup.scope-all') }, { value: 'some', label: t('servers.backup-setup.scope-some') }]} />
+        </div>
+        <Show when={props.row.scope === 'some'}>
+          <div data-vesta="backup-form-field">
+            <BackupFileSelection connectionId={props.connectionId} value={props.row.includeText} disabled={props.readOnly} onChange={next => props.onChange({ includeText: next })} />
+            <span data-vesta="backup-form-help">{props.row.includeText.split('\n').filter(Boolean).join(', ')}</span>
+            <Show when={has('include')}><span role="alert">{t(problemText.include)}</span></Show>
+          </div>
+        </Show>
+        <button type="button" data-vesta="backup-advanced" aria-expanded={showSkip() || has('exclude') ? 'true' : 'false'}
+          disabled={has('exclude')} onClick={() => setShowSkip(!showSkip())}>
+          <Icon name="icons/controls/chevron-right" size={12} />
+          {t('servers.backup-setup.exclude')}
+        </button>
+        <Show when={showSkip() || has('exclude')}>
+          <TextArea size="sm" rows={2} aria-label={t('servers.backup-setup.exclude')}
+            description={t('servers.backup-setup.exclude-help')} placeholder={'logs/\n*.tmp'} value={props.row.excludeText} disabled={props.readOnly}
+            error={has('exclude') ? t(problemText.exclude) : undefined} onChange={(next: string) => props.onChange({ excludeText: next })} />
+        </Show>
+      </div>
+      <div data-vesta="backup-form-column">
         <div data-vesta="backup-form-field">
           <span data-vesta="backup-form-label">{t('servers.backup-setup.mode')}</span>
           <SegmentedControl size="sm" aria-label={t('servers.backup-setup.mode')} value={props.row.profile.mode} disabled={props.readOnly}
@@ -125,26 +152,6 @@ function ProfileFields(props: { connectionId: string; row: Row; others: readonly
             <p data-vesta="server-callout" data-tone="warning">{t('servers.backup-setup.keeps-everything')}</p>
           </Show>
         </div>
-      </div>
-
-      <div data-vesta="backup-form-column">
-        <div data-vesta="backup-form-field">
-          <span data-vesta="backup-form-label">{t('servers.backup-setup.scope')}</span>
-          <SegmentedControl size="sm" aria-label={t('servers.backup-setup.scope')} value={props.row.scope} disabled={props.readOnly}
-            onChange={(value) => props.onChange({ scope: value as Row['scope'] })}
-            options={[{ value: 'all', label: t('servers.backup-setup.scope-all') }, { value: 'some', label: t('servers.backup-setup.scope-some') }]} />
-        </div>
-        <div style={{ "min-height": "72px" }}><Show when={props.row.scope === 'some'}>
-          <div data-vesta="backup-form-field">
-            <BackupFileSelection connectionId={props.connectionId} value={props.row.includeText} disabled={props.readOnly} onChange={next => props.onChange({ includeText: next })} />
-            <span data-vesta="backup-form-help">{props.row.includeText.split('\n').filter(Boolean).join(', ')}</span>
-            <Show when={has('include')}><span role="alert">{t(problemText.include)}</span></Show>
-          </div>
-        </Show>
-        </div>
-        <TextArea size="sm" rows={2} label={t('servers.backup-setup.exclude')}
-          placeholder={'logs/\n*.tmp'} value={props.row.excludeText} disabled={props.readOnly}
-          error={has('exclude') ? t(problemText.exclude) : undefined} onChange={(next: string) => props.onChange({ excludeText: next })} />
       </div>
     </div>
   );
@@ -196,7 +203,7 @@ function useConfigSave(snapshot: () => ServerSnapshot, configuration: () => Back
   return { save, saving, error, stale, uncertain };
 }
 
-/** First-time setup, inline: one suggested profile in two columns, then turn on. */
+/** First-time setup starts with one suggested profile. */
 export function BackupSetup(props: { snapshot: ServerSnapshot; onEnabled: (profile: string) => void }) {
   const connection = stableConnectionId(() => props.snapshot);
   const config = useServerResource(connection, backupConfigResource);
@@ -226,12 +233,12 @@ export function BackupSetup(props: { snapshot: ServerSnapshot; onEnabled: (profi
               <ProfileFields connectionId={props.snapshot.connection.id} row={row()} others={[]} onChange={(patch) => setRow((value) => ({ ...value, ...patch }))} />
               <Show when={saver.stale()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('servers.backup-setup.stale')}</p></Show>
               <Show when={saver.uncertain()}><p data-vesta="server-callout" data-tone="warning" role="status">{t('servers.backup-setup.uncertain')}</p></Show>
-              <div data-vesta="backup-form-actions">
+              <footer data-vesta="backup-form-actions">
                 <StorageNote configuration={current()} />
                 <Button tone="accent" icon={<Icon name="icons/content/storage" />} disabled={saver.saving() || !valid()} onClick={() => void turnOn()}>
                   {t(saver.saving() ? 'servers.backup-setup.turning-on' : saver.uncertain() ? 'servers.backup-setup.retry' : 'servers.backup-setup.turn-on')}
                 </Button>
-              </div>
+              </footer>
             </>
           )}
         </Show>

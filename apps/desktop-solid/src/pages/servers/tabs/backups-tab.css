@@ -45,6 +45,33 @@
     min-inline-size: 0;
   }
 
+  :where([data-vesta="backup-form-name"]) {
+    grid-column: 1 / -1;
+    max-inline-size: 26rem;
+  }
+
+  :where([data-server-panel="backup-setup"]) {
+    max-inline-size: 53rem;
+  }
+
+  :where([data-server-panel="backup-setup"] [data-vesta="backup-form-actions"]) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-server-panel="backup-setup"] [data-vesta="backup-location"]) {
+    flex-wrap: wrap;
+  }
+
+  :where([data-server-panel="backup-setup"] [data-vesta="backup-location"] code) {
+    max-inline-size: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  :where([data-vesta="backup-form-column"] > [data-vesta="backup-advanced"]) {
+    align-self: flex-start;
+  }
+
   :where([data-vesta="backup-form-field"]) {
     display: flex;
     flex-direction: column;
@@ -66,7 +93,7 @@
   /* Retention: "lead [count] unit" rows in one grid, so the counts share a column. */
   :where([data-vesta="backup-keep"]) {
     display: grid;
-    grid-template-columns: max-content 88px max-content;
+    grid-template-columns: minmax(0, max-content) 88px minmax(0, max-content);
     align-items: center;
     gap: var(--vesta-space-2);
     font-size: var(--vesta-text-sm);
@@ -83,7 +110,6 @@
 
   :where([data-vesta="backup-keep-lead"]) > * {
     grid-area: 1 / 1;
-    white-space: nowrap;
   }
 
   :where([data-vesta="backup-keep-sizer"]) {
