@@ -81,7 +81,7 @@
     align-items: stretch;
     gap: 0;
     box-sizing: border-box;
-    block-size: var(--segmented-height);
+    min-block-size: var(--segmented-height);
     max-inline-size: 100%;
     overflow-x: auto;
     padding: var(--segmented-padding);
@@ -174,18 +174,16 @@
     gap: var(--vesta-space-2);
     align-items: center;
     justify-content: center;
-    line-height: var(--vesta-leading-tight);
+    line-height: var(--vesta-leading-normal);
     padding-block: 0.15em;
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     cursor: inherit;
   }
 
   :where([data-vesta='segmented-text']) {
     display: block;
     min-inline-size: 0;
-    overflow: hidden;
+    overflow: clip visible;
     text-overflow: ellipsis;
   }
 

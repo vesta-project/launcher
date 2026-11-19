@@ -117,7 +117,11 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
           <section aria-labelledby="overview-shots">
             <header data-vesta="overview-panel-header">
               <h2 id="overview-shots">{t("overview.screenshots")}</h2>
-              <span data-vesta="overview-quiet">{shots().length}</span>
+              <Show when={shots().length > 5}>
+                <Button size="sm" variant="ghost" onClick={() => setViewer(0)}>
+                  {t("overview.view-all-count", { count: shots().length })}
+                </Button>
+              </Show>
             </header>
             <ul data-vesta="shot-grid">
               <For each={shots().slice(0, 5)}>

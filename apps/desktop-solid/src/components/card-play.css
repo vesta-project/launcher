@@ -10,6 +10,7 @@
     --play-fill-active: var(--play-fill-hover);
 
     display: inline-grid;
+    box-sizing: border-box;
     flex: none;
     place-items: center;
     inline-size: 36px;

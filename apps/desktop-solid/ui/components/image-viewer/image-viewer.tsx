@@ -617,6 +617,7 @@ export function ImageViewer(props: ImageViewerProps) {
                             <img
                               data-vesta="image-viewer-image"
                               src={image.src}
+                              loading={Math.abs(index() - slideIndex()) <= 1 ? 'eager' : 'lazy'}
                               draggable="false"
                               alt={image.alt ?? image.title ?? ''}
                               style={{

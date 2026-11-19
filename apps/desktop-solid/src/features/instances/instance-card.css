@@ -114,7 +114,6 @@
   @media (hover: hover) {
     :where([data-vesta='instance-card']:hover) {
       box-shadow: var(--vesta-shadow-md);
-      transform: scale(1.03);
     }
 
     :where([data-vesta='instance-card']:hover)::after {

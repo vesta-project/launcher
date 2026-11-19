@@ -33,15 +33,15 @@
     gap: var(--vesta-space-2);
   }
   :where(.install-import-methods) {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-auto-rows: minmax(66px, auto);
     gap: 8px;
   }
   :where(.install-import-launchers) {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-auto-rows: minmax(66px, auto);
     gap: 8px;
-    margin-block-start: 8px;
   }
   :where(.install-import-row) {
     display: flex;
@@ -126,9 +126,10 @@
    from the side it came from. */
 @layer launcher {
   :where(.install-import-back) {
-    margin-block: calc(var(--vesta-space-1) * -1);
+    block-size: 1lh;
+    align-items: center;
     display: inline-flex;
-    overflow: hidden;
+    overflow: clip visible;
     max-inline-size: 0;
     margin-inline-end: calc(var(--vesta-space-2) * -1);
     opacity: 0;

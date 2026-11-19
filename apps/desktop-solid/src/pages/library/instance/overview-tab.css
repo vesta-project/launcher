@@ -216,7 +216,7 @@
   .overview-world-play {
     inline-size: 28px;
     block-size: 28px;
-    padding: 6px;
+    padding: 0;
     position: absolute;
     inset-block-start: var(--vesta-space-4);
     inset-inline-end: var(--vesta-space-4);
@@ -268,7 +268,7 @@
     position: absolute;
     inset: auto 0 0;
     padding: var(--vesta-space-1-5) var(--vesta-space-2);
-    background: linear-gradient(transparent, color-mix(in oklab, var(--vesta-color-media-shade) 70%, transparent));
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 85%, transparent);
     color: var(--vesta-color-media-text);
     font-size: var(--vesta-text-xs);
     text-align: start;
@@ -276,10 +276,12 @@
 
   :where(.shot-copy) {
     position: absolute;
-    inset: var(--vesta-space-1) var(--vesta-space-1) auto auto;
+    inset: var(--vesta-space-2) var(--vesta-space-2) auto auto;
     opacity: 0;
-    background: color-mix(in oklab, var(--vesta-color-media-shade) 80%, transparent);
-    color: var(--vesta-color-media-text);
+    --button-bg: color-mix(in oklab, var(--vesta-color-media-shade) 85%, transparent);
+    --button-bg-hover: var(--vesta-color-media-shade);
+    --button-bg-active: var(--vesta-color-media-shade);
+    --button-fg: var(--vesta-color-media-text);
   }
 
   :where(

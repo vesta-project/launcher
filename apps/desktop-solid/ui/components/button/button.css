@@ -131,8 +131,8 @@
 
   :where([data-vesta='button-label']) {
     min-inline-size: 0;
-    padding-block: 0.15em;
-    overflow: hidden;
+    line-height: var(--vesta-leading-normal);
+    overflow: clip visible;
     text-overflow: ellipsis;
   }
 }
