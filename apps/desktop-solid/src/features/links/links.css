@@ -61,6 +61,12 @@
     inset-inline: auto var(--vesta-space-2);
   }
 
+  :where([data-vesta='link-preview'][data-scoped]) {
+    position: absolute;
+    max-inline-size: min(40rem, calc(100% - var(--vesta-space-4)));
+    font-family: var(--vesta-font-mono);
+  }
+
   @keyframes vesta-link-preview-in {
     from {
       opacity: 0;

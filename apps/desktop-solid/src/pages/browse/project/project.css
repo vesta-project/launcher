@@ -37,6 +37,7 @@
 @layer launcher {
   .project-board {
     --project-gutter: 24px;
+    --rich-text-size: 1rem;
     --project-bar-bg: color-mix(in oklab, var(--vesta-color-surface-sunken) 70%, var(--vesta-color-surface));
     /* The facts column is raised off the pane, like the instance Overview's panels. */
     --project-facts-bg: var(--vesta-color-surface-raised);

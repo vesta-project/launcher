@@ -50,6 +50,20 @@
     min-inline-size: 0;
   }
 
+  .browse-sources {
+    --segmented-height: max(var(--vesta-size-control-sm), 26px);
+    --segmented-icon-size: 18px;
+  }
+
+  .browse-sources :where([data-vesta='segmented-item']) {
+    min-inline-size: calc(var(--segmented-icon-size) + var(--vesta-space-3));
+  }
+
+  .browse-sources :where([data-vesta='icon']) {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
   /* Types read as tabs, not a second button group: no track, a sliding accent underline. */
   :where(.browse-type-tabs) {
     --segmented-track-bg: transparent;
@@ -81,7 +95,6 @@
     margin-inline-start: auto;
   }
 
-  /* Sort is quiet until hovered: no box at rest. */
   :where(.browse-sort-select) {
     min-inline-size: 8.5rem;
   }

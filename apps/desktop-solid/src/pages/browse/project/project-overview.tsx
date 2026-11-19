@@ -27,7 +27,8 @@ import { ServerFacts } from './server-project';
 
 const linkIcon = (link: ProjectLink) => {
   const identity = `${link.kind} ${link.label} ${link.url}`.toLowerCase();
-  if (/discord|chat|matrix|zulip/.test(identity)) return 'icons/content/chat';
+  if (/discord/.test(identity)) return 'branding/services/discord';
+  if (/chat|matrix|zulip/.test(identity)) return 'icons/content/chat';
   if (/issue|bug|tracker/.test(identity)) return 'icons/status/bug';
   if (/source|github|gitlab|codeberg|code/.test(identity)) return 'icons/content/code';
   if (/wiki|docs|documentation/.test(identity)) return 'icons/content/help';

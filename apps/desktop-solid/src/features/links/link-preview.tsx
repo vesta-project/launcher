@@ -1,9 +1,6 @@
 import { Portal } from '@solidjs/web';
 import { useOverlayMount } from '@vesta/ui';
-import { createMemo, createSignal, onSettled, Show } from 'solid-js';
-import { t } from '../../localization';
-import { parseProjectUrl, sourceById } from '../browse/browse-model';
-import { peekProject } from '../browse/browse-projects';
+import { createSignal, onSettled, Show } from 'solid-js';
 import './links.css';
 
 /** Elements whose address is worth previewing: real links, and buttons that open one (`data-href`). */
@@ -31,26 +28,14 @@ function readable(href: string) {
 
 /**
  * The browser-style status pill: while a link is hovered or focused, its address shows in the
- * bottom-left corner of the window (bottom-right when the link itself sits there). A link to a
- * project the launcher can open names that project instead, once it is known. Mount once, in
- * the shell; it listens on the document, so any `a[href]` or `[data-href]` takes part.
+ * bottom corner of the resource board or window. Mount once in the shell so links
+ * are handled whether their content was rendered by Solid or by the Markdown viewer.
  */
 export function LinkPreview() {
   const mount = useOverlayMount();
   const [href, setHref] = createSignal<string | undefined>(undefined, { name: 'linkPreviewHref' });
   const [side, setSide] = createSignal<'start' | 'end'>('start', { name: 'linkPreviewSide' });
-
-  const label = createMemo(
-    () => {
-      const value = href();
-      if (!value) return undefined;
-      const project = parseProjectUrl(value);
-      const known = project && peekProject(project.platform, project.id);
-      if (project && known) return t('links.preview-project', { name: known.name, source: sourceById(project.platform).label });
-      return readable(value);
-    },
-    { name: 'linkPreviewLabel' },
-  );
+  const [board, setBoard] = createSignal<HTMLElement | undefined>(undefined, { name: 'linkPreviewBoard' });
 
   onSettled(() => {
     let current: HTMLElement | undefined;
@@ -58,13 +43,18 @@ export function LinkPreview() {
       if (!found) {
         current = undefined;
         setHref(undefined);
+        setBoard(undefined);
         return;
       }
       if (found.element === current && found.href === href()) return;
       current = found.element;
+      const owner = found.element.closest<HTMLElement>('.project-board') ?? undefined;
+      setBoard(owner);
       // Like a browser, step aside when the link itself sits in the corner.
       const box = found.element.getBoundingClientRect();
-      setSide(box.bottom > window.innerHeight - 40 && box.left < window.innerWidth / 2 ? 'end' : 'start');
+      const bounds = owner?.getBoundingClientRect();
+      setSide(box.bottom > (bounds?.bottom ?? window.innerHeight) - 40 &&
+        box.left < (bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2) ? 'end' : 'start');
       setHref(found.href);
     };
     const hide = () => show(undefined);
@@ -94,14 +84,18 @@ export function LinkPreview() {
   });
 
   return (
-    <Portal mount={mount}>
-      <Show when={label()}>
-        {(text) => (
-          <div data-vesta="link-preview" data-side={side()} aria-hidden="true">
-            {text()}
-          </div>
-        )}
-      </Show>
-    </Portal>
+    <Show when={href()}>
+      {(value) => (
+        <Show when={{ owner: board() ?? mount }} keyed>
+          {(target) => (
+            <Portal mount={target.owner}>
+              <div data-vesta="link-preview" data-scoped={board() ? '' : undefined} data-side={side()} aria-hidden="true">
+                {readable(value())}
+              </div>
+            </Portal>
+          )}
+        </Show>
+      )}
+    </Show>
   );
 }

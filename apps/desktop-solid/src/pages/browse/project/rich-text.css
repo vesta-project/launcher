@@ -8,8 +8,8 @@
   :where([data-vesta='rich-text']) {
     min-inline-size: 0;
     color: var(--vesta-color-text);
-    font-size: var(--vesta-text-md);
-    line-height: 1.6;
+    font-size: var(--rich-text-size, var(--vesta-text-md));
+    line-height: 1.5;
     overflow-wrap: anywhere;
   }
 
@@ -33,22 +33,22 @@
   }
 
   :where([data-vesta='rich-text']) :where(h1) {
-    font-size: var(--vesta-text-xl);
+    font-size: 1.6em;
   }
 
   :where([data-vesta='rich-text']) :where(h2) {
     padding-block-end: 0.3em;
     border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
-    font-size: var(--vesta-text-lg);
+    font-size: 1.35em;
   }
 
   :where([data-vesta='rich-text']) :where(h3) {
-    font-size: var(--vesta-text-md);
+    font-size: 1.15em;
   }
 
   :where([data-vesta='rich-text']) :where(h4, h5, h6) {
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
+    font-size: 1em;
   }
 
   :where([data-vesta='rich-text']) :where(ul, ol) {

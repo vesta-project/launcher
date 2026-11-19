@@ -74,8 +74,17 @@ function Browser() {
     () => source(),
     (id) => ensureCategories(id),
   );
-  // Reading the query at apply time is the point: it is the latest committed state.
-  createEffect(key, () => void loadResults(untrack(query)));
+  // Give the newly mounted toolbar and skeletons a paint before starting a cold search.
+  createEffect(key, () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => void loadResults(untrack(query)), 0);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  });
 
   onSettled(() => listenForInstalls());
 
