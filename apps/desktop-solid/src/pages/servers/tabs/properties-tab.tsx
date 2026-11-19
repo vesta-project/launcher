@@ -195,7 +195,6 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
     return (
       <>
         <Show when={summary().edited > 0}><Badge size="sm" variant="soft" tone="warning">{t('server-settings.summary-edited', { count: summary().edited })}</Badge></Show>
-        <Show when={summary().edited === 0 && summary().customized > 0}><Badge size="sm" variant="soft" tone="neutral">{t('server-settings.summary-customized', { count: summary().customized })}</Badge></Show>
         <span>{t('server-settings.summary-count', { count: summary().count })}</span>
       </>
     );

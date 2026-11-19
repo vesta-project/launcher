@@ -20,7 +20,7 @@ import { agentReachable } from '../../../features/servers/shell-model';
 import { putOperations, serverCommand, serverPlayers, useServersClock } from '../../../features/servers/store';
 import type { ModerationAction, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { CopyValue, SectionLink, SettingsColumns, SettingsPage, SettingsPanel, SettingsSearch } from '../settings-parts';
+import { CopyValue, SectionLink, SettingsPage, SettingsSearch } from '../settings-parts';
 
 type Action = ModerationAction['action'];
 type Request = { action: Action; player: string; choices?: Action[] };
@@ -144,24 +144,17 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
 
   return (
     <SettingsPage class="server-player-manager">
-      <SettingsColumns aside={
-        <Show when={changesWhitelist() && whitelistOn() !== null}>
-          <SettingsPanel title={t('servers.players.whitelist')} name="player-whitelist"
-            description={t(whitelistOn() ? 'servers.people.whitelist-on' : 'servers.people.whitelist-off')}
-            action={<SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>} />
-        </Show>
-      }>
+      <div data-server-player-directory>
         <div data-vesta="server-settings-bar" data-server-player-toolbar>
-          <SegmentedControl
+          <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
+          <Select
             size="md"
             aria-label={t('servers.tab.players')}
             value={filter()}
             onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
             options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
           />
-          {/* Search and Add player travel together, so a wrap never strands the button on its own row. */}
-          <div data-vesta="server-settings-bar-end">
-            <SettingsSearch value={query()} onChange={(value) => { setQuery(value); setPage(0); }} placeholder={t('servers.people.search')} />
+          <div data-server-player-add>
             <Show when={moderate() || operator()}>
               <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
                 {t('servers.people.add')}
@@ -169,6 +162,12 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
             </Show>
           </div>
         </div>
+        <Show when={changesWhitelist() && whitelistOn() !== null}>
+          <div data-server-player-whitelist>
+            <span>{t(whitelistOn() ? 'servers.people.whitelist-on' : 'servers.people.whitelist-off')}</span>
+            <SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>
+          </div>
+        </Show>
         <section data-server-player-results>
           <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
@@ -206,7 +205,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
             </Show>
           </Show>
         </section>
-      </SettingsColumns>
+      </div>
       <Show when={dialog()} keyed>
         {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>

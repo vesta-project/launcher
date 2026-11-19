@@ -7,7 +7,6 @@ import {
   MenuCheckboxItem,
   MenuItem,
   MenuSeparator,
-  MenuSub,
   Select,
   TextField,
 } from "@vesta/ui";
@@ -17,7 +16,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  onSettled,
 } from "solid-js";
 import { t } from "../../localization";
 import { VirtualList } from "../virtual-list";
@@ -85,18 +83,6 @@ export interface LogViewProps {
 export function LogView(props: LogViewProps) {
   const [copyStatus, setCopyStatus] = createSignal("", {
     name: "log-view:copy-status",
-  });
-  let root!: HTMLDivElement;
-  const [compact, setCompact] = createSignal(false, {
-    name: "log-view:compact-toolbar",
-  });
-  onSettled(() => {
-    const pane = root.closest(".instance-pane") ?? root;
-    const observer = new ResizeObserver(([entry]) =>
-      setCompact(entry.contentRect.width <= 560),
-    );
-    observer.observe(pane);
-    return () => observer.disconnect();
   });
   const [metadata, setMetadata] = createSignal(false, {
     name: "log-view:metadata",
@@ -227,9 +213,6 @@ export function LogView(props: LogViewProps) {
   return (
     <div
       data-vesta="console"
-      ref={(element) => {
-        root = element;
-      }}
       data-metadata={metadata() ? "" : undefined}
     >
       <header data-vesta="console-toolbar">
@@ -251,27 +234,27 @@ export function LogView(props: LogViewProps) {
           value={props.state().query}
           onChange={(query) => patch({ query })}
         />
-        <div data-vesta="console-levels" role="group" aria-label={t("console.levels")}>
+        <Menu
+          placement="bottom-end"
+          trigger={(menuProps) => (
+            <Button {...menuProps} size="sm"
+              variant={props.state().levels.length === LOG_LEVELS.length ? "outline" : "solid"}
+              icon={<Icon name="icons/content/filter" />}>
+              {t("console.levels")}
+            </Button>
+          )}
+        >
           <For each={levels}>
             {(level) => (
-              <button
-                type="button"
-                data-vesta="console-level"
-                data-level={level.id}
-                aria-pressed={
-                  props.state().levels.includes(level.id) ? "true" : "false"
-                }
-                onClick={() => toggleLevel(level.id)}
+              <MenuCheckboxItem
+                checked={props.state().levels.includes(level.id)}
+                onChange={() => toggleLevel(level.id)}
               >
-                <span data-vesta="console-level-dot" />
-                {level.label}
-                <span data-vesta="console-level-count">
-                  {counts()[level.id] ?? 0}
-                </span>
-              </button>
+                {level.label} ({counts()[level.id] ?? 0})
+              </MenuCheckboxItem>
             )}
           </For>
-        </div>
+        </Menu>
         {props.toolbarExtras}
         <Menu
           placement="bottom-end"
@@ -287,21 +270,6 @@ export function LogView(props: LogViewProps) {
             />
           )}
         >
-          <Show when={compact()}>
-            <MenuSub label={t("console.levels")}>
-              <For each={levels}>
-                {(level) => (
-                  <MenuCheckboxItem
-                    checked={props.state().levels.includes(level.id)}
-                    onChange={() => toggleLevel(level.id)}
-                  >
-                    {level.label}
-                  </MenuCheckboxItem>
-                )}
-              </For>
-            </MenuSub>
-            <MenuSeparator />
-          </Show>
           <MenuItem onSelect={() => void copy(true)}>
             {t("console.copy-displayed")}
           </MenuItem>

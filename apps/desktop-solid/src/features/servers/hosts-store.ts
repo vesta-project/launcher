@@ -21,7 +21,7 @@ const fixtureScenario = (key: string) => globalThis.localStorage?.getItem(`vesta
 const api = (): Promise<HostsApi> => (nativeServers
   ? Promise.resolve(hostsNative)
   : (fixtureApi ??= import('./host-fixtures').then((module) => module.createHostFixtures({
-    hosts: fixtureScenario('hosts'), found: fixtureScenario('import'), signin: fixtureScenario('signin'), create: fixtureScenario('create'), remove: fixtureScenario('remove'),
+    hosts: fixtureScenario('hosts') ?? 'servers', found: fixtureScenario('import'), signin: fixtureScenario('signin'), create: fixtureScenario('create'), remove: fixtureScenario('remove'),
   }))));
 
 /** Run a host command, normalizing rejections into the closed error model. */

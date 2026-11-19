@@ -112,10 +112,21 @@ export function machineRemoval(snapshot: ServerSnapshot): string | null {
 /** Settings > General: one quiet row at the end, for owners of the server's Vesta Server. */
 export function HostRemoveRow(props: { snapshot: ServerSnapshot }) {
   const [open, setOpen] = createSignal(false, { name: 'host-remove:row-open' });
+  const olderHost = () => {
+    const ref = machineRef(props.snapshot);
+    if (!ref) return null;
+    const info = hostInfo(ref.hostId);
+    if (!info || !canRemoveFromMachine(info.role ?? props.snapshot.connection.role) || hostOffersRemove(ref.hostId)) return null;
+    return vestaHost(ref.hostId)?.name ?? t('servers.host-remove.your-machine');
+  };
   // Remembered once shown, so the dialog's "needs a newer Vesta Server" line stays readable.
   const [shown, setShown] = createSignal(untrack(() => machineRemoval(props.snapshot)), { name: 'host-remove:row-machine' });
   return (
-    <Show when={machineRemoval(props.snapshot) ?? (open() ? shown() : null)}>
+    <Show when={machineRemoval(props.snapshot) ?? (open() ? shown() : null)} fallback={
+      <Show when={olderHost()}>
+        {(machine) => <SettingRow label={t('servers.host-remove.setting')} description={t(removeProblemLines.older, { machine: machine() })} children={null} />}
+      </Show>
+    }>
       {(machine) => (
         <div data-vesta="host-remove-row">
           <SettingRow label={t('servers.host-remove.setting')} description={t('servers.host-remove.setting-help', { machine: machine() })}>

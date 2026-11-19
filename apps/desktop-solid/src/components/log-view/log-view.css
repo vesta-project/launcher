@@ -1,11 +1,11 @@
 /*
  * Log view (instance and server consoles): toolbar, a terminal surface that runs edge
  * to edge, and a status bar.
- * Hooks: [data-vesta=console] -toolbar -levels -level -level-dot -level-count -log -status
+ * Hooks: [data-vesta=console] -toolbar -log -status
  *        -empty; [data-vesta=log-line] (data-level) log-level log-thread log-text
  *        log-truncated; [data-vesta=log-gap] log-gap-detail
- * States: console: data-metadata; log: data-wrap; level: aria-pressed, data-level
- * Knobs: --console-bg, --console-fg, --level-color
+ * States: console: data-metadata; log: data-wrap
+ * Knobs: --console-bg, --console-fg
  *
  * Lines are flush rows with no gaps or stripes, like a real terminal. Only warnings and
  * errors are marked: a coloured rail on the left and a faint wash across the line.
@@ -39,75 +39,6 @@
   .console-actions {
     flex: none;
     margin-inline-start: auto;
-  }
-
-  /* Level filters: one joined control, each level in its own colour with its count. */
-  :where([data-vesta="console-levels"]) {
-    display: inline-flex;
-    flex: none;
-    padding: 2px;
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-surface-sunken);
-  }
-
-  :where([data-vesta="console-level"]) {
-    --level-color: var(--vesta-color-accent);
-
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    block-size: calc(var(--vesta-size-control-sm) - 6px);
-    padding-inline: 8px;
-    border: 0;
-    border-radius: calc(var(--vesta-radius-sm) - 2px);
-    background: transparent;
-    color: var(--vesta-color-text-subtle);
-    font: inherit;
-    font-size: var(--vesta-text-xs);
-    font-weight: var(--vesta-weight-medium);
-    cursor: default;
-    transition:
-      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
-      color var(--vesta-duration-fast) var(--vesta-ease-standard);
-  }
-
-  :where([data-vesta="console-level"][data-level="WARN"]) {
-    --level-color: var(--vesta-color-warning);
-  }
-
-  :where([data-vesta="console-level"][data-level="ERROR"]) {
-    --level-color: var(--vesta-color-danger);
-  }
-
-  :where([data-vesta="console-level"][data-level="DEBUG"]) {
-    --level-color: var(--vesta-color-text-subtle);
-  }
-
-  :where([data-vesta="console-level"]:hover) {
-    color: var(--vesta-color-text-muted);
-  }
-
-  :where([data-vesta="console-level"][aria-pressed="true"]) {
-    background: color-mix(in oklab, var(--level-color) 16%, transparent);
-    color: var(--vesta-color-text);
-  }
-
-  :where([data-vesta="console-level-dot"]) {
-    inline-size: 7px;
-    block-size: 7px;
-    border-radius: 50%;
-    background: var(--level-color);
-    opacity: 0.35;
-  }
-
-  :where([data-vesta="console-level"][aria-pressed="true"] [data-vesta="console-level-dot"]) {
-    opacity: 1;
-  }
-
-  :where([data-vesta="console-level-count"]) {
-    color: var(--vesta-color-text-subtle);
-    font-variant-numeric: tabular-nums;
   }
 
   /* ---- Terminal surface ---- */
@@ -265,16 +196,6 @@
     }
 
     :where([data-vesta="console"][data-metadata] [data-vesta="log-thread"]) {
-      display: none;
-    }
-
-    :where([data-vesta="console-level-count"]) {
-      display: none;
-    }
-  }
-
-  @container pane (max-width: 560px) {
-    :where([data-vesta="console-levels"]) {
       display: none;
     }
   }

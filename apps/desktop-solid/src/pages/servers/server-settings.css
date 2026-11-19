@@ -6,11 +6,23 @@
  */
 @layer launcher {
   .server-player-manager { --content-max-width: var(--content-wide-max-width); }
+  .server-player-manager :where([data-server-player-directory]) {
+    display: grid;
+    gap: var(--vesta-space-3);
+  }
   .server-player-manager :where([data-server-player-toolbar]) {
-    padding: var(--vesta-space-3);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-surface-raised);
+    gap: var(--vesta-space-2);
+  }
+  .server-player-manager :where([data-server-player-add]) {
+    margin-inline-start: auto;
+  }
+  .server-player-manager :where([data-server-player-whitelist]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-1) var(--vesta-space-2);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
   }
   .server-player-manager :where([data-server-player-results] > [data-vesta="empty-state"]) {
     border: var(--vesta-border-width) solid var(--vesta-color-border);
