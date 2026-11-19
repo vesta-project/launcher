@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 import { ActivityLedger, backgroundList, readyList, selectPill, visibleTaskList, weightedProgress } from '../src/features/activity/activity-model';
+import { notificationDestination } from '../src/features/activity/notification-routes';
 const task = (id, patch = {}) => ({ id, kind: 'task', title: id, state: 'running', startedAt: 0, cancellable: true, ...patch });
+
+test('legacy update notifications open the in-app changelog', () => {
+  expect(notificationDestination({ path: '/changelog' }, [])).toEqual({ dialog: 'changelog' });
+});
 
 test('dismissing one failed row removes it without clearing active or other failed work', () => {
   const ledger = new ActivityLedger();

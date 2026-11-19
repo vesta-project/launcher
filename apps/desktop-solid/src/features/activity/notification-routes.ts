@@ -1,6 +1,6 @@
 import { instanceSlug } from '../instances/native-model';
 
-export type NotificationDestination = { route: string } | { url: string };
+export type NotificationDestination = { route: string } | { dialog: 'changelog' };
 type InstanceIdentity = { id: string | number; name: string };
 
 /** Translate the known old mini-router destinations at the UI boundary; stored actions stay intact. */
@@ -16,7 +16,7 @@ export function notificationDestination(
     ? payload.params as Record<string, unknown> : {};
   if (path === '/config') return { route: '/settings' };
   if (path === '/install' || path === '/install/import') return { route: '/create' };
-  if (path === '/changelog') return { url: 'https://github.com/vesta-project/launcher/releases' };
+  if (path === '/changelog') return { dialog: 'changelog' };
   if (path === '/instance') {
     const matches = instances.filter((item) => params.id != null
       ? String(item.id) === String(params.id)

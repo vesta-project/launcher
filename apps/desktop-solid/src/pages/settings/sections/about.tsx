@@ -2,7 +2,6 @@ import { getVersion } from '@tauri-apps/api/app';
 import { isTauri } from '@tauri-apps/api/core';
 import { Button, Dialog } from '@vesta/ui';
 import { For, Show, createSignal, onSettled } from 'solid-js';
-import { navigate } from '../../../app/router';
 import { openImport } from '../../../features/installation/import-request';
 import { Icon } from '../../../components/icon';
 import { openExternal } from '../../../features/links/external-links';
@@ -12,7 +11,7 @@ import { tour } from '../../../features/onboarding/tour';
 import { resetConfig, setting, updateSetting } from '../../../features/settings/config';
 import { updateStatus, checkForUpdates } from '../../../features/settings/updates';
 import { t } from '../../../localization';
-import { ChangelogDialog } from './changelog-dialog';
+import { openChangelog } from '../../../features/changelog/dialog-state';
 import { Card, ToggleRow } from '../parts';
 import './about.css';
 
@@ -41,7 +40,6 @@ const openLink = (url: string) => void openExternal(url);
 
 export function AboutSettings() {
   const [version, setVersion] = createSignal('0.2.0-dev');
-  const [changelogOpen, setChangelogOpen] = createSignal(false, { name: 'changelogOpen' });
   const status = () => updateStatus().state;
   const [resetting, setResetting] = createSignal(false);
   const checkNow = () => void checkForUpdates();
@@ -50,7 +48,6 @@ export function AboutSettings() {
   });
   return (
     <>
-      <ChangelogDialog open={changelogOpen()} onOpenChange={setChangelogOpen} version={version()} />
       <section data-vesta="prefs-about">
         <img src="/favicon.ico" alt="" width="56" height="56" draggable="false" />
         <div>
@@ -100,7 +97,7 @@ export function AboutSettings() {
           <Button
             variant="outline"
             icon={<Icon name="icons/content/history" />}
-            onClick={() => setChangelogOpen(true)}
+            onClick={openChangelog}
           >
             {t('prefs.about.view')}
           </Button>

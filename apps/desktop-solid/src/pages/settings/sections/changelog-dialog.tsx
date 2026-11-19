@@ -1,12 +1,21 @@
 import { Button, Dialog, Select, Skeleton } from '@vesta/ui';
-import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onSettled, untrack } from 'solid-js';
+import { getVersion } from '@tauri-apps/api/app';
+import { isTauri } from '@tauri-apps/api/core';
 import { Icon } from '../../../components/icon';
 import { loadReleases, sameVersion, type Release } from '../../../features/changelog/changelog';
+import { changelogOpen, setChangelogOpen } from '../../../features/changelog/dialog-state';
 import { highlightsFor, whatsNew } from '../../../features/whats-new';
 import { openExternal } from '../../../features/links/external-links';
 import { formatDate, t } from '../../../localization';
 import { RichTextView } from '../../browse/project/rich-text-view';
 import './changelog-dialog.css';
+
+export function GlobalChangelogDialog() {
+  const [version, setVersion] = createSignal('0.2.0-dev', { name: 'changelogLauncherVersion' });
+  onSettled(() => { if (isTauri()) void getVersion().then(setVersion).catch(() => undefined); });
+  return <ChangelogDialog open={changelogOpen()} onOpenChange={setChangelogOpen} version={version()} />;
+}
 
 /** A release picker beside one bounded reading pane; narrow windows use a select. */
 export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boolean) => void; version: string }) {

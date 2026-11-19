@@ -11,13 +11,14 @@
 @layer launcher {
   .changelog-dialog {
     --dialog-width: min(920px, calc(100vw - 48px));
+    block-size: min(calc(100dvh - 40px), 760px);
   }
 
   :where([data-vesta='changelog']) {
     display: grid;
     grid-template-columns: 180px minmax(0, 1fr);
     gap: var(--vesta-space-4);
-    block-size: min(70vh, 640px);
+    flex: 1 1 0;
     min-block-size: 0;
     min-inline-size: 0;
     overflow: hidden;
@@ -30,16 +31,23 @@
     container: changelog / inline-size;
   }
 
+  :where([data-vesta='changelog-versions'], [data-vesta='changelog-notes']) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
   :where([data-vesta='changelog-picker']) { display: none; }
 
   :where([data-vesta='changelog-versions']) {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--vesta-space-1);
     min-block-size: 0;
-    padding-inline-end: var(--vesta-space-2);
+    padding: var(--vesta-space-1);
     overflow-y: auto;
-    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-surface-sunken);
   }
 
   :where([data-vesta='changelog-version']) {

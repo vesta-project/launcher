@@ -22,6 +22,7 @@ import { BrowsePage } from '../pages/browse/browse-page';
 import { CreatePage } from '../pages/create/create-page';
 import { LibraryPage } from '../pages/library/library-page';
 import { SettingsPage } from '../pages/settings/settings-page';
+import { GlobalChangelogDialog } from '../pages/settings/sections/changelog-dialog';
 import { ServersPage } from '../pages/servers/servers-page';
 import { useServerStatusSync, useServerSync } from '../features/servers/store';
 import { useHostSync } from '../features/servers/hosts-store';
@@ -82,6 +83,7 @@ export function Shell() {
     <div ref={shellElement} data-vesta="shell" data-platform={platform}>
       <Titlebar />
       <AccountLoginDialog />
+      <GlobalChangelogDialog />
       <TooltipHints />
       <ToastRegion />
       <LinkPreview />
