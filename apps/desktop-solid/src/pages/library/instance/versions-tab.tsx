@@ -310,7 +310,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                   >
                     <Show when={listing.identity()}>
                       <MenuItem
-                        icon={<Icon name="icons/content/server" size={14} />}
+                        icon={<Icon name="icons/rail/servers" size={14} />}
                         disabled={busy()}
                         onSelect={() => setUnlinkingServer(true)}
                       >

@@ -82,7 +82,7 @@ function ServerList() {
       <Show when={hosts().length > 0 && !(empty() && single())}>
         <header data-vesta="vesta-group-header" data-list-header>
           <Show when={single()}>
-            {(host) => <Button size="sm" variant="ghost" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>
+            {(host) => <Button size="sm" variant="ghost" icon={<Icon name="icons/rail/servers" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>
               {host().name}<Reach hostId={host().id} />
             </Button>}
           </Show>
@@ -118,10 +118,10 @@ function ServerList() {
 /** One machine, no servers yet: the machine, whether it's online, and the one next step. */
 function MachineEmpty(props: { host: VestaHost }) {
   return (
-    <EmptyState icon="icons/content/server" title={props.host.name} status={<Reach hostId={props.host.id} />}
+    <EmptyState icon="icons/rail/servers" title={props.host.name} status={<Reach hostId={props.host.id} />}
       description={t(hostReach(props.host.id) === 'offline' ? 'vesta-server.list.machine-offline' : 'vesta-server.list.machine-empty', { name: props.host.name })}>
       <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/add`)}>{t('vesta-server.list.add-first')}</Button>
-      <Button variant="ghost" icon={<Icon name="icons/content/gear" />} onClick={() => transitionTo(`/servers/host/${props.host.id}`)}>{t('vesta-server.list.machine-settings')}</Button>
+      <Button variant="ghost" icon={<Icon name="icons/rail/settings" />} onClick={() => transitionTo(`/servers/host/${props.host.id}`)}>{t('vesta-server.list.machine-settings')}</Button>
     </EmptyState>
   );
 }
@@ -168,7 +168,7 @@ function ServerGroup(props: { host: VestaHost | null; other: boolean; servers: S
             icon={<Icon name={expanded() ? 'icons/controls/chevron-down' : 'icons/controls/chevron-right'} size={14} />}
             onClick={() => setExpanded(!expanded())}>{label()}</Button></h2>
           <Reach hostId={host().id} />
-          <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: label() })} icon={<Icon name="icons/content/gear" />}
+          <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: label() })} icon={<Icon name="icons/rail/settings" />}
             onClick={() => transitionTo(`/servers/host/${host().id}`)} />
         </header>}
       </Show>

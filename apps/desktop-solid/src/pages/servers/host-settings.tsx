@@ -114,7 +114,7 @@ function HostSettingsContent(props: { host: VestaHost }) {
         <header data-vesta="vesta-host-header">
           <Button size="sm" variant="ghost" icon={<Icon name="icons/navigation/arrow-back" />} onClick={() => transitionTo('/servers')}>{t('servers.done.all-servers')}</Button>
           <div>
-            <span data-vesta="vesta-host-icon"><Icon name="icons/content/server" size={22} /></span>
+            <span data-vesta="vesta-host-icon"><Icon name="icons/rail/servers" size={22} /></span>
             <h1>{props.host.name}</h1>
             <Show when={role()}>{(current) => <Badge variant="soft">{t(hostRoleLabel(current()))}</Badge>}</Show>
           </div>

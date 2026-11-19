@@ -229,7 +229,7 @@ export function ProjectView(props: { data: ProjectData; project: ResourceProject
             <Show when={gallery() > 0}>
               <Tab
                 value="gallery"
-                icon={<Icon name="icons/content/grid" size={14} />}
+                icon={<Icon name="icons/rail/library" size={14} />}
                 badge={<span data-vesta="project-tab-count">{formatNumber(gallery())}</span>}
               >
                 {t('browse.tab-gallery')}

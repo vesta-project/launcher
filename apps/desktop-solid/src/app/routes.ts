@@ -20,7 +20,7 @@ export interface NavItem {
 /** Rail destinations above the pinned instances. All rail icons share one stroke family (icons/rail). */
 export const mainNav: NavItem[] = [
   { id: 'library', label: 'nav.library', icon: 'icons/rail/library', href: '/library' },
-  { id: 'create', label: 'nav.create', icon: 'icons/rail/add', href: '/create' },
+  { id: 'create', label: 'nav.create', icon: 'icons/actions/add', href: '/create' },
   { id: 'browse', label: 'nav.browse', icon: 'icons/rail/browse', href: '/browse' },
 ];
 

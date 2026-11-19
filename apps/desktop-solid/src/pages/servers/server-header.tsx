@@ -74,7 +74,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
           <Show when={sleeping()}><span>{t(sleepingMessage(sleepPolicy.value()?.policy))}</span></Show>
         </HeaderIdentity>
         <div data-vesta="instance-header-actions">
-          <IconButton variant="ghost" label={t('servers.settings.title')} icon={<Icon name="icons/content/gear" />} onClick={props.onOpenSettings} />
+          <IconButton variant="ghost" label={t('servers.settings.title')} icon={<Icon name="icons/rail/settings" />} onClick={props.onOpenSettings} />
           <Menu
             placement="bottom-end"
             trigger={(menuProps) => (

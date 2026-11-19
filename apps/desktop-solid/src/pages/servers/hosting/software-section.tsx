@@ -40,7 +40,7 @@ const launchText = (launch: SoftwareLaunch | null | undefined) => launch?.custom
 
 /** The software's mark on a tile tinted with its colour; a server glyph for the original setup. */
 function SoftwareMark(props: { software: SoftwareId | null | undefined; size?: 'sm' | 'lg' }) {
-  return <SharedMark software={props.software ?? 'original'} icon={props.software ? softwareIcon[props.software] : 'icons/content/server'} size={props.size} />;
+  return <SharedMark software={props.software ?? 'original'} icon={props.software ? softwareIcon[props.software] : 'icons/rail/servers'} size={props.size} />;
 }
 
 /** Settings → Software: what runs the server, switching it inline, and quietly going back. */

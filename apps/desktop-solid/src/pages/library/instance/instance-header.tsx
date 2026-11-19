@@ -175,7 +175,7 @@ export function InstanceHeader(props: {
           <IconButton
             variant="ghost"
             label={t("instance.settings")}
-            icon={<Icon name="icons/content/gear" />}
+            icon={<Icon name="icons/rail/settings" />}
             onClick={props.onOpenSettings}
           />
           <Menu

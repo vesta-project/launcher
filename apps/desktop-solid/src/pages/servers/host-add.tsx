@@ -54,7 +54,7 @@ const makeLabels: Record<AddMode, MessageId> = { new: 'server-add.step.create', 
 /** The software's mark on its tinted tile, or a server glyph when the software isn't known. */
 function Mark(props: { kind: string | null | undefined; size?: 'sm' | 'lg' }) {
   const icon = () => (props.kind ? softwareIcon[props.kind as SoftwareId] : undefined);
-  return <SoftwareMark software={icon() ? props.kind! : 'original'} icon={icon() ?? 'icons/content/server'} size={props.size} />;
+  return <SoftwareMark software={icon() ? props.kind! : 'original'} icon={icon() ?? 'icons/rail/servers'} size={props.size} />;
 }
 
 export function HostAdd(props: { hostId: string }) {
@@ -438,7 +438,7 @@ function AddWizard(props: { hostId: string; machine: string }) {
             <div data-vesta="server-add-panel">
               <header data-vesta="vesta-step-intro">
                 <h1>{t('vesta-server.import.title')}</h1>
-                <span data-vesta="add-machine"><Icon name="icons/content/server" size={14} />{props.machine}</span>
+                <span data-vesta="add-machine"><Icon name="icons/rail/servers" size={14} />{props.machine}</span>
               </header>
 
               <Show when={loadError()}>

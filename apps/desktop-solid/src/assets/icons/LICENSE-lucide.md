@@ -1,6 +1,6 @@
 # Lucide icons
 
-These icons are from Lucide (https://lucide.dev, ISC licence), path data unchanged, restyled to the launcher stroke: content/plugin (puzzle), content/modpack (package), content/resource-pack (palette), content/datapack (braces), content/shader (sparkles), content/config (file-cog). Lucide includes icons derived from Feather (MIT); its full licence follows.
+The outline icons ported from the Opus asset pass are from Lucide (https://lucide.dev, ISC licence), restyled to the launcher 2px stroke. The launcher retains custom glyphs where they convey deliberate UI details. Lucide includes icons derived from Feather (MIT); its full licence follows.
 
 ### Lucide LICENSE (copied in full from `lucide-static@1.71.0`, `LICENSE`)
 

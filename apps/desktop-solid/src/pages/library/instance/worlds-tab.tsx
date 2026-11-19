@@ -252,13 +252,13 @@ export function WorldsTab(props: { entry: InstanceEntry }) {
                 <Show when={servers().length}><span>{servers().length}</span></Show>
               </header>
               <Show when={servers().length} fallback={
-                <EmptyState variant="inline" icon="icons/content/server" title={t("worlds.no-saved-servers")} description={t("worlds.saved-servers-hint")} />
+                <EmptyState variant="inline" icon="icons/rail/servers" title={t("worlds.no-saved-servers")} description={t("worlds.saved-servers-hint")} />
               }>
                 <ul data-vesta="world-list">
                   <For each={servers()}>{(server) => (
                     <li data-vesta="world-row" data-kind="server">
                       <span data-vesta="world-open">
-                        <Show when={server.icon} fallback={<span data-vesta="world-thumb" data-placeholder=""><Icon name="icons/content/server" size={18} /></span>}>
+                        <Show when={server.icon} fallback={<span data-vesta="world-thumb" data-placeholder=""><Icon name="icons/rail/servers" size={18} /></span>}>
                           <img data-vesta="world-thumb" src={server.icon ?? ''} alt="" loading="lazy" />
                         </Show>
                         <span data-vesta="world-copy">

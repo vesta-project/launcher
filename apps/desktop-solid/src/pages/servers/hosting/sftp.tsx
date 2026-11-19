@@ -84,7 +84,7 @@ function SftpDialog(props: { snapshot: ServerSnapshot; path: string; onClose: ()
       description={status.value() ? t(running() ? 'server-hosting.sftp-here-description' : 'server-hosting.sftp-off-description') : undefined}
       footer={
         <>
-          <Button variant={running() ? 'ghost' : 'solid'} tone={running() ? undefined : 'accent'} icon={<Icon name="icons/content/gear" />} onClick={settings}>
+          <Button variant={running() ? 'ghost' : 'solid'} tone={running() ? undefined : 'accent'} icon={<Icon name="icons/rail/settings" />} onClick={settings}>
             {t('server-hosting.sftp-settings')}
           </Button>
           <Show when={running()}>

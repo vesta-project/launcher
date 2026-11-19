@@ -30,7 +30,7 @@ export const syncCategories: {
     id: 'servers',
     label: 'prefs.sync.servers',
     description: 'prefs.sync.servers-description',
-    icon: 'icons/content/server',
+    icon: 'icons/rail/servers',
   },
   {
     id: 'resourcepacks',

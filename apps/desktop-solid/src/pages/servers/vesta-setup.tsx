@@ -451,7 +451,7 @@ export function VestaSetup() {
                           <li>
                             <button type="button" data-vesta="vesta-machine" data-state={state()} disabled={!!busy()} aria-busy={busy() === found.hostId ? 'true' : undefined}
                               onClick={() => void choose(found)}>
-                              <Icon name="icons/content/server" size={18} />
+                              <Icon name="icons/rail/servers" size={18} />
                               <span data-vesta="vesta-machine-text">
                                 <strong>{found.name ?? found.address}</strong>
                                 <span>{t(stateLabels[state()])}</span>
@@ -498,7 +498,7 @@ export function VestaSetup() {
                 {/* No code proves this is the machine, so say once which one is trusted. */}
                 <div data-vesta="vesta-trust">
                   <p>
-                    <Icon name="icons/content/server" size={16} />
+                    <Icon name="icons/rail/servers" size={16} />
                     <span>{t('vesta-server.account.trust', { name: current().name, address: current().address })}</span>
                   </p>
                   <details>

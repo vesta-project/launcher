@@ -43,7 +43,7 @@ export const mainTabs: readonly ShellTab<MainTabId>[] = [
 const ACCESS_NEEDS = ['principals.view', 'invitations.create', 'devices.revoke', 'access-sources.manage'];
 
 export const settingsSections: readonly ShellSection[] = [
-  { id: 'general', group: 'server', label: 'servers.settings.general', icon: 'icons/content/gear', needs: ['config.view'], live: true },
+  { id: 'general', group: 'server', label: 'servers.settings.general', icon: 'icons/rail/settings', needs: ['config.view'], live: true },
   { id: 'game', group: 'server', label: 'servers.settings.game', icon: 'icons/content/sliders', needs: ['config.view'], live: true },
   { id: 'world', group: 'server', label: 'server-hosting.world', icon: 'icons/content/globe', needs: ['config.view'], live: true },
   { id: 'software', group: 'server', label: 'server-hosting.software', icon: 'icons/content/cube', needs: ['content.install'], live: true, owner: true },

@@ -84,7 +84,7 @@ const javaOptions = () => nativeInstances ? [
 ];
 
 const sections = [
-  { id: "general", label: "instance-settings.general", icon: "icons/content/gear" },
+  { id: "general", label: "instance-settings.general", icon: "icons/rail/settings" },
   { id: "java", label: "instance-settings.java", icon: "icons/content/code" },
   { id: "memory", label: "instance-settings.memory", icon: "icons/content/storage" },
   { id: "window", label: "instance-settings.window", icon: "icons/content/monitor" },

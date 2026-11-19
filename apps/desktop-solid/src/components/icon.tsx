@@ -1,9 +1,8 @@
 import './icon.css';
 import type { JSX } from '@solidjs/web';
 
-// Launcher icons come from the old implementation's asset set (copied under src/assets).
-// They are plain outlines/fills without a colour of their own, so they inherit
-// `currentColor`. Swap the set in one place when the SVG pass lands.
+// Bundled Lucide outlines and launcher glyphs inherit currentColor.
+// Keep their attribution alongside the plain SVG assets.
 const icons = import.meta.glob<string>(['../assets/icons/**/*.svg', '../assets/branding/**/*.svg'], {
   query: '?raw',
   import: 'default',

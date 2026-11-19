@@ -187,7 +187,7 @@ const groupIcons: Record<string, string> = {
   mouse: 'icons/content/keyboard',
   movement: 'icons/content/keyboard',
   gameplay: 'icons/content/cube',
-  inventory: 'icons/content/grid',
+  inventory: 'icons/rail/library',
   accessibility: 'icons/content/accessibility',
   skin: 'icons/content/skin-icon',
   online: 'icons/status/wifi',
@@ -484,7 +484,7 @@ function ServerPane(props: { tabs: () => JSX.Element }) {
       <Checklist items={servers()} key={(server) => server.id} empty={t('prefs.sync.no-servers')}>
         {(server) => (
           <div data-vesta="prefs-sync-row">
-            <Icon name="icons/content/server" size={16} />
+            <Icon name="icons/rail/servers" size={16} />
             <span data-vesta="prefs-sync-label">{server().name}</span>
             <span data-vesta="prefs-sync-meta">{server().address}</span>
             <IconButton

@@ -438,12 +438,12 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
                     <>
                       <Menu trigger={(menuProps) => (
                         <button {...menuProps} type="button" data-vesta="breadcrumb-link" data-root-menu disabled={loading()} aria-label={t('vesta-server.import.roots', { name: props.machine })}>
-                          <Icon name="icons/content/server" size={14} />{props.machine}<Icon name="icons/controls/chevron-down" size={12} />
+                          <Icon name="icons/rail/servers" size={14} />{props.machine}<Icon name="icons/controls/chevron-down" size={12} />
                         </button>
                       )}>
                         <For each={props.roots}>
                           {(root) => (
-                            <MenuItem icon={<Icon name={isDriveRoot(root.displayPath) ? 'icons/content/server' : 'icons/content/folder'} />} disabled={!root.readable}
+                            <MenuItem icon={<Icon name={isDriveRoot(root.displayPath) ? 'icons/rail/servers' : 'icons/content/folder'} />} disabled={!root.readable}
                               shortcut={isDriveRoot(root.displayPath) ? undefined : root.displayPath} onSelect={() => openRoot(root)}>
                               {isDriveRoot(root.displayPath) ? root.displayPath : folderName(root.displayPath)}
                             </MenuItem>
@@ -454,10 +454,10 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
                     </>
                   }>
                   <Show when={crumbs().length > 0 || (view().kind === 'folder' && !single())} fallback={
-                    <span data-vesta="breadcrumb-link" data-current aria-current="location"><Icon name="icons/content/server" size={14} />{props.machine}</span>
+                    <span data-vesta="breadcrumb-link" data-current aria-current="location"><Icon name="icons/rail/servers" size={14} />{props.machine}</span>
                   }>
                     <button type="button" data-vesta="breadcrumb-link" disabled={loading()} onClick={() => (single() ? void goTo(single()!.displayPath) : show({ kind: 'top' }))}>
-                      <Icon name="icons/content/server" size={14} />{props.machine}
+                      <Icon name="icons/rail/servers" size={14} />{props.machine}
                     </button>
                     <span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span>
                   </Show>
@@ -491,7 +491,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
         }>
           <div data-vesta="vesta-path-bar">
             <form data-vesta="vesta-browser-bar" data-typing onSubmit={(event) => void openTyped(event)}>
-              <Icon name="icons/content/server" size={14} />
+              <Icon name="icons/rail/servers" size={14} />
               <input data-vesta="vesta-path-input" type="text" value={typing() ?? ''} spellcheck={false} autocomplete="off"
                 aria-label={t('vesta-server.import.type-path')} aria-invalid={typedError() ? 'true' : undefined} aria-describedby={typedError() ? typedNoteId : undefined}
                 ref={(element) => requestAnimationFrame(() => { element.focus(); element.select(); })}

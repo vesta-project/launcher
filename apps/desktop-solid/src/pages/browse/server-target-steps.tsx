@@ -33,7 +33,7 @@ const connectionLabels: Record<ServerTarget['connection'], MessageId> = {
 };
 
 const destinationLabels: Record<Destination, { title: MessageId; help: MessageId; icon: string }> = {
-  server: { title: 'browse.target-server', help: 'browse.target-server-help', icon: 'icons/content/server' },
+  server: { title: 'browse.target-server', help: 'browse.target-server-help', icon: 'icons/rail/servers' },
   modpack: { title: 'browse.target-modpack', help: 'browse.target-modpack-help', icon: 'icons/content/modpack' },
   both: { title: 'browse.target-both', help: 'browse.target-both-help', icon: 'icons/content/layers' },
 };

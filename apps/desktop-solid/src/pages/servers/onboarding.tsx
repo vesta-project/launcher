@@ -31,7 +31,7 @@ export function HostGuide() {
           </ol>
           <footer>
             <Button variant="ghost" onClick={() => transitionTo('/servers')}>{t('common.back')}</Button>
-            <Button tone="accent" icon={<Icon name="icons/content/server" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
+            <Button tone="accent" icon={<Icon name="icons/rail/servers" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
           </footer>
         </div>
       </div>

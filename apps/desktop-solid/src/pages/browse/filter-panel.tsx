@@ -214,7 +214,7 @@ export function FilterPanel(props: { section: () => Section | undefined }) {
                 <span data-vesta="browse-toggle-label">{t('browse.environment-client')}</span>
               </Toggle>
               <Toggle pressed={server()} onClick={() => setServer(!server())}>
-                <Icon name="icons/content/server" size={12} />
+                <Icon name="icons/rail/servers" size={12} />
                 <span data-vesta="browse-toggle-label">{t('browse.environment-server')}</span>
               </Toggle>
             </div>

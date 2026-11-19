@@ -11,7 +11,7 @@ import { useModpackArea } from './area';
 
 const modeCopy: Record<ClientPackMode, { icon: string; title: MessageId; description: MessageId }> = {
   none: { icon: 'icons/actions/close', title: 'server-pack.mode-none', description: 'server-pack.mode-none-description' },
-  'server-modpack': { icon: 'icons/content/server', title: 'server-pack.mode-server', description: 'server-pack.mode-server-description' },
+  'server-modpack': { icon: 'icons/rail/servers', title: 'server-pack.mode-server', description: 'server-pack.mode-server-description' },
   custom: { icon: 'icons/content/modpack', title: 'server-pack.mode-custom', description: 'server-pack.mode-custom-description' },
 };
 
