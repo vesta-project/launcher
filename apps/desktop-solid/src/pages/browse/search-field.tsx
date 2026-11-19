@@ -208,7 +208,10 @@ export function SearchField() {
       >
         {/* Server listings are joined, not installed, so they have no install target. */}
         <Show when={!isServerType(type())}>
-          <span data-vesta="browse-scope">
+          <span data-vesta="browse-scope" onContextMenu={(event) => {
+            event.preventDefault();
+            openPanel('instance');
+          }}>
             <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
           </span>
         </Show>

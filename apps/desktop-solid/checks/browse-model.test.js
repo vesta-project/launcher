@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   normalizeQuery,
+  hostQuery,
   pageCount,
   parseOperators,
   parseProjectUrl,
@@ -83,6 +84,12 @@ describe('query keys', () => {
     expect(pageCount(0, 20)).toBe(1);
     expect(pageCount(41, 20)).toBe(3);
     expect(pageCount(1_000_000, 50)).toBe(200);
+  });
+
+  test('CurseForge paginates a saved 100-result preference in pages of 50', () => {
+    const input = { ...base, pageSize: 100, page: 2 };
+    expect(hostQuery({ ...input, source: 'curseforge' })).toMatchObject({ limit: 50, offset: 50 });
+    expect(hostQuery(input)).toMatchObject({ limit: 100, offset: 100 });
   });
 });
 

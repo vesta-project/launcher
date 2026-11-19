@@ -19,6 +19,7 @@ export function defaultServerInstallDestination(project: Pick<ResourceProject, '
   return 'both';
 }
 export const pageSizes = [20, 50, 100] as const;
+export const maxBrowsePageSize = (source: SourceId) => source === 'curseforge' ? 50 : 100;
 /** CurseForge refuses result windows past 10 000 entries. */
 export const maxResultWindow = 10_000;
 
@@ -283,7 +284,7 @@ export function normalizeQuery(query: BrowseQuery): BrowseQuery {
     categories: [...new Set(query.categories)].sort(),
     sort: sortKnown ? query.sort : source.defaultSort,
     sortOrder: source.sortOrder ? query.sortOrder : 'desc',
-    pageSize: query.pageSize,
+    pageSize: Math.min(query.pageSize, maxBrowsePageSize(query.source)),
     page: Math.max(1, Math.floor(query.page) || 1),
   };
 }

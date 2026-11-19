@@ -4,6 +4,7 @@ import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import {
   pageCount,
+  maxBrowsePageSize,
   pageSizes,
   queryKey,
   type ResourceProject,
@@ -16,7 +17,6 @@ import {
   generation,
   hasActiveFilters,
   page,
-  pageSize,
   pending,
   query,
   recalledScroll,
@@ -84,7 +84,7 @@ export function Results() {
   const enter = () => generation() !== mounted || !untrack(results);
 
   const total = () => results()?.total ?? 0;
-  const pages = createMemo(() => pageCount(total(), pageSize()), { name: 'browsePages' });
+  const pages = createMemo(() => pageCount(total(), query().pageSize), { name: 'browsePages' });
 
   // Scroll position belongs to the shown result set: remembered when it is replaced or the
   // page is left, restored when it comes back. Changing page scrolls to the top smoothly.
@@ -219,8 +219,8 @@ export function Results() {
                 <Select
                   size="sm"
                   aria-label={t('browse.per-page')}
-                  options={sizeOptions}
-                  value={String(pageSize())}
+                  options={sizeOptions.filter((option) => Number(option.value) <= maxBrowsePageSize(query().source))}
+                  value={String(query().pageSize)}
                   onChange={(value) => setPageSize(Number(value))}
                 />
               </label>

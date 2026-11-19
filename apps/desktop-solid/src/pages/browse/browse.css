@@ -83,9 +83,6 @@
 
   /* Sort is quiet until hovered: no box at rest. */
   :where(.browse-sort-select) {
-    --field-bg: transparent;
-    --field-border-color: transparent;
-
     min-inline-size: 8.5rem;
   }
 
@@ -230,6 +227,8 @@
 
   :where([data-vesta='browse-pane']) {
     position: relative;
+    display: flex;
+    flex-direction: column;
     flex: 1;
     min-block-size: 0;
     overflow: hidden auto;
@@ -244,6 +243,10 @@
     z-index: 2;
     block-size: 3px;
     margin-block-end: -3px;
+  }
+
+  :where([data-vesta='browse-pane']) > * {
+    flex-shrink: 0;
   }
 
   :where([data-vesta='browse-notice']),
@@ -298,6 +301,7 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--vesta-space-2);
+    margin-block-start: auto;
     padding-block: var(--vesta-space-4) var(--vesta-space-2);
   }
 
