@@ -223,6 +223,9 @@ impl CurseForgeSource {
         }
         Ok(piston_lib::client::provider_api_client()?
             .request(method, url)
+            // A stalled API call fails in seconds instead of holding Browse for the
+            // shared client's two-minute download timeout.
+            .timeout(std::time::Duration::from_secs(20))
             .header("x-api-key", &self.api_key)
             .header("Accept", "application/json"))
     }

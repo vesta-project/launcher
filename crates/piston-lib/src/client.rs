@@ -237,15 +237,22 @@ pub fn shared_client() -> &'static Client {
 
 /// Credentialed provider APIs must never forward custom API-key headers through
 /// reqwest's automatic redirects (which only strip standard sensitive headers).
+/// One client is shared so requests reuse its connections instead of paying a new
+/// TLS handshake each time.
 pub fn provider_api_client() -> Result<Client, reqwest::Error> {
+    if let Some(client) = PROVIDER_API_CLIENT.get() {
+        return Ok(client.clone());
+    }
     let mut builder = base_client_builder().redirect(reqwest::redirect::Policy::none());
     if let Some(proxy) = configured_proxy_url() {
         builder = builder.proxy(reqwest::Proxy::all(&proxy)?);
     }
-    builder.build()
+    let client = builder.build()?;
+    Ok(PROVIDER_API_CLIENT.get_or_init(|| client).clone())
 }
 
 static SHARED_CLIENT: OnceLock<Client> = OnceLock::new();
+static PROVIDER_API_CLIENT: OnceLock<Client> = OnceLock::new();
 static SHARED_PROXY_CONFIG: OnceLock<ProxyConfig> = OnceLock::new();
 
 #[cfg(test)]

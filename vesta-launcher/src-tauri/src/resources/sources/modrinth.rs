@@ -556,6 +556,9 @@ impl ModrinthSource {
         request: RequestBuilder,
         operation: &str,
     ) -> Result<T> {
+        // A stalled API call fails in seconds instead of holding Browse for the shared
+        // client's two-minute download timeout.
+        let request = request.timeout(Duration::from_secs(20));
         let retry = request.try_clone();
         let mut response = request.send().await?;
 
