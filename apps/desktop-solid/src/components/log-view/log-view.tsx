@@ -216,45 +216,47 @@ export function LogView(props: LogViewProps) {
       data-metadata={metadata() ? "" : undefined}
     >
       <header data-vesta="console-toolbar">
-        <Show when={props.sources}>
-          <Select
+        <div data-vesta="console-search-group">
+          <Show when={props.sources}>
+            <Select
+              size="sm"
+              aria-label={t("console.log-source")}
+              class="console-source"
+              value={props.sourceKey()}
+              onChange={choose}
+              options={props.sources?.() ?? []}
+            />
+          </Show>
+          <TextField
             size="sm"
-            aria-label={t("console.log-source")}
-            class="console-source"
-            value={props.sourceKey()}
-            onChange={choose}
-            options={props.sources?.() ?? []}
+            class="console-search"
+            aria-label={t("console.search-log")}
+            placeholder={t("console.search-log")}
+            value={props.state().query}
+            onChange={(query) => patch({ query })}
           />
-        </Show>
-        <TextField
-          size="sm"
-          class="console-search"
-          aria-label={t("console.search-log")}
-          placeholder={t("console.search-log")}
-          value={props.state().query}
-          onChange={(query) => patch({ query })}
-        />
-        <Menu
-          placement="bottom-end"
-          trigger={(menuProps) => (
-            <Button {...menuProps} size="sm"
-              variant={props.state().levels.length === LOG_LEVELS.length ? "outline" : "solid"}
-              icon={<Icon name="icons/content/filter" />}>
-              {t("console.levels")}
-            </Button>
-          )}
-        >
-          <For each={levels}>
-            {(level) => (
-              <MenuCheckboxItem
-                checked={props.state().levels.includes(level.id)}
-                onChange={() => toggleLevel(level.id)}
-              >
-                {level.label} ({counts()[level.id] ?? 0})
-              </MenuCheckboxItem>
+          <Menu
+            placement="bottom-end"
+            trigger={(menuProps) => (
+              <IconButton {...menuProps} size="sm" class="console-level-filter" variant="ghost"
+                tone={props.state().levels.length === LOG_LEVELS.length ? "neutral" : "accent"}
+                label={t("console.levels")} tooltip={false} icon={<Icon name="icons/content/filter" />} />
             )}
-          </For>
-        </Menu>
+          >
+            <For each={levels}>
+              {(level) => (
+                <MenuCheckboxItem
+                  checked={props.state().levels.includes(level.id)}
+                  onChange={() => toggleLevel(level.id)}
+                >
+                  <span data-vesta="console-level-option" data-level={level.id}>
+                    <i aria-hidden="true" />{level.label}<small>{counts()[level.id] ?? 0}</small>
+                  </span>
+                </MenuCheckboxItem>
+              )}
+            </For>
+          </Menu>
+        </div>
         {props.toolbarExtras}
         <Menu
           placement="bottom-end"

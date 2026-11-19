@@ -16,14 +16,6 @@
   .server-player-manager :where([data-server-player-add]) {
     margin-inline-start: auto;
   }
-  .server-player-manager :where([data-server-player-whitelist]) {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--vesta-space-1) var(--vesta-space-2);
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
   .server-player-manager :where([data-server-player-results] > [data-vesta="empty-state"]) {
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
@@ -343,7 +335,6 @@
   :where([data-vesta="server-player"][data-open]) > :where([data-vesta="server-player-row"]) > :where([data-vesta="icon"]) { transform: rotate(90deg); }
   :where([data-vesta="server-player-name"]) { display: flex; flex-direction: column; gap: 1px; min-inline-size: 0; }
   :where([data-vesta="server-player-name"]) > strong { overflow: hidden; font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
-  :where([data-vesta="server-player-name"]) > small { color: var(--vesta-color-text-subtle); font-family: var(--vesta-font-mono); font-size: 11px; }
   :where([data-vesta="server-player-chips"]) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--vesta-space-1); }
   :where([data-vesta="server-activity-avatar"][data-online]) { box-shadow: 0 0 0 2px var(--vesta-color-surface-raised), 0 0 0 3.5px var(--vesta-color-success); }
 
@@ -355,7 +346,8 @@
     background: var(--vesta-color-fill);
     animation: settings-reveal 160ms var(--vesta-ease-out) both;
   }
-  :where([data-vesta="server-player-uuid"]) { display: flex; align-items: center; gap: var(--vesta-space-2); color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
+  :where([data-vesta="server-player-detail-bar"]) { display: flex; align-items: center; justify-content: space-between; gap: var(--vesta-space-2); }
+  :where([data-vesta="server-player-uuid"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1) var(--vesta-space-2); min-inline-size: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); overflow-wrap: anywhere; }
   :where([data-vesta="server-player-facts"]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--vesta-space-2); }
   :where([data-vesta="server-player-fact"]) {
     display: flex;
@@ -369,7 +361,6 @@
   :where([data-vesta="server-player-fact"]) > span { color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); font-weight: var(--vesta-weight-semibold); letter-spacing: normal; text-transform: none; }
   :where([data-vesta="server-player-fact"]) > p { flex: 1; margin: 0; font-size: var(--vesta-text-sm); line-height: 1.45; }
   :where([data-vesta="server-player-fact"]) > p > small { display: block; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
-  :where([data-vesta="server-player-fact"]) > :where([data-vesta="button"]) { align-self: flex-start; margin-block-start: var(--vesta-space-1); }
   :where([data-vesta="server-player-fact"][data-tone="danger"]) { border-color: color-mix(in oklab, var(--vesta-color-danger) 40%, transparent); }
 
   /* ---- Access: people rows ---- */
@@ -383,13 +374,13 @@
 }
 
 /*
- * Access (D7): each person with their devices nested beneath; pack users fold into one group.
+ * Access: each person with their devices nested beneath.
  * Hooks: [data-vesta=server-access-people|server-access-person|server-access-devices]
  * States: person: data-self; device row: data-revoked
  */
 @layer launcher {
   :where([data-vesta="server-access-people"]) { display: flex; flex-direction: column; }
-  :where(:is([data-server-panel="access-machine-devices"], [data-server-panel="player-whitelist"]) [data-vesta="prefs-card-header"]) {
+  :where([data-server-panel="access-machine-devices"] [data-vesta="prefs-card-header"]) {
     padding-block-end: var(--vesta-space-3);
     overflow-wrap: anywhere;
   }
@@ -401,8 +392,10 @@
   :where([data-vesta="server-access-devices"]) {
     display: flex;
     flex-direction: column;
-    margin: calc(-1 * var(--vesta-space-1)) var(--vesta-space-4) var(--vesta-space-3) calc(var(--vesta-space-4) + 15px);
-    padding: 0 0 0 calc(var(--vesta-space-3) + 2px);
+    margin-block: calc(-1 * var(--vesta-space-1)) var(--vesta-space-3);
+    margin-inline: calc(var(--vesta-space-4) + 15px) var(--vesta-space-4);
+    padding: 0;
+    padding-inline-start: var(--vesta-space-2);
     border-inline-start: calc(var(--vesta-border-width) * 2) solid var(--vesta-color-border);
     list-style: none;
   }
@@ -419,10 +412,12 @@
   :where([data-vesta="server-access-devices"]) li > div { display: flex; flex: 1; flex-wrap: wrap; align-items: baseline; gap: 0 var(--vesta-space-2); min-inline-size: 0; }
   :where([data-vesta="server-access-devices"]) li > div > span {
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-1-5, 6px);
     color: var(--vesta-color-text);
     font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
   }
   :where([data-vesta="server-access-devices"]) small { font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-access-devices"]) li[data-revoked] > div > span { color: var(--vesta-color-text-muted); text-decoration: line-through; }

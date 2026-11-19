@@ -26,6 +26,45 @@
     min-inline-size: 0;
   }
 
+  :where([data-vesta="console-search-group"]) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-inline-size: 0;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+  }
+
+  :where([data-vesta="console-search-group"]) :where(.console-search, .console-source) {
+    --field-bg: transparent;
+    --field-border-color: transparent;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta="console-search-group"]) :where(.console-source, .console-level-filter) {
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: 0;
+  }
+
+  :where([data-vesta="console-search-group"]) .console-level-filter {
+    border-inline-end: 0;
+    border-inline-start-color: var(--vesta-color-border);
+  }
+
+  :where([data-vesta="console-level-option"]) {
+    --log-level-color: var(--vesta-color-info-text);
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta="console-level-option"][data-level="WARN"]) { --log-level-color: var(--vesta-color-warning-text); }
+  :where([data-vesta="console-level-option"][data-level="ERROR"]) { --log-level-color: var(--vesta-color-danger-text); }
+  :where([data-vesta="console-level-option"][data-level="DEBUG"]) { --log-level-color: var(--vesta-color-text-muted); }
+  :where([data-vesta="console-level-option"]) > i { inline-size: 7px; block-size: 7px; border-radius: 50%; background: var(--log-level-color); }
+  :where([data-vesta="console-level-option"]) > small { color: var(--vesta-color-text-muted); }
+
   .console-source {
     flex: 0 1 200px;
     min-inline-size: 140px;

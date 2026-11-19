@@ -1,5 +1,5 @@
 import { Metadata } from '../../../components/metadata';
-import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, TextField, toast } from '@vesta/ui';
+import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, SegmentedControl, Select, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import { EmptyLine, EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
@@ -11,7 +11,7 @@ import { isPlayerName, newIntentId } from '../../../features/servers/model';
 import { afterFailure, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
 import { banDuration } from '../../../features/servers/operations-model';
 import {
-  BAN_DURATIONS, PLAYER_FILTERS, PLAYER_PAGE_SIZE, playerPage, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid, type KnownPlayer, type PlayerFilter,
+  BAN_DURATIONS, PLAYER_FILTERS, PLAYER_PAGE_SIZE, playerPage, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, type KnownPlayer, type PlayerFilter,
 } from '../../../features/servers/player-manager';
 import { effectiveValue, parseProperties, propertyDef } from '../../../features/servers/properties-model';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
@@ -20,7 +20,8 @@ import { agentReachable } from '../../../features/servers/shell-model';
 import { putOperations, serverCommand, serverPlayers, useServersClock } from '../../../features/servers/store';
 import type { ModerationAction, ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { CopyValue, SectionLink, SettingsPage, SettingsSearch } from '../settings-parts';
+import { CopyValue, SettingsPage, SettingsSearch } from '../settings-parts';
+import { useServerShell } from '../shell-context';
 
 type Action = ModerationAction['action'];
 type Request = { action: Action; player: string; choices?: Action[] };
@@ -107,6 +108,7 @@ const filterLabels: Record<PlayerFilter, MessageId> = {
  * searchable list. A row opens to show the UUID and what you can do about that player.
  */
 export function PlayerManager(props: { snapshot: ServerSnapshot }) {
+  const shell = useServerShell();
   const id = stableConnectionId(() => props.snapshot);
   const [filter, setFilter] = createSignal<PlayerFilter>('all', { name: 'server-players:filter' });
   const [page, setPage] = createSignal(0, { name: 'server-players:page' });
@@ -154,6 +156,12 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
             onChange={(value) => { setFilter(value as PlayerFilter); setPage(0); }}
             options={PLAYER_FILTERS.map((entry) => ({ value: entry, label: entry === 'all' ? t(filterLabels[entry]) : `${t(filterLabels[entry])} ${counts()[entry]}` }))}
           />
+          <Show when={changesWhitelist() && whitelistOn() !== null && shell?.openSection}>
+            <IconButton size="md" variant="ghost" tone={whitelistOn() ? 'accent' : 'neutral'}
+              label={`${t(whitelistOn() ? 'servers.people.whitelist-on' : 'servers.people.whitelist-off')} ${t('servers.people.whitelist-change')}`}
+              icon={<Icon name={whitelistOn() ? 'icons/security/shield-check' : 'icons/security/shield-off'} />}
+              onClick={() => shell?.openSection?.('game')} />
+          </Show>
           <div data-server-player-add>
             <Show when={moderate() || operator()}>
               <Button size="md" tone="accent" icon={<Icon name="icons/actions/add" />} disabled={addChoices().length === 0} onClick={() => ask({ action: addChoices()[0]!, player: '', choices: addChoices() })}>
@@ -162,12 +170,6 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
             </Show>
           </div>
         </div>
-        <Show when={changesWhitelist() && whitelistOn() !== null}>
-          <div data-server-player-whitelist>
-            <span>{t(whitelistOn() ? 'servers.people.whitelist-on' : 'servers.people.whitelist-off')}</span>
-            <SectionLink section="game">{t('servers.people.whitelist-change')}</SectionLink>
-          </div>
-        </Show>
         <section data-server-player-results>
           <ServerErrorNote error={listError()} onRetry={() => { void whitelist.refresh(); void ops.refresh(); void bans.refresh(); }} />
 
@@ -227,6 +229,11 @@ function PlayerRow(props: {
   date: (ms: number) => string;
 }) {
   const ban = () => props.player.ban;
+  const whitelistAction = () => props.player.whitelisted ? 'whitelist_remove' : 'whitelist_add';
+  const operatorAction = () => props.player.operator ? 'deop' : 'op';
+  const banAction = () => ban() ? 'pardon' : 'ban';
+  const hasActions = () => ([whitelistAction(), operatorAction(), banAction()] as const).some(props.canAct) ||
+    (props.player.online && props.canAct('kick'));
   const expiry = () => (ban() ? banExpiry(ban()!.expires) : null);
   const created = () => { const value = ban() ? banExpiry(ban()!.created) : null; return value && !value.permanent ? props.date(value.atMs) : null; };
   return (
@@ -235,7 +242,6 @@ function PlayerRow(props: {
         <span data-vesta="server-activity-avatar" data-online={props.player.online ? '' : undefined} aria-hidden="true">{props.player.name.slice(0, 1).toUpperCase()}</span>
         <span data-vesta="server-player-name">
           <strong>{props.player.name}</strong>
-          <Show when={props.player.uuid}>{(uuid) => <small><Sensitive label={t('servers.people.uuid')}>{shortUuid(uuid())}</Sensitive></small>}</Show>
         </span>
         <span data-vesta="server-player-chips">
           <For each={props.chips}>{(chip) => <Badge size="sm" variant="soft" tone={chip.tone}>{t(chip.message, chip.args)}</Badge>}</For>
@@ -244,20 +250,34 @@ function PlayerRow(props: {
       </button>
       <Show when={props.open}>
         <div data-vesta="server-player-detail">
-          <div data-vesta="server-player-uuid">
-            <span>{t('servers.people.uuid')}</span>
-            <Show when={props.player.uuid} fallback={<span>{t('servers.people.no-uuid')}</span>}>
-              {(uuid) => <CopyValue value={uuid()} label={t('servers.people.copy-uuid')}><Sensitive label={t('servers.people.uuid')}>{uuid()}</Sensitive></CopyValue>}
+          <div data-vesta="server-player-detail-bar">
+            <div data-vesta="server-player-uuid">
+              <span>{t('servers.people.uuid')}</span>
+              <Show when={props.player.uuid} fallback={<span>{t('servers.people.no-uuid')}</span>}>
+                {(uuid) => <CopyValue value={uuid()} label={t('servers.people.copy-uuid')}><Sensitive label={t('servers.people.uuid')}>{uuid()}</Sensitive></CopyValue>}
+              </Show>
+            </div>
+            <Show when={hasActions()}>
+              <Menu placement="bottom-end" trigger={(triggerProps) =>
+                <IconButton {...triggerProps} size="sm" variant="ghost" tooltip={false}
+                  label={t('common.actions-for', { name: props.player.name })} icon={<Icon name="icons/content/ellipsis-v" />} />
+              }>
+                <MenuItem disabled={!props.canAct(whitelistAction())} onSelect={() => props.onAction(whitelistAction())}>{t(actionTitles[whitelistAction()])}</MenuItem>
+                <MenuItem disabled={!props.canAct(operatorAction())} onSelect={() => props.onAction(operatorAction())}>{t(actionTitles[operatorAction()])}</MenuItem>
+                <MenuSeparator />
+                <Show when={props.player.online}>
+                  <MenuItem tone="danger" disabled={!props.canAct('kick')} onSelect={() => props.onAction('kick')}>{t(actionTitles.kick)}</MenuItem>
+                </Show>
+                <MenuItem tone={ban() ? 'neutral' : 'danger'} disabled={!props.canAct(banAction())} onSelect={() => props.onAction(banAction())}>
+                  {t(actionTitles[banAction()])}
+                </MenuItem>
+              </Menu>
             </Show>
           </div>
           <div data-vesta="server-player-facts">
             <div data-vesta="server-player-fact">
               <span>{t('servers.people.whitelist-section')}</span>
               <p>{props.player.whitelisted ? t('servers.people.on-whitelist') : t('servers.people.not-on-whitelist')}</p>
-              <Button size="sm" variant="outline" disabled={!props.canAct(props.player.whitelisted ? 'whitelist_remove' : 'whitelist_add')}
-                onClick={() => props.onAction(props.player.whitelisted ? 'whitelist_remove' : 'whitelist_add')}>
-                {props.player.whitelisted ? t('servers.moderate.whitelist-remove') : t('servers.players.add-whitelist')}
-              </Button>
             </div>
             <div data-vesta="server-player-fact">
               <span>{t('servers.people.operator-section')}</span>
@@ -269,9 +289,6 @@ function PlayerRow(props: {
                   </p>
                 )}
               </Show>
-              <Button size="sm" variant="outline" disabled={!props.canAct(props.player.operator ? 'deop' : 'op')} onClick={() => props.onAction(props.player.operator ? 'deop' : 'op')}>
-                {props.player.operator ? t('servers.moderate.deop') : t('servers.players.make-operator')}
-              </Button>
             </div>
             <div data-vesta="server-player-fact" data-tone={ban() ? 'danger' : undefined}>
               <span>{t('servers.people.ban-section')}</span>
@@ -289,16 +306,8 @@ function PlayerRow(props: {
                   </p>
                 )}
               </Show>
-              <Button size="sm" variant="outline" tone={ban() ? undefined : 'danger'} disabled={!props.canAct(ban() ? 'pardon' : 'ban')} onClick={() => props.onAction(ban() ? 'pardon' : 'ban')}>
-                {ban() ? t('servers.people.unban') : t('servers.people.ban')}
-              </Button>
             </div>
           </div>
-          <Show when={props.player.online}>
-            <div>
-              <Button size="sm" variant="ghost" disabled={!props.canAct('kick')} onClick={() => props.onAction('kick')}>{t('servers.people.kick')}</Button>
-            </div>
-          </Show>
         </div>
       </Show>
     </li>

@@ -1,4 +1,4 @@
-import { Badge, Button, Dialog, IconButton, SegmentedControl, Select, Switch as Toggle, TextField, toast } from '@vesta/ui';
+import { Badge, Button, Dialog, IconButton, Menu, MenuItem, SegmentedControl, Select, Switch as Toggle, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { transitionTo } from '../../../app/transition';
 import { canManageHost, hostIdOf } from '../../../features/servers/host-model';
@@ -17,7 +17,7 @@ import { serverCommand, useServersClock } from '../../../features/servers/store'
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
 import type { AccessSources, Invitation, IssuedInvitation, RoleSummary, ServerDevice, ServerUser } from '../../../features/servers/native-manage';
 import { Sensitive, ServerErrorNote } from '../parts';
-import { SettingsColumns, SettingsGroup, SettingsPage, SettingsPanel } from '../settings-parts';
+import { SettingsColumns, SettingsPage, SettingsPanel } from '../settings-parts';
 import { activeDevices, deviceNameProblem, groupAccess, renamable, type AccessPerson } from '../../../features/servers/access-model';
 import { IntentMemo } from '../../../features/servers/model';
 
@@ -75,7 +75,9 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
   const [editing, setEditing] = createSignal<ServerUser | null>(null, { name: 'server-access:editing' });
 
   const [renaming, setRenaming] = createSignal<ServerDevice | null>(null, { name: 'server-access:renaming' });
-  const [packOpen, setPackOpen] = createSignal(false, { name: 'server-access:pack-open' });
+  const [peopleView, setPeopleView] = createSignal('people', { name: 'server-access:people-view' });
+  const packUsers = () => groups().packUsers;
+  const showPack = () => packUsers().length > 0 && peopleView() === 'pack';
   const canManage = () => can('principals.manage');
   const saved = (next: ServerUser) => seedServerResource(id(), usersResource, (users.value() ?? []).map((entry) => (entry.id === next.id ? next : entry)));
   const renamed = (device: ServerDevice, name: string) =>
@@ -116,25 +118,29 @@ function PeopleView(props: { snapshot: ServerSnapshot }) {
               />
             )}
           </Show>
-          <Show when={groups().packUsers.length}>
-            <SettingsGroup title={t('servers.access.pack-users', { count: groups().packUsers.length })} open={packOpen()} onToggle={() => setPackOpen(!packOpen())}
-              summary={t('servers.access.pack-users-summary', { count: groups().packUsers.reduce((sum, entry) => sum + activeDevices(entry), 0) })}>
-              <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.pack-users-help')}</p>
-              <div data-vesta="server-access-people">
-                <For each={groups().packUsers} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-              </div>
-            </SettingsGroup>
-          </Show>
         </>
       }>
-        <SettingsPanel title={t('servers.access.people')} name="access-people">
+        <SettingsPanel title={t('servers.access.people')} name="access-people"
+          action={<Show when={packUsers().length}>
+            <SegmentedControl size="sm" aria-label={t('servers.access.people')} value={showPack() ? 'pack' : 'people'} onChange={setPeopleView}
+              options={[{ value: 'people', label: t('servers.access.people') }, { value: 'pack', label: t('servers.access.pack-users', { count: packUsers().length }) }]} />
+          </Show>}>
           <ServerErrorNote error={users.error() ?? devices.error()} onRetry={() => { void users.refresh(); void devices.refresh(); }} />
           <Show when={loaded()} fallback={<Show when={!users.error() && !devices.error()}><p data-vesta="server-muted" class="server-panel-note">{t('servers.loading')}</p></Show>}>
             <div data-vesta="server-access-people">
-              <For each={groups().people} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-              <For each={groups().others} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
-              <Show when={!groups().people.length && !groups().others.length}>
-                <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
+              <Show when={showPack()} fallback={
+                <>
+                  <For each={groups().people} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+                  <For each={groups().others} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
+                  <Show when={!groups().people.length && !groups().others.length}>
+                    <p data-vesta="server-muted" class="server-panel-note">{t('servers.access.no-people')}</p>
+                  </Show>
+                </>
+              }>
+                <p data-vesta="server-muted" class="server-panel-note">
+                  {t('servers.access.pack-users-help')} {t('servers.access.pack-users-summary', { count: packUsers().reduce((sum, entry) => sum + activeDevices(entry), 0) })}
+                </p>
+                <For each={packUsers()} keyed={(entry) => entry.key}>{(entry) => <Person entry={entry()} />}</For>
               </Show>
             </div>
           </Show>
@@ -190,13 +196,14 @@ function PersonRow(props: {
       <Show when={props.person.devices.length}>
         <ul data-vesta="server-access-devices" aria-label={t('servers.access.devices-of', { name: props.person.name })}>
           <For each={props.person.devices} keyed={(device) => device.id}>
-            {(device) => (
-              <li data-revoked={device().revoked ? '' : undefined}>
+            {(device) => {
+              const canRename = () => renamable(device(), props.allDevices);
+              const canRevoke = () => props.canRevoke && !device().current && !device().revoked;
+              return <li data-revoked={device().revoked ? '' : undefined}>
                 <Icon name="icons/content/monitor" size={14} />
-                <div>
+                <div title={device().id}>
                   <span>
                     {device().current && device().name === 'Vesta Launcher' ? t('servers.access.this-device') : device().name}
-                    <small title={device().id}>{device().id.slice(0, 8)}</small>
                     <Show when={device().current && device().name !== 'Vesta Launcher'}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>
                     <Show when={device().revoked}><Badge size="sm" variant="soft" tone="danger">{t('servers.access.revoked')}</Badge></Show>
                   </span>
@@ -204,15 +211,23 @@ function PersonRow(props: {
                     {(seen) => <small>{t('servers.seen', { time: t(age(seen(), now()).message, { count: age(seen(), now()).count }) })}</small>}
                   </Show>
                 </div>
-                <Show when={renamable(device(), props.allDevices)}>
-                  <IconButton size="sm" variant="ghost" label={t('servers.access.rename-device', { name: device().name })} icon={<Icon name="icons/actions/edit" />}
-                    onClick={() => props.onRename(device())} />
+                <Show when={canRename() || canRevoke()}>
+                  <Menu placement="bottom-end" trigger={(triggerProps) =>
+                    <IconButton {...triggerProps} size="sm" variant="ghost" tooltip={false}
+                      label={t('common.actions-for', { name: device().name })} icon={<Icon name="icons/content/ellipsis-v" />} />
+                  }>
+                    <Show when={canRename()}>
+                      <MenuItem icon={<Icon name="icons/actions/edit" />} onSelect={() => props.onRename(device())}>
+                        {t('servers.access.rename-device', { name: device().name })}
+                      </MenuItem>
+                    </Show>
+                    <Show when={canRevoke()}>
+                      <MenuItem tone="danger" onSelect={() => props.onRevoke(device())}>{t('servers.access.revoke')}</MenuItem>
+                    </Show>
+                  </Menu>
                 </Show>
-                <Show when={props.canRevoke && !device().current && !device().revoked}>
-                  <Button size="sm" variant="ghost" tone="danger" onClick={() => props.onRevoke(device())}>{t('servers.access.revoke')}</Button>
-                </Show>
-              </li>
-            )}
+              </li>;
+            }}
           </For>
         </ul>
       </Show>
