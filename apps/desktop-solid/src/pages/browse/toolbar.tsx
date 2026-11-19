@@ -1,10 +1,11 @@
 import { IconButton, SegmentedControl, Select } from '@vesta/ui';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, onCleanup, Show } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { sourceById, sources, type ResourceType, type SourceId } from '../../features/browse/browse-model';
 import { serverTypes } from '../../features/browse/browse-targets';
 import {
   banners,
+  prefetchBrowseType,
   setBanners,
   setSort,
   setSortOrder,
@@ -42,6 +43,14 @@ const sourceOptions = sources.map((item) => ({
  * ordered and drawn. The install target and filters live in the search field below.
  */
 export function Toolbar() {
+  let warmTimer: ReturnType<typeof setTimeout> | undefined;
+  const warm = (event: Event) => {
+    const row = (event.target as Element | null)?.closest('[data-vesta="segmented-item"]');
+    const value = row?.querySelector<HTMLInputElement>('input')?.value as ResourceType | undefined;
+    clearTimeout(warmTimer);
+    if (value && value in typeLabels) warmTimer = setTimeout(() => prefetchBrowseType(value), 85);
+  };
+  onCleanup(() => clearTimeout(warmTimer));
   // A server target narrows the tabs to what it takes (Plugins for Paper, Mods for Fabric…).
   const allowedTypes = createMemo(
     () => {
@@ -82,7 +91,7 @@ export function Toolbar() {
         value={source()}
         onChange={(value) => setSource(value as SourceId)}
       />
-      <div data-vesta="browse-types">
+      <div data-vesta="browse-types" onPointerOver={warm} onFocusIn={warm} onPointerLeave={() => clearTimeout(warmTimer)}>
         <SegmentedControl
           size="sm"
           class="browse-type-tabs"

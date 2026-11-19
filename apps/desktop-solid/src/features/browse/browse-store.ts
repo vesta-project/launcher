@@ -148,8 +148,8 @@ function savePrefs() {
 }
 
 /** Everything that selects a result set, normalised. Read inside a memo. */
-export const query = (): BrowseQuery =>
-  normalizeQuery({
+const currentFilters = (): BrowseQuery =>
+  ({
     type: type(),
     source: source(),
     text: committedText(),
@@ -164,6 +164,7 @@ export const query = (): BrowseQuery =>
     pageSize: pageSize(),
     page: page(),
   });
+export const query = () => normalizeQuery(currentFilters());
 
 /* ---- Setters (every filter change returns to page 1 and never touches history) ---- */
 
@@ -204,8 +205,11 @@ export function setText(value: string) {
 }
 /** Enter and chip conversion apply the text now instead of after the debounce. */
 export function commitText() {
+  commitSearchText(untrack(text));
+}
+
+function commitSearchText(value: string) {
   clearTimeout(debounce);
-  const value = untrack(text);
   if (value !== untrack(committedText)) {
     setCommittedText(value);
     firstPage();
@@ -213,7 +217,7 @@ export function commitText() {
 }
 export function replaceText(value: string) {
   setTextSignal(value);
-  commitText();
+  commitSearchText(value);
 }
 
 export function setGameVersion(value: string | null) {
@@ -512,8 +516,7 @@ const [results, setResults] = createSignal<ResultSet | undefined>(undefined, { n
 const [pending, setPending] = createSignal(false, { name: 'browsePending' });
 const [failure, setFailure] = createSignal<string | undefined>(undefined, { name: 'browseFailure' });
 const [warning, setWarning] = createSignal(false, { name: 'browseWarning' });
-const [generation, setGeneration] = createSignal(0, { name: 'browseGeneration' });
-export { results, pending, failure, warning, generation };
+export { results, pending, failure, warning };
 
 let sequence = 0;
 const errorText = (reason: unknown) => (reason instanceof Error ? reason.message : String(reason));
@@ -524,10 +527,8 @@ const fetchPage = (q: BrowseQuery, key: string) => () =>
   );
 
 function publish(set: ResultSet) {
-  const previous = untrack(results);
   setResults(set);
   setFailure(undefined);
-  if (previous?.key !== set.key) setGeneration((value) => value + 1);
   seedProjects(set.hits);
 }
 
@@ -535,8 +536,8 @@ const idle = (work: () => void) =>
   typeof requestIdleCallback === 'function' ? requestIdleCallback(work, { timeout: 2000 }) : setTimeout(work, 200);
 
 /**
- * Shows the cached page for this query immediately (even stale) and revalidates it. Whatever
- * is on screen stays until the new page lands; responses arriving out of order are dropped.
+ * Shows the matching cached page immediately (even stale). A cold query has its own loading
+ * state; responses arriving out of order never replace the results of the current query.
  */
 export async function loadResults(q: BrowseQuery, force = false) {
   const key = queryKey(q);
@@ -546,9 +547,9 @@ export async function loadResults(q: BrowseQuery, force = false) {
   if (force) searchCache.invalidate(key);
   if (cached?.hasData) {
     publish(cached.data!);
-    setWarning(false);
   }
-  setPending(!cached?.hasData);
+  setWarning(false);
+  setPending(force || !searchCache.isFresh(key));
   setFailure(undefined);
   try {
     const set = await searchCache.read(key, fetchPage(q, key));
@@ -584,6 +585,26 @@ export function prefetchBrowse(id?: string) {
   const key = queryKey(q);
   ensureCategories(q.source);
   void searchCache.read(key, fetchPage(q, key)).catch(() => undefined);
+}
+
+/** Warm a type tab with the same filters its selection will use. */
+export function prefetchBrowseType(next: ResourceType) {
+  const current = untrack(currentFilters);
+  if (next === current.type) return;
+  const selected = sourceById(current.source);
+  const provider = selected.types.includes(next) ? selected : firstSourceForType(next);
+  const q = normalizeQuery({ ...current, type: next, source: provider.id, page: 1, categories: [],
+    creator: provider.id === current.source ? current.creator : null,
+    sort: provider.id === current.source ? current.sort : provider.defaultSort,
+  });
+  const key = queryKey(q);
+  void searchCache.read(key, fetchPage(q, key)).catch(() => undefined);
+}
+
+export function visibleBrowseResults() {
+  const key = queryKey(query());
+  const shown = results();
+  return shown?.key === key ? shown : searchCache.peek(key)?.data;
 }
 
 export const retry = () => loadResults(untrack(query), true);

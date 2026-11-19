@@ -14,14 +14,13 @@ import { prefetchProject } from '../../features/browse/browse-projects';
 import {
   clearFilters,
   failure,
-  generation,
   hasActiveFilters,
   page,
   pending,
   query,
   recalledScroll,
   rememberScroll,
-  results,
+  visibleBrowseResults,
   retry,
   banners,
   setPage,
@@ -76,25 +75,27 @@ export function Results() {
   let pane: HTMLDivElement | undefined;
   let top = 0;
   let shownBase: string | undefined;
+  let shownKey: string | undefined;
   let hoveredCard: HTMLElement | null = null;
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Cards created after the result set changed fade in; a page restored on return does not.
-  const mounted = untrack(generation);
-  const enter = () => generation() !== mounted || !untrack(results);
+  const displayed = createMemo(visibleBrowseResults, { name: 'visibleBrowsePage' });
+  const enter = () => (recalledScroll(displayed()?.key ?? '') ?? 0) === 0;
 
-  const total = () => results()?.total ?? 0;
+  const total = () => displayed()?.total ?? 0;
   const pages = createMemo(() => pageCount(total(), query().pageSize), { name: 'browsePages' });
 
   // Scroll position belongs to the shown result set: remembered when it is replaced or the
   // page is left, restored when it comes back. Changing page scrolls to the top smoothly.
   createEffect(
-    () => results()?.key,
-    (key, previous) => {
-      if (!pane || key === undefined) return;
-      if (previous !== undefined && previous !== key) rememberScroll(previous, top);
+    () => displayed()?.key,
+    (key) => {
+      if (!pane || key === shownKey) return;
+      if (shownKey !== undefined) rememberScroll(shownKey, top);
+      shownKey = key;
+      if (key === undefined) return;
       const base = queryKey(untrack(query), false);
-      const samePage = shownBase === base && previous !== undefined;
+      const samePage = shownBase === base;
       shownBase = base;
       pane.scrollTo({ top: recalledScroll(key) ?? 0, behavior: samePage && !reducedMotion() ? 'smooth' : 'instant' });
     },
@@ -102,15 +103,14 @@ export function Results() {
 
   onSettled(() => () => {
     clearTimeout(hoverTimer);
-    const key = results()?.key;
-    if (key) rememberScroll(key, top);
+    if (shownKey) rememberScroll(shownKey, top);
   });
 
   // Warm only the first two cards after rendering; hover/focus uses the same bounded queue.
   createEffect(
-    () => results()?.key,
+    () => displayed()?.key,
     () => {
-      const projects = untrack(() => results()?.hits.slice(0, 2) ?? []);
+      const projects = untrack(() => displayed()?.hits.slice(0, 2) ?? []);
       const warm = () => projects.forEach((project) => prefetchProject(project.source, project.id));
       if (typeof requestIdleCallback === 'function') {
         const handle = requestIdleCallback(warm, { timeout: 1500 });
@@ -142,7 +142,7 @@ export function Results() {
     if (card) prefetchProject(card.dataset.platform as SourceId, card.dataset.project as string);
   };
 
-  const hits = (): ResourceProject[] => results()?.hits ?? [];
+  const hits = (): ResourceProject[] => displayed()?.hits ?? [];
 
   return (
     <section data-vesta="browse-results" aria-label={t('browse.results-label')}>
@@ -164,7 +164,7 @@ export function Results() {
           </p>
         </Show>
         <Switch>
-          <Match when={failure()}>
+          <Match when={!pending() && failure()}>
             {(message) => (
               <div data-vesta="browse-error">
                 <Notice details={message()} action={{ label: t('browse.retry'), onClick: () => void retry() }}>
@@ -173,10 +173,10 @@ export function Results() {
               </div>
             )}
           </Match>
-          <Match when={!results()}>
+          <Match when={!displayed()}>
             <Skeletons />
           </Match>
-          <Match when={results() && !hits().length}>
+          <Match when={!hits().length}>
             <EmptyState
               variant="inline"
               icon="icons/content/search"

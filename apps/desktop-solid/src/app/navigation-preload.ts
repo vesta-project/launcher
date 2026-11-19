@@ -8,6 +8,7 @@ import { prefetchServerOpen } from '../pages/servers/nav-prefetch';
 export function useNavigationPreloading() {
   onSettled(() => {
     if (typeof document === 'undefined') return;
+    const warmBrowse = setTimeout(() => prefetchBrowse(), 250);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let hovered: Element | null = null;
     const target = (node: EventTarget | null) => node instanceof Element
@@ -53,6 +54,7 @@ export function useNavigationPreloading() {
     document.addEventListener('focusin', focus);
     document.addEventListener('pointerdown', down);
     return () => {
+      clearTimeout(warmBrowse);
       clearTimeout(timer);
       document.removeEventListener('pointerover', over);
       document.removeEventListener('pointerout', out);

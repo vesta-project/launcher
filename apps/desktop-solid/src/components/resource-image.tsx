@@ -41,25 +41,39 @@ const queue = createResourceImageQueue(loadImage);
 const backgrounds = createResourceImageQueue(loadImage, 1);
 const readCached = createImageCacheReader(urls => invoke<Record<string, string>>('get_cached_resource_images', { urls }));
 
-type Visibility = { near: boolean; visible: boolean; update: (priority: number) => void };
+type PriorityListener = (priority: number) => void;
+type Visibility = { near: boolean; visible: boolean; listeners: Set<PriorityListener> };
 const watched = new Map<Element, Visibility>();
 let nearObserver: IntersectionObserver | undefined, visibleObserver: IntersectionObserver | undefined;
-function observe(element: Element, update: Visibility['update']) {
+function observe(element: Element, update: PriorityListener) {
   if (typeof IntersectionObserver === 'undefined') { update(0); return () => {}; }
   const receive = (entries: IntersectionObserverEntry[], field: 'near' | 'visible') => {
     for (const entry of entries) {
       const state = watched.get(entry.target);
       if (!state) continue;
       state[field] = entry.isIntersecting;
-      state.update(state.visible ? 0 : state.near ? 1 : 2);
+      for (const listener of state.listeners) listener(state.visible ? 0 : state.near ? 1 : 2);
     }
   };
-  nearObserver ??= new IntersectionObserver(entries => receive(entries, 'near'), { rootMargin: '160px' });
+  // Expand nested scroll containers as well as the viewport so Browse can warm the next rows.
+  nearObserver ??= new IntersectionObserver(entries => receive(entries, 'near'), {
+    rootMargin: '520px', scrollMargin: '520px',
+  } as IntersectionObserverInit);
   visibleObserver ??= new IntersectionObserver(entries => receive(entries, 'visible'));
-  watched.set(element, { near: false, visible: false, update });
-  nearObserver.observe(element); visibleObserver.observe(element);
+  // Offscreen cards skip laying out descendants. Observe the card box to warm all its artwork.
+  const target = element.closest('[data-vesta="browse-card"]') ?? element;
+  let state = watched.get(target);
+  if (!state) {
+    state = { near: false, visible: false, listeners: new Set() };
+    watched.set(target, state);
+    nearObserver.observe(target); visibleObserver.observe(target);
+  }
+  state.listeners.add(update);
+  update(state.visible ? 0 : state.near ? 1 : 2);
   return () => {
-    watched.delete(element); nearObserver?.unobserve(element); visibleObserver?.unobserve(element);
+    state.listeners.delete(update);
+    if (state.listeners.size) return;
+    watched.delete(target); nearObserver?.unobserve(target); visibleObserver?.unobserve(target);
     if (!watched.size) { nearObserver?.disconnect(); visibleObserver?.disconnect(); }
   };
 }

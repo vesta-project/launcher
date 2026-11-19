@@ -74,17 +74,8 @@ function Browser() {
     () => source(),
     (id) => ensureCategories(id),
   );
-  // Give the newly mounted toolbar and skeletons a paint before starting a cold search.
-  createEffect(key, () => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const frame = requestAnimationFrame(() => {
-      timer = setTimeout(() => void loadResults(untrack(query)), 0);
-    });
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer);
-    };
-  });
+  // The store publishes cached data or a loading state immediately. The request itself is async.
+  createEffect(key, () => void loadResults(untrack(query)));
 
   onSettled(() => listenForInstalls());
 
