@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { createFluentBundle, formatLocalizedMessage } from '../src/localization/catalog';
 import { logCatchup, parseNativeCrash, resourceFromNative, resourceScope, worldFromNative, worldRouteId, worldTransferNeedsAcknowledgement } from '../src/features/instances/native-details-model';
 
 describe('native instance detail boundaries', () => {
@@ -43,5 +45,16 @@ describe('native instance detail boundaries', () => {
     expect(logCatchup(['A'], ['B', 'A'])).toEqual(['A', 'B', 'A']);
     expect(logCatchup([], ['A'])).toEqual(['A']);
     expect(logCatchup(['A'], [])).toEqual(['A']);
+  });
+  test('the Resources badge counts pending updates and says so', () => {
+    const source = readFileSync(new URL('../src/pages/library/instance/instance-page.tsx', import.meta.url), 'utf8');
+    // The badge counts resources carrying an update artifact, so its copy may not say "new".
+    expect(source).toContain('resourcesFor(props.id).filter((item) => item.update).length');
+    const copy = readFileSync(new URL('../src/localization/locales/en/app.ftl', import.meta.url), 'utf8');
+    const bundle = createFluentBundle('en', [copy]);
+    const badge = (count) => formatLocalizedMessage(bundle, bundle, 'instance.updates-count', { count })
+      .replace(/[\u2068\u2069]/g, '');
+    expect(badge(1)).toBe('1 update');
+    expect(badge(4)).toBe('4 updates');
   });
 });

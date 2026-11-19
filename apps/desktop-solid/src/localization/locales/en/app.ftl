@@ -70,7 +70,11 @@ instance-worlds = Worlds
 instance-versions = Versions
 instance-console = Console
 instance-crash = Crash
-instance-updates-count = { $count } new
+instance-updates-count =
+    { $count ->
+        [one] 1 update
+       *[other] { $count } updates
+    }
 
 overview-continue-playing = Continue playing
 overview-no-worlds = No worlds yet
