@@ -14,6 +14,19 @@
     block-size: 100%;
   }
 
+  /* Outline weight follows the rendered size, not the 24-unit drawing: small icons beside
+     menu text stay light, rail and hero icons stay sturdy. The stroke is measured in screen
+     pixels (non-scaling) as a share of the icon's width, clamped to a readable range. */
+  :where([data-vesta='icon']) {
+    container-type: size;
+  }
+
+  :where([data-vesta='icon']) > :where(svg[stroke]),
+  :where([data-vesta='icon']) > :where(svg[stroke]) :where(*) {
+    stroke-width: clamp(var(--vesta-icon-stroke-min, 1px), var(--vesta-icon-stroke-scale, 7.5cqi), var(--vesta-icon-stroke-max, 3px));
+    vector-effect: non-scaling-stroke;
+  }
+
   /* Preserve each asset's fill/stroke contract, especially fill="none" outlines.
      Legacy filled SVGs without an explicit fill still inherit the UI colour. */
   :where([data-vesta='icon']) > :where(svg:not([fill])) {
