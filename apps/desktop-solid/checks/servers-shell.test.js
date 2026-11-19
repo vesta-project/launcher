@@ -309,6 +309,8 @@ async function resourceHarness(run, initialPath = '/library') {
           ${await readFile(path, 'utf8')}
         ` }));
         build.onLoad({ filter: /features[\\/]servers[\\/]service\.ts$/ }, () => ({ loader: 'js', contents: 'export const serversApi = async () => ({ remove: async () => {} });' }));
+        // addAccount imports onboarding lazily; bundling it would drag the whole UI barrel in here.
+        build.onLoad({ filter: /features[\\/]onboarding[\\/]index\.ts$/ }, () => ({ loader: 'js', contents: 'export const onboarding = { guest: () => false, signInFromGuest() {} };' }));
       } }],
     });
     if (!built.success) throw new AggregateError(built.logs, 'Shell harness failed');

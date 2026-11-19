@@ -173,7 +173,7 @@ export function CodeInput(props: {
                     inputmode="text"
                     autocapitalize="characters"
                     autocomplete={index === 0 ? 'one-time-code' : 'off'}
-                    spellcheck={false}
+                    spellcheck="false"
                     onFocus={(event) => {
                       if (index > current().length) focusCell(current().length);
                       else event.currentTarget.select();
