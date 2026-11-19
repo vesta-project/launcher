@@ -2,7 +2,7 @@
 // A new machine asks for its setup code, checked the moment it is complete; claim follows on
 // its own. A machine someone already set up needs no code: the Minecraft account is the
 // permission, so this device signs in as that account. Link codes stay as a fallback.
-import { Button, IconButton, TextField } from '@vesta/ui';
+import { Button, IconButton, Popover, TextField } from '@vesta/ui';
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { Board } from '../../components/board';
 import { Icon } from '../../components/icon';
@@ -85,7 +85,11 @@ export function VestaSetup() {
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(retryTimer));
 
-  const machines = createMemo(() => sortDiscovered(discovered(), hosts()), { name: 'vesta-setup:machines' });
+  const machines = createMemo(() => {
+    const saved = hosts();
+    const linked = new Set(saved.map((host) => host.id));
+    return sortDiscovered(discovered().filter((host) => !linked.has(host.hostId)), saved);
+  }, { name: 'vesta-setup:machines' });
   const parsed = createMemo(() => parseVestaAddress(address()), { name: 'vesta-setup:parsed' });
   const addressError = () => {
     const value = parsed();
@@ -470,7 +474,6 @@ export function VestaSetup() {
               <form data-vesta="vesta-address" onSubmit={(event) => void lookUp(event)}>
                 <TextField
                   label={t('vesta-server.setup.address')}
-                  description={t('vesta-server.setup.address-help')}
                   placeholder="192.168.1.67"
                   value={address()}
                   onChange={(value) => { setAddress(value); setProblem(null); }}
@@ -495,17 +498,19 @@ export function VestaSetup() {
               <form data-vesta="server-add-panel" onSubmit={(event) => { event.preventDefault(); void signInWithAccount(); }}>
                 <h1>{t('vesta-server.account.title', { name: current().name })}</h1>
                 <p>{t('vesta-server.account.help', { name: current().name })}</p>
-                {/* No code proves this is the machine, so say once which one is trusted. */}
-                <div data-vesta="vesta-trust">
-                  <p>
-                    <Icon name="icons/rail/servers" size={16} />
-                    <span>{t('vesta-server.account.trust', { name: current().name, address: current().address })}</span>
-                  </p>
-                  <details>
-                    <summary>{t('vesta-server.account.details')}</summary>
-                    <span>{t('vesta-server.account.fingerprint')}</span>
-                    <code>{formatFingerprint(current().fingerprint)}</code>
-                  </details>
+                <div data-vesta="vesta-connection">
+                  <Icon name="icons/rail/servers" size={18} />
+                  <span><strong>{current().name}</strong><small>{current().address}</small></span>
+                  <Popover placement="bottom-end" trigger={(triggerProps) =>
+                    <IconButton {...triggerProps} size="sm" variant="ghost" label={t('vesta-server.account.details')}
+                      icon={<Icon name="icons/status/info" />} />
+                  }>
+                    <div data-vesta="vesta-trust">
+                      <p>{t('vesta-server.account.trust', { name: current().name, address: current().address })}</p>
+                      <strong>{t('vesta-server.account.fingerprint')}</strong>
+                      <code>{formatFingerprint(current().fingerprint)}</code>
+                    </div>
+                  </Popover>
                 </div>
                 <Show when={account()}>
                   {(who) => (

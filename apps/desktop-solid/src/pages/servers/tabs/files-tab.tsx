@@ -125,8 +125,9 @@ export function FilesTab(props: { snapshot: ServerSnapshot }) {
   const folderHover = hoverIntent((path) => prefetchListing(untrack(id), path));
   onCleanup(folderHover.cancel);
 
-  const go = (path: string) => transitionTo(`/servers/${id()}/files${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`);
-  const href = (path: string) => `#/servers/${encodeURIComponent(id())}/files${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`;
+  const pathTo = (path: string) => `/servers/${id()}/files${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`;
+  const go = (path: string) => transitionTo(pathTo(path));
+  const href = (path: string) => `#${pathTo(path)}`;
   const crumbs = () => {
     const segments = directory() ? directory().split('/') : [];
     return segments.map((name, index) => ({ name, path: segments.slice(0, index + 1).join('/') }));

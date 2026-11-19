@@ -450,7 +450,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
                           )}
                         </For>
                       </Menu>
-                      <Show when={place()}><span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span></Show>
+                      <Show when={crumbs().length || (place() && !single())}><span data-vesta="breadcrumb-separator" aria-hidden="true"><Icon name="icons/controls/chevron-right" size={12} /></span></Show>
                     </>
                   }>
                   <Show when={crumbs().length > 0 || (view().kind === 'folder' && !single())} fallback={
@@ -492,7 +492,7 @@ function FolderBrowser(props: { hostId: string; machine: string; roots: FolderRo
           <div data-vesta="vesta-path-bar">
             <form data-vesta="vesta-browser-bar" data-typing onSubmit={(event) => void openTyped(event)}>
               <Icon name="icons/rail/servers" size={14} />
-              <input data-vesta="vesta-path-input" type="text" value={typing() ?? ''} spellcheck={false} autocomplete="off"
+              <input data-vesta="vesta-path-input" type="text" value={typing() ?? ''} spellcheck="false" autocomplete="off"
                 aria-label={t('vesta-server.import.type-path')} aria-invalid={typedError() ? 'true' : undefined} aria-describedby={typedError() ? typedNoteId : undefined}
                 ref={(element) => requestAnimationFrame(() => { element.focus(); element.select(); })}
                 onInput={(event) => { setTyping(event.currentTarget.value); setTypedError(null); }}

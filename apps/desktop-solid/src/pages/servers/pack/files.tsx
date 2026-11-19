@@ -55,7 +55,7 @@ export function ModpackFiles() {
     setOpened(null);
     transitionTo(`/servers/${area.id()}/pack/files/${next}${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`);
   };
-  const href = (path: string) => `#/servers/${encodeURIComponent(area.id())}/pack/files/${root()}${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`;
+  const href = (path: string) => `#/servers/${area.id()}/pack/files/${root()}${path ? `/${encodeRouteSegments(path).join('/')}` : ''}`;
   const crumbs = () => {
     const segments = directory() ? directory().split('/') : [];
     return segments.map((name, index) => ({ name, path: segments.slice(0, index + 1).join('/') }));

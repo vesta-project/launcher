@@ -399,11 +399,12 @@ describe('[hosts] account sign in', () => {
     expect(owners[0]).toMatchObject({ role: 'primary_owner' });
   });
 
-  test('the setup screen asks for no code on a set up machine and trusts it in one calm line', () => {
+  test('the setup screen uses account sign-in and keeps the machine fingerprint in connection details', () => {
     const page = source('src/pages/servers/vesta-setup.tsx');
     expect(page).toContain("if (state === 'claimed') return toSignIn(next);");
     expect(page).toContain("'vesta-server.account.trust'");
-    expect(page).toContain('<details>');
+    expect(page).toContain('<Popover placement="bottom-end"');
+    expect(page).toContain('formatFingerprint(current().fingerprint)');
     expect(page).toContain("toLinkCode(current, 'vesta-server.account.approval')");
     expect(page).toContain('<AccountMenu');
     // The device name is the computer's own; the platform label is only a fallback.
@@ -483,10 +484,11 @@ describe('[hosts] import store', () => {
 });
 
 describe('[hosts] players', () => {
-  test('the whitelist banner is only for people who can switch the whitelist', () => {
+  test('the whitelist shortcut is only for people who can switch the whitelist', () => {
     const page = source('src/pages/servers/tabs/players-tab.tsx');
     expect(page).toContain("gate(props.snapshot.capabilities, 'config.edit') === 'allowed'");
-    expect(page).toContain('<Show when={changesWhitelist() && whitelistOn() !== null}>');
+    expect(page).toContain('<Show when={changesWhitelist() && whitelistOn() !== null && shell?.openSection}>');
+    expect(page).toContain("onClick={() => shell?.openSection?.('game')}");
     expect(page).toContain('useServerResource(id, propertiesResource, { enabled: changesWhitelist })');
   });
 });
