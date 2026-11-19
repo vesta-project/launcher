@@ -51,12 +51,12 @@
   }
 
   .browse-sources {
-    --segmented-height: max(var(--vesta-size-control-sm), 26px);
-    --segmented-icon-size: 18px;
+    flex: none;
+    --segmented-icon-size: 16px;
   }
 
   .browse-sources :where([data-vesta='segmented-item']) {
-    min-inline-size: calc(var(--segmented-icon-size) + var(--vesta-space-3));
+    min-inline-size: var(--segmented-height);
   }
 
   .browse-sources :where([data-vesta='icon']) {
@@ -708,7 +708,7 @@
     justify-content: center;
     box-sizing: border-box;
     max-inline-size: 11rem;
-    block-size: 20px;
+    min-block-size: 20px;
     margin: 0;
     padding: 0 var(--vesta-space-1-5);
     border: 0;
@@ -717,7 +717,7 @@
     color: var(--vesta-color-text-muted);
     font: inherit;
     font-size: var(--vesta-text-xs);
-    line-height: 1;
+    line-height: var(--vesta-leading-normal);
     white-space: nowrap;
     cursor: default;
     transition:
@@ -727,7 +727,7 @@
 
   :where([data-vesta='browse-tag'] > span:not([data-vesta])) {
     min-inline-size: 0;
-    overflow: hidden;
+    overflow: clip visible;
     text-overflow: ellipsis;
   }
 

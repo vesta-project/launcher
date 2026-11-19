@@ -32,7 +32,7 @@ import {
   setServer,
   clearFilters,
   setText,
-  results,
+  visibleBrowseResults,
   text,
   toggleCategory,
   type,
@@ -264,7 +264,7 @@ export function SearchField() {
           onInput={(event) => applyText(event.currentTarget.value, false)}
           onKeyDown={onKeyDown}
         />
-        <Show when={results()}>
+        <Show when={visibleBrowseResults()}>
           {(current) => (
             <span data-vesta="browse-search-count" role="status" data-tip={t('browse.results-count', { count: current().total })}>
               {formatCount(current().total)}

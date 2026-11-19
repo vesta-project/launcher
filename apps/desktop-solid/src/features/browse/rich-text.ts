@@ -122,6 +122,22 @@ function keepAlignment(element: Element) {
   else element.removeAttribute('style');
 }
 
+/** A leading picture and a multiline title form one disclosure header. */
+function alignSummaryImages(root: DocumentFragment) {
+  for (const summary of root.querySelectorAll('details > summary')) {
+    const image = summary.firstElementChild;
+    if (!(image instanceof HTMLImageElement) || !summary.textContent?.trim()) continue;
+    const heading = summary.ownerDocument.createElement('span');
+    heading.dataset.embed = 'summary-heading';
+    const title = summary.ownerDocument.createElement('span');
+    if (image.nextElementSibling?.tagName === 'BR') image.nextElementSibling.remove();
+    image.remove();
+    title.append(...summary.childNodes);
+    heading.append(image, title);
+    summary.append(heading);
+  }
+}
+
 function finish(root: DocumentFragment, labels: RichTextLabels) {
   convertSpoilerBlocks(root, labels);
   for (const element of root.querySelectorAll('*')) {
@@ -138,6 +154,7 @@ function finish(root: DocumentFragment, labels: RichTextLabels) {
       wrap.append(element);
     }
   }
+  alignSummaryImages(root);
 }
 
 export function renderRichText(source: string, format: 'markdown' | 'html', labels: RichTextLabels): DocumentFragment {

@@ -78,9 +78,12 @@
 
   :where([data-vesta='rich-text']) :where(img) {
     max-inline-size: 100%;
-    block-size: auto;
     border-radius: var(--vesta-radius-sm);
     vertical-align: middle;
+  }
+
+  :where([data-vesta='rich-text']) :where(img:not([height]), img[width][height]) {
+    block-size: auto;
   }
 
   :where([data-vesta='rich-text']) :where(img:not(a img)) {
@@ -156,6 +159,25 @@
     color: var(--vesta-color-text-muted);
     font-weight: var(--vesta-weight-medium);
     cursor: default;
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='summary-heading']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    max-inline-size: calc(100% - 1.5em);
+    vertical-align: middle;
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='summary-heading']) > :where(img) {
+    flex: none;
+    max-inline-size: min(32%, 96px);
+  }
+
+  :where([data-vesta='rich-text']) :where([data-embed='summary-heading']) :where(h1, h2, h3, h4, h5, h6, p) {
+    margin-block: 0;
+    padding-block: 0;
+    border: 0;
   }
 
   :where([data-vesta='rich-text']) :where(details[open] > summary) {

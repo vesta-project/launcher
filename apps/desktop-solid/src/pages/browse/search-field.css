@@ -74,12 +74,13 @@
     flex: none;
     align-items: center;
     box-sizing: border-box;
-    block-size: 20px;
+    min-block-size: 20px;
     border: var(--vesta-border-width) solid transparent;
     border-radius: var(--vesta-radius-sm);
     background: var(--vesta-color-fill);
     color: var(--vesta-color-text);
     font-size: var(--vesta-text-sm);
+    line-height: var(--vesta-leading-normal);
     animation: browse-chip-in var(--vesta-duration-normal) var(--vesta-ease-out) both;
   }
 
@@ -126,7 +127,7 @@
 
   :where([data-vesta='browse-chip-body']) {
     max-inline-size: 18ch;
-    overflow: hidden;
+    overflow: clip visible;
     padding: 0 var(--vesta-space-0-5) 0 var(--vesta-space-1-5);
     border: 0;
     background: transparent;
