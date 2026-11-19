@@ -80,7 +80,7 @@ export function FirstInstanceStep() {
             <ChoiceRow
               selected={choice() === 'import'}
               onSelect={() => setChoice('import')}
-              icon={<Icon name={found().icon ?? 'icons/actions/move'} size={18} />}
+              icon={<Icon name={found().icon ?? 'icons/actions/download'} size={18} />}
               title={t('welcome.first-import-title')}
               detail={
                 moreLaunchers()

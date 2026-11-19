@@ -41,6 +41,12 @@ instance-actions-desktop-page-short = Open instance page
 
 # Library arranging and groups.
 library-arrange = Arrange library
+library-sort-by = Sort by
+library-sort-recent = Recently played
+library-sort-name = Name
+library-sort-newest = Date added
+library-sort-playtime = Playtime
+library-sort-custom = Custom order
 library-arrange-done = Done
 library-arrange-hint = Drag to reorder. Hold a card over another to group them.
 library-arranging = Arranging the library. Drag cards to move them, or hold one over the middle of another to group them. Focus a card and press Enter to move it with the arrow keys.

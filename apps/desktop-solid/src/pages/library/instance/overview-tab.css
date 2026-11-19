@@ -222,6 +222,11 @@
     inset-inline-end: var(--vesta-space-4);
   }
 
+  .overview-world-play:not(:disabled):active {
+    transform: none;
+    box-shadow: inset 0 0 0 2px var(--vesta-color-media-shade);
+  }
+
   /* ---- Screenshots: the newest large, the next four around it ---- */
   :where([data-vesta="shot-grid"]) {
     display: grid;

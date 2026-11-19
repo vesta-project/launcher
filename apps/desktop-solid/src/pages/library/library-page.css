@@ -11,6 +11,10 @@
  *        --library-ghost-scale, --library-ghost-tilt (written while carrying)
  */
 @layer launcher {
+  :where([data-vesta='library-background']) {
+    min-block-size: 100%;
+  }
+
   :where([data-vesta='library-grid']) {
     --library-grid-min: 180px;
     --library-grid-gap: 20px;

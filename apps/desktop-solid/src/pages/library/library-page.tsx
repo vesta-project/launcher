@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled } from 'solid-js';
-import { Button, toast } from '@vesta/ui';
+import { Button, ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuRadioGroup, ContextMenuRadioItem, ContextMenuSeparator, toast } from '@vesta/ui';
 import { EmptyState } from '../../components/empty-state';
 import { t } from '../../localization';
 import { nativeInstances, nativeRecord, instancePending, instancesLoaded } from '../../features/instances/native-service';
@@ -10,8 +10,8 @@ import { InstanceCard } from '../../features/instances/instance-card';
 import type { InstanceArrangeActions } from '../../features/instances/action-menu';
 import {
   beginLibraryArrange, containerOf, createGroup, customOrder, endLibraryArrange, groupMembers, isGroupEntry,
-  libraryArranging, libraryLayoutStore, moveEntry, recolorGroup, renameGroup, sameEntries, ungroup,
-  type LibraryEntry, type LibraryGroup,
+  libraryArranging, libraryLayoutStore, librarySorts, moveEntry, recolorGroup, renameGroup, sameEntries, ungroup,
+  type LibraryEntry, type LibraryGroup, type LibrarySort,
 } from '../../features/instances/library-layout';
 import { beforeForIndex, keyboardMoveKeys } from '../../features/instances/library-arrange';
 import { createKeyboardMove, createLibraryDrag, flipItems, type LibraryDrag } from '../../features/instances/library-drag';
@@ -355,11 +355,32 @@ function LibraryGrid() {
 
   return (
     <>
-      <ul data-vesta="library-grid" data-library-surface="main" data-arranging={libraryArranging() ? '' : undefined}>
-        <For each={entries()}>
-          {(entry) => <LibraryItem id={entry} context={context} />}
-        </For>
-      </ul>
+      <ContextMenu trigger={(triggerProps) => {
+        const background = (event: Event) => !libraryArranging() && openGroup() === null &&
+          !(event.target instanceof Element && event.target.closest('[data-library-item]'));
+        const contextMenu = triggerProps.onContextMenu as (event: MouseEvent) => void;
+        const pointerDown = triggerProps.onPointerDown as (event: PointerEvent) => void;
+        return (
+          <div {...triggerProps} data-vesta="library-background" tabindex={0} aria-label={t('nav.library')}
+            onContextMenu={(event) => { if (background(event)) contextMenu(event); }}
+            onPointerDown={(event) => { if (background(event)) pointerDown(event); }}>
+            <ul data-vesta="library-grid" data-library-surface="main" data-arranging={libraryArranging() ? '' : undefined}>
+              <For each={entries()}>{(entry) => <LibraryItem id={entry} context={context} />}</For>
+            </ul>
+          </div>
+        );
+      }}>
+        <ContextMenuGroup label={t('library.sort-by')}>
+          <ContextMenuRadioGroup value={store.layout().sort} onChange={(value) => {
+            const sort = value as LibrarySort;
+            store.update((layout) => ({ ...layout, sort, order: sort === 'custom' ? customOrder(layout, ids()) : layout.order }));
+          }}>
+            <For each={librarySorts}>{(sort) => <ContextMenuRadioItem value={sort}>{t(`library.sort-${sort}`)}</ContextMenuRadioItem>}</For>
+          </ContextMenuRadioGroup>
+        </ContextMenuGroup>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => beginLibraryArrange(ids())}>{t('library.arrange')}</ContextMenuItem>
+      </ContextMenu>
       <Show when={openGroupData() ? openGroup() : undefined} keyed>
         {(id) => {
           const group = () => groups().get(id);
@@ -412,7 +433,7 @@ function LibraryEmpty() {
       suggestions={[
         { icon: 'icons/actions/add', label: t('management.start-new'), description: t('management.start-new-help'), onSelect: () => requestCreateAction('new') },
         { icon: 'icons/content/modpack', label: t('management.start-modpack'), description: t('management.start-modpack-help'), onSelect: () => { setType('modpack'); transitionTo('/browse'); } },
-        { icon: 'icons/actions/move', label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
+        { icon: 'icons/actions/download', label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
         // Opening a file needs the native picker; the browser preview has none.
         ...(nativeInstances ? [{ icon: 'icons/content/file', label: t('management.start-file'), description: t('management.start-file-help'), onSelect: () => requestCreateAction('file') }] : []),
       ]}
