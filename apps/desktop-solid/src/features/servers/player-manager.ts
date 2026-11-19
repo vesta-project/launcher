@@ -4,6 +4,7 @@
 import type { MessageId } from '../../localization/messages';
 import type { Tone } from '@vesta/ui';
 import type { BanEntry, OperatorEntry, PlayersView, WhitelistEntry } from './native';
+import { isPlayerName } from './model';
 
 export interface KnownPlayer {
   /** `uuid:<uuid>`, or `name:<exact name>` for a player known only by name. */
@@ -15,6 +16,21 @@ export interface KnownPlayer {
   whitelisted: boolean;
   operator: { level: number; bypassesPlayerLimit: boolean } | null;
   ban: { reason: string; created: string; expires: string; source: string } | null;
+}
+
+const javaUuid = /^(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i;
+export const isPlayerUuid = (input: string) => javaUuid.test(input.trim());
+
+/** Whitelist commands accept names. A UUID is useful only if the server has a matching name. */
+export function resolveWhitelistPlayer(input: string, known: readonly Pick<KnownPlayer, 'uuid' | 'name'>[]) {
+  const value = input.trim();
+  if (isPlayerName(value)) return value;
+  if (!isPlayerUuid(value)) return undefined;
+  const normalize = (id: string) => id.toLowerCase().replaceAll('-', '');
+  const id = normalize(value);
+  const names = new Set(known.filter((entry) => entry.uuid && normalize(entry.uuid) === id && isPlayerName(entry.name))
+    .map((entry) => entry.name));
+  return names.size === 1 ? names.values().next().value : undefined;
 }
 
 export interface PlayerSources {

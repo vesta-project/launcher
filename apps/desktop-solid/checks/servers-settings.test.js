@@ -4,7 +4,17 @@ import {
   propertySchema, propertySearchText, unreportedKeys,
 } from '../src/features/servers/properties-model';
 import { activeCodesAt, applyMotdFormat, motdTokens, parseMotd, serializeMotd, stripMotdCodes } from '../src/features/servers/motd-model';
-import { banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, shortUuid } from '../src/features/servers/player-manager';
+import { banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, resolveWhitelistPlayer, shortUuid } from '../src/features/servers/player-manager';
+
+test('whitelist accepts names and resolves known UUIDs without guessing', () => {
+  const uuid = '069a79f4-44e9-4726-a5be-fca90e38aaf5';
+  const known = [{ uuid, name: 'PlayerOne' }];
+  expect(resolveWhitelistPlayer(' AnotherPlayer ', [])).toBe('AnotherPlayer');
+  expect(resolveWhitelistPlayer(uuid.toUpperCase(), known)).toBe('PlayerOne');
+  expect(resolveWhitelistPlayer(uuid.replaceAll('-', ''), known)).toBe('PlayerOne');
+  expect(resolveWhitelistPlayer(uuid, [])).toBeUndefined();
+  expect(resolveWhitelistPlayer(uuid, [...known, { uuid, name: 'OtherName' }])).toBeUndefined();
+});
 
 describe('[game settings] grouping, essentials, search and change detection', () => {
   test('essentials lead with what most owners change; every key has one group and a help line', () => {

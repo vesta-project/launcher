@@ -11,7 +11,8 @@ import { isPlayerName, newIntentId } from '../../../features/servers/model';
 import { afterFailure, isWhitelist, moderationRequest, routeFor, standing, type Attempt } from '../../../features/servers/moderation-attempt';
 import { banDuration } from '../../../features/servers/operations-model';
 import {
-  BAN_DURATIONS, PLAYER_FILTERS, PLAYER_PAGE_SIZE, playerPage, banExpiry, filterCounts, filterPlayers, mergePlayers, playerChips, type KnownPlayer, type PlayerFilter,
+  BAN_DURATIONS, PLAYER_FILTERS, PLAYER_PAGE_SIZE, playerPage, banExpiry, filterCounts, filterPlayers, isPlayerUuid, mergePlayers, playerChips,
+  resolveWhitelistPlayer, type KnownPlayer, type PlayerFilter,
 } from '../../../features/servers/player-manager';
 import { effectiveValue, parseProperties, propertyDef } from '../../../features/servers/properties-model';
 import { invalidateServerResources, useServerResource } from '../../../features/servers/resources';
@@ -209,7 +210,7 @@ export function PlayerManager(props: { snapshot: ServerSnapshot }) {
         </section>
       </div>
       <Show when={dialog()} keyed>
-        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
+        {(request) => <ModerationDialog snapshot={props.snapshot} request={request} knownPlayers={players} onClose={() => setDialog(null)} onDone={() => invalidateServerResources(id(), PLAYER_LIST_RESOURCES)} />}
       </Show>
     </SettingsPage>
   );
@@ -326,6 +327,7 @@ const choiceLabels: Partial<Record<Action, MessageId>> = {
 /** Every moderation change, with the server's confirmation step for operators. */
 function ModerationDialog(props: {
   snapshot: ServerSnapshot;
+  knownPlayers?: () => readonly KnownPlayer[];
   /** Each request mounts a fresh dialog, so its fields start from the request. */
   request: Request;
   onClose: () => void;
@@ -349,14 +351,22 @@ function ModerationDialog(props: {
   const uncertain = () => !!attempt()?.uncertain || !!confirm()?.uncertain;
   const takesReason = () => action() === 'kick' || action() === 'ban';
   const adding = () => !props.request.player && (props.request.choices?.length ?? 0) > 1;
+  const whitelistInput = () => action() === 'whitelist_add' && !props.request.player;
+  const playerName = () => {
+    const value = player().trim();
+    return whitelistInput()
+      ? resolveWhitelistPlayer(value, props.knownPlayers?.() ?? [])
+      : isPlayerName(value) ? value : undefined;
+  };
 
   /** A fresh attempt from the fields, routed by the server's state right now. */
   const fresh = async (id: string): Promise<Attempt | null> => {
     const status = props.snapshot.status;
     const routed = routeFor(action(), { state: status?.state, generation: status?.generation });
-    if (!routed || !isPlayerName(player())) return null;
+    const name = playerName();
+    if (!routed || !name) return null;
     const base: Attempt = {
-      action: action(), player: player(), reason: reason(), durationSeconds: duration() === 'permanent' ? null : Number(duration()),
+      action: action(), player: name, reason: reason(), durationSeconds: duration() === 'permanent' ? null : Number(duration()),
       ...routed, intentId: newIntentId(), uncertain: false,
     };
     // Reading the file revision sends nothing; a failure here leaves no attempt behind.
@@ -414,7 +424,7 @@ function ModerationDialog(props: {
       footer={
         <>
           <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
-          <Button tone={action() === 'ban' || action() === 'op' ? 'danger' : 'accent'} disabled={busy() || !isPlayerName(player())} onClick={() => void submit()}>
+          <Button tone={action() === 'ban' || action() === 'op' ? 'danger' : 'accent'} disabled={busy() || (!confirming() && !playerName())} onClick={() => void submit()}>
             {confirming() ? t('servers.moderate.confirm', { count: remaining() }) : t(actionTitles[action()])}
           </Button>
         </>
@@ -427,11 +437,21 @@ function ModerationDialog(props: {
       </Show>
       <TextField
         label={t('servers.players.name')}
+        placeholder={whitelistInput() ? t('servers.players.whitelist-input') : undefined}
+        description={whitelistInput() ? t('servers.players.whitelist-input-help') : undefined}
         value={player()}
         onChange={setPlayer}
         readOnly={!!props.request.player || locked()}
         autofocus={!props.request.player}
-        error={player() && !isPlayerName(player()) ? t('servers.players.name-format') : undefined}
+        error={player().trim() && !playerName() && !locked()
+          ? t(whitelistInput() ? (isPlayerUuid(player()) ? 'servers.players.whitelist-uuid-unknown' : 'servers.players.whitelist-input-help') : 'servers.players.name-format')
+          : undefined}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.isComposing && (playerName() || confirming())) {
+            event.preventDefault();
+            void submit();
+          }
+        }}
         spellcheck="false"
       />
       <Show when={takesReason()}>
