@@ -63,15 +63,14 @@ export const useModpackArea = () => useContext(ModpackAreaContext)!;
 
 /** Loads the pack workspace once per server and keeps derived pieces next to it. */
 export function createModpackArea(snapshot: Accessor<ServerSnapshot>): ModpackAreaValue {
-  const context = createMemo(() => {
-    const value = snapshot();
-    return { id: value.connection.id, role: value.connection.role, capabilities: value.capabilities };
-  }, {
-    name: 'modpack:context',
-    equals: (a, b) => a.id === b.id && a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
+  // Status events keep these projections: gate them before constructing access state.
+  const connection = createMemo(() => snapshot().connection, { name: 'modpack:connection' });
+  const capabilities = createMemo(() => snapshot().capabilities, {
+    name: 'modpack:capabilities',
+    equals: (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b),
   });
-  const id = createMemo(() => context().id, { name: 'modpack:server-id' });
-  const access = createMemo(() => ({ capabilities: context().capabilities, role: context().role }), {
+  const id = createMemo(() => connection().id, { name: 'modpack:server-id' });
+  const access = createMemo(() => ({ capabilities: capabilities(), role: connection().role }), {
     name: 'modpack:access', equals: (a, b) => a.role === b.role && (a.capabilities === b.capabilities || JSON.stringify(a.capabilities) === JSON.stringify(b.capabilities)),
   });
   const minecraftStopped = createMemo(() => snapshot().status?.state === 'stopped' && !['starting', 'waking'].includes(snapshot().status?.lifecycle ?? ''), { name: 'modpack:minecraft-stopped' });

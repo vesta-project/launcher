@@ -107,6 +107,8 @@ test('live status snapshots do not flash loading or restart workspace reads', ()
   api.seedServerResource('live', api.packWorkspaceResource, api.seedPackWorkspace('fabric'));
   let loadingRuns = 0;
   const initial = snapshot(api, 'live');
+  let roleReads = 0;
+  Object.defineProperty(initial.connection, 'role', { get: () => { roleReads++; return 'owner'; } });
   const owner = api.createRoot(dispose => {
     const [state, setState] = api.createSignal(initial, { name: 'pack-loading:live-snapshot' });
     const area = api.createModpackArea(state);
@@ -116,8 +118,10 @@ test('live status snapshots do not flash loading or restart workspace reads', ()
   try {
     await waitFor(api, () => !api.untrack(owner.area.loading), 'workspace load');
     const before = loadingRuns;
+    const beforeRoleReads = roleReads;
     // Status events preserve the capability projection; a full refresh can replace it.
     for (let tick = 0; tick < 60; tick++) { owner.setState({ ...initial, tick }); await settle(api); }
+    expect(roleReads).toBe(beforeRoleReads);
     owner.setState(snapshot(api, 'live')); await settle(api);
     expect(loadingRuns).toBe(before);
     expect(c.reads).toHaveLength(0); expect(c.previews).toHaveLength(0);
