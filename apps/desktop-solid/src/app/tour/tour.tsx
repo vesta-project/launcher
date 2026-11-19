@@ -38,7 +38,7 @@ function buildSteps(): TourStep[] {
     onboarding.guest()
       ? { id: 'guest', title: 'tour.guest-title', body: 'tour.guest-body', targets: ['[data-vesta="titlebar-guest"]'], placement: 'bottom' }
       : { id: 'account', title: 'tour.account-title', body: 'tour.account-body', targets: ['[data-vesta="rail-account"]'], placement: 'right' },
-    { id: 'settings', title: 'tour.settings-title', body: 'tour.settings-body', targets: [`[data-vesta="rail-bottom"] ${railLink('/settings')}`], placement: 'right' },
+    { id: 'settings', title: 'tour.settings-title', body: 'tour.settings-body', targets: [railLink('/settings')], placement: 'right' },
     { id: 'finish', title: 'tour.finish-title', body: 'tour.finish-body' },
   ];
 }
