@@ -50,7 +50,7 @@ export function iconReferences(root) {
 // Preserve presentation attributes so differently styled brands aren't collapsed.
 export function normalizeSvg(svg) {
   return [...svg.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<\/?([\w:-]+)\b([^>]*?)(\/?)>/g)].map(m => {
-    const attrs = [...m[2].matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/g)].filter(a => !['aria-hidden', 'xmlns', 'version', 'width', 'height'].includes(a[1])).map(a => {
+    const attrs = [...m[2].matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/g)].filter(a => !['aria-hidden', 'xmlns', 'version'].includes(a[1]) && !(m[1] === 'svg' && ['width', 'height'].includes(a[1]))).map(a => {
       let v = a[3].trim().replace(/\s+/g, ' ');
       if (a[1] === 'd' || a[1] === 'points') v = (v.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][-+]?\d+)?/g) ?? []).map(t => isNaN(Number(t)) ? t : String(Number(t))).join(' ');
       return `${a[1]}=${v}`;

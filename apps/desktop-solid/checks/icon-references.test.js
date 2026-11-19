@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { files, iconReferences, normalizeSvg } from '../scripts/icon-references.mjs';
 
@@ -40,6 +40,17 @@ describe('icon references', () => {
       byShape.set(shape, [...(byShape.get(shape) ?? []), relative(assets, path)]);
     }
     expect([...byShape.values()].filter(paths => paths.length > 1)).toEqual([]);
+  });
+
+  test('root SVG dimensions are unique and use icon sizes, never stroke widths', () => {
+    for (const path of files(join(assets, 'icons')).filter(path => path.endsWith('.svg'))) {
+      const root = readFileSync(path, 'utf8').match(/<svg\b[^>]*>/)[0];
+      for (const attribute of ['width', 'height']) {
+        const values = [...root.matchAll(new RegExp('\\s' + attribute + '="([^"]+)"', 'g'))];
+        expect(values.length).toBeLessThanOrEqual(1);
+        for (const match of values) expect(Number(match[1])).toBeGreaterThanOrEqual(14);
+      }
+    }
   });
 
   test('refresh and restart share the 24px, 2px round-stroke action family', () => {
