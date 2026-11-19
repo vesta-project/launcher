@@ -142,10 +142,10 @@
     border: 1px solid color-mix(in oklab, var(--vesta-color-accent) 55%, var(--vesta-color-border));
     border-radius: 26px;
     color: var(--vesta-color-on-accent);
-    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-accent) 85%, white), var(--vesta-color-accent));
+    background: linear-gradient(160deg, color-mix(in oklab, var(--vesta-color-accent) 85%, var(--vesta-color-on-accent)), var(--vesta-color-accent));
     box-shadow:
       0 18px 40px -12px color-mix(in oklab, var(--vesta-color-accent) 70%, transparent),
-      inset 0 1px 0 color-mix(in oklab, white 35%, transparent);
+      inset 0 1px 0 color-mix(in oklab, var(--vesta-color-on-accent) 35%, transparent);
   }
 
   [data-vesta='reel-media'][data-active] :where([data-vesta='reel-art-hero']) {
