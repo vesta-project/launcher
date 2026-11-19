@@ -72,6 +72,9 @@ export function Shell() {
   useMouseBack();
   let visitedCreate = false;
   const keepCreate = createMemo(() => { visitedCreate ||= route().page === 'create'; return visitedCreate; }, { name: 'createSessionMounted' });
+  // A page of results is costly to build, so Browse is kept as it was left rather than rebuilt.
+  let visitedBrowse = false;
+  const keepBrowse = createMemo(() => { visitedBrowse ||= route().page === 'browse'; return visitedBrowse; }, { name: 'browseSessionMounted' });
   let shellElement!: HTMLDivElement;
   onSettled(() => watchFrameSplit(shellElement));
   let dropElement: HTMLElement | undefined;
@@ -100,12 +103,10 @@ export function Shell() {
         <Rail />
         <main ref={(element) => { dropElement = element; }} data-vesta="scene" id="scene" tabindex={-1}>
           <Show when={keepCreate()}><div style={{ display: route().page === 'create' ? 'contents' : 'none' }}><CreatePage /></div></Show>
+          <Show when={keepBrowse()}><div style={{ display: route().page === 'browse' ? 'contents' : 'none' }}><BrowsePage /></div></Show>
           <Switch>
             <Match when={route().page === 'library'}>
               <LibraryPage />
-            </Match>
-            <Match when={route().page === 'browse'}>
-              <BrowsePage />
             </Match>
             <Match when={route().page === 'servers'}>
               <ServersPage />

@@ -32,10 +32,10 @@ const decodeSegment = (value: string | undefined) => {
 };
 
 /** `/` focuses the search field unless the user is already typing somewhere. */
-function useSearchShortcut() {
+function useSearchShortcut(enabled: () => boolean) {
   onSettled(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+      if (!enabled() || event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
       const active = event.target instanceof Element ? event.target : null;
       if (active?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       event.preventDefault();
@@ -46,21 +46,24 @@ function useSearchShortcut() {
   });
 }
 
-function Browser() {
+/** The list stays mounted under a project page or another page (`active` false), so returning shows it as it was. */
+function Browser(props: { active: () => boolean }) {
   const key = createMemo(() => queryKey(query()), { name: 'browseQueryKey' });
-  useSearchShortcut();
+  useSearchShortcut(props.active);
 
   // The route owns the target (an instance under /for, a server under /server); the store
   // follows it. The instance catalogue can load after the route does, so the lookup is part of
-  // what this tracks.
+  // what this tracks. A project page chooses its target in place, so its route is not applied.
   createEffect(
     () => ({
+      active: props.active(),
       instance: route().section === 'for' ? route().detail : undefined,
       server: route().section === 'server' ? decodeSegment(route().detail) : undefined,
       ready: !!findInstance(route().detail),
     }),
-    ({ instance, server }) =>
+    ({ active, instance, server }) =>
       untrack(() => {
+        if (!active) return;
         if (server) return syncServerTarget(server);
         syncServerTarget(undefined);
         syncTarget(instance);
@@ -84,22 +87,30 @@ function Browser() {
       <div data-vesta="browse">
         <Toolbar />
         <SearchField />
-        <Results />
+        <Results active={props.active} />
       </div>
     </Board>
   );
 }
 
+/** Stays mounted while other pages show (see the shell); `shown` is whether Browse is on screen. */
 export function BrowsePage() {
+  const shown = () => route().page === 'browse';
+  const onProject = () => shown() && route().section === 'project';
   return (
     <>
-      <Show when={route().section === 'project'} fallback={<Browser />}>
+      <Show when={onProject()}>
         <ProjectPage />
       </Show>
+      <div style={{ display: onProject() ? 'none' : 'contents' }}>
+        <Browser active={() => shown() && !onProject()} />
+      </div>
       {/* Both views install through the same choosers. */}
       <InstancePickerDialog />
       <WorldPickerDialog />
-      <ServerTargetSync />
+      <Show when={shown()}>
+        <ServerTargetSync />
+      </Show>
     </>
   );
 }

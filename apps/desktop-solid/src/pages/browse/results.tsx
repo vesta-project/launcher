@@ -1,5 +1,5 @@
 import { Button, Pagination, Progress, Select, Skeleton } from '@vesta/ui';
-import { createEffect, createMemo, For, Match, onSettled, Show, Switch, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Match, onSettled, Show, Switch, untrack } from 'solid-js';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import {
@@ -34,6 +34,9 @@ import { Notice } from '../../components/notice';
 
 const sizeOptions = pageSizes.map((size) => ({ value: String(size), label: String(size) }));
 const skeletons = Array.from({ length: 8 }, (_, index) => index);
+/** Cards rendered in the first frame (a screenful), then per following idle slot. */
+const firstCards = 12;
+const cardsPerFrame = 8;
 
 const reducedMotion = () =>
   document.documentElement.hasAttribute('data-vesta-reduced-motion') ||
@@ -70,8 +73,11 @@ function Skeletons() {
   );
 }
 
-/** The scrolling pane: states, cards, then pagination and page size. The count lives in the search field. */
-export function Results() {
+/**
+ * The scrolling pane: states, cards, then pagination and page size. The count lives in the search field.
+ * `active` is false while a project page covers the list; the list stays mounted underneath.
+ */
+export function Results(props: { active: () => boolean }) {
   let pane: HTMLDivElement | undefined;
   let top = 0;
   let shownBase: string | undefined;
@@ -84,6 +90,31 @@ export function Results() {
 
   const total = () => displayed()?.total ?? 0;
   const pages = createMemo(() => pageCount(total(), query().pageSize), { name: 'browsePages' });
+
+  // A page of up to 100 cards is too much for one frame: the first screenful renders with the
+  // result set and the rest follow a batch per frame, so a click answers at once. A set with a
+  // remembered scroll position renders whole, because that position needs the cards above it.
+  const [progress, setProgress] = createSignal<{ key?: string; count: number }>({ count: 0 }, { name: 'browseRenderedCards' });
+  const rendered = () => {
+    const key = displayed()?.key;
+    const current = progress();
+    if (current.key === key) return current.count;
+    return key !== undefined && (recalledScroll(key) ?? 0) > 0 ? Number.POSITIVE_INFINITY : firstCards;
+  };
+  createEffect(
+    () => [displayed()?.key, rendered(), displayed()?.hits.length ?? 0] as const,
+    ([key, count, length]) => {
+      if (count >= length) return;
+      // After the current frame has painted, and before input only when the window is idle.
+      const more = () => setProgress({ key, count: Math.min(count + cardsPerFrame, length) });
+      if (typeof requestIdleCallback === 'function') {
+        const handle = requestIdleCallback(more, { timeout: 120 });
+        return () => cancelIdleCallback(handle);
+      }
+      const timer = setTimeout(more, 16);
+      return () => clearTimeout(timer);
+    },
+  );
 
   // Scroll position belongs to the shown result set: remembered when it is replaced or the
   // page is left, restored when it comes back. Changing page scrolls to the top smoothly.
@@ -100,6 +131,18 @@ export function Results() {
       pane.scrollTo({ top: recalledScroll(key) ?? 0, behavior: samePage && !reducedMotion() ? 'smooth' : 'instant' });
     },
   );
+
+  // Hidden (under a project page or another page) the pane has no box and may lose its offset;
+  // put it back when shown again. Only then: on mount the restore above owns the position.
+  let hidden = false;
+  createEffect(props.active, (active) => {
+    if (!active) {
+      hidden = true;
+      return;
+    }
+    if (hidden && pane && pane.scrollTop !== top) pane.scrollTop = top;
+    hidden = false;
+  });
 
   onSettled(() => () => {
     clearTimeout(hoverTimer);
@@ -143,13 +186,19 @@ export function Results() {
   };
 
   const hits = (): ResourceProject[] => displayed()?.hits ?? [];
+  const renderedHits = () => {
+    const all = hits();
+    return rendered() >= all.length ? all : all.slice(0, rendered());
+  };
 
   return (
     <section data-vesta="browse-results" aria-label={t('browse.results-label')}>
       <div
         data-vesta="browse-pane"
         ref={(element: HTMLDivElement) => (pane = element)}
-        onScroll={(event) => (top = event.currentTarget.scrollTop)}
+        onScroll={(event) => {
+          if (props.active()) top = event.currentTarget.scrollTop;
+        }}
       >
         <Show when={pending()}>
           <div data-vesta="browse-progress">
@@ -198,7 +247,7 @@ export function Results() {
               onPointerOut={leave}
               onFocusIn={focus}
             >
-              <For each={hits()} keyed={(project) => `${project.source}:${project.id}`}>
+              <For each={renderedHits()} keyed={(project) => `${project.source}:${project.id}`}>
                 {(project, index) => <ResultCard project={project} index={index} enter={enter} />}
               </For>
             </div>
