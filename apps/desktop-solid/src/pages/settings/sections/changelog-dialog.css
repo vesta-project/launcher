@@ -16,9 +16,10 @@
 
   :where([data-vesta='changelog']) {
     display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-columns: minmax(150px, 21%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: var(--vesta-space-4);
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-block-size: 0;
     min-inline-size: 0;
     overflow: hidden;
@@ -29,6 +30,10 @@
     flex-direction: column;
     overflow: hidden;
     container: changelog / inline-size;
+  }
+
+  .changelog-dialog :where([data-vesta='changelog-notes']) {
+    --rich-text-size: var(--vesta-text-lg);
   }
 
   :where([data-vesta='changelog-versions'], [data-vesta='changelog-notes']) {

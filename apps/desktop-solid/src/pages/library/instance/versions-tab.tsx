@@ -501,7 +501,7 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     </div>
                   </Show>
                   <Show when={data().changelog}>
-                    {(text) => <pre data-vesta="changelog">{text()}</pre>}
+                    {(text) => <pre data-vesta="release-notes">{text()}</pre>}
                   </Show>
                 </>
               )}
@@ -710,7 +710,7 @@ function ReleaseRow(props: {
               when={changelog()}
               fallback={<p data-vesta="version-muted">{t("linking.changelog-empty")}</p>}
             >
-              {(text) => <pre data-vesta="changelog">{text()}</pre>}
+              {(text) => <pre data-vesta="release-notes">{text()}</pre>}
             </Show>
           </Show>
         </div>

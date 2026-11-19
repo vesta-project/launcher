@@ -406,7 +406,7 @@
     box-shadow: var(--vesta-shadow-md);
   }
 
-  :where([data-vesta='changelog']) {
+  :where([data-vesta='release-notes']) {
     max-block-size: 260px;
     overflow: auto;
     margin: 0;
