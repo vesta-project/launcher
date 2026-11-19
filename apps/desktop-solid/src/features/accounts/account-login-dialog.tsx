@@ -1,11 +1,11 @@
-import { Button, Dialog } from '@vesta/ui';
-import { Show, createSignal, createEffect } from 'solid-js';
+import { Button, Dialog, Skeleton } from '@vesta/ui';
+import { For, Show, createSignal, createEffect } from 'solid-js';
 import { open } from '@tauri-apps/plugin-shell';
 import { copyText } from '../../platform/clipboard';
 import { t } from '../../localization';
 import { Icon } from '../../components/icon';
 import { closeAccountLogin, loginState, startAccountLogin, restoreLoginFocus } from './login';
-import { DeviceCode } from './device-code';
+import { createDeviceCode, DeviceCode, DeviceCodeActions } from './device-code';
 import './account-login.css';
 
 export function AccountLoginDialog() {
@@ -28,6 +28,8 @@ export function AccountLoginDialog() {
       await open(parsed.href);
     } catch { setFeedback('open-failed'); }
   };
+  const waiting = () => loginState().phase === 'waiting' && loginState().code;
+  const device = createDeviceCode(() => waiting() ? loginState().expiresAt : undefined, copy, openSignIn);
   return (
     <Dialog
       title={t('account.sign-in')}
@@ -38,23 +40,33 @@ export function AccountLoginDialog() {
       onCloseAutoFocus={(event) => { event.preventDefault(); restoreLoginFocus(); }}
       closeLabel={t('nav.close')}
       size="sm"
-      footer={loginState().phase === 'waiting' && loginState().code ? undefined : <>
-        <Button variant="ghost" onClick={() => void closeAccountLogin()}>{t('common.cancel')}</Button>
-        <Show when={loginState().phase === 'error' && loginState().retryable}>
-          <Button onClick={() => { setFeedback(undefined); void startAccountLogin(); }}>{t('common.retry')}</Button>
+      footer={
+        <Show when={waiting()} fallback={
+          <>
+            <Button variant="ghost" onClick={() => void closeAccountLogin()}>{t('common.cancel')}</Button>
+            <Show when={loginState().phase === 'error' && loginState().retryable}>
+              <Button onClick={() => { setFeedback(undefined); void startAccountLogin(); }}>{t('common.retry')}</Button>
+            </Show>
+          </>
+        }>
+          <DeviceCodeActions state={device} cancel={() => void closeAccountLogin()} retry={() => void closeAccountLogin().then(startAccountLogin)} />
         </Show>
-      </>}
+      }
     >
       <div data-vesta="account-login">
         <Show when={loginState().phase === 'error'} fallback={
           <Show when={loginState().code} fallback={
-            <div data-vesta="account-login-status" role="status">
-              <span data-vesta="account-login-spinner" aria-hidden="true" />
-              <span>{t('account.connecting')}</span>
+            <div data-vesta="account-login-loading" role="status">
+              <div data-vesta="account-login-tiles" aria-hidden="true">
+                <For each={[0, 1, 2, 3, 4, 5, 6, 7]}>{() => <Skeleton height={46} />}</For>
+              </div>
+              <div data-vesta="account-login-status">
+                <span data-vesta="account-login-spinner" aria-hidden="true" />
+                <span>{t('account.connecting')}</span>
+              </div>
             </div>
           }>
-            <DeviceCode code={loginState().code!} expiresAt={loginState().expiresAt} copy={copy} openPage={openSignIn}
-              cancel={() => void closeAccountLogin()} retry={() => void closeAccountLogin().then(startAccountLogin)} />
+            <DeviceCode code={loginState().code!} state={device} />
           </Show>
         }>
           <div role="alert" data-vesta="account-login-error">

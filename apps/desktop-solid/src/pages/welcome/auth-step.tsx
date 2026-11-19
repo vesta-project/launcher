@@ -1,6 +1,6 @@
 import { Button } from '@vesta/ui';
 import { Match, Show, Switch } from 'solid-js';
-import { DeviceCode } from '../../features/accounts/device-code';
+import { createDeviceCode, DeviceCode, DeviceCodeActions } from '../../features/accounts/device-code';
 import { Icon } from '../../components/icon';
 import { onboarding, signIn } from '../../features/onboarding';
 import { t } from '../../localization';
@@ -12,6 +12,7 @@ import { t } from '../../localization';
  */
 export function AuthStep() {
   const state = () => signIn.state();
+  const device = createDeviceCode(() => state().expiresAt, signIn.copyCode, signIn.openPage);
   return (
     <div data-vesta="welcome-auth">
       <header data-vesta="welcome-head" data-align="center">
@@ -29,8 +30,10 @@ export function AuthStep() {
         </Match>
 
         <Match when={state().phase === 'waiting' && state().code}>
-          <DeviceCode code={state().code!} expiresAt={state().expiresAt} copy={signIn.copyCode} openPage={signIn.openPage}
-            retry={() => void signIn.cancel().then(signIn.start)} cancel={() => void signIn.cancel()} />
+          <DeviceCode code={state().code!} state={device} />
+          <div data-vesta="welcome-actions" data-align="center">
+            <DeviceCodeActions state={device} retry={() => void signIn.cancel().then(signIn.start)} cancel={() => void signIn.cancel()} />
+          </div>
         </Match>
 
         <Match when={true}>

@@ -14,6 +14,25 @@
   .account-login-dialog :where([data-vesta="dialog-footer"]) > :first-child {
     margin-inline-end: auto;
   }
+  .account-login-dialog :where([data-vesta="dialog-body"]) {
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+  .account-login-dialog :where([data-vesta="welcome-auth-code"]) { animation: none; }
+  :where([data-vesta="account-login-loading"]) {
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: var(--vesta-space-4);
+    min-block-size: 126px;
+  }
+  :where([data-vesta="account-login-tiles"]) {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 38px));
+    gap: var(--vesta-space-1-5);
+    inline-size: min(346px, 100%);
+  }
   :where([data-vesta="account-login"]) {
     display: grid;
     gap: var(--vesta-space-3);
