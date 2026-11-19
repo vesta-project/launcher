@@ -101,21 +101,22 @@
     animation-delay: 1.24s;
   }
 
-  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='playing'])
+  /* The page and step mirror the splash's phase as data-splash-intro (welcome-intro.ts). */
+  [data-vesta='welcome'][data-splash-intro='playing']
     :is([data-vesta='welcome-bar'], [data-vesta='welcome-telemetry']) {
     pointer-events: none;
     animation: welcome-intro-content 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.3s both;
   }
 
-  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='playing']) [data-vesta='welcome-atmosphere'] {
+  [data-vesta='welcome'][data-splash-intro='playing'] [data-vesta='welcome-atmosphere'] {
     animation: welcome-intro-room 1.3s ease-out both;
   }
 
   /* The step's own slide-in would move the logo while it is being measured and settled. */
-  [data-vesta='welcome-step']:has([data-vesta='welcome-splash'][data-intro]),
+  [data-vesta='welcome-step'][data-splash-intro],
   /* Settled: hold the final state; swapping back to the usual entrances would replay them. */
   [data-intro='settled'] :is([data-vesta='welcome-logo'], [data-vesta='welcome-tagline'], [data-vesta='welcome-splash-actions']),
-  [data-vesta='welcome']:has([data-vesta='welcome-splash'][data-intro='settled']) [data-vesta='welcome-telemetry'] {
+  [data-vesta='welcome'][data-splash-intro='settled'] [data-vesta='welcome-telemetry'] {
     animation: none;
   }
 

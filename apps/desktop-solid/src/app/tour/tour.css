@@ -197,7 +197,7 @@
 
 @layer launcher {
   /* The status step: an idle pill is a hidden dot, so bring it out while the tour points at it. */
-  html:has([data-vesta='tour-card'][data-step='status']) [data-vesta='status-pill'][data-collapsed] {
+  html[data-tour-step='status'] [data-vesta='status-pill'][data-collapsed] {
     visibility: visible;
     opacity: 1;
     transform: none;

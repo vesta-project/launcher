@@ -1,4 +1,4 @@
-import { createSignal, onSettled } from 'solid-js';
+import { createEffect, createSignal, onSettled } from 'solid-js';
 import { setting } from '../../features/settings/config';
 
 /**
@@ -24,6 +24,13 @@ export function createIntroClaim(available: boolean) {
   };
 }
 
+/**
+ * The mounted splash's phase, for the rest of the welcome page (`data-splash-intro`). An
+ * ancestor `:has()` would do the same, but it restyles every element on any DOM change.
+ */
+const [splashIntro, setSplashIntro] = createSignal<IntroPhase | undefined>(undefined, { name: 'welcomeSplashIntro' });
+export { splashIntro };
+
 /** Skipping fast-forwards rather than cutting, so the logo still glides home. */
 const SKIP_RATE = 8;
 const isIntro = (animation: Animation) =>
@@ -34,6 +41,10 @@ export function createWelcomeIntro(play: boolean) {
     name: 'welcomeIntroPhase',
   });
   let logo: HTMLElement | undefined;
+  createEffect(phase, (current) => {
+    setSplashIntro(current);
+    return () => setSplashIntro(undefined);
+  });
 
   onSettled(() => {
     const root = logo?.closest<HTMLElement>('[data-vesta="welcome"]');

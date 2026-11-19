@@ -18,7 +18,7 @@ import { AuthStep } from './auth-step';
 import { FirstInstanceStep } from './first-instance-step';
 import { CompleteStep, CreditsStep, SplashStep, TelemetryToggle } from './intro-steps';
 import { ThemeStep } from './theme-step';
-import { createIntroClaim, reducedMotion } from './welcome-intro';
+import { createIntroClaim, reducedMotion, splashIntro } from './welcome-intro';
 import './welcome.css';
 import './welcome-intro.css';
 
@@ -50,7 +50,7 @@ export function WelcomePage() {
   const calm = () => ['theme', 'first-instance', 'complete'].includes(onboarding.step());
 
   return (
-    <div data-vesta="welcome" data-step={onboarding.step()} data-tauri-drag-region="deep">
+    <div data-vesta="welcome" data-step={onboarding.step()} data-splash-intro={splashIntro()} data-tauri-drag-region="deep">
       <Atmosphere calm={calm()} />
       <header data-vesta="welcome-bar" data-platform={platform}>
         <Show when={position() >= 0 && !onboarding.loginOnly()}>
@@ -94,7 +94,11 @@ export function WelcomePage() {
         <section data-vesta="welcome-card" data-step={onboarding.step()}>
           <Show when={onboarding.step()} keyed>
             {(step) => (
-              <div data-vesta="welcome-step" data-direction={onboarding.direction() > 0 ? 'forward' : 'back'}>
+              <div
+                data-vesta="welcome-step"
+                data-direction={onboarding.direction() > 0 ? 'forward' : 'back'}
+                data-splash-intro={step === 'splash' ? splashIntro() : undefined}
+              >
                 <Switch>
                   <Match when={step === 'splash'}>
                     <SplashStep claimIntro={claimIntro} />

@@ -1,5 +1,5 @@
 import { Button } from '@vesta/ui';
-import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
+import { For, Show, createEffect, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import { onboarding } from '../../features/onboarding';
 import { tour } from '../../features/onboarding/tour';
 import { setting } from '../../features/settings/config';
@@ -172,6 +172,15 @@ function TourOverlay() {
     // Hand focus back to the page rather than leaving it on a removed button.
     document.querySelector<HTMLElement>('#scene')?.focus({ preventScroll: true });
   });
+  // Styles elsewhere in the shell key on the step (tour.css); an `html:has()` would restyle
+  // the whole document on every DOM change.
+  createEffect(
+    () => step().id,
+    (id) => {
+      document.documentElement.dataset.tourStep = id;
+      return () => delete document.documentElement.dataset.tourStep;
+    },
+  );
 
   const spotStyle = () => {
     const box = layout()?.spot;
