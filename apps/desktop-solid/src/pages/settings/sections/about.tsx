@@ -27,7 +27,7 @@ const links = [
     label: 'prefs.about.discord',
     host: 'discord.gg/zuDNHNHk8E',
     url: 'https://discord.gg/zuDNHNHk8E',
-    icon: 'icons/content/chat',
+    icon: 'branding/services/discord',
   },
   {
     label: 'prefs.about.license',

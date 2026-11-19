@@ -52,3 +52,16 @@ describe('icon references', () => {
     }
   });
 });
+
+test('About Discord uses a bundled mark that inherits either theme foreground', () => {
+  const about = readFileSync(join(root, 'src/pages/settings/sections/about.tsx'), 'utf8');
+  expect(about).toContain("icon: 'branding/services/discord'");
+  const svg = readFileSync(join(assets, 'branding/services/discord.svg'), 'utf8');
+  expect(svg).toContain('viewBox="0 0 24 24"');
+  expect(svg).toContain('fill="currentColor"');
+  expect(svg).not.toMatch(/(?:fill|stroke)=["'](?:#|white|black)/i);
+  const renderer = readFileSync(join(root, 'src/components/icon.tsx'), 'utf8');
+  expect(renderer).toContain('../assets/branding/**/*.svg');
+  const css = readFileSync(join(root, 'src/components/icon.css'), 'utf8');
+  expect(css).toContain('color: inherit;');
+});
