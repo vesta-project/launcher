@@ -206,13 +206,21 @@ impl crate::servers::ServerManager {
         let (active, _) = self
             .verified_release(&review.preview.connection_id, Some(instance))
             .await?;
-        if active.revision != review.release.revision
-            || active.sha256 != review.release.sha256
-            || active.server_id != review.release.server_id
-            || active.fingerprint != review.release.fingerprint
-        {
-            return Err(vesta_server_client::pack_sync::failure("pack_review_stale"));
-        }
+        verify_release(&active, review)?;
         Ok(())
     }
+}
+
+pub(crate) fn verify_release(
+    active: &vesta_server_client::pack_sync::Release,
+    review: &Prepared,
+) -> vesta_server_client::Result<()> {
+    if active.revision != review.release.revision
+        || active.sha256 != review.release.sha256
+        || active.server_id != review.release.server_id
+        || active.fingerprint != review.release.fingerprint
+    {
+        return Err(vesta_server_client::pack_sync::failure("pack_review_stale"));
+    }
+    Ok(())
 }

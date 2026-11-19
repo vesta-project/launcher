@@ -1260,6 +1260,10 @@ impl ServerPackInstaller {
             let id = instance.id;
             let result = task.run(ctx.with_overall_range(30, 100)).await;
             if result.is_ok() {
+                app.state::<Arc<ServerManager>>()
+                    .pack_installs
+                    .finished(id)
+                    .await;
                 let _ = std::fs::remove_file(request_path);
             } else {
                 mark_server_install_interrupted(&app, id);
@@ -1268,6 +1272,47 @@ impl ServerPackInstaller {
         })
     }
 }
+// Session-local join window; serialized admission prevents two callers creating
+// different instances before task-manager deduplication can see either task.
+#[derive(Default)]
+pub(super) struct InstallJoins(
+    tokio::sync::Mutex<std::collections::HashMap<String, (i32, Instant)>>,
+);
+impl InstallJoins {
+    async fn finished(&self, instance_id: i32) {
+        for (id, at) in self.0.lock().await.values_mut() {
+            if *id == instance_id {
+                *at = Instant::now();
+            }
+        }
+    }
+    async fn run<F: std::future::Future<Output = Result<i32>>>(
+        &self,
+        key: String,
+        reusable: impl Fn(i32, Instant) -> bool,
+        create: impl FnOnce() -> F,
+    ) -> Result<i32> {
+        let mut installs = self.0.lock().await;
+        installs.retain(|_, (id, at)| reusable(*id, *at));
+        if let Some((id, _)) = installs.get(&key) {
+            return Ok(*id);
+        }
+        let id = create().await?;
+        installs.insert(key, (id, Instant::now()));
+        Ok(id)
+    }
+}
+fn install_target(connection: &str, revision: &str, sha256: &str, instance: &Instance) -> String {
+    serde_json::to_string(&(
+        connection,
+        revision,
+        sha256,
+        instance.name.trim().to_lowercase(),
+        &instance.game_directory,
+    ))
+    .expect("serializable install identity")
+}
+
 impl ServerManager {
     async fn prepare_new_install(
         &self,
@@ -1300,6 +1345,41 @@ impl ServerManager {
         Ok(prepared)
     }
     pub async fn start_pack_install(
+        &self,
+        app: &AppHandle,
+        connection: &str,
+        expected_revision: &str,
+        expected_sha256: &str,
+        consent: bool,
+        instance: Instance,
+    ) -> Result<i32> {
+        let key = install_target(connection, expected_revision, expected_sha256, &instance);
+        self.pack_installs
+            .run(
+                key,
+                |id, at| {
+                    crate::commands::instances::get_instance(id).is_ok_and(|instance| {
+                        app.state::<crate::tasks::manager::TaskManager>()
+                            .is_task_active(&format!("install_instance_{id}_server_pack"))
+                            || (instance.installation_status.as_deref() == Some("installed")
+                                && at.elapsed().as_secs() < 60)
+                            || instance.installation_status.as_deref() == Some("installing")
+                    })
+                },
+                || {
+                    self.start_pack_install_once(
+                        app,
+                        connection,
+                        expected_revision,
+                        expected_sha256,
+                        consent,
+                        instance,
+                    )
+                },
+            )
+            .await
+    }
+    async fn start_pack_install_once(
         &self,
         app: &AppHandle,
         connection: &str,
@@ -1523,5 +1603,77 @@ mod path_regressions {
         ] {
             assert!(safe_path(path).is_err(), "{path}");
         }
+    }
+}
+
+#[cfg(test)]
+mod install_join_tests {
+    use super::*;
+    #[tokio::test]
+    async fn concurrent_and_just_completed_installs_join_without_creating_or_downloading_again() {
+        let joins = InstallJoins::default();
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let install = || async {
+            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            tokio::task::yield_now().await;
+            Ok(7)
+        };
+        let instance = Instance {
+            name: "Pack".into(),
+            ..Instance::default()
+        };
+        let key = install_target("connection", "1", "digest", &instance);
+        let (a, b) = tokio::join!(
+            joins.run(key.clone(), |_, _| true, install),
+            joins.run(key.clone(), |_, _| true, install)
+        );
+        assert_eq!((a.unwrap(), b.unwrap()), (7, 7));
+        assert_eq!(
+            joins.run(key.clone(), |_, _| true, install).await.unwrap(),
+            7
+        );
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // Expired/deleted/failed targets are not a durable replay record.
+        joins.run(key, |_, _| false, install).await.unwrap();
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_ne!(
+            install_target("connection", "2", "digest", &instance),
+            install_target("connection", "1", "digest", &instance)
+        );
+        let other = Instance {
+            name: "Other target".into(),
+            ..instance
+        };
+        assert_ne!(
+            install_target("connection", "1", "digest", &other),
+            install_target(
+                "connection",
+                "1",
+                "digest",
+                &Instance {
+                    name: "Pack".into(),
+                    ..Instance::default()
+                }
+            )
+        );
+    }
+    #[tokio::test]
+    async fn failed_admission_does_not_poison_a_retry() {
+        let joins = InstallJoins::default();
+        assert!(joins
+            .run(
+                "key".into(),
+                |_, _| true,
+                || async { Err(conflict("pack_review_stale")) }
+            )
+            .await
+            .is_err());
+        assert_eq!(
+            joins
+                .run("key".into(), |_, _| true, || async { Ok(8) })
+                .await
+                .unwrap(),
+            8
+        );
     }
 }

@@ -48,9 +48,7 @@ impl ServerManager {
             .await
             .remove(&request.review_id)
             .ok_or_else(|| conflict("pack_review_expired"))?;
-        if plan.created.elapsed().as_secs() >= 900 {
-            return Err(conflict("pack_review_expired"));
-        }
+        verify_admission(&plan)?;
         verify_consent(&plan.preview, &request)?;
         let existing = plan
             .preview
@@ -122,6 +120,13 @@ impl ServerManager {
         }
         Ok(instance.id)
     }
+}
+
+fn verify_admission(plan: &Prepared) -> Result<()> {
+    if plan.created.elapsed().as_secs() >= 900 {
+        return Err(conflict("pack_review_expired"));
+    }
+    Ok(())
 }
 
 fn verify_consent(preview: &Preview, request: &ApplyRequest) -> Result<()> {
@@ -254,6 +259,44 @@ mod tests {
             files: plan.files.clone(),
         }
     }
+    #[test]
+    fn review_expiry_is_an_admission_boundary_and_execution_rechecks_identity() {
+        let root = tempfile::tempdir().unwrap();
+        let mut review = plan(root.path());
+        verify_admission(&review).unwrap();
+        review.created = Instant::now() - std::time::Duration::from_secs(901);
+        assert_eq!(
+            verify_admission(&review).unwrap_err().reason.as_deref(),
+            Some("pack_review_expired")
+        );
+        crate::modpack::server_source::verify_release(&review.release, &review).unwrap();
+        futures::executor::block_on(crate::modpack::server_source::plan(
+            root.path(),
+            &review,
+            None,
+        ))
+        .unwrap();
+        for field in ["revision", "sha256", "server_id", "fingerprint"] {
+            let mut changed = review.release.clone();
+            match field {
+                "revision" => changed.revision = "3".into(),
+                "sha256" => changed.sha256 = "d".repeat(64),
+                "server_id" => changed.server_id = "other".into(),
+                _ => changed.fingerprint = "e".repeat(64),
+            }
+            assert_eq!(
+                crate::modpack::server_source::verify_release(&changed, &review)
+                    .unwrap_err()
+                    .reason
+                    .as_deref(),
+                Some("pack_review_stale"),
+                "{field}"
+            );
+        }
+        std::fs::write(root.path().join(RECEIPT), b"{}").unwrap();
+        assert!(crate::modpack::server_source::verify_baseline(root.path(), &review).is_err());
+    }
+
     #[test]
     fn diff_tracks_only_pack_files_and_commit_preserves_user_mods() {
         let root = tempfile::tempdir().unwrap();
@@ -431,6 +474,286 @@ mod tests {
         assert_eq!(
             std::fs::read(root.path().join("mods/old.jar")).unwrap(),
             b"old"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn restart_command_database_watcher_and_cancelled_task_use_owned_fixtures() {
+        use crate::tasks::manager::{TaskContext, TaskManager};
+        use diesel::prelude::*;
+        use tauri::Listener;
+        let profile = tempfile::tempdir().unwrap();
+        crate::utils::db::init_vesta_pool(profile.path().to_path_buf()).unwrap();
+        crate::utils::db::init_config_pool(profile.path().to_path_buf()).unwrap();
+        let mut context = tauri::generate_context!();
+        context.config_mut().app.windows.clear();
+        let app = tauri::Builder::default()
+            .any_thread()
+            .build(context)
+            .unwrap();
+        let handle = app.handle().clone();
+        handle.manage(TaskManager::new(handle.clone()));
+        handle.manage(crate::notifications::manager::NotificationManager::new(
+            handle.clone(),
+        ));
+        handle.manage(ServerManager::at_root(profile.path().join("server-state")).unwrap());
+        let watcher = crate::resources::watcher::ResourceWatcher::new(handle.clone());
+        let root = tempfile::tempdir().unwrap();
+        let review = plan(root.path());
+        let instance = Instance {
+            id: 7,
+            name: "Owned pack fixture".into(),
+            minecraft_version: "1.21.1".into(),
+            modloader: Some("fabric".into()),
+            modloader_version: Some("0.16.10".into()),
+            modpack_version_id: Some("1".into()),
+            game_directory: Some(root.path().to_string_lossy().into_owned()),
+            installation_status: Some("installed".into()),
+            ..Instance::default()
+        };
+        diesel::insert_into(crate::schema::instance::table)
+            .values(&instance)
+            .execute(&mut crate::utils::db::get_vesta_conn().unwrap())
+            .unwrap();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            // The public command must return the existing target before any
+            // network request (this connection deliberately does not exist).
+            let manager = handle.state::<Arc<ServerManager>>();
+            manager.pack_installs.0.lock().await.insert(
+                install_target("no-network", "1", "digest", &instance),
+                (7, Instant::now()),
+            );
+            for _ in 0..2 {
+                assert_eq!(
+                    crate::commands::servers_pack_sync::server_pack_sync_install(
+                        handle.clone(),
+                        handle.state::<Arc<ServerManager>>(),
+                        "no-network".into(),
+                        "1".into(),
+                        "digest".into(),
+                        true,
+                        instance.clone()
+                    )
+                    .await
+                    .unwrap(),
+                    7
+                );
+            }
+            assert_eq!(
+                crate::schema::instance::table
+                    .count()
+                    .get_result::<i64>(&mut crate::utils::db::get_vesta_conn().unwrap())
+                    .unwrap(),
+                1
+            );
+            let mut expired = plan(tempfile::tempdir().unwrap().path());
+            expired.created = Instant::now() - std::time::Duration::from_secs(901);
+            handle
+                .state::<Arc<ServerManager>>()
+                .pack_previews
+                .lock()
+                .await
+                .insert("expired".into(), expired);
+            let expired_result = crate::commands::servers_pack_sync::server_pack_sync_apply(
+                handle.clone(),
+                handle.state::<Arc<ServerManager>>(),
+                ApplyRequest {
+                    review_id: "expired".into(),
+                    consent_revision: Some("2".into()),
+                    name: None,
+                    link_only: false,
+                },
+            )
+            .await;
+            assert_eq!(
+                expired_result.unwrap_err().reason.as_deref(),
+                Some("pack_review_expired")
+            );
+            crate::modpack::update::begin(&handle, &instance, root.path(), "2").unwrap();
+            let snapshot = apply_files(
+                root.path(),
+                &review,
+                &review.preview.changes,
+                &receipt(&review),
+            )
+            .unwrap();
+            std::mem::forget(snapshot); // crash after file apply, before durable publication
+            crate::commands::instances::update_installation_status(&handle, 7, "interrupted")
+                .unwrap();
+            crate::commands::instances::resume_instance_operation(
+                handle.clone(),
+                handle.state::<TaskManager>(),
+                7,
+            )
+            .await
+            .unwrap();
+            assert!(!crate::modpack::update::has_pending_recovery(root.path()));
+            let restored = crate::commands::instances::get_instance(7).unwrap();
+            assert_eq!(restored.modpack_version_id.as_deref(), Some("1"));
+            assert_eq!(restored.installation_status.as_deref(), Some("installed"));
+            assert_eq!(
+                std::fs::read(root.path().join("mods/old.jar")).unwrap(),
+                b"old"
+            );
+            assert!(!root.path().join("mods/new.jar").exists());
+            watcher
+                .watch_instance_without_scan(7, root.path().to_string_lossy().into_owned())
+                .await
+                .unwrap();
+            watcher.unwatch_instance(7).await.unwrap();
+
+            let events = Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+            let captured = events.clone();
+            let listener = handle.listen("core://activity-progress", move |event| {
+                captured
+                    .lock()
+                    .unwrap()
+                    .push(serde_json::from_str(event.payload()).unwrap());
+            });
+            let (cancel, cancel_rx) = tokio::sync::watch::channel(false);
+            let (_pause, pause_rx) = tokio::sync::watch::channel(false);
+            let ctx = TaskContext {
+                app_handle: handle.clone(),
+                notification_id: "fixture-pack".into(),
+                activity_attempt: "fixture-pack:1".into(),
+                notifications_enabled: false,
+                cancel_rx,
+                pause_rx,
+                progress_channel: None,
+                overall_range: (0, 100),
+            };
+            crate::modpack::server_source::plan(
+                root.path(),
+                &review,
+                Some(&ctx.with_overall_range(0, 30)),
+            )
+            .await
+            .unwrap();
+            assert!(events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| e["stage"] == "analyzing"));
+            assert!(events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| e["items"]["total"] == 2));
+            cancel.send(true).unwrap();
+            assert_eq!(
+                crate::modpack::server_source::plan(root.path(), &review, Some(&ctx))
+                    .await
+                    .err()
+                    .unwrap(),
+                "Update cancelled"
+            );
+            let details = PackDetails {
+                preview: review.preview.clone(),
+                version: None,
+                author: None,
+                description: None,
+                icon_url: None,
+                format: "vestapack".into(),
+                resources: vec![],
+            };
+            crate::modpack::update::begin(&handle, &instance, root.path(), "2").unwrap();
+            let task = crate::tasks::installers::modpack::InstallModpackTask::from_server(
+                instance.clone(),
+                details,
+            );
+            assert!(task.cancellable());
+            assert_eq!(task.id().as_deref(), Some("install_instance_7_server_pack"));
+            assert_eq!(task.run(ctx).await.unwrap_err(), "Installation cancelled");
+            let interrupted = crate::commands::instances::get_instance(7).unwrap();
+            assert_eq!(
+                interrupted.installation_status.as_deref(),
+                Some("interrupted")
+            );
+            assert_eq!(
+                interrupted.last_operation.as_deref(),
+                Some("server-pack-install")
+            );
+            assert!(!crate::modpack::update::has_pending_recovery(root.path()));
+            assert_eq!(
+                std::fs::read(root.path().join("mods/old.jar")).unwrap(),
+                b"old"
+            );
+            // A crash after durable publication must retain the new files/metadata.
+            crate::modpack::update::begin(&handle, &instance, root.path(), "2").unwrap();
+            let committed = apply_files(
+                root.path(),
+                &review,
+                &review.preview.changes,
+                &receipt(&review),
+            )
+            .unwrap();
+            diesel::update(crate::schema::instance::table.find(7))
+                .set(crate::schema::instance::modpack_version_id.eq(Some("2".to_string())))
+                .execute(&mut crate::utils::db::get_vesta_conn().unwrap())
+                .unwrap();
+            committed.finalize().unwrap();
+            crate::commands::instances::update_installation_status(&handle, 7, "interrupted")
+                .unwrap();
+            crate::commands::instances::resume_instance_operation(
+                handle.clone(),
+                handle.state::<TaskManager>(),
+                7,
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                crate::commands::instances::get_instance(7)
+                    .unwrap()
+                    .modpack_version_id
+                    .as_deref(),
+                Some("2")
+            );
+            assert_eq!(
+                std::fs::read(root.path().join("mods/new.jar")).unwrap(),
+                b"new"
+            );
+            assert!(!crate::modpack::update::has_pending_recovery(root.path()));
+            handle.unlisten(listener);
+        });
+    }
+
+    #[test]
+    fn signed_update_preserves_local_server_list_and_custom_config() {
+        let root = tempfile::tempdir().unwrap();
+        let review = plan(root.path());
+        crate::settings_sync::servers::ensure_linked_server(
+            root.path(),
+            "Local favourite",
+            "local.example:25565",
+        )
+        .unwrap();
+        crate::settings_sync::servers::ensure_linked_server(root.path(), "Linked", "[::1]:25565")
+            .unwrap();
+        let servers = std::fs::read(root.path().join("servers.dat")).unwrap();
+        std::fs::write(root.path().join("config/user.toml"), b"custom=true").unwrap();
+        let snapshot = apply_files(
+            root.path(),
+            &review,
+            &review.preview.changes,
+            &receipt(&review),
+        )
+        .unwrap();
+        snapshot.finalize().unwrap();
+        crate::settings_sync::servers::ensure_linked_server(
+            root.path(),
+            "Renamed linked",
+            "[::1]:25565",
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read(root.path().join("servers.dat")).unwrap(),
+            servers
+        );
+        assert_eq!(
+            std::fs::read(root.path().join("config/user.toml")).unwrap(),
+            b"custom=true"
         );
     }
 

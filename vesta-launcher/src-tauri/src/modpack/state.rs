@@ -317,6 +317,52 @@ mod tests {
     }
 
     #[test]
+    fn disabled_and_hash_renamed_override_membership_excludes_custom_copy() {
+        let game = tempfile::tempdir().unwrap();
+        let mut manifest = manifest("mods/unused.jar", "unused");
+        manifest.mods.clear();
+        manifest.overrides.extracted = vec!["mods/bundled.jar".into()];
+        manifest
+            .overrides
+            .hashes
+            .insert("mods/bundled.jar".into(), "abcd".into());
+        let mut disabled = resource(
+            1,
+            game.path()
+                .join("mods/bundled.jar.disabled")
+                .to_string_lossy()
+                .into_owned(),
+            "old",
+            "modpack",
+        );
+        disabled.is_enabled = false;
+        disabled.hash = Some("ABCD".into());
+        let mut custom = resource(
+            2,
+            game.path()
+                .join("mods/custom.jar")
+                .to_string_lossy()
+                .into_owned(),
+            "old",
+            "custom",
+        );
+        custom.hash = Some("abcd".into());
+        assert_eq!(
+            match_owned_resources(&[disabled.clone(), custom.clone()], &manifest, game.path()),
+            std::collections::HashSet::from([1])
+        );
+        disabled.local_path = game
+            .path()
+            .join("mods/renamed.jar.disabled")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            match_owned_resources(&[disabled, custom], &manifest, game.path()),
+            std::collections::HashSet::from([1])
+        );
+    }
+
+    #[test]
     fn unchanged_path_matches_even_when_provider_metadata_is_stale() {
         let game = tempfile::tempdir().unwrap();
         let row = resource(
