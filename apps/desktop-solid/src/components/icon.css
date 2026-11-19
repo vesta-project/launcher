@@ -14,15 +14,13 @@
     block-size: 100%;
   }
 
-  /* Outline weight follows the rendered size, not the 24-unit drawing: small icons beside
-     menu text stay light, rail and hero icons stay sturdy. The stroke is measured in screen
-     pixels (non-scaling) as a share of the icon's width, clamped to a readable range. */
-  :where([data-vesta='icon']) {
+  /* Scale UI outlines with their rendered size. Branding uses its authored SVG strokes. */
+  :where([data-vesta='icon'][data-scale-stroke]) {
     container-type: size;
   }
 
-  :where([data-vesta='icon']) > :where(svg[stroke]),
-  :where([data-vesta='icon']) > :where(svg[stroke]) :where(*) {
+  :where([data-vesta='icon'][data-scale-stroke]) > :where(svg[stroke]),
+  :where([data-vesta='icon'][data-scale-stroke]) > :where(svg[stroke]) :where(*) {
     stroke-width: clamp(var(--vesta-icon-stroke-min, 1px), var(--vesta-icon-stroke-scale, 7.5cqi), var(--vesta-icon-stroke-max, 3px));
     vector-effect: non-scaling-stroke;
   }

@@ -21,6 +21,7 @@ export function Icon(props: { name: IconName; size?: number; class?: string; lab
   return (
     <span
       data-vesta="icon"
+      data-scale-stroke={props.name.startsWith('icons/') ? '' : undefined}
       data-brand={props.name === "branding/sources/modrinth" ? "modrinth" : props.name === "branding/sources/curseforge" ? "curseforge" : undefined}
       class={props.class}
       role={props.label ? 'img' : undefined}
