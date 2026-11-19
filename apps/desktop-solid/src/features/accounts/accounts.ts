@@ -76,6 +76,11 @@ export async function removeAccount(uuid: string): Promise<void> {
 }
 
 export async function addAccount(): Promise<void> {
+  const { onboarding } = await import('../onboarding');
+  if (onboarding.guest()) {
+    onboarding.signInFromGuest();
+    return;
+  }
   await startAccountLogin();
 }
 
