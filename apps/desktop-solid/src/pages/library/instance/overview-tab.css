@@ -212,7 +212,7 @@
     font-size: var(--vesta-text-xs);
   }
 
-  /* Keep the latest world's primary action visible; reveal others on hover or focus. */
+  /* Shared card-play.css reveals every world action on hover, focus or running. */
   .overview-world-play {
     inline-size: 28px;
     block-size: 28px;
@@ -220,13 +220,6 @@
     position: absolute;
     inset-block-start: var(--vesta-space-4);
     inset-inline-end: var(--vesta-space-4);
-  }
-
-  :where([data-vesta="overview-world-grid"] > li[data-latest]) > .overview-world-play,
-  :where([data-vesta="overview-world-grid"] > li):hover > .overview-world-play,
-  :where([data-vesta="overview-world-grid"] > li):focus-within > .overview-world-play {
-    opacity: 1;
-    pointer-events: auto;
   }
 
   /* ---- Screenshots: the newest large, the next four around it ---- */

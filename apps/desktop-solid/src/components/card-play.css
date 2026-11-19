@@ -32,6 +32,14 @@
       transform var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
+  /* One reveal contract for instance/server cards and Overview world cards. */
+  :where(:is([data-vesta='instance-card'], [data-vesta='overview-world-grid'] > li):is(:hover, :focus-within)) [data-card-play],
+  [data-card-play]:focus-visible,
+  [data-card-play][data-running] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   :where(:is([data-card-play], [data-vesta='instance-card-play']):not(:disabled):hover) {
     background: var(--play-fill-hover);
     box-shadow: 0 4px 12px -2px color-mix(in oklab, var(--play-tone) 55%, transparent);

@@ -222,12 +222,6 @@
     outline-offset: var(--vesta-focus-offset);
   }
 
-  [data-vesta='instance-card']:hover :where([data-vesta='instance-card-play']),
-  [data-vesta='instance-card']:focus-within :where([data-vesta='instance-card-play']) {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
   /* ---- Spinner: the old card's ring, used in play and the overlay ---- */
   :where([data-vesta='instance-card-spinner']) {
     display: inline-block;

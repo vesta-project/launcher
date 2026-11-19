@@ -323,6 +323,7 @@ export function InstanceCard(props: InstanceCardProps) {
                 type="button"
                 data-vesta="instance-card-play"
                 data-card-play=""
+                data-running={kind() === 'running' ? '' : undefined}
                 data-variant={variant()}
                 aria-label={playLabel()}
                 aria-busy={busy() ? 'true' : undefined}

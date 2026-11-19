@@ -102,7 +102,7 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                         <span>{world.lastPlayed}</span>
                       </span>
                     </button>
-                    <button type="button" data-card-play="" data-variant="launch" class="overview-world-play" disabled={!idle()}
+                    <button type="button" data-card-play="" data-variant="launch" data-running={props.entry.state.kind === "running" ? "" : undefined} class="overview-world-play" disabled={!idle()}
                       aria-label={t("overview.play-named", { name: world.name })} onClick={() => play(world.id)}>
                       <Icon name="icons/actions/play" size={14} />
                     </button>
