@@ -900,3 +900,50 @@ async fn cancelling_a_download_releases_bulk_and_temp_bytes_without_replacing_de
     );
     assert_eq!(std::fs::read(&destination).unwrap(), bytes);
 }
+
+#[tokio::test]
+async fn retiring_account_during_download_preserves_destination_and_releases_stream() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    agent
+        .state
+        .files
+        .content
+        .lock()
+        .unwrap()
+        .insert("logs/retire.log".into(), vec![b'x'; 2 * CHUNK_BYTES]);
+    agent
+        .state
+        .files
+        .slow_download
+        .store(true, Ordering::SeqCst);
+    let current = Arc::new(AtomicBool::new(true));
+    let selected = current.clone();
+    client
+        .transport
+        .set_access_guard(Arc::new(move || selected.load(Ordering::SeqCst)))
+        .unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let destination = root.path().join("existing.log");
+    std::fs::write(&destination, b"preserved").unwrap();
+    let error = client
+        .file_download_with_progress("logs/retire.log", false, &destination, |offset, total| {
+            if offset > 0 && offset < total {
+                current.store(false, Ordering::SeqCst);
+            }
+        })
+        .await
+        .unwrap_err();
+    assert!(!current.load(Ordering::SeqCst));
+    assert_eq!(error.code, ErrorCode::CredentialsRejected);
+    assert_eq!(std::fs::read(&destination).unwrap(), b"preserved");
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+    drop(
+        client
+            .transport
+            .scheduler
+            .admit_bulk()
+            .expect("retired response retained bulk admission"),
+    );
+}

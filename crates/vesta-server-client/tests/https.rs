@@ -59,6 +59,7 @@ struct State {
     operation_read_denied: AtomicBool,
     mutation_has_details: AtomicBool,
     pack_plan_error_mode: AtomicUsize,
+    content_queries: Mutex<Vec<String>>,
 }
 struct Agent {
     endpoint: Endpoint,
@@ -346,6 +347,13 @@ async fn route(
                     .insert("etag", "\"status-1\"".parse().unwrap());
                 r
             }
+        }
+        "/api/v3/manage/content" => {
+            let query = req.uri().query().unwrap_or_default();
+            state.content_queries.lock().unwrap().push(query.to_owned());
+            envelope(
+                json!({"minecraft_version":"1.21.1","software":null,"truncated":false,"items":[{"kind":"mod","path":"mods/a.jar","filename":"a.jar","size":"1","enabled":true,"sha256":null,"provider":null,"display_provider":{"provider":"modrinth","project_id":"display-only","version_id":"v"},"declared":null,"pending":null,"pending_id":null,"pending_error":null}],"capabilities":{"list":true,"install":false,"update":false,"remove":false,"toggle":false,"cancel":false,"mods_supported":true,"plugins_supported":false}}),
+            )
         }
         "/api/v3/manage/server" => envelope(
             json!({"server_id":"server-1","name":"First","agent_version":"test","minecraft_version":"1.21.1","pack_version":"initial","game_port":25565,"backups_configured":false,"join_address":null}),
@@ -1222,4 +1230,65 @@ async fn setup_wire_contract_and_identical_apply_retry() {
     let bodies = agent.state.setup_apply_bodies.lock().unwrap();
     assert_eq!(bodies.len(), 2);
     assert_eq!(bodies[0], bodies[1]);
+}
+
+#[tokio::test]
+async fn content_summary_and_full_keep_display_attribution_out_of_verified_identity() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    for summary in [true, false] {
+        let inventory = client.content_inventory_view(summary).await.unwrap();
+        assert_eq!(inventory.minecraft_version, "1.21.1");
+        assert!(inventory.items[0].provider.is_none());
+        assert_eq!(
+            inventory.items[0]
+                .display_provider
+                .as_ref()
+                .unwrap()
+                .project_id,
+            "display-only"
+        );
+    }
+    assert_eq!(
+        *agent.state.content_queries.lock().unwrap(),
+        ["view=summary", ""]
+    );
+}
+
+#[tokio::test]
+async fn account_retired_during_a_pending_read_cannot_publish_or_start_an_action() {
+    let _owner = TEST_OWNER.lock().await;
+    let agent = Agent::start().await;
+    let client = agent.paired().await;
+    let current = Arc::new(AtomicBool::new(true));
+    let selected = current.clone();
+    client
+        .transport
+        .set_access_guard(Arc::new(move || selected.load(Ordering::SeqCst)))
+        .unwrap();
+    agent.state.slow_status.store(true, Ordering::SeqCst);
+    let read_client = client.clone();
+    let read = tokio::spawn(async move { read_client.status(true).await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while agent.state.status_reads.load(Ordering::SeqCst) == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    current.store(false, Ordering::SeqCst);
+    assert_eq!(
+        read.await.unwrap().unwrap_err().code,
+        ErrorCode::CredentialsRejected
+    );
+    assert_eq!(
+        client
+            .lifecycle("start", None, "retired-action")
+            .await
+            .unwrap_err()
+            .code,
+        ErrorCode::CredentialsRejected
+    );
+    assert_eq!(agent.state.starts.load(Ordering::SeqCst), 0);
 }
