@@ -19,6 +19,7 @@ import { mutateNativeScreenshot } from "../../../features/instances/native-detai
 import { copyScreenshot } from "../../../features/instances/screenshot-clipboard";
 import { t } from "../../../localization";
 import "./overview-tab.css";
+import "../../../components/card-play.css";
 import { LinkedPack } from './linked-pack';
 
 /**
@@ -101,8 +102,10 @@ export function OverviewTab(props: { entry: InstanceEntry }) {
                         <span>{world.lastPlayed}</span>
                       </span>
                     </button>
-                    <IconButton size="sm" tone="accent" variant={index() === 0 ? "solid" : "ghost"} class="overview-world-play" disabled={!idle()}
-                      label={t("overview.play-named", { name: world.name })} icon={<Icon name="icons/actions/play" />} onClick={() => play(world.id)} />
+                    <button type="button" data-card-play="" data-variant="launch" class="overview-world-play" disabled={!idle()}
+                      aria-label={t("overview.play-named", { name: world.name })} onClick={() => play(world.id)}>
+                      <Icon name="icons/actions/play" size={14} />
+                    </button>
                   </li>
                 )}
               </For>

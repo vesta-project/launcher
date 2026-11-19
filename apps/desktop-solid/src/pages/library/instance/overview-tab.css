@@ -212,27 +212,21 @@
     font-size: var(--vesta-text-xs);
   }
 
-  /* Play sits on the art's corner: always there on the latest, on hover for the rest. */
-  :where(.overview-world-play) {
-    display: inline-grid;
-    place-items: center;
-    padding: 0;
+  /* Keep the latest world's primary action visible; reveal others on hover or focus. */
+  .overview-world-play {
+    inline-size: 28px;
+    block-size: 28px;
+    padding: 6px;
     position: absolute;
-    inset-block-start: var(--vesta-space-3);
-    inset-inline-end: var(--vesta-space-3);
-    opacity: 0;
-    transition: opacity var(--vesta-duration-normal, 180ms) var(--vesta-ease-standard, ease);
+    inset-block-start: var(--vesta-space-4);
+    inset-inline-end: var(--vesta-space-4);
   }
 
-  :where([data-vesta="overview-world-grid"] > li[data-latest]) > :where(.overview-world-play),
-  :where([data-vesta="overview-world-grid"] > li):hover > :where(.overview-world-play),
-  :where([data-vesta="overview-world-grid"] > li):focus-within > :where(.overview-world-play) {
+  :where([data-vesta="overview-world-grid"] > li[data-latest]) > .overview-world-play,
+  :where([data-vesta="overview-world-grid"] > li):hover > .overview-world-play,
+  :where([data-vesta="overview-world-grid"] > li):focus-within > .overview-world-play {
     opacity: 1;
-  }
-
-  :where([data-vesta="overview-world-grid"] > li:not([data-latest])) > :where(.overview-world-play) {
-    background: color-mix(in oklab, var(--vesta-color-media-shade) 70%, transparent);
-    color: var(--vesta-color-media-text);
+    pointer-events: auto;
   }
 
   /* ---- Screenshots: the newest large, the next four around it ---- */

@@ -322,6 +322,7 @@ export function InstanceCard(props: InstanceCardProps) {
                 {...triggerProps}
                 type="button"
                 data-vesta="instance-card-play"
+                data-card-play=""
                 data-variant={variant()}
                 aria-label={playLabel()}
                 aria-busy={busy() ? 'true' : undefined}

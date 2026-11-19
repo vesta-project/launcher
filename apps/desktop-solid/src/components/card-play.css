@@ -1,0 +1,83 @@
+/* Shared artwork play action for instance, server and world cards. */
+@layer launcher {
+  /* ---- Reveal the action on card hover or keyboard focus.
+     Pressing keeps the hover fill and shrinks the control. ---- */
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])) {
+    --play-tone: var(--vesta-color-accent);
+    --play-fg: var(--vesta-color-on-accent);
+    --play-fill: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, var(--vesta-color-media-shade)) 90%, transparent);
+    --play-fill-hover: color-mix(in oklab, color-mix(in oklab, var(--play-tone) 94%, var(--vesta-color-media-shade)) 98%, transparent);
+    --play-fill-active: var(--play-fill-hover);
+
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    margin: 0;
+    padding: 0;
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--play-tone) 70%, var(--vesta-color-media-text));
+    border-radius: var(--vesta-radius-control);
+    background: var(--play-fill);
+    color: var(--play-fg);
+    text-shadow: none;
+    box-shadow: var(--vesta-shadow-md);
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+    transition:
+      opacity var(--vesta-duration-fast) var(--vesta-ease-standard),
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      box-shadow var(--vesta-duration-fast) var(--vesta-ease-standard),
+      transform var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play']):not(:disabled):hover) {
+    background: var(--play-fill-hover);
+    box-shadow: 0 4px 12px -2px color-mix(in oklab, var(--play-tone) 55%, transparent);
+  }
+
+  /* Pressed: shrink without changing the hover transparency. */
+  :where(:is([data-card-play], [data-vesta='instance-card-play']):not(:disabled):active) {
+    background: var(--play-fill-active);
+    box-shadow: var(--vesta-shadow-md);
+    transform: scale(0.95);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play']):focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])[data-variant='launch']) {
+    --play-tone: var(--vesta-color-success);
+    --play-fg: var(--vesta-color-on-success);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])[data-variant='kill']),
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])[data-variant='crash']) {
+    --play-tone: var(--vesta-color-danger);
+    --play-fg: var(--vesta-color-on-danger);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])[data-variant='resume']) {
+    --play-tone: var(--vesta-color-accent);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])[data-variant='busy']) {
+    --play-tone: var(--vesta-color-accent);
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play']):disabled) {
+    cursor: default;
+  }
+
+  :where(:is([data-card-play], [data-vesta='instance-card-play'])) > :where([data-vesta='icon']) {
+    --icon-size: 14px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where(:is([data-card-play], [data-vesta='instance-card-play'])) { transform: none; transition: none; }
+  }
+  html[data-vesta-reduced-motion] :where(:is([data-card-play], [data-vesta='instance-card-play'])) { transform: none; transition: none; }
+}
