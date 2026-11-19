@@ -55,12 +55,12 @@ export function BreadcrumbItem(props: BreadcrumbItemProps) {
         when={!current()}
         fallback={
           <KobalteBreadcrumbs.Link data-vesta="breadcrumb-link" current as="span">
-            {props.children}
+            <span data-vesta="breadcrumb-label">{props.children}</span>
           </KobalteBreadcrumbs.Link>
         }
       >
         <KobalteBreadcrumbs.Link data-vesta="breadcrumb-link" href={props.href}>
-          {props.children}
+          <span data-vesta="breadcrumb-label">{props.children}</span>
         </KobalteBreadcrumbs.Link>
       </Show>
       <Show when={!current()}>

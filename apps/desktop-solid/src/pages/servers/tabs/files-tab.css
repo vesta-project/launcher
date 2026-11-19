@@ -18,13 +18,14 @@
 
   :where(.server-files-crumbs) {
     min-inline-size: 0;
-    overflow: hidden;
+    overflow: clip visible;
   }
 
   :where([data-vesta="server-files-root"]) {
     display: inline-flex;
     align-items: center;
     gap: var(--vesta-space-1-5);
+    vertical-align: top;
   }
 
   :where(.server-files-body) {

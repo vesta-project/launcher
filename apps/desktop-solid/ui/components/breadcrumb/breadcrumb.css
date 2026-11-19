@@ -3,7 +3,7 @@
  *
  * Hooks:   [data-vesta=breadcrumbs] [data-vesta=breadcrumb-list]
  *          [data-vesta=breadcrumb-item] [data-vesta=breadcrumb-link]
- *          [data-vesta=breadcrumb-separator]
+ *          [data-vesta=breadcrumb-label] [data-vesta=breadcrumb-separator]
  * Knobs:   --breadcrumb-gap, --breadcrumb-fg, --breadcrumb-fg-current,
  *          --breadcrumb-fg-hover, --breadcrumb-separator-size
  */
@@ -27,7 +27,7 @@
     padding: 0;
     list-style: none;
     font-size: var(--vesta-text-sm);
-    line-height: var(--vesta-leading-tight);
+    line-height: var(--vesta-leading-normal);
   }
 
   :where([data-vesta='breadcrumb-item']) {
@@ -38,12 +38,19 @@
   }
 
   :where([data-vesta='breadcrumb-link']) {
+    display: inline-flex;
+    align-items: center;
     min-inline-size: 0;
     color: var(--breadcrumb-fg);
     text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Clipped only across, so the trimmed label keeps its ascenders and descenders. */
+  :where([data-vesta='breadcrumb-label']) {
+    min-inline-size: 0;
+    overflow: clip visible;
+    text-overflow: ellipsis;
   }
 
   :where(a[data-vesta='breadcrumb-link']:hover) {
