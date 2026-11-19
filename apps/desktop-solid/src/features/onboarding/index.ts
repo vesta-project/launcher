@@ -44,7 +44,7 @@ let freshExit = false;
 const setState = (next: FlowState) => {
   const previous = untrack(state);
   if (previous.status === 'active' && next.status === 'done') {
-    freshExit = !previous.loginOnly || next.guest;
+    freshExit = !previous.loginOnly;
     setExiting(true);
   }
   setFlowState(next);

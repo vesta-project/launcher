@@ -85,6 +85,10 @@ export class OnboardingFlow {
   }); }
   continueAsGuest() { return this.serialize(async () => {
     await this.transport.cancelLogin();
+    if (this.state.guest) {
+      this.update({ status: 'done', loginOnly: false });
+      return;
+    }
     await this.transport.guest();
     this.transport.enter('/library');
     this.update({ status: 'done', guest: true });

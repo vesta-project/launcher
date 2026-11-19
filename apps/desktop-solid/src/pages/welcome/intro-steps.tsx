@@ -1,5 +1,5 @@
 import { Button, Switch } from '@vesta/ui';
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, onSettled } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { openExternal } from '../../features/links/external-links';
 import { firstInstance, onboarding } from '../../features/onboarding';
@@ -57,24 +57,31 @@ const credits = [
  * brought us here does not skip it).
  */
 export function CreditsStep() {
-  const [armed, setArmed] = createSignal(false);
   onSettled(() => {
-    const advance = setTimeout(() => void onboarding.next(), 6000);
-    const arm = setTimeout(() => setArmed(true), 50);
+    let advancing = false;
+    const next = () => {
+      if (advancing) return;
+      advancing = true;
+      void onboarding.next();
+    };
+    const advance = setTimeout(next, 6000);
+    const stage = document.querySelector('[data-vesta="welcome-stage"]');
+    const arm = setTimeout(() => stage?.addEventListener('click', next), 50);
     const key = (event: KeyboardEvent) => {
       if (event.repeat) return;
-      void onboarding.next();
+      next();
     };
     window.addEventListener('keydown', key);
     return () => {
       clearTimeout(advance);
       clearTimeout(arm);
+      stage?.removeEventListener('click', next);
       window.removeEventListener('keydown', key);
     };
   });
 
   return (
-    <div data-vesta="welcome-credits" onClick={() => armed() && void onboarding.next()}>
+    <div data-vesta="welcome-credits">
       <p data-vesta="welcome-credits-text">{t('welcome.credits-text')}</p>
       <p data-vesta="welcome-credits-subtext">{t('welcome.credits-subtext')}</p>
       <ul data-vesta="welcome-credits-logos">

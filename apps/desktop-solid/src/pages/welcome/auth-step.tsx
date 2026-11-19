@@ -163,7 +163,7 @@ export function AuthStep() {
           </Button>
         </Show>
         <span data-vesta="welcome-foot-spacer" />
-        <Show when={!onboarding.loginOnly() && state().phase !== 'waiting'}>
+        <Show when={onboarding.guest() || (!onboarding.loginOnly() && state().phase !== 'waiting')}>
           <button type="button" data-vesta="welcome-quiet-link" onClick={() => void onboarding.continueAsGuest()}>
             {t('welcome.explore-guest')}
           </button>

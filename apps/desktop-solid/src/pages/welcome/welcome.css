@@ -830,8 +830,13 @@
 
   :where([data-vesta='welcome-telemetry-text']) :where(a) {
     color: inherit;
+    text-decoration: none;
     text-underline-offset: 2px;
     cursor: default;
+  }
+
+  :where([data-vesta='welcome-telemetry-text']) :where(a):is(:hover, :focus-visible) {
+    text-decoration: underline;
   }
 
   /* ---- Atmosphere ---- */

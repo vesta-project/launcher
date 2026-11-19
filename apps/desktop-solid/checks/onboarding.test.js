@@ -71,6 +71,16 @@ describe('onboarding navigation and completion', () => {
     await flow.next(); expect(flow.state.step).toBe('first-instance'); await flow.next(); expect(flow.state.step).toBe('complete');
     await flow.finish(); expect(calls.complete).toBe(1);
   });
+  test('returning from guest sign-in keeps the current guest session', async () => {
+    const { flow, calls } = setup();
+    await flow.initialize();
+    await flow.continueAsGuest();
+    flow.signInFromGuest();
+    await flow.continueAsGuest();
+    expect(flow.state).toMatchObject({ status: 'done', loginOnly: false, guest: true });
+    expect(calls.guest).toBe(1);
+    expect(calls.routes).toEqual(['/library']);
+  });
   test('import finishes into existing route; reset reactivates splash', async () => {
     const { flow, calls } = setup({ setup_step: 5 }, microsoft); await flow.initialize(); await flow.finish('/create/import/prism');
     expect(calls.routes).toEqual(['/create/import/prism']); await flow.reset();
