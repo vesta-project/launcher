@@ -3,6 +3,7 @@ import { Badge, Button, Dialog, IconButton, Menu, MenuItem, MenuSeparator, Segme
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
 import { EmptyLine, EmptyState } from '../../../components/empty-state';
 import { Icon } from '../../../components/icon';
+import { PlayerHead } from '../../../components/player-head';
 import { formatDate, formatNumber, t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
@@ -74,7 +75,7 @@ export function OnlinePlayersPanel(props: { snapshot: ServerSnapshot }) {
               <For each={roster().names.slice(0, PLAYER_PAGE_SIZE)}>
                 {(name) => (
                   <li data-vesta="server-activity-row" data-compact>
-                    <span data-vesta="server-activity-avatar" aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                    <PlayerHead name={name} size={28} />
                     <p data-vesta="server-activity-line"><strong>{name}</strong></p>
                     <Show when={moderate()}>
                       <div data-vesta="server-row-actions">
@@ -240,7 +241,7 @@ function PlayerRow(props: {
   return (
     <li data-vesta="server-player" data-open={props.open ? '' : undefined}>
       <button type="button" data-vesta="server-player-row" aria-expanded={props.open ? 'true' : 'false'} onClick={() => props.onToggle()}>
-        <span data-vesta="server-activity-avatar" data-online={props.player.online ? '' : undefined} aria-hidden="true">{props.player.name.slice(0, 1).toUpperCase()}</span>
+        <PlayerHead uuid={props.player.uuid} name={props.player.name} size={28} online={props.player.online} />
         <span data-vesta="server-player-name">
           <strong>{props.player.name}</strong>
         </span>

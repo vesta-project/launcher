@@ -1,0 +1,33 @@
+/*
+ * Player head (player-head.tsx): the face, or the first letter until it is available.
+ *
+ * Hooks:  [data-vesta=player-head] (data-online)
+ * Knobs:  --player-head-size
+ */
+@layer launcher {
+  :where([data-vesta='player-head']) {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--player-head-size, 36px);
+    block-size: var(--player-head-size, 36px);
+    overflow: hidden;
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text-muted);
+    font-size: calc(var(--player-head-size, 36px) * 0.4);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='player-head']) > img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    image-rendering: pixelated;
+  }
+
+  /* Someone on the server right now. */
+  :where([data-vesta='player-head'][data-online]) {
+    box-shadow: 0 0 0 2px var(--vesta-color-surface-raised), 0 0 0 3.5px var(--vesta-color-success);
+  }
+}

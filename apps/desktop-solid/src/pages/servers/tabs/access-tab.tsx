@@ -4,6 +4,7 @@ import { transitionTo } from '../../../app/transition';
 import { canManageHost, hostIdOf } from '../../../features/servers/host-model';
 import { hostInfo, loadHostInfo, vestaHost } from '../../../features/servers/hosts-store';
 import { Icon } from '../../../components/icon';
+import { PlayerHead } from '../../../components/player-head';
 import { SettingRow } from '../../../components/setting-row';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
@@ -172,19 +173,22 @@ function PersonRow(props: {
   return (
     <div data-vesta="server-access-person" data-self={props.person.self ? '' : undefined}>
       <div data-vesta="setting-row">
+        {/* Face, then who they are; what they can do and how many devices sit on the line below. */}
         <div data-vesta="server-person">
-          <span data-vesta="server-activity-avatar" aria-hidden="true">{(props.person.name || '?').slice(0, 1).toUpperCase()}</span>
-          <div data-vesta="setting-row-copy">
-            <span data-vesta="setting-row-label">
+          <PlayerHead uuid={user()?.minecraftAccounts[0]?.uuid} name={props.person.name} size={40} />
+          <div data-vesta="server-person-copy">
+            <span data-vesta="server-person-name">
               {props.person.name || t('servers.access.unknown-person')}
-              <Show when={props.person.self}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.you')}</Badge></Show>
-              <Show when={machineOwner()} fallback={
-                <For each={user()?.roles ?? []}>{(entry) => <Badge size="sm" variant="soft" tone={entry.role.rank >= 90 ? 'accent' : 'neutral'}>{entry.role.name}</Badge>}</For>
-              }>
-                {(name) => <Badge size="sm" variant="soft" tone="accent">{t('servers.access.machine-owner', { name: name() })}</Badge>}
-              </Show>
+              <Show when={props.person.self}><small>{t('servers.access.you')}</small></Show>
             </span>
-            <span data-vesta="setting-row-description">{t('servers.access.devices-count', { count: count() })}</span>
+            <span data-vesta="server-person-meta">
+              <Show when={machineOwner()} fallback={
+                <For each={user()?.roles ?? []}>{(entry) => <span data-rank={entry.role.rank >= 90 ? 'high' : undefined}>{entry.role.name}</span>}</For>
+              }>
+                {(name) => <span data-rank="high">{t('servers.access.machine-owner', { name: name() })}</span>}
+              </Show>
+              <span>{t('servers.access.devices-count', { count: count() })}</span>
+            </span>
           </div>
         </div>
         <Show when={user() && !machineOwner() && props.canManage && user()!.rank < myRank(props.snapshot, props.roles)}>
