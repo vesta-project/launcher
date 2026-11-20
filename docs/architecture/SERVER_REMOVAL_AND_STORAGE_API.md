@@ -94,7 +94,8 @@ Body: `{ "confirmName": string, "idempotencyKey": string, "permanently"?: boolea
 - `keepBackups` applies to permanent deletion and defaults to `true` for manual and
   scheduled purge. The host keeps server-owned local backups outside the purged tree,
   under the server ID. `false` also deletes the exclusive managed repository.
-  External and shared repositories remain separately managed.
+  External and shared repositories remain separately managed: deleting for good never
+  touches them (decided 2026-11-21), only backups Vesta manages for that server.
 
 Returns `409 server_busy` while a job owns the server. Other errors include `forbidden`,
 `not_found` and `confirm_name_mismatch`.
