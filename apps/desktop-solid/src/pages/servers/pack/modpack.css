@@ -92,11 +92,14 @@
     background: var(--vesta-color-accent);
   }
 
+  /* No panel padding: a pane's toolbar continues the tab row's strip with no gap, and
+     scrolling panes bring their own gutter (modpack-scroll). */
   .modpack-pane {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-block-size: 0;
+    padding: 0;
     overflow: hidden;
   }
 

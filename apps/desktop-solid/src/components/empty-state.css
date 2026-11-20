@@ -5,7 +5,7 @@
  *
  * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -heading -title
  *         -description -actions -suggestions -suggestions-label -suggestion
- *         -suggestion-label
+ *         -suggestion-icon -suggestion-label
  *         [data-vesta=empty-line]
  * Knobs:  --empty-state-inset (inline padding; match the surface's gutter),
  *         --empty-state-block (block padding), --empty-line-inset
@@ -97,7 +97,7 @@
   :where([data-vesta='empty-state-suggestions']) {
     display: grid;
     gap: var(--vesta-space-2);
-    inline-size: min(100%, 600px);
+    inline-size: min(100%, 420px);
     margin-block-start: var(--vesta-space-3);
   }
 
@@ -107,44 +107,50 @@
     font-weight: var(--vesta-weight-semibold);
   }
 
-  /* Small tiles: an icon over a short name; what it does is on hover. */
+  /*
+   * One grouped list on the surface colour: rows of a fixed icon column, a short name and a
+   * faint chevron, split by hairlines. What each does is on hover.
+   */
   :where([data-vesta='empty-state-suggestions'] > ul) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: var(--vesta-space-2);
     margin: 0;
     padding: 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface);
     list-style: none;
+  }
+
+  :where([data-vesta='empty-state-suggestions'] > ul > li + li) {
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
   :where([data-vesta='empty-state-suggestion']) {
     display: grid;
-    align-content: center;
-    justify-items: start;
-    gap: var(--vesta-space-2);
+    grid-template-columns: 16px minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: var(--vesta-space-3);
     inline-size: 100%;
-    block-size: 100%;
-    min-block-size: 72px;
-    padding: var(--vesta-space-3);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-surface);
+    min-block-size: 40px;
+    padding: var(--vesta-space-2) var(--vesta-space-3);
+    border: 0;
+    background: transparent;
     color: var(--vesta-color-text);
     font: inherit;
     text-align: start;
     cursor: default;
-    transition:
-      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
-      border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
   }
 
-  :where([data-vesta='empty-state-suggestion']) > [data-vesta='icon'] {
-    color: var(--vesta-color-text-muted);
+  :where([data-vesta='empty-state-suggestion-icon']) {
+    display: inline-flex;
+    justify-content: center;
+    color: var(--vesta-color-accent);
   }
 
   :where([data-vesta='empty-state-suggestion']:not(:disabled)):hover {
-    border-color: var(--vesta-color-border-strong);
-    background: var(--vesta-color-fill);
+    background: var(--vesta-color-fill-hover);
   }
 
   :where([data-vesta='empty-state-suggestion']:not(:disabled)):active {
@@ -153,7 +159,7 @@
 
   :where([data-vesta='empty-state-suggestion']):focus-visible {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: var(--vesta-focus-offset);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
   }
 
   :where([data-vesta='empty-state-suggestion']):disabled {
@@ -161,9 +167,20 @@
   }
 
   :where([data-vesta='empty-state-suggestion-label']) {
-    font-size: var(--vesta-text-sm);
+    overflow: hidden;
+    font-size: var(--vesta-text-md);
     font-weight: var(--vesta-weight-medium);
-    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where(.empty-state-suggestion-chevron) {
+    color: var(--vesta-color-text-subtle);
+    transition: color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='empty-state-suggestion']:hover, [data-vesta='empty-state-suggestion']:focus-visible) .empty-state-suggestion-chevron {
+    color: var(--vesta-color-text);
   }
 
   /* ---- One-liner, for menus, popovers, pickers and small lists ---- */

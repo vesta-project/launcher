@@ -6,7 +6,7 @@ import './empty-state.css';
 /** A next step offered by an empty state, e.g. a template to start from. */
 export interface EmptyStateSuggestion {
   label: string;
-  /** Shown on hover: the tile itself stays a short name. */
+  /** Shown on hover: the row itself stays a short name. */
   description?: string;
   /** Bundled icon name, e.g. `icons/content/storage`. */
   icon?: string;
@@ -28,7 +28,7 @@ export interface EmptyStateProps {
    * - `inline`: replaces a list or panel body. Icon beside the text, aligned with the rows.
    */
   variant?: 'page' | 'inline';
-  /** Choices to start from, shown as small tiles (icon and a short name; best for 2–5 options). */
+  /** Choices to start from, shown as one grouped list of rows (icon and a short name; best for 2–5 options). */
   suggestions?: readonly EmptyStateSuggestion[];
   /** Small heading above the suggestions, e.g. "Start from a template". */
   suggestionsLabel?: string;
@@ -76,12 +76,15 @@ export function EmptyState(props: EmptyStateProps) {
                     <button
                       type="button"
                       data-vesta="empty-state-suggestion"
-                      title={suggestion.description}
+                      data-tip={suggestion.description}
                       disabled={suggestion.disabled}
                       onClick={() => suggestion.onSelect()}
                     >
-                      <Show when={suggestion.icon}>{(icon) => <Icon name={icon()} size={18} />}</Show>
+                      <span data-vesta="empty-state-suggestion-icon" aria-hidden="true">
+                        <Show when={suggestion.icon}>{(icon) => <Icon name={icon()} size={16} />}</Show>
+                      </span>
                       <span data-vesta="empty-state-suggestion-label">{suggestion.label}</span>
+                      <Icon name="icons/controls/chevron-right" size={14} class="empty-state-suggestion-chevron" />
                     </button>
                   </li>
                 )}
