@@ -80,6 +80,13 @@ export interface LogViewProps {
   /** Prefix for the footer's line count, such as a file path. */
   footerDetail?: () => readonly (string | null | undefined)[] | undefined;
   footerTitle?: () => string | undefined;
+  /**
+   * Scrolled to the top with nothing more loaded above: fetch older lines (server history).
+   * The view keeps its place when they arrive on top.
+   */
+  onReachTop?: () => Promise<unknown> | void;
+  /** Older lines are on their way, for a quiet note at the top. */
+  loadingEarlier?: () => boolean;
 }
 
 /** The console log surface shared by instance logs and server consoles. */
@@ -182,6 +189,27 @@ export function LogView(props: LogViewProps) {
     const bottom =
       element.scrollHeight - element.scrollTop - element.clientHeight < 36;
     if (bottom !== props.state().follow) patch({ follow: bottom });
+  };
+  /**
+   * Near the top with every loaded line shown: ask for older ones. Their arrival grows the
+   * content above the view, so the scroll position moves by the same amount and nothing jumps.
+   */
+  let reachingTop = false;
+  const reachTop = () => {
+    const element = viewport();
+    if (!element || !props.onReachTop || reachingTop || element.scrollTop > 120) return;
+    if (props.state().wrap && wrappedPage().start > 0) return;
+    reachingTop = true;
+    const height = element.scrollHeight;
+    const first = props.lines()[0]?.id;
+    void Promise.resolve(props.onReachTop())
+      .catch(() => undefined)
+      .finally(() => {
+        requestAnimationFrame(() => {
+          if (props.lines()[0]?.id !== first) element.scrollTop += element.scrollHeight - height;
+          reachingTop = false;
+        });
+      });
   };
   /** Near the top of a wrapped log with more above: render more, then hold the view still. */
   const growWrapped = () => {
@@ -317,8 +345,13 @@ export function LogView(props: LogViewProps) {
         onScroll={() => {
           scroll();
           growWrapped();
+          reachTop();
         }}
+        aria-busy={props.loadingEarlier?.() ? "true" : undefined}
       >
+        <Show when={props.loadingEarlier?.()}>
+          <p data-vesta="console-earlier" role="status"><span>{t("console.loading-earlier")}</span></p>
+        </Show>
         <Show
           when={visible().length}
           fallback={

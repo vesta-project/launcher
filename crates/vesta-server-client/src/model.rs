@@ -485,7 +485,9 @@ dto!(ConsoleLine {
     text: String,
     truncated: bool
 });
-dto!(ConsolePage { items: Vec<ConsoleLine>, next_cursor: Option<String>, latest_cursor: String });
+// `previous_cursor` comes from servers with console history: the `before` value for the next
+// older page, null when nothing older is left. Older servers leave it out.
+dto!(ConsolePage { items: Vec<ConsoleLine>, next_cursor: Option<String>, latest_cursor: String, previous_cursor: Option<String> });
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PlayersView {

@@ -69,6 +69,14 @@ export class ConsoleBuffer {
   /** The next id at the bottom; a merged top counts down from the first entry instead. */
   private nextId = 0;
   dropped = 0;
+  /**
+   * Where older history continues (the server's `previousCursor`): undefined until a tail
+   * page says, null when the server has nothing older or doesn't page back.
+   */
+  older: string | null | undefined = undefined;
+  /** Lines loaded by scrolling up are kept on top of the live limit, up to this many. */
+  private history = 0;
+  static readonly HISTORY_LIMIT = 20_000;
 
   /** `limit` bounds all entries, gap markers included. */
   constructor(private readonly limit = CONSOLE_LINE_LIMIT) { entryEpochs.set(this.entries, 0); }
@@ -175,11 +183,34 @@ export class ConsoleBuffer {
     return before.length + after.length;
   }
 
+  /**
+   * Puts a page of older history (oldest first, all before the first line shown) on top.
+   * Lines already present are skipped. Returns how many were added.
+   */
+  prepend(lines: readonly ConsoleLine[]): number {
+    const fresh: ConsoleLine[] = [];
+    for (const line of lines) {
+      if (this.seen.has(line.cursor)) continue;
+      this.seen.add(line.cursor);
+      fresh.push(line);
+    }
+    if (!fresh.length) return 0;
+    this.invalidatePrefix();
+    const base = (this.entries[0]?.id ?? this.nextId) - fresh.length;
+    this.entries.unshift(...fresh.map((line, index) => lineEntry(line, base + index)));
+    if (!this.entries.length) this.nextId = base + fresh.length;
+    this.history = Math.min(ConsoleBuffer.HISTORY_LIMIT, this.history + fresh.length);
+    this.trim();
+    return fresh.length;
+  }
+
   clear() {
     this.invalidatePrefix();
     this.entries.length = 0;
     this.seen.clear();
     this.dropped = 0;
+    this.history = 0;
+    this.older = undefined;
   }
 
   get lineCount() {
@@ -188,8 +219,10 @@ export class ConsoleBuffer {
 
   /** Drops the oldest entries beyond the limit. */
   private trim() {
-    const excess = this.entries.length - this.limit;
+    const excess = this.entries.length - this.limit - this.history;
     if (excess <= 0) return;
+    // History scrolled into view goes first; once it is gone the live limit applies again.
+    this.history = Math.max(0, this.history - excess);
     this.invalidatePrefix();
     for (const removed of this.entries.splice(0, excess)) {
       if (removed.kind === 'line') {

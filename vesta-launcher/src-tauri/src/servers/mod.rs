@@ -1476,6 +1476,9 @@ impl ServerManager {
     ) -> Result<ConsolePage> {
         self.client(id).await?.console_page(cursor, limit).await
     }
+    pub async fn console_history(&self, id: &str, before: &str, limit: u16) -> Result<ConsolePage> {
+        self.client(id).await?.console_history(before, limit).await
+    }
     pub async fn console_send(
         self: &Arc<Self>,
         app: &AppHandle,

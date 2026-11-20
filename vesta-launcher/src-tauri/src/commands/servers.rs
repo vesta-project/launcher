@@ -189,6 +189,18 @@ pub async fn server_console_page(
         .console_page(&connection_id, cursor.as_deref(), limit)
         .await
 }
+/// Older console lines, for scrolling up past what was loaded (servers with console history).
+#[tauri::command]
+pub async fn server_console_history(
+    manager: Manager<'_>,
+    connection_id: String,
+    before: String,
+    limit: u16,
+) -> Result<ConsolePage> {
+    manager
+        .console_history(&connection_id, &before, limit)
+        .await
+}
 #[tauri::command]
 pub async fn server_console_send(
     app: AppHandle,

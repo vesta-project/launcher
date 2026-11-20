@@ -86,6 +86,7 @@ console-line-count = { $visible } of { $total } { $total ->
     [one] line
    *[other] lines
 }
+console-loading-earlier = Loading earlier lines
 console-jump-latest = Jump to latest
 console-copy-status = Copied
 console-copy-failed = Copy failed. Select and copy the text below.

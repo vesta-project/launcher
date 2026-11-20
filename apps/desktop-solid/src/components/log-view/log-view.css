@@ -226,6 +226,30 @@
     font-family: var(--vesta-font-sans);
   }
 
+
+  /* Older lines on their way: a note pinned to the top that takes no room, so nothing shifts. */
+  :where([data-vesta="console-earlier"]) {
+    position: sticky;
+    z-index: 1;
+    inset-block-start: 0;
+    block-size: 0;
+    margin: 0;
+    overflow: visible;
+    text-align: center;
+  }
+
+  :where([data-vesta="console-earlier"]) > span {
+    display: inline-block;
+    margin-block-start: var(--vesta-space-2);
+    padding: 2px var(--vesta-space-2);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-overlay);
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-xs);
+  }
+
   /* ---- Status bar ---- */
   :where([data-vesta="console-status"]) {
     display: flex;

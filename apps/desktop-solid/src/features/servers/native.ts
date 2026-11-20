@@ -262,6 +262,8 @@ export interface ConsoleLine {
 
 export interface ConsolePage extends Page<ConsoleLine> {
   latestCursor: string;
+  /** Servers with console history: the cursor for the next older page, null when there is none. Absent on older servers. */
+  previousCursor?: string | null;
 }
 
 // -------------------------------------------------------------------- players
@@ -412,6 +414,9 @@ export const serversNative = {
    */
   consolePage: (connectionId: ConnectionId, cursor: string | null, limit: number) =>
     call<ConsolePage>('server_console_page', { connectionId, cursor, limit }),
+  /** Lines just before `before` (a `previousCursor`), oldest first, from the server's retained lines and log files. */
+  consoleHistory: (connectionId: ConnectionId, before: string, limit: number) =>
+    call<ConsolePage>('server_console_history', { connectionId, before, limit }),
   consoleSend: (connectionId: ConnectionId, line: string, expectedGeneration: string, intentId: string) =>
     call<ServerOperation>('server_console_send', { connectionId, line, expectedGeneration, intentId }),
 

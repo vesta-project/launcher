@@ -9,7 +9,7 @@ import { serverConsoleView, toLogEntries } from '../../../features/servers/conso
 import { errorMessage } from '../../../features/servers/errors';
 import { IntentMemo, consoleLineProblem } from '../../../features/servers/model';
 import { busyIntent, operationStateMessage } from '../../../features/servers/operations-model';
-import { consoleBuffer, consoleVersion, loadConsoleTail, putOperations, serverCommand, serverOperations, useServerTopic } from '../../../features/servers/store';
+import { consoleBuffer, consoleVersion, loadConsoleHistory, loadConsoleTail, putOperations, serverCommand, serverOperations, useServerTopic } from '../../../features/servers/store';
 import type { ConsoleEntry } from '../../../features/servers/console-model';
 import { clearConsoleDisplay, consoleDisplayBoundary } from '../../../features/servers/console-model';
 import type { ServerCommandError, ServerSnapshot } from '../../../features/servers/native';
@@ -78,6 +78,13 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
   onSettled(() => {
     void loadConsoleTail(id()).catch(() => { /* live output continues */ });
   });
+  // Scrolling up past the loaded lines reads further back on servers with console history.
+  const [earlier, setEarlier] = createSignal(false, { name: 'server-console:earlier' });
+  const loadEarlier = async () => {
+    if (!consoleBuffer(id()).older) return;
+    setEarlier(true);
+    try { await loadConsoleHistory(id()); } finally { setEarlier(false); }
+  };
 
   return (
     <div data-vesta="server-console">
@@ -90,6 +97,8 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
         onClearDisplay={() => patch(untrack(() => clearConsoleDisplay(consoleBuffer(id()).entries)))}
         onRestoreDisplay={() => patch({ hiddenUntil: null, hiddenAfterCursor: null })}
         live={() => true}
+        onReachTop={loadEarlier}
+        loadingEarlier={earlier}
         sourceKey={id}
         ariaLabel={() => t('console.log-output', { name: t('console.live-output') })}
         emptyText={() => (running() ? t('servers.console.waiting') : t('servers.console.stopped'))}

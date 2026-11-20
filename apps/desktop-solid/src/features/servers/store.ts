@@ -408,9 +408,39 @@ export function loadConsoleTail(id: ConnectionId): Promise<number> {
 }
 async function readConsoleTail(id: ConnectionId) {
   const page = await serverCommand((client) => client.consolePage(id, null, 200));
-  const added = consoleBuffer(id).merge(page.items);
+  const buffer = consoleBuffer(id);
+  const added = buffer.merge(page.items);
+  // Only the first tail decides where history starts; later recoveries leave scrolled history alone.
+  if (buffer.older === undefined) buffer.older = page.previousCursor ?? null;
   bumpConsole(id);
   return added;
+}
+
+const historyLoads = new Map<ConnectionId, Promise<number>>();
+/**
+ * The page of console lines just above what is shown, from the server's history (its retained
+ * lines, then its log files). Resolves to how many lines were added; 0 when there is no more.
+ */
+export function loadConsoleHistory(id: ConnectionId): Promise<number> {
+  const pending = historyLoads.get(id);
+  if (pending) return pending;
+  const buffer = consoleBuffer(id);
+  const before = buffer.older;
+  if (!before) return Promise.resolve(0);
+  const request = serverCommand((client) => client.consoleHistory(id, before, 200))
+    .then((page) => {
+      const added = buffer.prepend(page.items);
+      buffer.older = page.previousCursor ?? null;
+      bumpConsole(id);
+      return added;
+    }, (reason) => {
+      // The history moved on (logs rotated): stop here rather than guess; the live view is unaffected.
+      if (toServerError(reason).code === 'conflict' || toServerError(reason).reason === 'cursor_gap') { buffer.older = null; bumpConsole(id); return 0; }
+      throw reason;
+    })
+    .finally(() => historyLoads.delete(id));
+  historyLoads.set(id, request);
+  return request;
 }
 
 const [now, setNow] = createSignal(Date.now(), { name: 'serversClock' });

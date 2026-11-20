@@ -988,6 +988,15 @@ impl Client {
             .await?,
         )
     }
+    /// Up to `limit` lines strictly before `before` (a `previous_cursor` the server handed out),
+    /// oldest first, reaching past the retained lines into the server's log files.
+    pub async fn console_history(&self, before: &str, limit: u16) -> Result<ConsolePage> {
+        if !(1..=200).contains(&limit) {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        let route = format!("console?limit={limit}&before={}", opaque_cursor(before)?);
+        from_wire(self.get(&route, true, "console.read").await?)
+    }
     pub async fn console_send(
         &self,
         line: &str,
@@ -1115,18 +1124,23 @@ fn has_operation_details(value: &Value) -> bool {
         .iter()
         .all(|key| value.get(key).is_some())
 }
+/// A server-issued cursor, safe to put in a query string as is.
+fn opaque_cursor(c: &str) -> Result<&str> {
+    if c.is_empty()
+        || c.len() > 512
+        || !c
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+    {
+        return Err(Error::new(ErrorCode::InvalidInput));
+    }
+    Ok(c)
+}
 fn page_route(route: &str, cursor: Option<&str>, limit: u16) -> Result<String> {
     let mut result = format!("{route}?limit={limit}");
     if let Some(c) = cursor {
-        if c.len() > 512
-            || !c
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-        {
-            return Err(Error::new(ErrorCode::InvalidInput));
-        }
         result.push_str("&cursor=");
-        result.push_str(c);
+        result.push_str(opaque_cursor(c)?);
     }
     Ok(result)
 }

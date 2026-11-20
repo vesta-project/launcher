@@ -578,7 +578,28 @@ export function createFixtureServers(options: { seeded?: boolean; latencyMs?: nu
         ? target.console.findIndex((entry) => entry.cursor === cursor) + 1
         : Math.max(0, target.console.length - limit);
       const items = target.console.slice(start, start + limit);
-      return { items: clone(items), nextCursor: items.at(-1)?.cursor ?? cursor ?? String(target.cursor), latestCursor: String(target.cursor) };
+      // The tail page says where history starts; the fixture keeps 600 older lines "on disk".
+      return { items: clone(items), nextCursor: items.at(-1)?.cursor ?? cursor ?? String(target.cursor), latestCursor: String(target.cursor),
+        ...(cursor ? {} : { previousCursor: start > 0 ? `mem.${start}` : 'disk.600' }) };
+    },
+
+    async consoleHistory(connectionId, before, limit) {
+      await wait();
+      const target = server(connectionId);
+      requireCapability(target, 'console.read');
+      const [kind, at] = before.split('.');
+      const end = Number(at);
+      if (kind === 'mem') {
+        const start = Math.max(0, end - limit);
+        return { items: clone(target.console.slice(start, end)), nextCursor: null, latestCursor: String(target.cursor), previousCursor: start > 0 ? `mem.${start}` : 'disk.600' };
+      }
+      const start = Math.max(0, end - limit);
+      const items = Array.from({ length: end - start }, (_, index) => {
+        const n = start + index;
+        const time = new Date(Date.parse('2026-11-20T09:00:00Z') + n * 7000).toISOString().slice(11, 19);
+        return { cursor: `disk.${n}`, text: `[${time}] [Server thread/INFO]: Earlier log line ${n + 1} from logs/latest.log`, truncated: false };
+      });
+      return { items, nextCursor: null, latestCursor: String(target.cursor), previousCursor: start > 0 ? `disk.${start}` : null };
     },
 
     async consoleSend(connectionId, text, expectedGeneration, intentId) {
