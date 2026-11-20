@@ -102,7 +102,7 @@ export function ServerHeader(props: { snapshot: ServerSnapshot; compact: boolean
             </Show>
             <MenuSeparator />
             {/* An owner of the server's Vesta Server removes it there. Everyone else forgets it on this device. */}
-            <Show when={machineRemove()} fallback={<MenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</MenuItem>}>
+            <Show when={machineRemove()} fallback={<MenuItem onSelect={() => setRemoving(true)}>{t('servers.forget')}</MenuItem>}>
               {(where) => <MenuItem tone="danger" onSelect={() => setRemovingFromMachine(true)}>{t('servers.host-remove.menu', { machine: where() })}</MenuItem>}
             </Show>
           </Menu>

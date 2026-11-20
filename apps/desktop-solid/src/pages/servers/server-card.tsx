@@ -17,6 +17,7 @@ import type { ServerSnapshot } from '../../features/servers/native';
 import { actionIcons, actionLabels, useLifecycle } from './lifecycle';
 import { KillDialog, StartKillQuick } from './kill';
 import { RemoveServerDialog } from './remove-dialog';
+import { HostRemoveDialog, machineRemoval } from './host-remove-dialog';
 import { GetModpackDialog, canGetModpack, offersClientPack } from './pack/get-modpack';
 import '../../features/instances/instance-card.css';
 
@@ -38,6 +39,7 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
   const [removing, setRemoving] = createSignal(false, { name: 'server-card:removing' });
   const [creating, setCreating] = createSignal(false, { name: 'server-card:creating' });
   const [killing, setKilling] = createSignal(false, { name: 'server-card:killing' });
+  const [removingFromMachine, setRemovingFromMachine] = createSignal(false, { name: 'server-card:removing-from-machine' });
   const lifecycle = useLifecycle(() => props.snapshot);
   const id = () => props.snapshot.connection.id;
   const href = () => `/servers/${id()}`;
@@ -162,9 +164,14 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => transitionTo(`${href()}/connection`)}>{t('servers.tab.connection')}</ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => setRemoving(true)}>{t('servers.remove')}</ContextMenuItem>
+        {/* The same choice as the server's own menu: an owner removes it from its Vesta Server
+            (it can come back there for 7 days); otherwise this launcher just stops listing it. */}
+        <Show when={machineRemoval(props.snapshot)} fallback={<ContextMenuItem onSelect={() => setRemoving(true)}>{t('servers.forget')}</ContextMenuItem>}>
+          {(where) => <ContextMenuItem tone="danger" onSelect={() => setRemovingFromMachine(true)}>{t('servers.host-remove.menu', { machine: where() })}</ContextMenuItem>}
+        </Show>
       </ContextMenu>
       <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />
+      <HostRemoveDialog snapshot={props.snapshot} open={removingFromMachine()} onOpenChange={setRemovingFromMachine} />
       <KillDialog snapshot={props.snapshot} open={killing()} onOpenChange={setKilling} />
       <Show when={creating()}><GetModpackDialog snapshot={props.snapshot} mode="new" onClose={() => setCreating(false)} /></Show>
     </>

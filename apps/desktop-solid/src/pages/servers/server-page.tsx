@@ -254,7 +254,7 @@ function TrustChanged(props: { snapshot: ServerSnapshot }) {
       </Show>
       <ServerErrorNote error={error()} />
       <footer>
-        <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.remove')}</Button>
+        <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.forget')}</Button>
         <Show when={presented()} fallback={<Button onClick={() => void check()}>{t('servers.trust.check')}</Button>}>
           <Button tone="danger" onClick={() => void approve()}>{t('servers.trust.approve')}</Button>
         </Show>
@@ -270,7 +270,7 @@ function CredentialsRejected(props: { snapshot: ServerSnapshot }) {
       <h2>{t('servers.rejected.title')}</h2>
       <p>{t('servers.error.credentials-rejected')}</p>
       <footer>
-        <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.remove')}</Button>
+        <Button variant="ghost" onClick={() => void removeServer(props.snapshot.connection.id).then(() => transitionTo('/servers'))}>{t('servers.forget')}</Button>
         {/* A server on a Vesta Server signs in through its machine, so it is set up again there. */}
         <Show when={hostIdOf(props.snapshot)} fallback={
           <Button onClick={() => transitionTo(`/servers/add/${props.snapshot.connection.id}`)}>{t('servers.rejected.pair-again')}</Button>

@@ -83,8 +83,8 @@ export function ConnectionTab(props: { snapshot: ServerSnapshot }) {
           </Panel>
 
           <Panel title={t('servers.connection.danger')} danger>
-            <SettingRow label={t('servers.remove')} description={t('servers.connection.remove-description')}>
-              <Button size="sm" tone="danger" variant="outline" onClick={() => setRemoving(true)}>{t('servers.remove')}</Button>
+            <SettingRow label={t('servers.forget')} description={t('servers.connection.remove-description')}>
+              <Button size="sm" tone="danger" variant="outline" onClick={() => setRemoving(true)}>{t('servers.forget')}</Button>
             </SettingRow>
           </Panel>
         </>

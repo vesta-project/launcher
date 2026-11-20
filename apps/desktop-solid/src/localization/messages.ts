@@ -2532,7 +2532,7 @@ export const messageIds = [
   "servers.rejected.pair-again",
   "servers.rejected.set-up-again",
   "servers.rejected.title",
-  "servers.remove",
+  "servers.forget",
   "servers.retry-after",
   "servers.sections",
   "servers.seen",
