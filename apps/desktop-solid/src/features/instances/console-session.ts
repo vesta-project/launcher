@@ -109,6 +109,12 @@ function createSession(id: string) {
   );
   const [sources, setSources] = createSignal(nativeInstances ? [logSources[0]] : logSources, { name: `console-sources:${id}` });
   const [fileLines, setFileLines] = createSignal<ParsedLog[]>([], { name: `console-file-lines:${id}` });
+  /**
+   * The game's latest.log when the launcher has no capture of a run to show (the game was
+   * last started elsewhere, or before this launcher kept captures). The live source then shows
+   * that file, so there is one current log instead of an empty live feed beside latest.log.
+   */
+  const [liveFile, setLiveFile] = createSignal<string | null>(null, { name: `console-live-file:${id}` });
   let selectionRevision = 0;
   let pending: string[] = [];
   let pendingCount = 0;
@@ -135,6 +141,7 @@ function createSession(id: string) {
     setState,
     lines,
     sources,
+    liveFile,
     async choose(source: string) {
       const revision = ++selectionRevision;
       setState((current) => ({ ...current, source, follow: source === 'live' }));
@@ -181,7 +188,15 @@ function createSession(id: string) {
             // text twice, so only earlier runs (the game's archived logs) stay as files.
             const capture = (path: string) => path.replaceAll('\\', '/').endsWith(`/data/logs/${slug}.log`);
             const captured = history.some((file) => capture(file.path));
-            const earlier = history.filter((file) => !capture(file.path) && !(captured && file.name === 'latest.log'));
+            const latest = captured ? undefined : history.find((file) => file.name === 'latest.log');
+            const fallback = !!latest && live().length === 0;
+            const earlier = history.filter((file) => !capture(file.path) && !((captured || fallback) && file.name === 'latest.log'));
+            if (fallback) {
+              const raw = await invoke<string[]>('read_specific_log_file', { path: latest.path });
+              if (disposed || revision !== captureRevision) return;
+              setLive(physicalLines(raw).slice(-MAX_LINES).map(parseLog));
+              setLiveFile(latest.path);
+            } else if (captured || live().length) setLiveFile(null);
             setSources([logSources[0], ...earlier.map((file) => ({ id: file.path, path: file.path, name: file.name, kind: 'file' as const, size: `${Math.ceil(file.size / 1024)} KB`, modified: new Date(file.last_modified * 1000).toLocaleString() }))]);
             if (!sources().some((source) => source.id === state().source)) {
               setState((current) => ({ ...current, source: 'live', follow: true }));

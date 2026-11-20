@@ -67,6 +67,7 @@ console-live-output = Live output
 console-current-capture = Current launcher capture
 console-source-live-game = Live game output
 console-source-stopped = Retained output from the stopped game
+console-source-latest-log = The game's last log
 console-log-source = Log source
 console-search-log = Search log
 console-levels = Levels
@@ -80,8 +81,6 @@ console-restore-display = Restore displayed output
 console-open-logs = Open logs folder
 console-no-filter-matches = No lines match the current filters.
 console-no-output = No displayed output.
-console-show-earlier = Show earlier lines
-console-show-latest = Show latest lines
 console-following-paused = Following paused
 console-line-count = { $visible } of { $total } { $total ->
     [one] line

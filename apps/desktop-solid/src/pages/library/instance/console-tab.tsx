@@ -18,8 +18,10 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
   const source = () =>
     session.sources().find((item) => item.id === state().source) ??
     session.sources()[0];
+  /** The live source shows latest.log when there is no capture of a run; it says so. */
+  const liveName = () => (session.liveFile() ? "latest.log" : t("console.live-output"));
   const sourceName = () =>
-    source().kind === "live" ? t("console.live-output") : source().name;
+    source().kind === "live" ? liveName() : source().name;
   return (
     <LogView
       lines={session.lines}
@@ -34,12 +36,14 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       sources={() =>
         session.sources().map((item) => ({
           value: item.id,
-          label: item.kind === "live" ? t("console.live-output") : item.name,
+          label: item.kind === "live" ? liveName() : item.name,
           description:
             item.kind === "live"
               ? props.entry.state.kind === "running"
                 ? t("console.source-live-game")
-                : t("console.source-stopped")
+                : session.liveFile()
+                  ? t("console.source-latest-log")
+                  : t("console.source-stopped")
               : <Metadata parts={[item.modified, item.size]} />,
         }))
       }
@@ -49,7 +53,9 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       footerDetail={() =>
         source().kind === "file"
           ? [source().path, source().modified]
-          : undefined
+          : session.liveFile()
+            ? ["logs/latest.log"]
+            : undefined
       }
       footerTitle={() =>
         `${source().path ?? t("console.current-capture")}

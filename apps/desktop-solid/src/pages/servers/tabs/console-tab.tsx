@@ -1,8 +1,7 @@
-import { Button, IconButton } from '@vesta/ui';
-import { Show, createMemo, createSignal, untrack } from 'solid-js';
+import { Button } from '@vesta/ui';
+import { Show, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { LogView } from '../../../components/log-view/log-view';
 import type { LogEntry } from '../../../components/log-view/log-model';
-import { Icon } from '../../../components/icon';
 import { t } from '../../../localization';
 import type { MessageId } from '../../../localization/messages';
 import { gate } from '../../../features/servers/capabilities';
@@ -30,8 +29,6 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
   const [sentOperation, setSentOperation] = createSignal<string | null>(null, { name: 'server-console:sent-operation' });
   const [failure, setFailure] = createSignal<{ message: MessageId; uncertain: boolean } | null>(null, { name: 'server-console:failure' });
   const [noticeSeen, setNoticeSeen] = createSignal(typeof localStorage !== 'undefined' && localStorage.getItem(NOTICE_KEY) === '1', { name: 'server-console:notice-seen' });
-  const [loadingTail, setLoadingTail] = createSignal(false, { name: 'server-console:loading-tail' });
-  const [tailLoaded, setTailLoaded] = createSignal(false, { name: 'server-console:tail-loaded' });
   const intents = new IntentMemo();
   const parsed = new WeakMap<ConsoleEntry, LogEntry>();
 
@@ -76,12 +73,11 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
     }
   };
 
-  const loadTail = async () => {
-    setLoadingTail(true);
-    try { await loadConsoleTail(id()); setTailLoaded(true); }
-    catch { /* live output continues; the button stays available */ }
-    finally { setLoadingTail(false); }
-  };
+  // Opening the console brings in what the server still holds, so the whole retained output
+  // is there to scroll through; live lines merge in by cursor. Once per connection.
+  onSettled(() => {
+    void loadConsoleTail(id()).catch(() => { /* live output continues */ });
+  });
 
   return (
     <div data-vesta="server-console">
@@ -97,16 +93,6 @@ export function ConsoleTab(props: { snapshot: ServerSnapshot }) {
         sourceKey={id}
         ariaLabel={() => t('console.log-output', { name: t('console.live-output') })}
         emptyText={() => (running() ? t('servers.console.waiting') : t('servers.console.stopped'))}
-        toolbarExtras={
-          <IconButton
-            size="sm"
-            variant="ghost"
-            icon={<Icon name="icons/content/history" />}
-            label={t('servers.console.load-recent')}
-            disabled={loadingTail() || tailLoaded()}
-            onClick={() => void loadTail()}
-          />
-        }
         banner={
           <Show when={!noticeSeen()}>
             <div data-vesta="server-callout" data-tone="neutral" class="server-console-notice">

@@ -295,7 +295,6 @@ servers-error-invalid-input = Check the values you entered.
 servers-error-internal = Something went wrong in the launcher.
 servers-error-local-intent-not-saved = The launcher couldn't save local server data. Check free disk space and folder permissions, then try again.
 servers-console-delivered = Delivered to Minecraft.
-servers-console-load-recent = Load recent history
 servers-console-send-again = Send again
 servers-operation-uncertain-retry = We couldn't confirm the server received this. Trying again is safe: the server won't run it twice.
 servers-players-names-withheld = { $count ->

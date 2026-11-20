@@ -35,6 +35,9 @@ import "./log-view.css";
 
 export type { LogEntry, LogViewState } from "./log-model";
 
+/** Wrapped lines rendered at a time, and how many more each scroll to the top adds. */
+const WRAP_PAGE = 1000;
+
 const levels = [
   { id: "INFO", label: "Info" },
   { id: "WARN", label: "Warn" },
@@ -91,8 +94,12 @@ export function LogView(props: LogViewProps) {
     undefined,
     { name: "log-view:viewport" },
   );
-  const [earlierEnd, setEarlierEnd] = createSignal<number | null>(null, {
-    name: "log-view:earlier-end",
+  /**
+   * Wrapped lines can't be virtualised (their heights vary), so they render the newest
+   * `wrapWindow` lines and the window grows as you scroll up to its top, keeping your place.
+   */
+  const [wrapWindow, setWrapWindow] = createSignal(WRAP_PAGE, {
+    name: "log-view:wrap-window",
   });
   const filterState = createMemo(
     () => ({
@@ -174,23 +181,24 @@ export function LogView(props: LogViewProps) {
     if (!element || !props.live()) return;
     const bottom =
       element.scrollHeight - element.scrollTop - element.clientHeight < 36;
-    if (earlierEnd() === null && bottom !== props.state().follow)
-      patch({ follow: bottom });
+    if (bottom !== props.state().follow) patch({ follow: bottom });
+  };
+  /** Near the top of a wrapped log with more above: render more, then hold the view still. */
+  const growWrapped = () => {
+    const element = viewport();
+    if (!element || !props.state().wrap || element.scrollTop > 120) return;
+    if (wrappedPage().start === 0) return;
+    const before = element.scrollHeight;
+    setWrapWindow((size) => size + WRAP_PAGE);
+    requestAnimationFrame(() => {
+      element.scrollTop += element.scrollHeight - before;
+    });
   };
   const wrappedPage = createMemo(
     () => {
       const lines = visible();
-      const anchor = earlierEnd();
-      const found =
-        anchor === null ? -1 : lines.findIndex((line) => line.id > anchor);
-      const end =
-        found < 0
-          ? lines.length
-          : found === 0
-            ? Math.min(2000, lines.length)
-            : found;
-      const start = Math.max(0, end - 2000);
-      return { start, lines: lines.slice(start, end) };
+      const start = Math.max(0, lines.length - wrapWindow());
+      return { start, lines: lines.slice(start) };
     },
     { name: "log-view:wrapped-page" },
   );
@@ -204,7 +212,7 @@ export function LogView(props: LogViewProps) {
   createEffect(
     () => pageScope(),
     () => {
-      setEarlierEnd(null);
+      setWrapWindow(WRAP_PAGE);
     },
     { name: "log-view:reset-page" },
   );
@@ -306,7 +314,10 @@ export function LogView(props: LogViewProps) {
         aria-label={props.ariaLabel()}
         tabindex={0}
         ref={setViewport}
-        onScroll={scroll}
+        onScroll={() => {
+          scroll();
+          growWrapped();
+        }}
       >
         <Show
           when={visible().length}
@@ -331,32 +342,6 @@ export function LogView(props: LogViewProps) {
               </VirtualList>
             }
           >
-            <Show when={wrappedPage().start > 0}>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  // Selecting an earlier page pauses live following without growing the DOM.
-                  patch({ follow: false });
-                  setEarlierEnd(visible()[wrappedPage().start - 1].id);
-                  const element = viewport();
-                  queueMicrotask(() => {
-                    if (element) element.scrollTop = 0;
-                  });
-                }}
-              >
-                {t("console.show-earlier")}
-              </Button>
-            </Show>
-            <Show when={earlierEnd() !== null}>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setEarlierEnd(null)}
-              >
-                {t("console.show-latest")}
-              </Button>
-            </Show>
             <For each={wrappedPage().lines} keyed={rowKey}>
               {(line) => <LogRow entry={line()} />}
             </For>
@@ -377,7 +362,7 @@ export function LogView(props: LogViewProps) {
             size="sm"
             variant="ghost"
             onClick={() => {
-              setEarlierEnd(null);
+              setWrapWindow(WRAP_PAGE);
               patch({ follow: true });
             }}
           >
