@@ -384,7 +384,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
                               >
                                 <time
                                   datetime={new Date(candidate.lastPlayedAtUnixMs!).toISOString()}
-                                  title={new Date(candidate.lastPlayedAtUnixMs!).toLocaleString()}
+                                  data-tip={new Date(candidate.lastPlayedAtUnixMs!).toLocaleString()}
                                 >
                                   {new Date(candidate.lastPlayedAtUnixMs!).toLocaleDateString(
                                     undefined,
@@ -524,7 +524,7 @@ export function LauncherImportPage(props: { kind: LauncherKind }) {
                           icon={<Icon name="icons/content/folder" />}
                           iconEnd={<Icon name="icons/actions/external-link" size={13} />}
                           onClick={() => void openGameFolder()}
-                          title={item().gameDirectory}
+                          data-tip={item().gameDirectory}
                         >
                           <span class="launcher-import-game-path">{item().gameDirectory}</span>
                         </Button>

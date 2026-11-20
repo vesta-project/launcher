@@ -113,10 +113,10 @@ function Row(props: { snapshot: ServerSnapshot; row: GraphRow; history: BackupHi
             <div data-vesta="backup-commit-body">
               <Show when={naming() !== null} fallback={
                 <p data-vesta="backup-commit-title">
-                  <strong title={new Date(point().time).toLocaleString()}>{point().label ?? when(point().time)}</strong>
+                  <strong data-tip={new Date(point().time).toLocaleString()}>{point().label ?? when(point().time)}</strong>
                   <Show when={point().profile}>{(profile) => <Badge size="sm" variant="soft" tone="neutral">{profile()}</Badge>}</Show>
                   <Show when={point().safety}><Badge size="sm" variant="soft" tone="warning">{t('servers.backups.safety')}</Badge></Show>
-                  <Show when={point().kept}><span data-vesta="backup-commit-kept" title={t('servers.backups.keep-help')}><Icon name="icons/actions/pin" size={12} />{t('servers.backups.kept')}</span></Show>
+                  <Show when={point().kept}><span data-vesta="backup-commit-kept" data-tip={t('servers.backups.keep-help')}><Icon name="icons/actions/pin" size={12} />{t('servers.backups.kept')}</span></Show>
                 </p>
               }>
                 <form data-vesta="backup-commit-rename" onSubmit={(event) => { event.preventDefault(); if (!labelProblem(naming()!)) void update(point(), { label: cleanLabel(naming()!) }); }}>

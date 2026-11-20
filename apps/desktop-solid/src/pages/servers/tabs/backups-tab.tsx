@@ -170,7 +170,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
                           {profile.name}
                           <Badge size="sm" variant="soft" tone="neutral">{t(profile.mode === 'online' ? 'servers.backups.mode-online' : 'servers.backups.mode-stopped')}</Badge>
                         </span>
-                        <span data-vesta="setting-row-description" title={retention(profile)}>{retentionSummary(profile)}</span>
+                        <span data-vesta="setting-row-description" data-tip={retention(profile)}>{retentionSummary(profile)}</span>
                       </div>
                       <div data-vesta="setting-row-control">{profileActions(profile.name)}</div>
                     </div>

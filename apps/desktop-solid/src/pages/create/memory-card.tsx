@@ -92,7 +92,7 @@ export function InstallMemoryCard(props: {
               <span>{t("install.selected-max")}</span>
               <button
                 type="button"
-                title={t("install.toggle-memory-unit")}
+                data-tip={t("install.toggle-memory-unit")}
                 aria-label={t("install.toggle-memory-unit")}
                 onClick={() => setUnit(unit() === "MB" ? "GB" : "MB")}
               >

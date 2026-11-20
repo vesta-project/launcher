@@ -153,7 +153,7 @@ export function Sensitive(props: { children: JSX.Element; label?: string }) {
       tabindex={hidden() ? 0 : undefined}
       role={hidden() ? 'button' : undefined}
       aria-label={hidden() ? t('servers.privacy.hidden', { name: props.label ?? t('servers.address.label') }) : undefined}
-      title={hidden() ? t('servers.privacy.reveal') : undefined}
+      data-tip={hidden() ? t('servers.privacy.reveal') : undefined}
       onClick={reveal}
       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); reveal(event); } }}
     >

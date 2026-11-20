@@ -48,8 +48,8 @@ export function SandboxSettings() {
                 <li>
                   <button type="button" role="radio" data-preset={entry.id}
                     aria-checked={preset().id === entry.id ? 'true' : 'false'}
-                    title={t(entry.text)}
-                    onClick={() => updateSetting('default_sandbox_preset', entry.id)}>
+                    data-tip={t(entry.text)}
+                    aria-label={t(entry.text)} onClick={() => updateSetting('default_sandbox_preset', entry.id)}>
                     <Icon name={entry.icon} size={20} />
                     <strong>{t(entry.name)}</strong>
                   </button>
@@ -73,7 +73,7 @@ export function SandboxSettings() {
               </ul>
             </dd>
             <dt>{t('prefs.sandbox.nesting')}</dt>
-            <dd data-vesta="prefs-order" title={t('prefs.sandbox.nesting-description')}>
+            <dd data-vesta="prefs-order" data-tip={t('prefs.sandbox.nesting-description')}>
               <span>{t(outerFirst() ? 'prefs.sandbox.layer-sandbox' : 'prefs.sandbox.layer-wrapper')}</span>
               <Icon name="icons/controls/chevron-right" size={12} />
               <span>{t(outerFirst() ? 'prefs.sandbox.layer-wrapper' : 'prefs.sandbox.layer-sandbox')}</span>

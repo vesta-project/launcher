@@ -327,7 +327,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
               <span data-vesta="resource-title">{row().name}</span>
               <span data-vesta="resource-sub">
                 <span data-vesta="resource-kind" data-kind={entry().kind}>{t(kindLabel[entry().kind])}</span>
-                <span data-vesta="resource-file" title={entry().path}>{entry().filename}</span>
+                <span data-vesta="resource-file" data-tip={entry().path}>{entry().filename}</span>
                 <Show when={entry().pendingError}><span data-tone="danger">{t('server-content.pending-failed')}</span></Show>
               </span>
             </span>
@@ -335,7 +335,7 @@ export function ServerResourcesTab(props: { snapshot: ServerSnapshot }) {
         </div>
         <div data-vesta="table-cell" role="cell" class="col-version">
           <span data-vesta="resource-version">
-            <span title={row().version ?? undefined}>{row().version ?? t('server-content.version-unknown')}</span>
+            <span data-tip={row().version ?? undefined}>{row().version ?? t('server-content.version-unknown')}</span>
             <Show when={actions().update ? available() : undefined}>
               {(version) => (
                 <IconButton size="sm" variant="ghost" class="resource-update" disabled={working()}

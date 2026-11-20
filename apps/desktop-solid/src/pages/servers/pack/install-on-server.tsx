@@ -161,7 +161,7 @@ export function InstallOnServerDialog(props: { request: InstallRequestSource }) 
           <span data-vesta="pack-review-note">{!stopped() ? t('server-pack.stop-to-install') : ''}</span>
           <Button variant="ghost" onClick={close}>{t('common.cancel')}</Button>
           <Button tone="accent" disabled={busy() || !stopped() || (!!plan() && !request()) || !!blocker() || (!!plan() && reviewEmpty(plan()!)) || (!!plan() && reviewNeedsWarningConsent(plan()!) && !warningsAcknowledged())}
-            title={!stopped() ? t('server-pack.stop-to-install') : blocker() ? t(blocker()!) : undefined} onClick={() => void apply()}>
+            data-tip={!stopped() ? t('server-pack.stop-to-install') : blocker() ? t(blocker()!) : undefined} onClick={() => void apply()}>
             {t(update() ? 'server-pack.review-update' : 'server-pack.review-install')}
           </Button>
         </Show>
@@ -248,7 +248,7 @@ function ReviewTitle(props: { source: PackInstallSource; name: string }) {
         <span data-vesta="source-tag" data-source={kind()}>{sourceName()}</span>
       </span>
       <Show when={project()?.summary}>
-        {(text) => <span data-vesta="pack-review-summary" aria-hidden="true" title={text()}>{text()}</span>}
+        {(text) => <span data-vesta="pack-review-summary" aria-hidden="true" data-tip-overflow>{text()}</span>}
       </Show>
     </span>
   );

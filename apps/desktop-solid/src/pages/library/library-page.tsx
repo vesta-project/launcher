@@ -442,7 +442,7 @@ function LibraryEmpty() {
           {(start) => (
             <li>
               <div data-vesta="library-card-slot">
-                <button type="button" data-vesta="library-start-tile" data-primary={start.primary ? '' : undefined} title={start.help} onClick={() => start.run()}>
+                <button type="button" data-vesta="library-start-tile" data-primary={start.primary ? '' : undefined} data-tip={start.help} aria-label={start.help} onClick={() => start.run()}>
                   <Icon name={start.icon} size={22} />
                   <span>{start.label}</span>
                 </button>

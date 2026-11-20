@@ -146,7 +146,7 @@ function Dimensions(props: { world: ServerWorld }) {
                 <strong>{view().label ? t(view().label!) : view().name}</strong>
                 <span>{view().present ? t('server-world.dimension-generated') : t('server-world.dimension-missing')}</span>
                 <Show when={view().present && view().folders.length}>
-                  <code title={view().folders.join('\n')}>{view().folders.join(', ')}</code>
+                  <code data-tip={view().folders.join('\n')}>{view().folders.join(', ')}</code>
                 </Show>
               </div>
             </li>

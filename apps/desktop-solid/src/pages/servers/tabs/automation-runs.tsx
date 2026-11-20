@@ -119,7 +119,7 @@ function RunRow(props: { snapshot: ServerSnapshot; run: RunSummary; name: string
           <span>{t(trigger().message, { ...trigger().args })}</span>
         </p>
         <p data-vesta="server-activity-meta">
-          <span title={formatDateTime(props.run.startedAtMs)}>{t('servers.ago', { time: t(started().message, { count: started().count }) })}</span>
+          <span data-tip={formatDateTime(props.run.startedAtMs)}>{t('servers.ago', { time: t(started().message, { count: started().count }) })}</span>
           <Show when={props.run.finishedAtMs}>{(finished) => <span>{t('server-automation.took', { time: elapsed((finished() - props.run.startedAtMs) / 1000) })}</span>}</Show>
           <Show when={props.run.outcomeCode}>{(code) => <span>{outcomeText(code())}</span>}</Show>
           <Show when={props.run.nextWakeAtMs}>{(wake) => <span>{t('server-automation.wakes', { time: formatDateTime(wake()) })}</span>}</Show>

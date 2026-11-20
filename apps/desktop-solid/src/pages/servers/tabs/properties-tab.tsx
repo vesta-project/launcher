@@ -163,7 +163,7 @@ export function PropertiesTab(props: { snapshot: ServerSnapshot }) {
   const Row = (row: { def: PropertyDef }) => (
     <div data-vesta="setting-row" data-edited={row.def.key in changes() ? '' : undefined} data-server-property={row.def.key}>
       <div data-vesta="setting-row-copy">
-        <span data-vesta="setting-row-label" title={row.def.key}>{t(row.def.label)}</span>
+        <span data-vesta="setting-row-label" data-tip={row.def.key}>{t(row.def.label)}</span>
         <span data-vesta="setting-row-description">{description(row.def)}</span>
         <Show when={showKeys() || matchedByKey(row.def, t(row.def.label), t(row.def.help), query())}>
           <code data-vesta="server-setting-key">{row.def.key}</code>

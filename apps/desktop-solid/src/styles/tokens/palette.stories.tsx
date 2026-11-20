@@ -10,7 +10,7 @@ function Scale(props: { name: string }) {
     <Row label={props.name} gap={2}>
       <For each={steps}>{(step) => (
         <div
-          title={`--vesta-${props.name}-${step}`}
+          data-tip={`--vesta-${props.name}-${step}`}
           style={{
             width: '40px',
             height: '32px',

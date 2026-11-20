@@ -155,7 +155,7 @@ function RestoreAction(props: { state: SoftwareState; busy: boolean; stopped: bo
   return (
     <Show when={softwareRestoreKind(props.state) && props.state.previous && props.state.available}>
       <Button size="sm" variant="ghost" icon={<Icon name="icons/content/history" />} disabled={!props.stopped || props.busy}
-        title={!props.stopped ? t('server-hosting.stop-first') : undefined} onClick={() => props.onRestore()}>
+        data-tip={!props.stopped ? t('server-hosting.stop-first') : undefined} onClick={() => props.onRestore()}>
         {t(softwareRestoreKind(props.state) === 'software' ? 'server-hosting.restore-previous' : 'server-hosting.recover-launch')}
       </Button>
     </Show>

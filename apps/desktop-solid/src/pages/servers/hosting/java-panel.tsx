@@ -149,7 +149,7 @@ function RuntimeRow(props: { row: JavaRow; stopped: boolean; locked: boolean; ac
           <Show when={props.row.selected}><Badge size="sm" tone="success">{t('server-java.in-use')}</Badge></Show>
           <small><Metadata parts={[runtime().vendor, runtime().version, runtime().arch]} /></small>
         </span>
-        <code title={runtime().path}>{runtime().path}</code>
+        <code data-tip={runtime().path}>{runtime().path}</code>
       </div>
       <Show when={!props.row.selected}>
         <Button size="sm" variant="outline" disabled={props.locked || !props.stopped} data-tip={!props.stopped ? t('server-java.stop-first') : undefined}

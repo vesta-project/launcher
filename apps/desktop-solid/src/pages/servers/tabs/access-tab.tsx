@@ -205,7 +205,7 @@ function PersonRow(props: {
               const canRevoke = () => props.canRevoke && !device().current && !device().revoked;
               return <li data-revoked={device().revoked ? '' : undefined}>
                 <Icon name="icons/content/monitor" size={14} />
-                <div title={device().id}>
+                <div data-tip={device().id}>
                   <span>
                     {device().current && device().name === 'Vesta Launcher' ? t('servers.access.this-device') : device().name}
                     <Show when={device().current && device().name !== 'Vesta Launcher'}><Badge size="sm" variant="soft" tone="accent">{t('servers.access.this-device')}</Badge></Show>

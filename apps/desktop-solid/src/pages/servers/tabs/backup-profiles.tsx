@@ -164,7 +164,7 @@ function StorageNote(props: { configuration: BackupConfiguration }) {
       <Icon name="icons/content/storage" size={12} />
       <span>{t(props.configuration.repository.initialized ? 'servers.backup-setup.storage' : 'servers.backup-setup.storage-new')}</span>
       <Show when={props.configuration.repository.location} fallback={<span>{t('servers.backup-setup.storage-unknown')}</span>}>
-        {(location) => <code title={location()}>{location()}</code>}
+        {(location) => <code data-tip-overflow>{location()}</code>}
       </Show>
     </p>
   );

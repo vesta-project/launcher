@@ -349,7 +349,7 @@ export function WorkflowEditor(props: { snapshot: ServerSnapshot; workflowId: st
             </span>
             <Button variant="ghost" disabled={saving()} onClick={discard}>{t(isNew ? 'common.cancel' : 'server-files.discard')}</Button>
           </Show>
-          <Button tone="accent" disabled={!dirty() || problems().length > 0 || saving()} title={t('server-files.save-shortcut', { value: saveKeys })}
+          <Button tone="accent" disabled={!dirty() || problems().length > 0 || saving()} data-tip={t('server-files.save-shortcut', { value: saveKeys })}
             onClick={() => void save()}>{t(isNew ? 'server-automation.create' : 'server-files.save')}</Button>
         </Show>
         <Show when={!isNew && canManage()}>

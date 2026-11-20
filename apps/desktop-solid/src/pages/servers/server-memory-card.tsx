@@ -48,7 +48,7 @@ export function ServerMemoryCard(props: {
           <div data-vesta="memory-comparison">
             <div data-selected>
               <span>{t('server-add.memory.chosen')}</span>
-              <button type="button" title={t('install.toggle-memory-unit')} aria-label={t('install.toggle-memory-unit')}
+              <button type="button" data-tip={t('install.toggle-memory-unit')} aria-label={t('install.toggle-memory-unit')}
                 onClick={() => setUnit(unit() === 'MB' ? 'GB' : 'MB')}>
                 {format(shown())}
               </button>

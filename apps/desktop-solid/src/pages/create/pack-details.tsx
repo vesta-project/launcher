@@ -115,7 +115,7 @@ export function InstallPackDetails(props: {
       </Show>
       </Show>
       <Show when={!props.resourcesOnly && filename()}>
-        <div data-vesta="install-pack-file" title={props.source?.value}>
+        <div data-vesta="install-pack-file" data-tip={props.source?.value}>
           <Icon name="icons/content/file" size={15} />
           <span>{filename()}</span>
         </div>

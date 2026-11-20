@@ -61,7 +61,7 @@ export function DeveloperSettings() {
                 variant="outline"
                 tone={'danger' in action ? 'danger' : undefined}
                 disabled={!isTauri()}
-                title={isTauri() ? undefined : t('prefs.needs-desktop')}
+                data-tip={isTauri() ? undefined : t('prefs.needs-desktop')}
                 icon={<Icon name="icons/content/terminal" size={14} />}
                 onClick={() => void run(action.command)}
               >

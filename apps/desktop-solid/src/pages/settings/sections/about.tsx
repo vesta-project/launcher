@@ -110,7 +110,7 @@ export function AboutSettings() {
             variant="outline"
             icon={<Icon name="icons/actions/external-link" />}
             disabled
-            title={t('prefs.coming-soon')}
+            data-tip={t('prefs.coming-soon')}
           >
             {t('prefs.about.open')}
           </Button>

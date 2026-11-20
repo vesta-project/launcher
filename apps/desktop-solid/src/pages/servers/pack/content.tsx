@@ -198,7 +198,7 @@ export function ModpackContent() {
                     </span>
                   )}
                 </Show>
-                <span data-vesta="resource-file" title={entry().path}>{entryFileName(entry())}</span>
+                <span data-vesta="resource-file" data-tip={entry().path}>{entryFileName(entry())}</span>
                 <Show when={entry().source.type === 'manual'}><Badge size="sm" tone="danger">{t('server-pack.needs-file')}</Badge></Show>
               </span>
             </span>
@@ -206,7 +206,7 @@ export function ModpackContent() {
         </div>
         <div data-vesta="table-cell" role="cell" class="col-version">
           <span data-vesta="resource-version">
-            <span title={versionLabel(entry())}>{versionLabel(entry())}</span>
+            <span data-tip-overflow>{versionLabel(entry())}</span>
             <Show when={!readOnly() && available()}>
               <IconButton size="sm" variant="ghost" class="resource-update" disabled={busy()} label={t('server-pack.update-entry', { name: nameOf(entry()) })}
                 icon={<Icon name="icons/actions/download" />} onClick={() => update(entry())} />
