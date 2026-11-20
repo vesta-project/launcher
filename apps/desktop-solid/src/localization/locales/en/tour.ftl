@@ -42,6 +42,7 @@ tour-demo-world = My First World
 tour-demo-farm = Cozy Farming
 tour-demo-tech = Tech Adventures
 tour-demo-sky = Skyblock with Friends
+tour-demo-activity = Installing My First World
 
 tour-replay = Quick tour
 tour-replay-description = Take the short look around the launcher again.

@@ -8,11 +8,16 @@ import { setting, updateSetting } from '../settings/config';
  * setup reset clears again.
  */
 const [step, setStep] = createSignal<number | undefined>(undefined, { name: 'tourStep' });
+/** The id of the step on screen (set by the overlay), so parts of the shell can act it out. */
+const [showing, setShowing] = createSignal<string | undefined>(undefined, { name: 'tourShowing' });
 
 export const tour = {
   /** The step index while the tour is open, otherwise undefined. */
   step,
   open: () => step() !== undefined,
+  /** The step id on screen, e.g. 'status' while the tour points at the titlebar pill. */
+  showing,
+  setShowing,
   /** Opens the tour once per setup; a finished or skipped tour never comes back on its own. */
   offer() {
     if (untrack(() => setting('tutorial_completed') || step() !== undefined)) return;

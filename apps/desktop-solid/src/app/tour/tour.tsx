@@ -64,15 +64,21 @@ function measure(selectors: string[] | undefined): Box | undefined {
     }
   }
   if (left === Infinity) return undefined;
-  // Small targets (the idle status dot) still get a comfortable ring around their centre.
-  const grow = (low: number, high: number) => {
+  // The ring is the same width all round, so it stays centred on the target even where the
+  // target nearly meets the window edge (the titlebar pill sits 5px from the top): it narrows
+  // everywhere rather than only on the cramped side. Small targets (the idle status dot) grow
+  // to a comfortable minimum around their centre first.
+  const EDGE = 2;
+  const widen = (low: number, high: number) => {
     const missing = MIN_SPOT - (high - low) - PAD * 2;
     return missing > 0 ? [low - missing / 2, high + missing / 2] : [low, high];
   };
-  [left, right] = grow(left, right);
-  [top, bottom] = grow(top, bottom);
-  left = Math.max(left - PAD, 4); top = Math.max(top - PAD, 4);
-  right = Math.min(right + PAD, innerWidth - 4); bottom = Math.min(bottom + PAD, innerHeight - 4);
+  [left, right] = widen(Math.max(left, EDGE), Math.min(right, innerWidth - EDGE));
+  [top, bottom] = widen(Math.max(top, EDGE), Math.min(bottom, innerHeight - EDGE));
+  const room = Math.max(0, Math.min(PAD, left - EDGE, top - EDGE, innerWidth - EDGE - right, innerHeight - EDGE - bottom));
+  left -= room; top -= room; right += room; bottom += room;
+  left = Math.max(left, EDGE); top = Math.max(top, EDGE);
+  right = Math.min(right, innerWidth - EDGE); bottom = Math.min(bottom, innerHeight - EDGE);
   if (right - left < 4 || bottom - top < 4) return undefined;
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
@@ -178,7 +184,8 @@ function TourOverlay() {
     () => step().id,
     (id) => {
       document.documentElement.dataset.tourStep = id;
-      return () => delete document.documentElement.dataset.tourStep;
+      tour.setShowing(id);
+      return () => { delete document.documentElement.dataset.tourStep; tour.setShowing(undefined); };
     },
   );
 

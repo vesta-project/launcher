@@ -209,4 +209,14 @@
   html[data-tour-step='status'] [data-vesta='status-pill'][data-collapsed] > [data-vesta='status-pill-fill'] {
     visibility: hidden;
   }
+
+  /* Leaving the status step: the tour's stand-in install vanishes at once instead of shrinking
+     away with its words showing. */
+  [data-vesta='status-pill'][data-demo][data-collapsed] {
+    transition: none;
+  }
+
+  [data-vesta='status-pill'][data-demo][data-collapsed] > :where([data-vesta='status-pill-content'], [data-vesta='status-pill-fill']) {
+    visibility: hidden;
+  }
 }

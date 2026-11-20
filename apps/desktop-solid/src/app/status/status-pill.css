@@ -256,6 +256,8 @@
   :where([data-vesta="status-pill-label"]) {
     /* Never wider than 150px, and narrower when the slot is short (the rest needs ~84px). */
     max-inline-size: clamp(48px, 100cqi - 84px, 150px);
+    /* The pill sets line-height 1; a clipped box that short cuts off descenders (g, y, p). */
+    line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
   }

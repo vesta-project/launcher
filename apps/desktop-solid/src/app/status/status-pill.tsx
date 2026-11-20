@@ -12,6 +12,8 @@ import {
   type PillState,
 } from '../../features/activity';
 import { findInstance, playInstance, playingInstanceIds } from '../../features/instances/catalog';
+import { tour } from '../../features/onboarding/tour';
+import demoArt from '../../assets/images/placeholders/placeholder-image1.jpg';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { percentText } from './format';
@@ -165,11 +167,34 @@ export function StatusPill() {
   let measured = 0;
   const [open, setOpen] = createSignal(false, { name: 'activityPanelOpen' });
 
+  // The tour acts out an install while it points at the pill, so the step shows something
+  // instead of an empty dot. Real work always wins; the stand-in never reaches the store.
+  const demoOn = createMemo(() => tour.showing() === 'status' && pillState().state === 'idle', { name: 'activityPillDemoOn' });
+  const [demoProgress, setDemoProgress] = createSignal(0.08, { name: 'activityPillDemoProgress' });
+  /** True once the stand-in has finished collapsing away, so an opened panel never shows it. */
+  const [demoGone, setDemoGone] = createSignal(true, { name: 'activityPillDemoGone' });
+  createEffect(demoOn, (on) => {
+    if (!on) {
+      const timer = setTimeout(() => setDemoGone(true), 600);
+      return () => clearTimeout(timer);
+    }
+    setDemoGone(false);
+    setDemoProgress(0.08);
+    const timer = setInterval(() => setDemoProgress((value) => Math.min(0.9, value + 0.025 + Math.random() * 0.03)), 500);
+    return () => clearInterval(timer);
+  });
+  const live = createMemo<PillState>(() => {
+    if (!demoOn()) return pillState();
+    const demo: Activity = { id: 'tour-demo', kind: 'instance_install', state: 'running', title: t('tour.demo-activity'), icon: demoArt, startedAt: 0, cancellable: false };
+    return { state: 'running', activities: [demo], count: 1, icons: [demo], extraCount: 0, progress: demoProgress() };
+  }, { name: 'activityPillLive' });
+
   // The last visible state stays on screen while the pill collapses away.
   const shown = createMemo<Shown | undefined>(
     (previous) => {
-      const state = pillState();
-      return state.state === 'idle' ? previous : state;
+      const state = live();
+      if (state.state !== 'idle') return state;
+      return previous && 'activities' in previous && previous.activities[0]?.id === 'tour-demo' && demoGone() ? undefined : previous;
     },
     { name: 'activityPillShown' },
   );
@@ -181,7 +206,7 @@ export function StatusPill() {
       && !activities().some((row) => isForeground(row) || row.state === 'failed'),
     (empty) => { if (empty) setOpen(false); },
   );
-  const collapsed = createMemo(() => pillState().state === 'idle' && !open(), { name: 'activityPillCollapsed' });
+  const collapsed = createMemo(() => live().state === 'idle' && !open(), { name: 'activityPillCollapsed' });
   const face = createMemo(() => {
     const state = shown();
     return state ? faceOf(state) : undefined;
@@ -198,7 +223,7 @@ export function StatusPill() {
   };
   const label = () => {
     const state = shown();
-    if (!state || pillState().state === 'idle') return t('activity.panel-title');
+    if (!state || live().state === 'idle') return t('activity.panel-title');
     const status = statusText(state);
     const value = progress();
     return state.state === 'running' && value !== undefined
@@ -273,6 +298,7 @@ export function StatusPill() {
         data-vesta="status-pill"
         data-face={face()}
         data-collapsed={collapsed() ? '' : undefined}
+        data-demo={(() => { const state = shown(); return state && 'activities' in state && state.activities[0]?.id === 'tour-demo' ? '' : undefined; })()}
         data-open={open() ? '' : undefined}
         data-indeterminate={progress() === undefined ? '' : undefined}
         style={{ '--status-pill-progress': String(progress() ?? 0) }}

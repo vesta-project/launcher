@@ -31,6 +31,7 @@ export const messageIds = [
   "tour.demo-farm",
   "tour.demo-tech",
   "tour.demo-sky",
+  "tour.demo-activity",
   "tour.replay",
   "tour.replay-description",
   "tour.replay-action",
