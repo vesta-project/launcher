@@ -2,7 +2,7 @@
  * What's new scenes (scenes.tsx): real launcher screens drawn small, one per highlight.
  *
  * Hooks:  [data-vesta=scene] (data-scene = paint | server | join | speed), -fit, -fit-body,
- *         -caption, -window, -rail, -rail-head, -rail-item (data-current), -rail-rule,
+ *         -corner, -window, -rail, -rail-head, -rail-item (data-current), -rail-rule,
  *         -rail-instance (data-joined), -rail-gap, -titlebar, -board, -button (data-tone)
  *         paint: -paint-look (--i), -themed, -library, -card (data-current), -play
  *         server: -server, -server-head, -server-icon, -server-who, -server-status,
@@ -53,14 +53,6 @@
     transform-origin: 0 0;
   }
 
-  :where([data-vesta='scene-caption']) {
-    position: absolute;
-    inset-block-start: 18px;
-    inset-inline-start: 28px;
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-  }
-
   /* ---------- The launcher frame ---------- */
   :where([data-vesta='scene-themed']) {
     /* Geometry follows the theme drawn here, not the one in use. */
@@ -107,7 +99,15 @@
 
   :where([data-vesta='scene-rail-head']) {
     margin-block-end: 4px;
+    overflow: hidden;
     background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='scene-rail-head']) > img {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    image-rendering: pixelated;
   }
 
   :where([data-vesta='scene-rail-item']) {
@@ -138,12 +138,30 @@
   }
 
   :where([data-vesta='scene-titlebar']) {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-sm);
+  }
+
+  /* The theme on show, where the real titlebar keeps its account chip: it scales with the window. */
+  :where([data-vesta='scene-corner']) {
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-end: 12px;
+    display: inline-flex;
+    align-items: center;
+    block-size: 22px;
+    padding-inline: 10px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
   }
 
   :where([data-vesta='scene-titlebar']) > [data-current] {

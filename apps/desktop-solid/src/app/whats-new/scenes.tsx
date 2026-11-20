@@ -6,6 +6,7 @@ import art3 from '../../assets/images/placeholders/placeholder-image3.png';
 import art4 from '../../assets/images/placeholders/placeholder-image4.png';
 import art5 from '../../assets/images/placeholders/placeholder-image5.png';
 import { Icon } from '../../components/icon';
+import { activeAccount, usePlayerHead } from '../../features/accounts/accounts';
 import type { SceneName } from '../../features/whats-new';
 import { resolveThemeTokens, themePresets, type ThemeValues } from '../../features/settings/theme-model';
 import { setting } from '../../features/settings/config';
@@ -55,12 +56,16 @@ function Fit(props: { width: number; height: number; children: JSX.Element }) {
 type Place = 'library' | 'browse' | 'servers';
 
 /** The launcher's frame: rail on the left, titlebar along the top, the board in the middle. */
-function Window(props: { place: Place; crumbs: string[]; instances: string[]; children: JSX.Element; joined?: JSX.Element }) {
+function Window(props: { place: Place; crumbs: string[]; instances: string[]; children: JSX.Element; joined?: JSX.Element; corner?: string }) {
+  // Your own head where the account sits in the rail, as in the real launcher.
+  const head = usePlayerHead(() => activeAccount()?.uuid);
   const rail: [Place | 'create', string][] = [['library', 'icons/rail/library'], ['create', 'icons/actions/add'], ['browse', 'icons/rail/browse'], ['servers', 'icons/rail/servers']];
   return (
     <div data-vesta="scene-window">
       <nav data-vesta="scene-rail">
-        <span data-vesta="scene-rail-head" />
+        <span data-vesta="scene-rail-head">
+          <Show when={head()}>{(url) => <img src={url()} alt="" />}</Show>
+        </span>
         <For each={rail}>
           {([place, icon]) => <span data-vesta="scene-rail-item" data-current={place === props.place ? '' : undefined}><Icon name={icon as never} size={18} /></span>}
         </For>
@@ -79,6 +84,7 @@ function Window(props: { place: Place; crumbs: string[]; instances: string[]; ch
             </>
           )}
         </For>
+        <Show when={props.corner}>{(corner) => <span data-vesta="scene-corner">{corner()}</span>}</Show>
       </header>
       <main data-vesta="scene-board">{props.children}</main>
     </div>
@@ -137,10 +143,9 @@ function PaintScene() {
     <For each={looks()}>
       {(look, index) => (
         <div data-vesta="scene-paint-look" style={{ '--i': index(), '--n': looks().length }}>
-          <span data-vesta="scene-caption">{look.name}</span>
           <Fit width={820} height={470}>
             <div data-vesta="scene-themed" data-vesta-scheme={look.scheme} data-vesta-accent={look.neutral ? 'neutral' : 'hue'} style={look.tokens}>
-              <Window place="library" crumbs={[t('nav.library')]} instances={[art1, art2, art3]}>
+              <Window place="library" crumbs={[t('nav.library')]} instances={[art1, art2, art3]} corner={look.name}>
                 <LibraryBoard />
               </Window>
             </div>

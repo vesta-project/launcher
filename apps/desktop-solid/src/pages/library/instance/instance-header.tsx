@@ -33,7 +33,8 @@ function primaryAction(entry: InstanceEntry) {
       return {
         label: t("instance.stop"),
         icon: "icons/actions/stop",
-        tone: "danger" as const,
+        // Stopping the game is routine, like stopping a server: red stays for force kill and delete.
+        tone: "neutral" as const,
         disabled: false,
         run: () => playInstance(entry.instance.id),
       };

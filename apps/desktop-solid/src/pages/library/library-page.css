@@ -402,4 +402,66 @@
     transition: none;
     transform: none;
   }
+
+  /* ---- First run: a heading, then one tile per way in, where cards will sit ---- */
+  :where([data-vesta='library-empty']) > h2 {
+    margin: 0;
+    padding: var(--vesta-space-10) 40px 0;
+    font-size: var(--vesta-text-xl);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='library-empty']) > [data-vesta='library-grid'] {
+    padding-block-start: var(--vesta-space-5);
+  }
+
+  :where([data-vesta='library-start-tile']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    max-inline-size: 200px;
+    aspect-ratio: 1;
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) dashed var(--vesta-color-border-strong);
+    border-radius: var(--vesta-radius-container);
+    background: transparent;
+    color: var(--vesta-color-text-muted);
+    font: inherit;
+    font-weight: var(--vesta-weight-semibold);
+    text-align: center;
+    cursor: default;
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  /* The usual way in carries the accent. */
+  :where([data-vesta='library-start-tile'][data-primary]) {
+    border-style: solid;
+    border-color: color-mix(in oklab, var(--vesta-color-accent) 55%, transparent);
+    background: color-mix(in oklab, var(--vesta-color-accent) 10%, transparent);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='library-start-tile'][data-primary]) > [data-vesta='icon'] {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='library-start-tile']:hover) {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='library-start-tile'][data-primary]:hover) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
+  }
+
+  :where([data-vesta='library-start-tile']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: var(--vesta-focus-offset);
+  }
 }

@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onSettled } from 'solid-js';
 import { Button, ContextMenu, ContextMenuGroup, ContextMenuItem, ContextMenuRadioGroup, ContextMenuRadioItem, ContextMenuSeparator, toast } from '@vesta/ui';
-import { EmptyState } from '../../components/empty-state';
+import { Icon } from '../../components/icon';
 import { t } from '../../localization';
 import { nativeInstances, nativeRecord, instancePending, instancesLoaded } from '../../features/instances/native-service';
 import { NativeExportDialog } from "../../features/instances/native-export-dialog";
@@ -422,22 +422,36 @@ function LibraryGrid() {
   );
 }
 
-/** First run: no instances yet, so offer every way one can arrive. */
+/**
+ * First run: no instances yet. The grid shows where they will go, with one tile per way in
+ * (the first is the usual one), so the page reads as the Library rather than a block of text.
+ */
 function LibraryEmpty() {
+  const starts = () => [
+    { icon: 'icons/actions/add', label: t('management.tile-new'), help: t('management.start-new-help'), primary: true, run: () => requestCreateAction('new') },
+    { icon: 'icons/content/modpack', label: t('management.tile-modpack'), help: t('management.start-modpack-help'), run: () => { setType('modpack'); transitionTo('/browse'); } },
+    { icon: 'icons/actions/download', label: t('management.tile-launcher'), help: t('management.start-launcher-help'), run: () => requestCreateAction('launchers') },
+    // Opening a file needs the native picker; the browser preview has none.
+    ...(nativeInstances ? [{ icon: 'icons/content/file', label: t('management.tile-file'), help: t('management.start-file-help'), run: () => requestCreateAction('file') }] : []),
+  ];
   return (
-    <EmptyState
-      icon="icons/rail/library"
-      title={t('management.empty')}
-      description={t('management.empty-description')}
-      suggestionsLabel={t('management.start-label')}
-      suggestions={[
-        { label: t('management.start-new'), description: t('management.start-new-help'), onSelect: () => requestCreateAction('new') },
-        { label: t('management.start-modpack'), description: t('management.start-modpack-help'), onSelect: () => { setType('modpack'); transitionTo('/browse'); } },
-        { label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
-        // Opening a file needs the native picker; the browser preview has none.
-        ...(nativeInstances ? [{ label: t('management.start-file'), description: t('management.start-file-help'), onSelect: () => requestCreateAction('file') }] : []),
-      ]}
-    />
+    <section data-vesta="library-empty" aria-labelledby="library-empty-title">
+      <h2 id="library-empty-title">{t('management.empty')}</h2>
+      <ul data-vesta="library-grid">
+        <For each={starts()}>
+          {(start) => (
+            <li>
+              <div data-vesta="library-card-slot">
+                <button type="button" data-vesta="library-start-tile" data-primary={start.primary ? '' : undefined} title={start.help} onClick={() => start.run()}>
+                  <Icon name={start.icon} size={22} />
+                  <span>{start.label}</span>
+                </button>
+              </div>
+            </li>
+          )}
+        </For>
+      </ul>
+    </section>
   );
 }
 

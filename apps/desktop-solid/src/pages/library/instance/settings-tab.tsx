@@ -238,9 +238,10 @@ export function InstanceSettingsTab(props: {
   const memoryHigh = () => !!(nativeMemory() || !nativeInstances) && draft().maxMemory >= systemMemoryMb() * 0.9;
 
   // The current section is the last one whose top has passed a reading line near the top of
-  // the scroller. Short sections at the end can never reach that line, so over the final
-  // screen of scrolling the line slides down to the bottom edge: every section gets its turn
-  // and the last one is current at the very bottom.
+  // the scroller. Short sections at either end could never claim that line, so it slides: over
+  // the first screen of scrolling it comes in from the top edge (the first section is current
+  // at the very top), and over the last screen it goes down to the bottom edge (the last one
+  // is current at the very bottom). Every section gets its turn.
   onSettled(() => {
     void loadSystemMemory();
     const box = scroller;
@@ -253,11 +254,13 @@ export function InstanceSettingsTab(props: {
       if (!sections.length) return;
       const view = box.clientHeight;
       const remaining = box.scrollHeight - view - box.scrollTop;
-      const top = view * 0.3;
+      const reading = view * 0.3;
+      const top = reading * Math.min(Math.max(box.scrollTop, 0) / view, 1);
       const line = remaining >= view ? top : top + (view - top - 1) * (1 - Math.max(remaining, 0) / view);
       const origin = box.getBoundingClientRect().top;
       let found = sections[0]!;
-      for (const section of sections) {
+      // A page shorter than two screens: the top still belongs to the first section.
+      if (box.scrollTop > 1) for (const section of sections) {
         if (section.getBoundingClientRect().top - origin <= line) found = section;
         else break;
       }

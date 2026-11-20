@@ -2,7 +2,7 @@
 // size, art scrim, status tag and hover action. Actions live in the context menu, as on
 // instance cards.
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, Tooltip } from '@vesta/ui';
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '../../components/icon';
 import { transitionTo } from '../../app/transition';
@@ -54,6 +54,15 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
   };
 
   const open = () => transitionTo(href());
+  // Hover settles back to rest for a moment after the pointer leaves, like an instance card.
+  const [leaving, setLeaving] = createSignal(false, { name: 'server-card:leaving' });
+  let leaveTimer: number | undefined;
+  onCleanup(() => window.clearTimeout(leaveTimer));
+  const leave = () => {
+    setLeaving(true);
+    window.clearTimeout(leaveTimer);
+    leaveTimer = window.setTimeout(() => setLeaving(false), 250);
+  };
 
   const card = (triggerProps: Record<string, unknown>): JSX.Element => (
     <div
@@ -63,11 +72,13 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
       data-preload-server={id()}
       data-status={state().tag?.status ?? 'idle'}
       data-tone={state().tone}
+      data-leaving={leaving() ? '' : undefined}
       role="group"
       aria-label={props.snapshot.connection.name}
       tabindex={0}
       style={{ '--instance-card-image': `url("${serverArt(props.snapshot.connection.serverId || id())}")` } as JSX.CSSProperties}
       onClick={open}
+      onPointerLeave={leave}
       onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); open(); } }}
     >
       <div data-vesta="instance-card-top">
@@ -93,6 +104,8 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
                 {...tooltip}
                 type="button"
                 data-vesta="instance-card-play"
+                data-card-play=""
+                data-running={state().tag?.status === 'running' ? '' : undefined}
                 data-variant={busy() ? 'busy' : quick() === 'start' ? 'launch' : quick() === 'wake' ? 'wake' : quick() === 'sleep' ? 'sleep' : 'kill'}
                 aria-label={quick() && !busy() ? t(actionLabels[quick()!]) : t('servers.lifecycle.sending')}
                 aria-busy={busy() ? 'true' : undefined}
