@@ -460,7 +460,7 @@ export function LibraryPage() {
   return (
     <>
       <Show when={route().section} keyed fallback={
-        <Board showcase={(!nativeInstances || instancesLoaded()) && instances().length > 0}>
+        <Board showcase>
           <Show when={!nativeInstances || instancesLoaded()} fallback={<p role="status">{t('management.loading')}</p>}>
           <Show when={instances().length > 0} fallback={<Show when={tour.open()} fallback={<LibraryEmpty />}><TourDemoCards /></Show>}>
             <LibraryGrid />

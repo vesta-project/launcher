@@ -78,7 +78,7 @@ function ServerList() {
   const single = () => (hosts().length === 1 ? hosts()[0] : undefined);
   const empty = () => serverSnapshots().length === 0 && serverAddJobs().length === 0;
   return (
-    <Board>
+    <Board showcase>
       <ServerErrorNote error={serversListError()} onRetry={() => void refreshServers()} />
       <Switch>
         <Match when={empty() && hosts().length === 0}>
