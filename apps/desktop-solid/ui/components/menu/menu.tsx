@@ -16,6 +16,8 @@ export interface MenuProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   placement?: Placement;
+  /** Open as wide as the trigger, for a row that drops its own list (an account switcher). */
+  sameWidth?: boolean;
 }
 
 export function Menu(props: MenuProps) {
@@ -27,6 +29,7 @@ export function Menu(props: MenuProps) {
       onOpenChange={props.onOpenChange}
       placement={props.placement ?? 'bottom-start'}
       gutter={4}
+      sameWidth={props.sameWidth}
     >
       <KobalteMenu.Trigger as={props.trigger} />
       <KobalteMenu.Portal mount={mount}>

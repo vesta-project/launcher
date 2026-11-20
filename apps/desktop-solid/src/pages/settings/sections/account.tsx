@@ -162,9 +162,27 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
     onFocus: () => setHover({ skin, variant: skinVariant }),
     onBlur: () => setHover(undefined),
   });
-  /** The cape picker: the wardrobe's third shelf. */
-  const capes = () => (
+  /**
+   * Roomy panes keep the account above the wardrobe and capes beside the character (under the
+   * stage when tall, after the skins otherwise). Skinny panes join the account to the stage and
+   * give capes a shelf of their own, so nothing is pushed below a full-width character.
+   */
+  const [narrow, setNarrow] = createSignal(false, { name: 'skinPanelNarrow' });
+  let panel: HTMLDivElement | undefined;
+  onSettled(() => {
+    const element = panel;
+    if (!element) return;
+    const measure = () => setNarrow(element.clientWidth < 720);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+  const shown = () => (shelf() === 'capes' && !narrow() ? 'library' : shelf());
+  /** The cape picker: its own group on roomy panes, the third shelf on skinny ones. */
+  const capes = (heading: boolean) => (
     <>
+      <Show when={heading}><h4>{t('skins.cape')}</h4></Show>
       <div data-vesta="cape-grid" role="radiogroup" aria-label={t('skins.cape')}>
         <button
           type="button"
@@ -210,7 +228,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
   );
   return (
     <>
-      <div data-vesta="skin-panel" id="skin-panel" data-disabled={supported() ? undefined : ''}>
+      <div data-vesta="skin-panel" id="skin-panel" ref={(element: HTMLDivElement) => (panel = element)} data-narrow={narrow() ? '' : undefined} data-disabled={supported() ? undefined : ''}>
         <Show when={!supported()}>
           <p data-vesta="skin-note" role="note">
             {t('skins.unsupported')}
@@ -224,9 +242,9 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
           )}
         </Show>
         <div data-vesta="skin-layout">
-          {/* Who you play as heads the stage, so the account and the character read as one. */}
           <div data-vesta="skin-stage">
-            {props.switcher}
+            {/* Skinny panes: who you play as heads the stage, so the two read as one. */}
+            <Show when={narrow()}>{props.switcher}</Show>
             <div data-vesta="skin-stage-view">
               <SkinViewer
                 skin={hover()?.skin ?? currentSkin()}
@@ -262,20 +280,22 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
             </Button>
             <SaveIndicator status={skins.status()} />
             </div>
+            <Show when={!narrow()}><section data-vesta="skin-group" data-capes="stage">{capes(true)}</section></Show>
           </div>
           <div data-vesta="skin-side">
+            <Show when={!narrow()}>{props.switcher}</Show>
             <section data-vesta="skin-group">
               <SegmentedControl
                 aria-label={t('skins.shelf')}
-                value={shelf()}
+                value={shown()}
                 onChange={(value) => setShelf(value as 'library' | 'presets' | 'capes')}
                 options={[
                   { value: 'library', label: t('skins.library') },
                   { value: 'presets', label: t('skins.presets') },
-                  { value: 'capes', label: t('skins.capes') },
+                  ...(narrow() ? [{ value: 'capes', label: t('skins.capes') }] : []),
                 ]}
               />
-              <Show when={shelf() === 'library'}>
+              <Show when={shown() === 'library'}>
                 <Show
                   when={profile()?.library.length}
                   fallback={supported() ? <p data-vesta="skin-hint">{t('skins.library-empty')}</p> : undefined}
@@ -311,7 +331,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                   </ul>
                 </Show>
               </Show>
-              <Show when={shelf() === 'presets'}>
+              <Show when={shown() === 'presets'}>
                 <Show
                   when={skins.presets()}
                   fallback={
@@ -359,8 +379,9 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                   )}
                 </Show>
               </Show>
-              <Show when={shelf() === 'capes'}>{capes()}</Show>
+              <Show when={shown() === 'capes'}>{capes(false)}</Show>
             </section>
+            <Show when={!narrow()}><section data-vesta="skin-group" data-capes="side">{capes(true)}</section></Show>
           </div>
         </div>
       </div>
@@ -377,7 +398,7 @@ function AccountSwitcher(props: { onManage: () => void }) {
   const others = () => accounts().filter((account) => account.uuid !== current()?.uuid);
   // The whole row opens the menu, so the name keeps the room a separate button would take.
   return (
-    <Menu placement="bottom-start" trigger={(menuProps) => (
+    <Menu placement="bottom-start" sameWidth trigger={(menuProps) => (
       <button {...menuProps} type="button" data-vesta="account-current"
         aria-label={t(others().length ? 'prefs.account.switch' : 'prefs.account.add-short')}>
         <Show when={current()} fallback={<span data-vesta="account-current-copy"><strong>{t('prefs.account.none')}</strong></span>}>

@@ -243,6 +243,25 @@
     margin-block-end: var(--vesta-space-2);
   }
 
+  /* Roomy panes: capes follow the skins, or sit under the stage when the pane is also tall,
+     so the picker is beside the character it dresses. Skinny panes give them a shelf instead. */
+  :where([data-vesta='skin-group'][data-capes='stage']) {
+    display: none;
+  }
+
+  @container pane (min-width: 761px) {
+    @media (min-height: 760px) {
+      :where([data-vesta='skin-group'][data-capes='stage']) {
+        display: flex;
+        margin-block-start: var(--vesta-space-4);
+      }
+
+      :where([data-vesta='skin-group'][data-capes='side']) {
+        display: none;
+      }
+    }
+  }
+
   :where([data-vesta='cape-grid']) {
     display: flex;
     flex-wrap: wrap;
