@@ -134,7 +134,7 @@ function readCollapsedPacks(): Set<string> {
  */
 function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
   const skins = createSkinController(() => props.account);
-  const [shelf, setShelf] = createSignal<'library' | 'presets'>('library');
+  const [shelf, setShelf] = createSignal<'library' | 'presets' | 'capes'>('library', { name: 'skinShelf' });
   const [collapsedPacks, setCollapsedPacks] = createSignal(readCollapsedPacks(), { name: 'skinPacksCollapsed' });
   const togglePack = (name: string, collapsed: boolean) => {
     const next = new Set(collapsedPacks());
@@ -162,10 +162,9 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
     onFocus: () => setHover({ skin, variant: skinVariant }),
     onBlur: () => setHover(undefined),
   });
-  /** The cape picker. Wide, tall windows show it under the stage; otherwise it follows the skins. */
+  /** The cape picker: the wardrobe's third shelf. */
   const capes = () => (
     <>
-      <h4>{t('skins.cape')}</h4>
       <div data-vesta="cape-grid" role="radiogroup" aria-label={t('skins.cape')}>
         <button
           type="button"
@@ -225,7 +224,9 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
           )}
         </Show>
         <div data-vesta="skin-layout">
+          {/* Who you play as heads the stage, so the account and the character read as one. */}
           <div data-vesta="skin-stage">
+            {props.switcher}
             <div data-vesta="skin-stage-view">
               <SkinViewer
                 skin={hover()?.skin ?? currentSkin()}
@@ -261,18 +262,17 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
             </Button>
             <SaveIndicator status={skins.status()} />
             </div>
-            <section data-vesta="skin-group" data-capes="stage">{capes()}</section>
           </div>
           <div data-vesta="skin-side">
-            {props.switcher}
             <section data-vesta="skin-group">
               <SegmentedControl
                 aria-label={t('skins.shelf')}
                 value={shelf()}
-                onChange={(value) => setShelf(value as 'library' | 'presets')}
+                onChange={(value) => setShelf(value as 'library' | 'presets' | 'capes')}
                 options={[
                   { value: 'library', label: t('skins.library') },
                   { value: 'presets', label: t('skins.presets') },
+                  { value: 'capes', label: t('skins.capes') },
                 ]}
               />
               <Show when={shelf() === 'library'}>
@@ -359,8 +359,8 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                   )}
                 </Show>
               </Show>
+              <Show when={shelf() === 'capes'}>{capes()}</Show>
             </section>
-            <section data-vesta="skin-group" data-capes="side">{capes()}</section>
           </div>
         </div>
       </div>
@@ -375,39 +375,39 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
 function AccountSwitcher(props: { onManage: () => void }) {
   const current = () => activeAccount();
   const others = () => accounts().filter((account) => account.uuid !== current()?.uuid);
+  // The whole row opens the menu, so the name keeps the room a separate button would take.
   return (
-    <section data-vesta="account-current" aria-label={t('prefs.account.accounts')}>
-      <Show when={current()} fallback={<span data-vesta="account-current-copy"><strong>{t('prefs.account.none')}</strong></span>}>
-        {(account) => (
-          <>
-            <Head uuid={account().uuid} size={44} />
-            <span data-vesta="account-current-copy">
-              <small>{t('prefs.account.playing-as')}</small>
-              <strong>{account().username}</strong>
-            </span>
-          </>
-        )}
-      </Show>
-      <Menu placement="bottom-end" trigger={(menuProps) => (
-        <Button {...menuProps} size="sm" variant="outline" iconEnd={<Icon name="icons/controls/chevron-down" size={14} />}>
-          {t(others().length ? 'prefs.account.switch' : 'prefs.account.add-short')}
-        </Button>
-      )}>
-        <For each={others()}>
+    <Menu placement="bottom-start" trigger={(menuProps) => (
+      <button {...menuProps} type="button" data-vesta="account-current"
+        aria-label={t(others().length ? 'prefs.account.switch' : 'prefs.account.add-short')}>
+        <Show when={current()} fallback={<span data-vesta="account-current-copy"><strong>{t('prefs.account.none')}</strong></span>}>
           {(account) => (
-            <MenuItem icon={<Head uuid={account.uuid} size={20} />} onSelect={() => void switchAccount(account.uuid)}>
-              {account.username}
-              <Show when={account.is_expired}><span data-vesta="account-menu-note"> · {t('prefs.account.expired')}</span></Show>
-            </MenuItem>
+            <>
+              <Head uuid={account().uuid} size={40} />
+              <span data-vesta="account-current-copy">
+                <small>{t('prefs.account.playing-as')}</small>
+                <strong>{account().username}</strong>
+              </span>
+            </>
           )}
-        </For>
-        <Show when={others().length}><MenuSeparator /></Show>
-        <MenuItem icon={<Icon name="icons/actions/add" />} onSelect={() => void addAccount()}>{t('prefs.account.add-microsoft')}</MenuItem>
-        <Show when={accounts().length}>
-          <MenuItem icon={<Icon name="icons/content/people" />} onSelect={props.onManage}>{t('prefs.account.manage')}</MenuItem>
         </Show>
-      </Menu>
-    </section>
+        <Icon name="icons/controls/chevron-down" size={16} />
+      </button>
+    )}>
+      <For each={others()}>
+        {(account) => (
+          <MenuItem icon={<Head uuid={account.uuid} size={20} />} onSelect={() => void switchAccount(account.uuid)}>
+            {account.username}
+            <Show when={account.is_expired}><span data-vesta="account-menu-note"> · {t('prefs.account.expired')}</span></Show>
+          </MenuItem>
+        )}
+      </For>
+      <Show when={others().length}><MenuSeparator /></Show>
+      <MenuItem icon={<Icon name="icons/actions/add" />} onSelect={() => void addAccount()}>{t('prefs.account.add-microsoft')}</MenuItem>
+      <Show when={accounts().length}>
+        <MenuItem icon={<Icon name="icons/content/people" />} onSelect={props.onManage}>{t('prefs.account.manage')}</MenuItem>
+      </Show>
+    </Menu>
   );
 }
 

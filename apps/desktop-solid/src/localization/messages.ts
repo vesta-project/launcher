@@ -1903,6 +1903,7 @@ export const messageIds = [
   "skins.delete",
   "skins.current",
   "skins.cape",
+  "skins.capes",
   "skins.cape-none",
   "skins.capes-empty",
   "skins.failed",

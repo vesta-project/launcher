@@ -9,6 +9,7 @@ skins-apply = Wear { $name }
 skins-delete = Delete { $name } from library
 skins-current = Current skin
 skins-cape = Cape
+skins-capes = Capes
 skins-cape-none = No cape
 skins-capes-empty = This account doesn't own any capes.
 skins-failed = Couldn't update your skin: { $message }

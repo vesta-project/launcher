@@ -243,25 +243,6 @@
     margin-block-end: var(--vesta-space-2);
   }
 
-  /* Capes follow the skins by default. A wide, tall pane has room under the stage instead,
-     so the picker sits with the character it dresses and the skin shelf gets the column. */
-  :where([data-vesta='skin-group'][data-capes='stage']) {
-    display: none;
-  }
-
-  @container pane (min-width: 761px) {
-    @media (min-height: 760px) {
-      :where([data-vesta='skin-group'][data-capes='stage']) {
-        display: flex;
-        margin-block-start: var(--vesta-space-4);
-      }
-
-      :where([data-vesta='skin-group'][data-capes='side']) {
-        display: none;
-      }
-    }
-  }
-
   :where([data-vesta='cape-grid']) {
     display: flex;
     flex-wrap: wrap;
@@ -471,8 +452,7 @@
   }
 
   :where([data-vesta='skin-stage']) > :where([data-vesta='skin-stage-view']) {
-    border-end-start-radius: 0;
-    border-end-end-radius: 0;
+    border-radius: 0;
   }
 
   :where([data-vesta='skin-stage-bar']) {
@@ -504,13 +484,43 @@
     padding: var(--vesta-space-3);
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-container);
-    background:
-      radial-gradient(80% 160% at 0% 50%, color-mix(in oklab, var(--vesta-color-accent) 14%, transparent), transparent 70%),
-      var(--vesta-color-surface-raised);
+    background: var(--vesta-color-surface-raised);
   }
 
-  :where([data-vesta='account-current']) > :where([data-vesta='button']) {
-    margin-inline-start: auto;
+  /* On the stage it is the stage's head: joined to the top edge, like the toolbar at the bottom. */
+  :where([data-vesta='skin-stage']) > :where([data-vesta='account-current']) {
+    padding: var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-2) var(--vesta-space-3);
+    border-block-end: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  /* The row is the switcher: a button that reads as the account, its chevron at the end. */
+  :where(button[data-vesta='account-current']) {
+    inline-size: 100%;
+    color: var(--vesta-color-text);
+    font: inherit;
+    text-align: start;
+    cursor: default;
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where(button[data-vesta='account-current']:hover, button[data-vesta='account-current'][aria-expanded='true']) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where(button[data-vesta='account-current']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='account-current-copy']) {
+    flex: 1;
+  }
+
+  :where([data-vesta='account-current']) > :where([data-vesta='icon']) {
+    flex: none;
+    color: var(--vesta-color-text-muted);
   }
 
   :where([data-vesta='account-current-copy']) {
@@ -566,13 +576,31 @@
     color: var(--vesta-color-accent-text);
   }
 
+  /* Mid widths keep the stage beside the wardrobe, narrower and shorter, so your skins stay in
+     view instead of sitting under a full-width character. */
   @container pane (max-width: 760px) {
+    :where([data-vesta='skin-layout']) {
+      grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+      gap: var(--vesta-space-4);
+    }
+
+    :where([data-vesta='skin-stage-view']) {
+      min-block-size: clamp(16rem, 44vh, 24rem);
+    }
+  }
+
+  /* Narrow: one column, with a short stage so the wardrobe starts on the first screen. */
+  @container pane (max-width: 560px) {
     :where([data-vesta='skin-layout']) {
       grid-template-columns: minmax(0, 1fr);
     }
 
     :where([data-vesta='skin-stage']) {
       position: static;
+    }
+
+    :where([data-vesta='skin-stage-view']) {
+      min-block-size: 14rem;
     }
   }
 }
