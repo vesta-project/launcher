@@ -18,11 +18,11 @@
   },
   "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "@solidjs/diagnostics": "^2.0.0-rc.20",
-    "@solidjs/vite-plugin": "^3.0.0-next.54",
+    "@solidjs/diagnostics": "^2.0.3",
+    "@solidjs/vite-plugin": "^3.0.1",
     "@tauri-apps/cli": "2.12.4",
     "@types/node": "^26.6.6",
-    "eslint-plugin-solid": "~0.18.1",
+    "eslint-plugin-solid": "~0.20.0",
     "oxlint": "~1.90.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.5"
@@ -30,8 +30,8 @@
   "dependencies": {
     "@fluent/bundle": "^0.19.1",
     "@kobalte/core": "2.0.0-alpha.2",
-    "@solid-primitives/props": "4.0.0-next.5",
-    "@solidjs/web": "^2.0.0-rc.20",
+    "@solid-primitives/props": "4.0.0",
+    "@solidjs/web": "^2.0.3",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
@@ -41,7 +41,7 @@
     "dompurify": "^3.4.17",
     "marked": "^18.1.2",
     "skinview3d": "^3.4.2",
-    "solid-js": "^2.0.0-rc.20"
+    "solid-js": "^2.0.3"
   },
   "patchedDependencies": {
     "@kobalte/core@2.0.0-alpha.2": "patches/@kobalte%2Fcore@2.0.0-alpha.2.patch"

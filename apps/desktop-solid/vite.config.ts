@@ -6,7 +6,6 @@ export default defineConfig({
   // the entries around src/App.tsx (wrapped in src/Document.tsx) and `vite build`
   // prerenders the shell into a purely static dist/client.
   plugins: [
-    // Keep diagnostics enabled using the installed RC plugin options.
     solid({ start: true, diagnostics: true }), // add `ssr: true` for streaming SSR
   ],
   resolve: {
