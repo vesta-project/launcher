@@ -117,6 +117,17 @@ function SaveIndicator(props: { status: SaveState }) {
   );
 }
 
+/** Which preset packs are folded away; remembered on this device only. */
+const PACKS_KEY = 'vesta:skin-packs-collapsed';
+function readCollapsedPacks(): Set<string> {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(PACKS_KEY) ?? '[]');
+    return new Set(Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
 /**
  * The wardrobe: the character on a stage at the left, under its name like in game; who you are
  * playing as, then skins and capes at the right. Uses the page's full width.
@@ -124,6 +135,15 @@ function SaveIndicator(props: { status: SaveState }) {
 function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
   const skins = createSkinController(() => props.account);
   const [shelf, setShelf] = createSignal<'library' | 'presets'>('library');
+  const [collapsedPacks, setCollapsedPacks] = createSignal(readCollapsedPacks(), { name: 'skinPacksCollapsed' });
+  const togglePack = (name: string, collapsed: boolean) => {
+    const next = new Set(collapsedPacks());
+    if (collapsed) next.add(name);
+    else next.delete(name);
+    if (next.size === collapsedPacks().size && [...next].every((item) => collapsedPacks().has(item))) return;
+    setCollapsedPacks(next);
+    try { localStorage.setItem(PACKS_KEY, JSON.stringify([...next])); } catch { /* a convenience only */ }
+  };
   const [hover, setHover] = createSignal<{ skin: string; variant: SkinVariant }>();
   const supported = () => canManageSkin(props.account);
   const profile = () => skins.profile();
@@ -142,6 +162,47 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
     onFocus: () => setHover({ skin, variant: skinVariant }),
     onBlur: () => setHover(undefined),
   });
+  /** The cape picker. Wide, tall windows show it under the stage; otherwise it follows the skins. */
+  const capes = () => (
+    <>
+      <h4>{t('skins.cape')}</h4>
+      <div data-vesta="cape-grid" role="radiogroup" aria-label={t('skins.cape')}>
+        <button
+          type="button"
+          role="radio"
+          data-vesta="cape-option"
+          aria-checked={view()?.capeId ? 'false' : 'true'}
+          aria-label={t('skins.cape-none')}
+          data-tip={t('skins.cape-none')}
+          disabled={locked()}
+          onClick={() => skins.setCape(undefined)}
+        >
+          <span data-vesta="cape-none" aria-hidden="true">
+            <Icon name="icons/actions/close" size={14} />
+          </span>
+        </button>
+        <For each={owned()}>
+          {(cape) => (
+            <button
+              type="button"
+              role="radio"
+              data-vesta="cape-option"
+              aria-checked={view()?.capeId === cape.id ? 'true' : 'false'}
+              aria-label={cape.name}
+              data-tip={cape.name}
+              disabled={locked()}
+              onClick={() => skins.setCape(cape.id)}
+            >
+              <CapeFace url={cape.url} />
+            </button>
+          )}
+        </For>
+      </div>
+      <Show when={supported() && profile() && !owned().length}>
+        <p data-vesta="skin-hint">{t('skins.capes-empty')}</p>
+      </Show>
+    </>
+  );
   createEffect(
     () => shelf(),
     (value) => {
@@ -200,6 +261,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
             </Button>
             <SaveIndicator status={skins.status()} />
             </div>
+            <section data-vesta="skin-group" data-capes="stage">{capes()}</section>
           </div>
           <div data-vesta="skin-side">
             {props.switcher}
@@ -260,8 +322,16 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                     <div data-vesta="skin-packs">
                       <For each={packs()}>
                         {(pack: PresetPack) => (
-                          <div data-vesta="skin-pack">
-                            <h5>{pack.name}</h5>
+                          <details
+                            data-vesta="skin-pack"
+                            open={!collapsedPacks().has(pack.name)}
+                            onToggle={(event) => togglePack(pack.name, !event.currentTarget.open)}
+                          >
+                            <summary data-vesta="skin-pack-head">
+                              <Icon name="icons/controls/chevron-right" size={12} />
+                              <span>{pack.name}</span>
+                              <small>{pack.skins.length}</small>
+                            </summary>
                             <ul data-vesta="skin-library">
                               <For each={pack.skins}>
                                 {(preset: Preset) => (
@@ -282,7 +352,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                                 )}
                               </For>
                             </ul>
-                          </div>
+                          </details>
                         )}
                       </For>
                     </div>
@@ -290,44 +360,7 @@ function SkinPanel(props: { account: Account; switcher: JSX.Element }) {
                 </Show>
               </Show>
             </section>
-            <section data-vesta="skin-group">
-              <h4>{t('skins.cape')}</h4>
-              <div data-vesta="cape-grid" role="radiogroup" aria-label={t('skins.cape')}>
-                <button
-                  type="button"
-                  role="radio"
-                  data-vesta="cape-option"
-                  aria-checked={view()?.capeId ? 'false' : 'true'}
-                  aria-label={t('skins.cape-none')}
-                  data-tip={t('skins.cape-none')}
-                  disabled={locked()}
-                  onClick={() => skins.setCape(undefined)}
-                >
-                  <span data-vesta="cape-none" aria-hidden="true">
-                    <Icon name="icons/actions/close" size={14} />
-                  </span>
-                </button>
-                <For each={owned()}>
-                  {(cape) => (
-                    <button
-                      type="button"
-                      role="radio"
-                      data-vesta="cape-option"
-                      aria-checked={view()?.capeId === cape.id ? 'true' : 'false'}
-                      aria-label={cape.name}
-                      data-tip={cape.name}
-                      disabled={locked()}
-                      onClick={() => skins.setCape(cape.id)}
-                    >
-                      <CapeFace url={cape.url} />
-                    </button>
-                  )}
-                </For>
-              </div>
-              <Show when={supported() && profile() && !owned().length}>
-                <p data-vesta="skin-hint">{t('skins.capes-empty')}</p>
-              </Show>
-            </section>
+            <section data-vesta="skin-group" data-capes="side">{capes()}</section>
           </div>
         </div>
       </div>
