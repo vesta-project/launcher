@@ -5,6 +5,7 @@ import { ACCOUNT_TYPE_GUEST, accounts, activeAccount, usePlayerHead } from '../.
 import { instances } from '../../features/instances/catalog';
 import { tour } from '../../features/onboarding/tour';
 import { whatsNew, type FeatureRelease } from '../../features/whats-new';
+import { openChangelog } from '../../features/changelog/dialog-state';
 import { t } from '../../localization';
 import { Atmosphere } from '../../pages/welcome/atmosphere';
 import { Warp } from '../../pages/welcome/welcome-warp';
@@ -45,6 +46,10 @@ function Showcase(props: { release: FeatureRelease }) {
         <header data-vesta="whats-new-head">
           <span data-vesta="whats-new-kicker">{t('whats-new.kicker')}</span>
           <h2 id="whats-new-heading" data-vesta="whats-new-title">{t(props.release.title)}</h2>
+          {/* Everything else in the release is one click away, so the reel can stay short. */}
+          <Button size="sm" variant="ghost" class="whats-new-changelog" onClick={() => { whatsNew.close(); openChangelog(); }}>
+            {t('whats-new.full-changelog')}
+          </Button>
           <Button size="sm" variant="ghost" class="whats-new-close" aria-label={t('nav.close')} onClick={whatsNew.close}
             icon={<Icon name="icons/actions/close" size={14} />} />
         </header>

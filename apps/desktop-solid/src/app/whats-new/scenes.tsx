@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { For, Show, createMemo, onSettled, untrack } from 'solid-js';
+import { For, Show, createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import art1 from '../../assets/images/placeholders/placeholder-image1.jpg';
 import art2 from '../../assets/images/placeholders/placeholder-image2.png';
 import art3 from '../../assets/images/placeholders/placeholder-image3.png';
@@ -11,6 +11,8 @@ import type { SceneName } from '../../features/whats-new';
 import { resolveThemeTokens, themePresets, type ThemeValues } from '../../features/settings/theme-model';
 import { setting } from '../../features/settings/config';
 import { t } from '../../localization';
+import { searchResources } from '../../features/browse/browse-api';
+import { hostQuery, normalizeQuery, type ResourceType } from '../../features/browse/browse-model';
 import { resolvedScheme } from '../preferences';
 import './scenes.css';
 
@@ -109,7 +111,7 @@ function LibraryBoard() {
         {(card, index) => (
           <li data-vesta="scene-card" data-current={index() === 0 ? '' : undefined} style={{ 'background-image': `url(${card.art})` }}>
             <Show when={index() === 0}>
-              <span data-vesta="scene-play"><Icon name="icons/actions/play" size={14} />{t('instance.play')}</span>
+              <span data-vesta="scene-play"><Icon name="icons/actions/play" size={14} /></span>
             </Show>
             <b>{card.name}</b>
             <small>{card.meta}</small>
@@ -214,14 +216,59 @@ function ServerScene() {
   );
 }
 
-const listings = [
+interface SceneListing { name: string; players: [number, number]; pack: string | null; art: string }
+interface SceneResult { name: string; summary: string; icon: string | null }
+
+// What the scenes show when Modrinth can't be reached (offline, or the browser preview).
+const sampleListings: SceneListing[] = [
   { name: 'Hearthstead SMP', players: [214, 500], pack: 'Cobblemon', art: art2 },
   { name: 'Pixel Plains', players: [88, 200], pack: 'Fabulously Optimized', art: art3 },
   { name: 'Northwatch', players: [41, 100], pack: 'Prominence II RPG', art: art4 },
 ];
+const sampleResults: Record<string, [string, string][]> = {
+  performance: [['Sodium', 'Rendering engine with big frame rate gains'], ['Lithium', 'General-purpose optimisation for the game'], ['FerriteCore', 'Uses less memory'], ['ModernFix', 'Faster launch, less memory'], ['Entity Culling', "Skips drawing what you can't see"], ['ImmediatelyFast', 'Speeds up immediate-mode rendering']],
+  minimap: [["Xaero's Minimap", 'A minimap that keeps up with you'], ['JourneyMap', 'Real-time mapping in game or a browser'], ['VoxelMap', 'Minimap and world map'], ['Antique Atlas', 'A hand-drawn world map book'], ['Map Atlases', 'Atlases that fill in as you explore'], ['FTB Chunks', 'Minimap with chunk claiming']],
+};
+const queries = ['performance', 'minimap'] as const;
+
+/*
+ * Real listings from Modrinth, through Browse's own search, fetched once per session the first
+ * time a scene that needs them is shown. Until they arrive (or if they can't), the samples above.
+ */
+const [liveListings, setLiveListings] = createSignal<SceneListing[] | null>(null, { name: 'scene:live-listings' });
+const [liveResults, setLiveResults] = createSignal<Record<string, SceneResult[]> | null>(null, { name: 'scene:live-results' });
+let fetched = false;
+const search = (type: ResourceType, text: string, sort: string, size: number) =>
+  searchResources('modrinth', hostQuery(normalizeQuery({
+    type, source: 'modrinth', text, gameVersion: null, loader: null, client: false, server: false, creator: null,
+    categories: [], sort, sortOrder: 'desc', pageSize: size, page: 1,
+  })));
+function fetchLive() {
+  if (fetched) return;
+  fetched = true;
+  void search('server', '', 'relevance', 3).then((response) => {
+    const servers = response.hits.filter((hit) => hit.server?.ping).slice(0, 3);
+    if (servers.length < 3) return;
+    setLiveListings(servers.map((hit, index) => ({
+      name: hit.name,
+      players: [hit.server!.ping!.online, hit.server!.ping!.max],
+      pack: hit.server!.content.kind === 'modpack' ? hit.server!.content.projectName : null,
+      art: hit.icon_url ?? [art2, art3, art4][index]!,
+    })));
+  }).catch(() => {});
+  void Promise.all(queries.map((text) => search('mod', text, 'relevance', 6))).then((responses) => {
+    if (responses.some((response) => response.hits.length < 6)) return;
+    setLiveResults(Object.fromEntries(queries.map((text, index) => [text, responses[index]!.hits.slice(0, 6)
+      .map((hit) => ({ name: hit.name, summary: hit.summary, icon: hit.icon_url }))])));
+  }).catch(() => {});
+}
+const listings = () => liveListings() ?? sampleListings;
+const results = (text: string): SceneResult[] =>
+  liveResults()?.[text] ?? sampleResults[text]!.map(([name, summary]) => ({ name, summary, icon: null }));
 
 /** Browse lists servers with who's on; Install & play sets the pack up and the instance lands in the rail. */
 function JoinScene() {
+  fetchLive();
   return (
     <Fit width={780} height={470}>
       <Window place="browse" crumbs={[t('nav.browse'), t('browse.type-server')]} instances={[art1, art5]}
@@ -229,14 +276,14 @@ function JoinScene() {
         <div data-vesta="scene-browse">
           <span data-vesta="scene-search"><Icon name="icons/content/search" size={14} /><span>{t('browse.type-server')}</span></span>
           <ul data-vesta="scene-listings">
-            <For each={listings}>
+            <For each={listings()}>
               {(listing, index) => (
                 <li data-vesta="scene-listing" data-current={index() === 0 ? '' : undefined}>
                   <img src={listing.art} alt="" />
                   <span data-vesta="scene-listing-text">
                     <b>{listing.name}</b>
                     <small><i data-vesta="scene-live" />{t('browse.server-players', { count: listing.players[0]!, max: listing.players[1]! })}</small>
-                    <small>{t('browse.server-modpack', { name: listing.pack })}</small>
+                    <Show when={listing.pack}>{(pack) => <small>{t('browse.server-modpack', { name: pack() })}</small>}</Show>
                   </span>
                   <Show when={index() === 0} fallback={<span data-vesta="scene-button" data-tone="outline">{t('browse.server-play')}</span>}>
                     <span data-vesta="scene-join-button">
@@ -255,31 +302,29 @@ function JoinScene() {
   );
 }
 
-const searches: { query: string; results: [string, string][] }[] = [
-  { query: 'performance', results: [['Sodium', 'Rendering engine with big frame rate gains'], ['Lithium', 'General-purpose optimisation for the game'], ['FerriteCore', 'Uses less memory'], ['ModernFix', 'Faster launch, less memory'], ['Entity Culling', "Skips drawing what you can't see"], ['ImmediatelyFast', 'Speeds up immediate-mode rendering']] },
-  { query: 'minimap', results: [["Xaero's Minimap", 'A minimap that keeps up with you'], ['JourneyMap', 'Real-time mapping in game or a browser'], ['VoxelMap', 'Minimap and world map'], ['Antique Atlas', 'A hand-drawn world map book'], ['Map Atlases', 'Atlases that fill in as you explore'], ['FTB Chunks', 'Minimap with chunk claiming']] },
-];
-
 /** Browse answering at once: each search lands with its results already there. */
 function SpeedScene() {
+  fetchLive();
   return (
     <Fit width={780} height={470}>
       <Window place="browse" crumbs={[t('nav.browse'), t('browse.type-mod')]} instances={[art1, art5]}>
         <div data-vesta="scene-browse">
           <span data-vesta="scene-search">
             <Icon name="icons/content/search" size={14} />
-            <For each={searches}>{(search, index) => <span data-vesta="scene-speed-query" data-set={index()}>{search.query}</span>}</For>
+            <For each={[...queries]}>{(text, index) => <span data-vesta="scene-speed-query" data-set={index()}>{text}</span>}</For>
           </span>
-          <For each={searches}>
-            {(search, set) => (
+          <For each={[...queries]}>
+            {(text, set) => (
               <ul data-vesta="scene-speed-results" data-set={set()}>
-                <For each={search.results}>
-                  {([name, summary], index) => (
+                <For each={results(text)}>
+                  {(result, index) => (
                     <li data-vesta="scene-result" style={{ '--r': index() }}>
-                      <span data-vesta="scene-result-initial" style={{ '--tint': (set() * 6 + index()) * 47 }}>{name.charAt(0)}</span>
+                      <Show when={result.icon} fallback={<span data-vesta="scene-result-initial" style={{ '--tint': (set() * 6 + index()) * 47 }}>{result.name.charAt(0)}</span>}>
+                        {(icon) => <img data-vesta="scene-result-icon" src={icon()} alt="" />}
+                      </Show>
                       <span data-vesta="scene-listing-text">
-                        <b>{name}</b>
-                        <small>{summary}</small>
+                        <b>{result.name}</b>
+                        <small>{result.summary}</small>
                       </span>
                     </li>
                   )}

@@ -1,7 +1,7 @@
 import { navigate } from "../../app/router";
 import { nativeRecords } from "../instances/native-service";
 import { notificationDestination } from "./notification-routes";
-import { openChangelog } from "../changelog/dialog-state";
+import { openUpdateNotes } from "../changelog/dialog-state";
 import { openExternal } from "../links/external-links";
 import { t } from "../../localization";
 import { createMemo, createRoot, createSignal } from "solid-js";
@@ -87,7 +87,7 @@ async function invokeAction(
   if (action.id === "navigate") {
     const destination = payload ? notificationDestination(payload, nativeRecords()) : undefined;
     if (!destination) throw new Error(t("activity.action-unavailable"));
-    if ('dialog' in destination) openChangelog();
+    if ('dialog' in destination) await openUpdateNotes();
     else navigate(destination.route);
     return;
   }

@@ -6,6 +6,7 @@ whats-new-progress = { $count } of { $total }
 whats-new-back = Back
 whats-new-next = Next
 whats-new-done = Let's go
+whats-new-full-changelog = Full changelog
 whats-new-tour = Take the tour
 whats-new-jump-in = Jump in
 whats-new-watch = Watch the highlights

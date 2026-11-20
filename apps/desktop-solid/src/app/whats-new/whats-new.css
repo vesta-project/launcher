@@ -48,14 +48,21 @@
 
   :where([data-vesta='whats-new-head']) {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     align-items: start;
-    gap: 2px var(--vesta-space-3);
+    gap: 2px var(--vesta-space-1);
+  }
+
+  :where([data-vesta='whats-new-head']) .whats-new-changelog {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
   }
 
   :where([data-vesta='whats-new-head']) .whats-new-close {
     grid-row: 1 / span 2;
-    grid-column: 2;
+    grid-column: 3;
+    align-self: center;
   }
 
   :where([data-vesta='whats-new-kicker']) {
@@ -185,7 +192,7 @@
 
   :where([data-vesta='reel-body']) {
     margin: 0;
-    max-width: 52ch;
+    max-width: 72ch;
     color: var(--vesta-color-text-muted);
     line-height: 1.5;
   }

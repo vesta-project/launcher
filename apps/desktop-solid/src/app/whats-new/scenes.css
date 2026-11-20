@@ -261,20 +261,20 @@
     box-shadow: 0 0 0 1px var(--vesta-color-accent);
   }
 
+  /* Icon only, like the real card's play button. */
   :where([data-vesta='scene-play']) {
     position: absolute;
     inset-block-start: 10px;
     inset-inline-end: 10px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    block-size: 26px;
-    padding-inline: 10px;
+    display: grid;
+    place-items: center;
+    inline-size: 36px;
+    block-size: 36px;
+    border: var(--vesta-border-width) solid color-mix(in oklab, var(--vesta-color-success) 70%, var(--vesta-color-media-text));
     border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-accent);
-    color: var(--vesta-color-on-accent);
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
+    background: color-mix(in oklab, var(--vesta-color-success) 90%, var(--vesta-color-media-shade));
+    color: var(--vesta-color-on-success, var(--vesta-color-media-text));
+    box-shadow: var(--vesta-shadow-md);
     text-shadow: none;
   }
 
@@ -718,6 +718,14 @@
 
   :where([data-vesta='scene-speed-results'][data-set='1']) > [data-vesta='scene-result'] {
     animation-delay: calc(var(--scene-run) * 0.64 + var(--r) * 30ms);
+  }
+
+  :where([data-vesta='scene-result-icon']) {
+    flex: none;
+    inline-size: 48px;
+    block-size: 48px;
+    border-radius: var(--vesta-radius-lg);
+    object-fit: cover;
   }
 
   :where([data-vesta='scene-result-initial']) {
