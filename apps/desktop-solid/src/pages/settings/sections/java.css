@@ -79,6 +79,28 @@
     background: color-mix(in oklab, var(--vesta-color-accent) 7%, transparent);
   }
 
+  /* Any installed runtime row is the control that picks it. */
+  :where([data-vesta='prefs-java'] li[data-pickable]) {
+    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='prefs-java'] li[data-pickable]:hover) {
+    background: var(--vesta-color-fill-hover);
+  }
+
+  :where([data-vesta='prefs-java'] li[data-pickable]:active) {
+    background: var(--vesta-color-fill-active);
+  }
+
+  :where([data-vesta='prefs-java'] li[data-pickable]:hover [data-vesta='prefs-java-radio']) {
+    border-color: var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='prefs-java'] li[role='radio']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
   :where([data-vesta='prefs-java-radio']) {
     flex: none;
     inline-size: 14px;

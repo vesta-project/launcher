@@ -193,12 +193,33 @@ export function JavaSettings() {
                   </Button>
                 </Show>
               </header>
-              <ul>
+              {/* The whole row picks the runtime: click it, or focus it and press Enter or Space.
+                  Its own buttons (test, more) keep their clicks. A runtime that isn't
+                  downloaded yet can't be picked; its row offers the download instead. */}
+              <ul role="radiogroup" aria-label={environment.name}>
                 <For each={environment.runtimes}>
                   {(runtime) => {
                     const id = key(environment.major, runtime);
+                    const pickable = () => !!runtime.path && !runtime.active;
+                    const pick = (event: Event) => {
+                      if ((event.target as Element).closest('button, [role="menu"]')) return;
+                      if (pickable()) void activate(environment.major, runtime);
+                    };
                     return (
-                      <li data-active={runtime.active ? '' : undefined}>
+                      <li
+                        data-active={runtime.active ? '' : undefined}
+                        data-pickable={pickable() ? '' : undefined}
+                        role="radio"
+                        aria-checked={runtime.active ? 'true' : 'false'}
+                        aria-disabled={runtime.path ? undefined : 'true'}
+                        tabindex={runtime.path ? 0 : -1}
+                        onClick={pick}
+                        onKeyDown={(event) => {
+                          if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                          event.preventDefault();
+                          pick(event);
+                        }}
+                      >
                         <span data-vesta="prefs-java-radio" aria-hidden="true" />
                         <div>
                           <span data-vesta="prefs-java-source">
@@ -232,15 +253,6 @@ export function JavaSettings() {
                             </Button>
                           }
                         >
-                          <Show when={!runtime.active}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void activate(environment.major, runtime)}
-                            >
-                              {t('prefs.java.use')}
-                            </Button>
-                          </Show>
                           <Button
                             size="sm"
                             variant="ghost"

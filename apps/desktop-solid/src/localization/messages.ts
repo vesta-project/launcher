@@ -1634,7 +1634,6 @@ export const messageIds = [
   "prefs.java.not-installed",
   "prefs.java.download",
   "prefs.java.downloading",
-  "prefs.java.use",
   "prefs.java.actions",
   "prefs.java.copy-path",
   "prefs.java.verified",

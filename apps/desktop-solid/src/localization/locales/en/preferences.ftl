@@ -201,7 +201,6 @@ prefs-java-active = Active
 prefs-java-not-installed = Not installed yet
 prefs-java-download = Download and use
 prefs-java-downloading = Downloading…
-prefs-java-use = Use
 prefs-java-actions = Runtime actions
 prefs-java-copy-path = Copy full path
 prefs-java-verified = Java { $version } ({ $bits }-bit) works.
