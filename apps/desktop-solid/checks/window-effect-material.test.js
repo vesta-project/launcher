@@ -49,7 +49,7 @@ test("coverage ordering holds across the slider and materials; flat stays opaque
   expect(tokens["--vesta-theme-library-board-scale"]).toMatch(/%$/);
 });
 
-test("reveal CSS: no extra titlebar/rail fill, reduced library board, author themes untouched", () => {
+test("reveal CSS: no extra titlebar/rail fill, translucent card fields, author themes untouched", () => {
   const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replaceAll("\r\n", "\n");
   const shell = read("../src/app/shell.css");
   const board = read("../src/components/board.css");
@@ -57,11 +57,12 @@ test("reveal CSS: no extra titlebar/rail fill, reduced library board, author the
   const reveal = ":root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])";
   expect(shell).toContain(`${reveal}\n    [data-vesta='titlebar'] {\n    background: transparent;`);
   expect(shell).toContain(`${reveal}\n    [data-vesta='rail'] {\n    --rail-bg: transparent;`);
-  expect(board).toContain(`${reveal}\n    :where([data-vesta='board'][data-showcase])`);
+  // The card fields are translucent with or without an effect, so the frame gradient shows too.
+  expect(board).toContain(":root:not([data-vesta-material='flat']):not([data-vesta-author-theme]) :where([data-vesta='board'][data-showcase])");
   expect(board).toContain("var(--vesta-color-panel) var(--vesta-theme-library-board-scale, 100%), transparent");
   expect(runtime).toContain("--vesta-theme-canvas-opacity-light");
   const page = readFileSync(new URL("../src/pages/library/library-page.tsx", import.meta.url), "utf8");
-  expect(page).toContain("<Board showcase={(!nativeInstances || instancesLoaded()) && instances().length > 0}>");
+  expect(page).toContain("<Board showcase>");
 });
 
 test("window effect key includes the scheme; reduced transparency and unsupported fall back to none", () => {
