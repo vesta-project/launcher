@@ -82,6 +82,10 @@ export interface ThemeDefinition {
   shadows: "soft" | "crisp" | "none";
   /** A fixed palette that ignores colour harmony (Aurora). */
   fixedHues?: [number, number, number];
+  /** Background accent strengths (percent) when the default is too quiet (Legacy's bold wash). */
+  backgroundStrengths?: [number, number, number];
+  /** Type weight: `heavy` sets labels and titles a step bolder (Legacy's chunkier look). */
+  weight?: "standard" | "heavy";
 }
 
 export const themeDefinitions: readonly ThemeDefinition[] = [
@@ -180,10 +184,12 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
     name: "Legacy Vesta",
     hue: 195,
     hueAdjustable: false,
+    // The old launcher: a teal top fading to purple, under cool purple-grey panels (no third,
+    // warm stop: teal and orange mix to green in the middle).
     neutral: {
-      hue: "accent",
-      chroma: { dark: 0.024, light: 0.024 },
-      lift: { dark: 0.075, light: -0.06 },
+      hue: 285,
+      chroma: { dark: 0.02, light: 0.02 },
+      lift: { dark: 0.06, light: -0.06 },
       tint: 0.7,
     },
     accentChroma: { dark: 0.105, light: 0.12 },
@@ -193,7 +199,9 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
     gradientAngle: 180,
     material: "glass",
     shadows: "soft",
-    fixedHues: [195, 310, 67],
+    fixedHues: [192, 300, 305],
+    backgroundStrengths: [34, 26, 34],
+    weight: "heavy",
   },
 ];
 
@@ -317,7 +325,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
   const mix = (color: string, strength: number) =>
     `color-mix(in oklab, ${color} calc(${strength}% * var(--vesta-bg-strength, 1)), transparent)`;
   const strengths: [number, number, number] =
-    def.background === "gradient" ? [20, 18, 20] : [13, 13, 12];
+    def.backgroundStrengths ?? (def.background === "gradient" ? [20, 18, 20] : [13, 13, 12]);
   const spot = (x: number, y: number) => {
     const angle = ((theme.gradientAngle - 135) * Math.PI) / 180;
     return `${50 + (x - 50) * Math.cos(angle) - (y - 50) * Math.sin(angle)}% ${50 + (x - 50) * Math.sin(angle) + (y - 50) * Math.cos(angle)}%`;
@@ -361,6 +369,10 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-theme-accent-chroma-dark": String(def.accentChroma.dark),
     "--vesta-theme-accent-chroma-light": String(def.accentChroma.light),
     "--vesta-space-unit": def.spaceUnit,
+    // Body text stays regular; medium, semibold and bold move up a step for heavy presets.
+    "--vesta-weight-medium": def.weight === "heavy" ? "600" : "500",
+    "--vesta-weight-semibold": def.weight === "heavy" ? "700" : "600",
+    "--vesta-weight-bold": def.weight === "heavy" ? "800" : "700",
     "--vesta-radius-factor": String(def.radius),
     "--vesta-border-width": `${theme.borderWidth}px`,
     "--vesta-theme-canvas-opacity": pct(canvas),
