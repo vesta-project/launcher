@@ -56,7 +56,7 @@ export function TooltipHints(props: TooltipHintsProps) {
       const overflow = element.hasAttribute('data-tip-overflow');
       const text = element.dataset.tip || (overflow ? element.textContent?.trim() : undefined);
       if (pointerDown || dragging || !text || !element.isConnected) return;
-      const layer = element.closest<HTMLElement>('dialog[open], [role="dialog"]');
+      const layer = element.closest<HTMLElement>('dialog[open], [role="dialog"]') ?? document.querySelector<HTMLElement>('dialog[open], [role="dialog"]');
       if (layer && tip.parentElement !== layer) layer.append(tip);
       if (overflow && !truncated(element)) return;
       tip.textContent = text;
