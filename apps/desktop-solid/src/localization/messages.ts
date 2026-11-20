@@ -542,6 +542,8 @@ export const messageIds = [
     "server-pack.error-copy-failed",
   "server-pack.drift-short",
   "server-pack.drift-update",
+  "server-pack.drift-updated",
+  "server-pack.drift-updated-description",
   "server-pack.draft-title",
   "server-pack.draft-matches",
   "server-pack.draft-based",

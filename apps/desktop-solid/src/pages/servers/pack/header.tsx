@@ -39,8 +39,19 @@ function PackDrift() {
     const workspace = area.workspace();
     if (!workspace || busy()) return;
     setBusy(true);
+    const target = workspace.serverMinecraftVersion;
     // The draft write answers with the draft; the workspace (and its drift flag) is re-read.
-    try { await area.writeManifest({ ...workspace.draft.manifest, minecraftVersion: workspace.serverMinecraftVersion }); await area.reload(); }
+    try {
+      await area.writeManifest({ ...workspace.draft.manifest, minecraftVersion: target });
+      await area.reload();
+      // There is no going back to the old version (Vesta Server only takes a draft for the
+      // Minecraft it runs), so say plainly that only the draft changed and where to review it.
+      toast.show({
+        title: t('server-pack.drift-updated', { version: target ?? '' }),
+        description: t('server-pack.drift-updated-description'),
+        actions: [{ label: t('server-pack.review-publish'), onClick: () => area.open('versions') }],
+      });
+    }
     catch (reason) { toast.show({ title: t(errorMessage(reason)), tone: 'danger' }); }
     finally { setBusy(false); }
   };

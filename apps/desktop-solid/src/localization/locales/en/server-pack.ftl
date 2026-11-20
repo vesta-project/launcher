@@ -247,6 +247,8 @@ server-pack-upload-path-refused = Modpack files go in mods, config, resourcepack
 # Versions
 server-pack-drift-short = The server runs Minecraft { $version }
 server-pack-drift-update = Update to { $version }
+server-pack-drift-updated = The draft now uses Minecraft { $version }
+server-pack-drift-updated-description = Players keep the current pack until you publish.
 server-pack-draft-title = Draft
 server-pack-draft-matches = No changes since revision { $revision }
 server-pack-draft-based = from revision { $revision }
