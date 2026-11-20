@@ -139,35 +139,37 @@ export function ServerCard(props: { snapshot: ServerSnapshot; now: number }) {
 
   return (
     <>
+      {/* Same order and look as an instance card's menu: the main action, where to go, the
+          card's own settings, then removal, each group split once. */}
       <ContextMenu trigger={card}>
-        <ContextMenuItem onSelect={open}>{t('servers.open')}</ContextMenuItem>
-        <ContextMenuItem disabled={serverRefreshing(id())} onSelect={() => void refreshServerWithFeedback(id())}>{t('servers.refresh')}</ContextMenuItem>
         <Show when={quick()}>
-          {(action) => <ContextMenuItem disabled={busy()} onSelect={() => runQuick()}>{t(actionLabels[action()])}</ContextMenuItem>}
+          {(action) => <ContextMenuItem icon={<Icon name={actionIcons[action()]} />} disabled={busy()} onSelect={() => runQuick()}>{t(actionLabels[action()])}</ContextMenuItem>}
         </Show>
         <Show when={controls().stop}>
-          <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
+          <ContextMenuItem icon={<Icon name="icons/actions/stop" />} disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
         </Show>
         <Show when={controls().primary === 'kill'}>
-          <ContextMenuItem onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
+          <ContextMenuItem icon={<Icon name="icons/actions/stop" />} tone="danger" onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
         </Show>
-        <ContextMenuItem onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
+        <ContextMenuItem icon={<Icon name="icons/rail/servers" />} onSelect={open}>{t('servers.open')}</ContextMenuItem>
+        <ContextMenuItem icon={<Icon name="icons/content/terminal" />} onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
         <Show when={canGetModpack(props.snapshot) && offersClientPack(props.snapshot)}>
-          <ContextMenuItem onSelect={() => setCreating(true)}>{t('server-pack.play-create')}</ContextMenuItem>
+          <ContextMenuItem icon={<Icon name="icons/actions/add" />} onSelect={() => setCreating(true)}>{t('server-pack.play-create')}</ContextMenuItem>
         </Show>
         <ContextMenuSeparator />
-        <Show when={hostIdOf(props.snapshot)}>
-          {(hostId) => <ContextMenuItem onSelect={() => transitionTo(`/servers/host/${hostId()}`)}>{t('vesta-server.list.machine-settings')}</ContextMenuItem>}
-        </Show>
-        <ContextMenuItem onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
+        <ContextMenuItem icon={<Icon name={props.snapshot.connection.pinned ? 'icons/actions/unpin' : 'icons/actions/pin'} />} onSelect={() => void updateServer(id(), { pinned: !props.snapshot.connection.pinned })}>
           {props.snapshot.connection.pinned ? t('common.unpin') : t('servers.pin')}
         </ContextMenuItem>
-        <ContextMenuItem onSelect={() => transitionTo(`${href()}/connection`)}>{t('servers.tab.connection')}</ContextMenuItem>
+        <ContextMenuItem icon={<Icon name="icons/content/link" />} onSelect={() => transitionTo(`${href()}/connection`)}>{t('servers.tab.connection')}</ContextMenuItem>
+        <Show when={hostIdOf(props.snapshot)}>
+          {(hostId) => <ContextMenuItem icon={<Icon name="icons/rail/settings" />} onSelect={() => transitionTo(`/servers/host/${hostId()}`)}>{t('vesta-server.list.machine-settings')}</ContextMenuItem>}
+        </Show>
+        <ContextMenuItem icon={<Icon name="icons/actions/refresh" />} disabled={serverRefreshing(id())} onSelect={() => void refreshServerWithFeedback(id())}>{t('servers.refresh')}</ContextMenuItem>
         <ContextMenuSeparator />
-        {/* The same choice as the server's own menu: an owner removes it from its Vesta Server
-            (it can come back there for 7 days); otherwise this launcher just stops listing it. */}
-        <Show when={machineRemoval(props.snapshot)} fallback={<ContextMenuItem onSelect={() => setRemoving(true)}>{t('servers.forget')}</ContextMenuItem>}>
-          {(where) => <ContextMenuItem tone="danger" onSelect={() => setRemovingFromMachine(true)}>{t('servers.host-remove.menu', { machine: where() })}</ContextMenuItem>}
+        {/* An owner removes it from its Vesta Server (it can come back there for 7 days);
+            otherwise this launcher just stops listing it. */}
+        <Show when={machineRemoval(props.snapshot)} fallback={<ContextMenuItem icon={<Icon name="icons/actions/close" />} onSelect={() => setRemoving(true)}>{t('servers.forget')}</ContextMenuItem>}>
+          {(where) => <ContextMenuItem icon={<Icon name="icons/actions/delete" />} tone="danger" onSelect={() => setRemovingFromMachine(true)}>{t('servers.host-remove.menu', { machine: where() })}</ContextMenuItem>}
         </Show>
       </ContextMenu>
       <RemoveServerDialog snapshot={props.snapshot} open={removing()} onOpenChange={setRemoving} />

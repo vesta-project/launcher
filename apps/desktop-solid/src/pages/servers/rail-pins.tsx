@@ -8,7 +8,8 @@ import { initials, serverArt } from '../../features/servers/art';
 import { lifecycleControls, minecraftFact, quickAction, statusDot } from '../../features/servers/model';
 import { pinnedServers, serverIcon, updateServer } from '../../features/servers/store';
 import { KillDialog } from './kill';
-import { actionLabels, useLifecycle } from './lifecycle';
+import { actionIcons, actionLabels, useLifecycle } from './lifecycle';
+import { Icon } from '../../components/icon';
 import './servers.css';
 
 /** Status for the shared pin dot: green while ready, red when it needs attention, a crescent while asleep. */
@@ -55,19 +56,20 @@ ${t(minecraftFact(snapshot().status).message)}`;
                   />
                 )}
               >
-                <ContextMenuItem onSelect={() => transitionTo(href())}>{t('servers.open')}</ContextMenuItem>
-                <ContextMenuItem onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
+                {/* Same shape as a pinned instance: the main action, where to go, then the pin. */}
                 <Show when={quick()}>
-                  {(action) => <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit(action())}>{t(actionLabels[action()])}</ContextMenuItem>}
+                  {(action) => <ContextMenuItem icon={<Icon name={actionIcons[action()]} />} disabled={busy()} onSelect={() => void lifecycle.submit(action())}>{t(actionLabels[action()])}</ContextMenuItem>}
                 </Show>
                 <Show when={lifecycleControls(snapshot()).stop}>
-                  <ContextMenuItem disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
+                  <ContextMenuItem icon={<Icon name="icons/actions/stop" />} disabled={busy()} onSelect={() => void lifecycle.submit('stop')}>{t('servers.lifecycle.stop')}</ContextMenuItem>
                 </Show>
                 <Show when={lifecycleControls(snapshot()).primary === 'kill'}>
-                  <ContextMenuItem onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
+                  <ContextMenuItem icon={<Icon name="icons/actions/stop" />} tone="danger" onSelect={() => setKilling(true)}>{t('servers.lifecycle.kill')}</ContextMenuItem>
                 </Show>
+                <ContextMenuItem icon={<Icon name="icons/rail/servers" />} onSelect={() => transitionTo(href())}>{t('servers.open')}</ContextMenuItem>
+                <ContextMenuItem icon={<Icon name="icons/content/terminal" />} onSelect={() => transitionTo(`${href()}/console`)}>{t('servers.tab.console')}</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => void updateServer(snapshot().connection.id, { pinned: false })}>{t('common.unpin')}</ContextMenuItem>
+                <ContextMenuItem icon={<Icon name="icons/actions/unpin" />} onSelect={() => void updateServer(snapshot().connection.id, { pinned: false })}>{t('common.unpin')}</ContextMenuItem>
               </ContextMenu>
               <KillDialog snapshot={snapshot()} open={killing()} onOpenChange={setKilling} />
               </>

@@ -144,6 +144,7 @@ export function Rail() {
                   )}
                 >
                   <ContextMenuItem
+                    icon={<Icon name={entry().state.kind === 'running' ? 'icons/actions/stop' : ['interrupted', 'failed'].includes(entry().state.kind) ? 'icons/actions/reload' : 'icons/actions/play'} />}
                     disabled={['warming', 'installing'].includes(entry().state.kind)}
                     onSelect={() => {
                       const kind = entry().state.kind;
@@ -157,20 +158,21 @@ export function Rail() {
                         ? t('common.resume-installation')
                         : t('common.play')}
                   </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => transitionTo(`/library/${entry().instance.id}`)}>{t('instance-actions.details')}</ContextMenuItem>
-                  <ContextMenuItem onSelect={() => transitionTo(`/library/${entry().instance.id}/settings`)}>{t('nav.settings')}</ContextMenuItem>
-                  <Show when={nativeInstances}><ContextMenuItem onSelect={() => void openNativeInstanceFolder(entry().instance.id)}>{t('instance-actions.folders')}</ContextMenuItem></Show>
+                  <ContextMenuItem icon={<Icon name="icons/rail/library" />} onSelect={() => transitionTo(`/library/${entry().instance.id}`)}>{t('instance-actions.details')}</ContextMenuItem>
+                  <ContextMenuItem icon={<Icon name="icons/rail/settings" />} onSelect={() => transitionTo(`/library/${entry().instance.id}/settings`)}>{t('instance.settings')}</ContextMenuItem>
+                  <Show when={nativeInstances}><ContextMenuItem icon={<Icon name="icons/content/folder" />} onSelect={() => void openNativeInstanceFolder(entry().instance.id)}>{t('instance.open-folder')}</ContextMenuItem></Show>
                   <ContextMenuSeparator />
-                  <ContextMenuItem disabled={index() === 0} onSelect={() => movePin(entry().instance.id, -1)}>
+                  <ContextMenuItem icon={<Icon name="icons/navigation/arrow-up" />} disabled={index() === 0} onSelect={() => movePin(entry().instance.id, -1)}>
                     {t('common.move-up')}
                   </ContextMenuItem>
                   <ContextMenuItem
+                    icon={<Icon name="icons/navigation/arrow-down" />}
                     disabled={index() === pinnedInstances().length - 1}
                     onSelect={() => movePin(entry().instance.id, 1)}
                   >
                     {t('common.move-down')}
                   </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => togglePin(entry().instance.id)}>{t('common.unpin')}</ContextMenuItem>
+                  <ContextMenuItem icon={<Icon name="icons/actions/unpin" />} onSelect={() => togglePin(entry().instance.id)}>{t('common.unpin')}</ContextMenuItem>
                 </ContextMenu>
               )}
             </For>

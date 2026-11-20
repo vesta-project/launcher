@@ -368,7 +368,7 @@ export function InstanceCard(props: InstanceCardProps) {
 
   return (
     <ContextMenu trigger={renderCard}>
-      <ContextMenuItem onSelect={() => {
+      <ContextMenuItem icon={<Icon name={kind() === 'crashed' ? 'icons/status/error' : kind() === 'running' ? 'icons/actions/stop' : ['failed', 'interrupted'].includes(kind()) ? 'icons/actions/reload' : 'icons/actions/play'} />} onSelect={() => {
         if (kind() === 'crashed') props.onOpenCrash?.();
         else if (kind() === 'failed') props.onRetry?.();
         else if (kind() === 'interrupted') props.onResume?.();
