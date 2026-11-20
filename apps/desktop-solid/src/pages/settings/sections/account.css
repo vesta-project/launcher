@@ -470,12 +470,26 @@
     gap: 0;
   }
 
+  /* Square at the bottom, where the toolbar joins; square at the top only when the account
+     row sits on it (skinny panes). */
   :where([data-vesta='skin-stage']) > :where([data-vesta='skin-stage-view']) {
-    border-radius: 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  :where([data-vesta='skin-stage']) > :where([data-vesta='account-current'] + [data-vesta='skin-stage-view']) {
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
+
+  /* The model toggle keeps its size (it scrolled when squeezed); a tight bar wraps instead. */
+  :where([data-vesta='skin-stage-bar']) > :where([data-vesta='segmented-field']) {
+    flex: none;
   }
 
   :where([data-vesta='skin-stage-bar']) {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--vesta-space-2);
     padding: var(--vesta-space-2);
@@ -599,7 +613,7 @@
      view instead of sitting under a full-width character. */
   @container pane (max-width: 760px) {
     :where([data-vesta='skin-layout']) {
-      grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+      grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
       gap: var(--vesta-space-4);
     }
 
