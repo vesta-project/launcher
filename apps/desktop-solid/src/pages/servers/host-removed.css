@@ -90,6 +90,162 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* A server row in Storage opens its breakdown underneath. */
+  :where([data-vesta='host-storage-list']) > li[data-vesta='host-storage-server'] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+  }
+
+  :where([data-vesta='host-storage-row']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    inline-size: 100%;
+    min-block-size: 52px;
+    margin: 0;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+  }
+
+  :where([data-vesta='host-storage-row']:hover) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='host-storage-row']:focus-visible) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
+  }
+
+  :where([data-vesta='host-storage-row']) > :last-child {
+    flex: none;
+    color: var(--vesta-color-text-subtle);
+    transition: rotate var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='host-storage-server'][data-open]) :where([data-vesta='host-storage-row']) > :last-child {
+    rotate: 180deg;
+  }
+
+  :where([data-vesta='host-storage-server']) > :where([data-vesta='server-storage']) {
+    padding: 0 var(--vesta-space-4) var(--vesta-space-3) calc(var(--vesta-space-4) + 16px + var(--vesta-space-3));
+  }
+
+  /* ---- One server's breakdown ---- */
+  :where([data-vesta='server-storage']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-2);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='server-storage']) p {
+    margin: 0;
+  }
+
+  :where([data-vesta='server-storage-head']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--vesta-space-3);
+  }
+
+  :where([data-vesta='server-storage-head']) > strong {
+    font-size: var(--vesta-text-lg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where([data-vesta='server-storage-bar']) {
+    display: flex;
+    gap: 2px;
+    block-size: 8px;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-full);
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='server-storage-bar']) > span {
+    flex-basis: 0;
+    min-inline-size: 3px;
+  }
+
+  :where([data-vesta='server-storage-legend']) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: var(--vesta-space-1) var(--vesta-space-4);
+    margin: 0;
+    padding: 0;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+    list-style: none;
+  }
+
+  :where([data-vesta='server-storage-legend']) > li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='server-storage-legend']) > li > span[data-part] {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 2px;
+  }
+
+  :where([data-vesta='server-storage-legend'], [data-vesta='server-storage-folders']) :where([data-vesta='server-storage-size']) {
+    margin-inline-start: auto;
+    color: var(--vesta-color-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* One colour per part, from the theme's tones. */
+  :where([data-vesta='server-storage']) [data-part='worlds'] { background: var(--vesta-color-success); }
+  :where([data-vesta='server-storage']) [data-part='backups'] { background: var(--vesta-color-accent); }
+  :where([data-vesta='server-storage']) [data-part='content'] { background: var(--vesta-color-info-text, color-mix(in oklab, var(--vesta-color-accent-text) 55%, var(--vesta-color-danger-text))); }
+  :where([data-vesta='server-storage']) [data-part='software'] { background: var(--vesta-color-warning); }
+  :where([data-vesta='server-storage']) [data-part='logs'] { background: var(--vesta-color-text-subtle); }
+  :where([data-vesta='server-storage']) [data-part='trash'] { background: var(--vesta-color-danger); }
+  :where([data-vesta='server-storage']) [data-part='other'] { background: var(--vesta-color-border-strong); }
+
+  :where([data-vesta='server-storage-subhead']) {
+    margin-block-start: var(--vesta-space-2) !important;
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='server-storage-folders']) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--vesta-space-1);
+    margin: 0;
+    padding: 0;
+    font-size: var(--vesta-text-sm);
+    list-style: none;
+  }
+
+  :where([data-vesta='server-storage-folders']) > li {
+    display: flex;
+    gap: var(--vesta-space-3);
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='server-storage-path']) {
+    overflow: hidden;
+    color: var(--vesta-color-text-muted);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @container (max-width: 420px) {
     :where([data-vesta='host-removed-row']) {
       flex-wrap: wrap;

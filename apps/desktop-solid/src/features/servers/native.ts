@@ -20,6 +20,7 @@ import { serversBackupsConfigNative } from './native-backups-config';
 import { serversBackupHistoryNative } from './native-backup-history';
 import { serversPresenceNative } from './native-presence';
 import { serversBrandingNative } from './native-branding';
+import { serversStorageNative } from './native-storage';
 import { serversAutomationNative } from './native-automation';
 import { serversMetricsNative } from './native-metrics';
 import { serversJavaNative } from './native-java';
@@ -443,6 +444,7 @@ export const serversNative = {
   // Sleep and server-list presentation: see native-presence.ts.
   ...serversPresenceNative,
   ...serversBrandingNative,
+  ...serversStorageNative,
   // Workflows and run history: see native-automation.ts.
   ...serversAutomationNative,
   // World, server software and SFTP: see hosting-native.ts.

@@ -12,6 +12,8 @@ import {
 import { hostCommand, hostInfo } from '../../features/servers/hosts-store';
 import type { HostStorage } from '../../features/servers/native-hosts';
 import { useServersClock } from '../../features/servers/store';
+import { hostConnectionId } from '../../features/servers/native-hosts';
+import { ServerStorageDetail } from './server-storage';
 import { Card as Panel } from '../settings/parts';
 import './host-removed.css';
 
@@ -22,6 +24,8 @@ export function StoragePanel(props: { hostId: string; refresh?: number }) {
   const [storage, setStorage] = createSignal<HostStorage | null>(null, { name: 'host-storage:value' });
   const [problem, setProblem] = createSignal<LifecycleProblem | null>(null, { name: 'host-storage:problem' });
   const [asking, setAsking] = createSignal(false, { name: 'host-storage:asking' });
+  /** The server row whose breakdown is open. */
+  const [open, setOpen] = createSignal<string | null>(null, { name: 'host-storage:open' });
   const shown = () => hostHas(hostInfo(props.hostId), 'storage');
 
   const load = async () => {
@@ -81,15 +85,23 @@ export function StoragePanel(props: { hostId: string; refresh?: number }) {
               <ul data-vesta="host-storage-list">
                 <For each={value().servers}>
                   {(server) => (
-                    <li>
-                      <Icon name="icons/rail/servers" size={16} />
-                      <span data-vesta="host-storage-text">
-                        <span data-vesta="host-storage-name" data-tip-overflow>{server.name}</span>
-                        <span data-vesta="host-storage-meta">
-                          {biggestParts(server.parts).map((part) => `${t(partLabels[part.part])} ${formatStorage(part.bytes)}`).join(' · ')}
+                    <li data-vesta="host-storage-server" data-open={open() === server.serverId ? '' : undefined}>
+                      <button type="button" data-vesta="host-storage-row" aria-expanded={open() === server.serverId ? 'true' : 'false'}
+                        data-tip={t('vesta-server.storage.show')}
+                        onClick={() => { setOpen((current) => (current === server.serverId ? null : server.serverId)); }}>
+                        <Icon name="icons/rail/servers" size={16} />
+                        <span data-vesta="host-storage-text">
+                          <span data-vesta="host-storage-name" data-tip-overflow>{server.name}</span>
+                          <span data-vesta="host-storage-meta">
+                            {biggestParts(server.parts).map((part) => `${t(partLabels[part.part])} ${formatStorage(part.bytes)}`).join(' · ')}
+                          </span>
                         </span>
-                      </span>
-                      <span data-vesta="host-storage-size">{formatStorage(server.bytes)}</span>
+                        <span data-vesta="host-storage-size">{formatStorage(server.bytes)}</span>
+                        <Icon name="icons/controls/chevron-down" size={14} />
+                      </button>
+                      <Show when={open() === server.serverId}>
+                        <ServerStorageDetail connectionId={hostConnectionId({ hostId: props.hostId, serverId: server.serverId })} />
+                      </Show>
                     </li>
                   )}
                 </For>

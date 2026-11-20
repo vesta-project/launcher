@@ -102,6 +102,20 @@ pub async fn server_motd_preview(
         })
         .await
 }
+/// One server's disk use from its last measurement (`storage.view`). Shape per the host API:
+/// measuredAt, bytes, parts, volume and the ten largest folders.
+#[tauri::command]
+pub async fn server_storage(
+    app: AppHandle,
+    manager: Manager<'_>,
+    connection_id: String,
+) -> Result<serde_json::Value> {
+    manager
+        .management_read(&app, &connection_id, |c| async move {
+            vesta_server_client::model::from_wire(c.get("storage", true, "storage.view").await?)
+        })
+        .await
+}
 #[tauri::command]
 pub async fn server_branding(
     app: AppHandle,

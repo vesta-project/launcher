@@ -24,6 +24,20 @@ export function createBrandingFixtures(host: BrandingHost) {
     return value;
   };
   return {
+    async storage(id: ConnectionId) {
+      await host.wait(); host.requireCapability(host.server(id), 'storage.view');
+      const GB = 1024 ** 3;
+      const bytes = 6.2 * GB;
+      return {
+        measuredAt: new Date(Date.now() - 14 * 60_000).toISOString(), bytes,
+        parts: { worlds: bytes * 0.5, backups: bytes * 0.3, content: bytes * 0.12, logs: bytes * 0.03, software: bytes * 0.03, trash: 0, other: bytes * 0.02 },
+        volume: { label: 'Data drive', freeBytes: 21 * GB, totalBytes: 256 * GB },
+        largest: [
+          { path: 'world/region', bytes: 2.4 * GB }, { path: 'backups/restic', bytes: 1.9 * GB }, { path: 'world_nether/DIM-1/region', bytes: 520 * 1024 ** 2 },
+          { path: 'mods', bytes: 610 * 1024 ** 2 }, { path: 'world_the_end/DIM1/region', bytes: 140 * 1024 ** 2 }, { path: 'logs', bytes: 180 * 1024 ** 2 },
+        ],
+      };
+    },
     async branding(id: ConnectionId) {
       await host.wait(); host.requireCapability(host.server(id), 'config.view'); return clone(current(id));
     },

@@ -15,6 +15,7 @@ import { serverCommand, serverIcon, setServerIcon } from '../../../features/serv
 import { ServerErrorNote } from '../parts';
 import { SaveBar, SettingsPage, SettingsPanel } from '../settings-parts';
 import { HostRemoveRow } from '../host-remove-dialog';
+import { ServerStorageDetail } from '../server-storage';
 
 const NAME_LIMIT = 128;
 const DESCRIPTION_LIMIT = 1024;
@@ -148,6 +149,14 @@ export function ServerProfilePanel(props: { snapshot: ServerSnapshot }) {
               <TextArea size="sm" aria-label={t('servers.profile.description')} value={description()} rows={3}
                 disabled={!canEdit()} error={descriptionProblem()} onChange={value => { editRevision.begin(); setDescriptionDraft(value); }} />
             </div>
+          </div>
+        </Show>
+        <Show when={gate(props.snapshot.capabilities, 'storage.view') === 'allowed'}>
+          <div data-vesta="server-setting-block">
+            <div data-vesta="setting-row-copy">
+              <span data-vesta="setting-row-label">{t('vesta-server.storage.title')}</span>
+            </div>
+            <ServerStorageDetail connectionId={props.snapshot.connection.id} />
           </div>
         </Show>
         <HostRemoveRow snapshot={props.snapshot} />

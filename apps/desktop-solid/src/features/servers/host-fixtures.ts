@@ -120,7 +120,7 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       ],
       servers: named.map((name, index) => {
         const bytes = (sizes[index] ?? 0.4) * GB;
-        return { serverId: list[index]?.serverId ?? `srv-${index}`, name, volumeId: 'data', bytes,
+        return { serverId: list[index]?.serverId ?? (name === 'Lobby' ? 'srv-lobby' : `srv-${index}`), name, volumeId: 'data', bytes,
           parts: { worlds: bytes * 0.5, backups: bytes * 0.3, content: bytes * 0.12, logs: bytes * 0.03, software: bytes * 0.03, trash: 0, other: bytes * 0.02 } };
       }),
       removed: { count: gone.length, bytes: gone.reduce((sum, server) => sum + (server.bytes ?? 0), 0) },

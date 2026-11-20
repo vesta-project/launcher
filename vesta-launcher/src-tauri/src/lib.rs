@@ -230,6 +230,7 @@ pub fn run(context: tauri::Context) {
             commands::servers::server_operations,
             commands::servers::server_console_page,
             commands::servers::server_console_history,
+            commands::servers_presence::server_storage,
             commands::servers::server_console_send,
             commands::servers::server_players,
             commands::servers::server_players_whitelist,
