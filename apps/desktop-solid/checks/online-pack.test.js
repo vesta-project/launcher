@@ -45,3 +45,13 @@ test('a release that lists its content sizes the memory suggestion by its mods',
   expect(onlinePackInfo({ project, release: { ...release, dependencies } }).modCount).toBe(181);
   expect(onlinePackInfo({ project, release }).modCount).toBe(0);
 });
+
+test('a CurseForge pack with known loaders only peeks at its manifest for the mod count', async () => {
+  const selection = { project: { ...project, source: 'curseforge' }, release: { ...release, loaders: ['fabric'] } };
+  const download = () => { throw new Error('unexpected download'); };
+  const peeked = await resolveOnlinePack(selection, download, async () => ({ modCount: 411, recommendedRamMb: 8192 }));
+  expect(peeked).toMatchObject({ modloader: 'fabric', minecraftVersion: '1.21.1', modCount: 411, recommendedRamMb: 8192 });
+  // A server that refuses ranges leaves the provider's details as they were.
+  const refused = await resolveOnlinePack(selection, download, async () => { throw new Error('range_unsupported'); });
+  expect(refused).toMatchObject({ modloader: 'fabric', modCount: 0 });
+});

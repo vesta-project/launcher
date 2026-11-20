@@ -47,7 +47,9 @@ export interface InstallDraft {
 }
 export const readPack = async (source: PackSource): Promise<PackInfo> => {
   if (source.online) {
-    return resolveOnlinePack(source.online, () => invoke<PackInfo>('get_modpack_manifest_info_from_url', { url: source.value }));
+    return resolveOnlinePack(source.online,
+      () => invoke<PackInfo>('get_modpack_manifest_info_from_url', { url: source.value }),
+      () => invoke<PackInfo>('get_modpack_manifest_info_remote', { url: source.value }));
   }
   return invoke<PackInfo>(
     source.kind === "file" ? "get_modpack_info" : "get_modpack_info_from_url",

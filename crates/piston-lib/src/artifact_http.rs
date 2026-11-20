@@ -44,6 +44,24 @@ pub async fn get_one(url: &Url) -> anyhow::Result<Response> {
     get_one_with_timeout(url, Duration::from_secs(120)).await
 }
 async fn get_one_with_timeout(url: &Url, timeout: Duration) -> anyhow::Result<Response> {
+    get_one_ranged(url, timeout, None).await
+}
+/// A byte range of a public artifact (`bytes=-N` for the last N bytes, or `bytes=a-b`), with
+/// the same destination checks and redirect policy as [`get`]. Callers must check for
+/// `206 Partial Content`: a server that ignores the range answers `200` with the whole file.
+pub async fn get_range(raw: &str, range: &str) -> anyhow::Result<Response> {
+    let range = range.to_string();
+    follow(raw, Duration::from_secs(30), move |url, remaining| {
+        let range = range.clone();
+        async move { get_one_ranged(&url, remaining, Some(&range)).await }
+    })
+    .await
+}
+async fn get_one_ranged(
+    url: &Url,
+    timeout: Duration,
+    range: Option<&str>,
+) -> anyhow::Result<Response> {
     let started = std::time::Instant::now();
     validate(url)?;
     if crate::client::configured_proxy().enabled {
@@ -79,9 +97,13 @@ async fn get_one_with_timeout(url: &Url, timeout: Duration) -> anyhow::Result<Re
         .timeout(timeout)
         .user_agent(concat!("VestaLauncher/", env!("CARGO_PKG_VERSION")))
         .build()?;
-    let response = client
+    let mut request = client
         .get(url.clone())
-        .header(reqwest::header::ACCEPT_ENCODING, "identity")
+        .header(reqwest::header::ACCEPT_ENCODING, "identity");
+    if let Some(range) = range {
+        request = request.header(reqwest::header::RANGE, range);
+    }
+    let response = request
         .send()
         .await
         .map_err(|_| anyhow::anyhow!("artifact_request_failed"))?;

@@ -45,10 +45,23 @@ export function onlinePackInfo({ project, release }: OnlinePackSelection): PackI
   };
 }
 
-export async function resolveOnlinePack(selection: OnlinePackSelection, inspect: () => Promise<PackInfo>): Promise<PackInfo> {
+/**
+ * `inspect` reads the pack's manifest, downloading the archive if it must; `peek` reads it with
+ * a few small range requests and fails rather than download. CurseForge lists no contents, so
+ * a pack whose version and loader are already known is only peeked at, for its mod count
+ * (it sizes the memory suggestion); when the peek fails the provider's details stand.
+ */
+export async function resolveOnlinePack(selection: OnlinePackSelection, inspect: () => Promise<PackInfo>,
+  peek?: () => Promise<PackInfo>): Promise<PackInfo> {
   const info = onlinePackInfo(selection);
-  if (selection.project.source !== 'curseforge' || (info.minecraftVersion &&
-      selection.release.loaders.some(loader => ['forge', 'fabric', 'quilt', 'neoforge'].includes(loader)))) return info;
+  if (selection.project.source !== 'curseforge') return info;
+  if (info.minecraftVersion && selection.release.loaders.some(loader => ['forge', 'fabric', 'quilt', 'neoforge'].includes(loader))) {
+    if (info.modCount || !peek) return info;
+    const manifest = await peek().catch(() => undefined);
+    return manifest?.modCount
+      ? { ...info, modCount: manifest.modCount, recommendedRamMb: manifest.recommendedRamMb ?? info.recommendedRamMb }
+      : info;
+  }
   const manifest = await inspect();
   if (!manifest.minecraftVersion || !manifest.modloader || manifest.modloader === 'unknown')
     throw new Error('Pack manifest does not specify a Minecraft version and loader');

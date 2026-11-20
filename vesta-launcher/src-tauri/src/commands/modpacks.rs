@@ -1932,6 +1932,15 @@ pub async fn get_modpack_manifest_info_from_url(
     app: AppHandle,
     url: String,
 ) -> Result<ModpackInfo, String> {
+    // Read just the manifest with range requests first; download the archive only when the
+    // server or the archive can't be read that way.
+    match remote_manifest_info(&url).await {
+        Ok(info) => return Ok(info),
+        Err(err) => log::info!(
+            "[get_modpack_manifest_info_from_url] Ranged read unavailable ({err}); downloading {}",
+            sanitized_url_for_log(&url)
+        ),
+    }
     let (_, path) = get_or_download_summary_archive(&app, &url).await?;
     let metadata = run_blocking_modpack_io("inspect pack runtime", move || {
         get_modpack_metadata(&path)
@@ -1941,6 +1950,31 @@ pub async fn get_modpack_manifest_info_from_url(
     if metadata.minecraft_version.trim().is_empty() || metadata.modloader_type.trim().is_empty() {
         return Err("Pack manifest does not specify a Minecraft version and loader".into());
     }
+    Ok(modpack_info_from_metadata(metadata, None, None))
+}
+
+/// A pack's version, loader and mod list from its download URL using range requests only
+/// (a few small reads, never the whole archive). Errors when that isn't possible.
+#[command]
+pub async fn get_modpack_manifest_info_remote(url: String) -> Result<ModpackInfo, String> {
+    remote_manifest_info(&url).await
+}
+
+async fn remote_manifest_info(url: &str) -> Result<ModpackInfo, String> {
+    let (final_url, _) = resolve_modpack_resource(piston_lib::client::shared_client(), url).await;
+    let started = Instant::now();
+    let metadata = piston_lib::game::modpack::remote::metadata_from_url(&final_url)
+        .await
+        .map_err(|e| e.to_string())?;
+    if metadata.minecraft_version.trim().is_empty() || metadata.modloader_type.trim().is_empty() {
+        return Err("Pack manifest does not specify a Minecraft version and loader".into());
+    }
+    log::info!(
+        "[remote_manifest_info] Read {} entries from {} in {:?}",
+        metadata.mods.len(),
+        sanitized_url_for_log(&final_url),
+        started.elapsed()
+    );
     Ok(modpack_info_from_metadata(metadata, None, None))
 }
 

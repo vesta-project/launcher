@@ -58,6 +58,22 @@ pub fn get_modpack_metadata<P: AsRef<Path>>(path: P) -> Result<ModpackMetadata> 
     ))
 }
 
+/// Metadata from a root manifest's bytes (`modrinth.index.json` or `manifest.json`), for
+/// callers that read the one file without the archive (see `remote`).
+pub fn metadata_from_manifest(name: &str, bytes: &[u8]) -> Result<ModpackMetadata> {
+    match name {
+        "modrinth.index.json" => Ok(metadata_from_modrinth(
+            serde_json::from_slice::<ModrinthIndex>(bytes)
+                .map_err(|e| anyhow!("Root modrinth.index.json is invalid: {}", e))?,
+        )),
+        "manifest.json" => Ok(metadata_from_curseforge(
+            serde_json::from_slice::<CurseForgeManifest>(bytes)
+                .map_err(|e| anyhow!("Root manifest.json is invalid: {}", e))?,
+        )),
+        _ => Err(anyhow!("Not a modpack manifest: {name}")),
+    }
+}
+
 fn metadata_from_modrinth(index: ModrinthIndex) -> ModpackMetadata {
     let mc_version = index
         .dependencies
