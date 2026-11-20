@@ -82,6 +82,17 @@
     --rail-bg: transparent;
   }
 
+  /* Frosted keeps a light frost on the titlebar and rail over the effect, where glass is clear. */
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none'])[data-vesta-material='frosted']:not([data-vesta-author-theme])
+    [data-vesta='titlebar'] {
+    background: color-mix(in oklab, var(--vesta-color-chrome) 50%, transparent);
+  }
+
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none'])[data-vesta-material='frosted']:not([data-vesta-author-theme])
+    [data-vesta='rail'] {
+    --rail-bg: color-mix(in oklab, var(--vesta-color-chrome) 50%, transparent);
+  }
+
   /* macOS: the native traffic lights own the top-left corner, so the titlebar keeps the full row. */
   :where([data-vesta='shell'][data-platform='macos']) {
     grid-template-areas:
