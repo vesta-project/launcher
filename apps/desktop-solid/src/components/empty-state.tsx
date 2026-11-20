@@ -6,7 +6,10 @@ import './empty-state.css';
 /** A next step offered by an empty state, e.g. a template to start from. */
 export interface EmptyStateSuggestion {
   label: string;
+  /** Shown on hover: the tile itself stays a short name. */
   description?: string;
+  /** Bundled icon name, e.g. `icons/content/storage`. */
+  icon?: string;
   disabled?: boolean;
   onSelect: () => void;
 }
@@ -25,7 +28,7 @@ export interface EmptyStateProps {
    * - `inline`: replaces a list or panel body. Icon beside the text, aligned with the rows.
    */
   variant?: 'page' | 'inline';
-  /** Choices to start from, shown as a short list of plain text rows (best for 2–5 options). */
+  /** Choices to start from, shown as small tiles (icon and a short name; best for 2–5 options). */
   suggestions?: readonly EmptyStateSuggestion[];
   /** Small heading above the suggestions, e.g. "Start from a template". */
   suggestionsLabel?: string;
@@ -73,16 +76,12 @@ export function EmptyState(props: EmptyStateProps) {
                     <button
                       type="button"
                       data-vesta="empty-state-suggestion"
+                      title={suggestion.description}
                       disabled={suggestion.disabled}
                       onClick={() => suggestion.onSelect()}
                     >
-                      <span data-vesta="empty-state-suggestion-text">
-                        <span data-vesta="empty-state-suggestion-label">{suggestion.label}</span>
-                        <Show when={suggestion.description}>
-                          <span data-vesta="empty-state-suggestion-description">{suggestion.description}</span>
-                        </Show>
-                      </span>
-                      <Icon name="icons/controls/chevron-right" size={14} class="empty-state-suggestion-chevron" />
+                      <Show when={suggestion.icon}>{(icon) => <Icon name={icon()} size={18} />}</Show>
+                      <span data-vesta="empty-state-suggestion-label">{suggestion.label}</span>
                     </button>
                   </li>
                 )}

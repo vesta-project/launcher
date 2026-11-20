@@ -17,7 +17,7 @@ server-automation-copy-name = Copy of { $name }
 server-automation-you = You
 server-automation-someone-else = Someone else
 server-automation-empty-title = No workflows yet
-server-automation-empty-description = Workflows run steps on a schedule or when something happens, like a nightly backup followed by a restart.
+server-automation-empty-description = Run steps on a schedule or when something happens.
 server-automation-footnote = Workflows keep running on the server while this launcher is closed. Schedules use a fixed UTC offset, so daylight saving time changes aren't applied.
 
 # Templates

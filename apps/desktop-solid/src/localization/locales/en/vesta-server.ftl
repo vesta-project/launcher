@@ -108,7 +108,7 @@ vesta-server-role-admin = Admin
 vesta-server-role-moderator = Moderator
 vesta-server-role-member = Member
 
-vesta-server-list-empty-description = Connect the computer that runs Vesta Server, like a spare PC or a VPS, then make your servers there.
+vesta-server-list-empty-description = Connect the PC or VPS that runs Vesta Server, then make your servers there.
 vesta-server-list-other = Other servers
 vesta-server-list-settings = { $name } settings
 vesta-server-list-machine-settings = Machine settings

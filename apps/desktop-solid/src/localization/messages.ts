@@ -39,6 +39,7 @@ export const messageIds = [
   "whats-new.back",
   "whats-new.next",
   "whats-new.done",
+  "whats-new.full-changelog",
   "whats-new.tour",
   "whats-new.jump-in",
   "whats-new.watch",

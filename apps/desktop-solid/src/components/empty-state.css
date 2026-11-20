@@ -5,7 +5,7 @@
  *
  * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -heading -title
  *         -description -actions -suggestions -suggestions-label -suggestion
- *         -suggestion-text -suggestion-label -suggestion-description
+ *         -suggestion-label
  *         [data-vesta=empty-line]
  * Knobs:  --empty-state-inset (inline padding; match the surface's gutter),
  *         --empty-state-block (block padding), --empty-line-inset
@@ -97,7 +97,7 @@
   :where([data-vesta='empty-state-suggestions']) {
     display: grid;
     gap: var(--vesta-space-2);
-    inline-size: min(100%, 480px);
+    inline-size: min(100%, 600px);
     margin-block-start: var(--vesta-space-3);
   }
 
@@ -107,35 +107,44 @@
     font-weight: var(--vesta-weight-semibold);
   }
 
-  /* Plain rows: the name over what it does, and a faint arrow that brightens when pointed at. */
+  /* Small tiles: an icon over a short name; what it does is on hover. */
   :where([data-vesta='empty-state-suggestions'] > ul) {
     display: grid;
-    gap: 2px;
-    margin: 0 0 0 calc(-1 * var(--vesta-space-2));
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: var(--vesta-space-2);
+    margin: 0;
     padding: 0;
     list-style: none;
   }
 
   :where([data-vesta='empty-state-suggestion']) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--vesta-space-3);
+    align-content: center;
+    justify-items: start;
+    gap: var(--vesta-space-2);
     inline-size: 100%;
-    min-block-size: 36px;
-    padding: var(--vesta-space-1-5) var(--vesta-space-2);
-    border: 0;
-    border-radius: var(--vesta-radius-control);
-    background: transparent;
+    block-size: 100%;
+    min-block-size: 72px;
+    padding: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-container);
+    background: var(--vesta-color-surface);
     color: var(--vesta-color-text);
     font: inherit;
     text-align: start;
     cursor: default;
-    transition: background-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+    transition:
+      background-color var(--vesta-duration-fast) var(--vesta-ease-standard),
+      border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='empty-state-suggestion']) > [data-vesta='icon'] {
+    color: var(--vesta-color-text-muted);
   }
 
   :where([data-vesta='empty-state-suggestion']:not(:disabled)):hover {
-    background: var(--vesta-color-fill-hover);
+    border-color: var(--vesta-color-border-strong);
+    background: var(--vesta-color-fill);
   }
 
   :where([data-vesta='empty-state-suggestion']:not(:disabled)):active {
@@ -144,36 +153,17 @@
 
   :where([data-vesta='empty-state-suggestion']):focus-visible {
     outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: calc(var(--vesta-focus-width) * -1);
+    outline-offset: var(--vesta-focus-offset);
   }
 
   :where([data-vesta='empty-state-suggestion']):disabled {
     opacity: 0.5;
   }
 
-  :where([data-vesta='empty-state-suggestion-text']) {
-    display: grid;
-    gap: 1px;
-    min-inline-size: 0;
-  }
-
   :where([data-vesta='empty-state-suggestion-label']) {
-    font-size: var(--vesta-text-md);
-    font-weight: var(--vesta-weight-medium);
-  }
-
-  :where([data-vesta='empty-state-suggestion-description']) {
-    color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
-  }
-
-  :where(.empty-state-suggestion-chevron) {
-    color: var(--vesta-color-text-subtle);
-    transition: color var(--vesta-duration-fast) var(--vesta-ease-standard);
-  }
-
-  :where([data-vesta='empty-state-suggestion']:hover, [data-vesta='empty-state-suggestion']:focus-visible) .empty-state-suggestion-chevron {
-    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-medium);
+    line-height: 1.3;
   }
 
   /* ---- One-liner, for menus, popovers, pickers and small lists ---- */
