@@ -165,8 +165,9 @@ const consoleLines: [string, string, string?][] = [
   ['18:04:39', 'Steve joined the game'],
   ['18:05:02', 'Kai_builds joined the game'],
   ['18:05:20', '<Kai_builds> anyone got spare iron?'],
+  ['18:05:33', "Can't keep up! Is the server overloaded? Running 2034ms or 40 ticks behind", 'warn'],
   ['18:05:41', 'RedstoneRae joined the game'],
-  ['18:05:58', '[Server] Welcome in, Rae', 'said'],
+  ['18:05:58', '[Server] Welcome in, Rae'],
 ];
 
 /** A server coming up in its own console: it starts, people join, and you talk to them from here. */
@@ -189,8 +190,9 @@ function ServerScene() {
                 1.21.4
               </small>
             </span>
-            <span data-vesta="scene-button" data-tone="outline"><Icon name="icons/actions/refresh" size={14} />{t('servers.lifecycle.restart')}</span>
-            <span data-vesta="scene-button" data-tone="quiet">{t('servers.lifecycle.stop')}</span>
+            {/* The same two buttons, icons and tones as a real server's header. */}
+            <span data-vesta="scene-button" data-tone="outline"><Icon name="icons/actions/reload" size={14} />{t('servers.lifecycle.restart')}</span>
+            <span data-vesta="scene-button" data-tone="quiet"><Icon name="icons/actions/stop" size={14} />{t('servers.lifecycle.stop')}</span>
           </header>
           <div data-vesta="scene-server-body">
             <ul data-vesta="scene-server-tabs">
@@ -198,14 +200,18 @@ function ServerScene() {
                 {([label, icon], index) => <li data-current={index() === 1 ? '' : undefined}><Icon name={icon as never} size={14} />{t(label as never)}</li>}
               </For>
             </ul>
+            {/* Drawn like the real console: a search strip, flush 20px lines that push the
+                older ones up as they arrive, warnings tinted, and the command row. */}
             <div data-vesta="scene-console">
+              <span data-vesta="scene-console-bar"><span data-vesta="scene-console-search">{t('console.search-log')}</span></span>
               <ol>
                 <For each={consoleLines}>
-                  {([time, text, kind], index) => <li data-kind={kind} style={{ '--i': index() }}><time>{time}</time>{text}</li>}
+                  {([time, text, kind], index) => <li data-kind={kind} style={{ '--i': index() }}><time>{time}</time><span>{text}</span></li>}
                 </For>
               </ol>
               <span data-vesta="scene-console-input">
-                <span data-vesta="scene-console-typed">say Welcome in, Rae</span>
+                <span data-vesta="scene-console-prompt" aria-hidden="true">›</span>
+                <span data-vesta="scene-console-field"><span data-vesta="scene-console-typed">say Welcome in, Rae</span></span>
                 <span data-vesta="scene-button" data-tone="quiet">{t('servers.console.send')}</span>
               </span>
             </div>
@@ -288,7 +294,6 @@ function JoinScene() {
                   <Show when={index() === 0} fallback={<span data-vesta="scene-button" data-tone="outline">{t('browse.server-play')}</span>}>
                     <span data-vesta="scene-join-button">
                       <span data-vesta="scene-join-install"><Icon name="icons/actions/download" size={14} />{t('browse.server-install-play')}</span>
-                      <span data-vesta="scene-join-progress"><i /></span>
                       <span data-vesta="scene-join-play"><Icon name="icons/actions/play" size={14} />{t('browse.server-play')}</span>
                     </span>
                   </Show>

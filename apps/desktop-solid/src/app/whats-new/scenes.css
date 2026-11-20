@@ -17,12 +17,6 @@
  * spacing, type and corners. Every element's resting style is its finished frame and the
  * animations only travel to it, so reduced motion (animation: none) shows a complete picture.
  */
-@property --fill {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 100%;
-}
-
 @layer launcher {
   :where([data-vesta='scene']) {
     --scene-run: 8s;
@@ -413,64 +407,110 @@
 
   :where([data-vesta='scene-console']) {
     display: grid;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto 1fr auto;
+    font-weight: var(--vesta-weight-regular);
     min-block-size: 0;
     background: var(--vesta-color-surface-sunken);
     font-family: var(--vesta-font-mono);
-    font-size: var(--vesta-text-xs);
+    font-size: 11px;
+    line-height: 20px;
   }
 
+  :where([data-vesta='scene-console-bar']) {
+    display: flex;
+    padding: 6px 12px;
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-panel);
+  }
+
+  :where([data-vesta='scene-console-search']) {
+    flex: 1;
+    padding-inline: 8px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text-subtle);
+    font-family: var(--vesta-font-sans);
+    font-size: var(--vesta-text-xs);
+    line-height: 22px;
+  }
+
+  /* Lines start collapsed at the bottom and open to 20px, so each one pushes the rest up. */
   :where([data-vesta='scene-console']) > ol {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 4px;
     margin: 0;
-    padding: 12px 16px;
+    padding: 6px 0;
     overflow: hidden;
     list-style: none;
   }
 
   :where([data-vesta='scene-console']) li {
-    display: flex;
-    gap: 12px;
+    display: grid;
+    flex: none;
+    grid-template-columns: 8ch minmax(0, 1fr);
+    column-gap: 2ch;
+    block-size: 20px;
+    padding-inline: 9px 12px;
+    overflow: hidden;
+    border-inline-start: 3px solid transparent;
+    color: var(--vesta-color-text);
     white-space: nowrap;
-    animation: scene-line 0.25s var(--scene-ease) calc(var(--scene-run) * var(--at, 0)) both;
+    animation: scene-line 0.22s var(--scene-ease) calc(var(--scene-run) * var(--at, 0)) both;
+  }
+
+  :where([data-vesta='scene-console']) li > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   :where([data-vesta='scene-console']) time {
     color: var(--vesta-color-text-subtle);
   }
 
-  :where([data-vesta='scene-console']) li[data-kind='done'] {
-    color: var(--vesta-color-success-text);
+  :where([data-vesta='scene-console']) li[data-kind='warn'] {
+    border-inline-start-color: var(--vesta-color-warning);
+    background: color-mix(in oklab, var(--vesta-color-warning) 7%, transparent);
+    color: var(--vesta-color-warning-text);
   }
 
-  :where([data-vesta='scene-console']) li[data-kind='said'] {
-    color: var(--vesta-color-accent-text);
-  }
-
-  /* When each line arrives, as a share of the run: boot, three people join, a chat, your reply. */
+  /* When each line arrives, as a share of the run: boot, people join, a chat, a hiccup, your reply. */
   :where([data-vesta='scene-console']) li:nth-child(1) { --at: 0.03; }
   :where([data-vesta='scene-console']) li:nth-child(2) { --at: 0.08; }
   :where([data-vesta='scene-console']) li:nth-child(3) { --at: 0.15; }
   :where([data-vesta='scene-console']) li:nth-child(4) { --at: 0.27; }
-  :where([data-vesta='scene-console']) li:nth-child(5) { --at: 0.36; }
-  :where([data-vesta='scene-console']) li:nth-child(6) { --at: 0.43; }
-  :where([data-vesta='scene-console']) li:nth-child(7) { --at: 0.5; }
-  :where([data-vesta='scene-console']) li:nth-child(8) { --at: 0.8; }
+  :where([data-vesta='scene-console']) li:nth-child(5) { --at: 0.34; }
+  :where([data-vesta='scene-console']) li:nth-child(6) { --at: 0.41; }
+  :where([data-vesta='scene-console']) li:nth-child(7) { --at: 0.46; }
+  :where([data-vesta='scene-console']) li:nth-child(8) { --at: 0.52; }
+  :where([data-vesta='scene-console']) li:nth-child(9) { --at: 0.8; }
 
   :where([data-vesta='scene-console-input']) {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-    background: var(--vesta-color-surface);
+    background: var(--vesta-color-panel);
+  }
+
+  :where([data-vesta='scene-console-prompt']) {
+    color: var(--vesta-color-accent-text);
+  }
+
+  :where([data-vesta='scene-console-field']) {
+    flex: 1;
+    min-inline-size: 0;
+    padding-inline: 8px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+    line-height: 22px;
   }
 
   :where([data-vesta='scene-console-typed']) {
-    flex: 1;
+    display: block;
     overflow: hidden;
     color: var(--vesta-color-text);
     white-space: nowrap;
@@ -478,6 +518,7 @@
   }
 
   :where([data-vesta='scene-console-input']) > [data-vesta='scene-button'] {
+    block-size: 24px;
     font-family: var(--vesta-font-sans);
   }
 
@@ -497,7 +538,8 @@
   }
 
   @keyframes scene-line {
-    from { opacity: 0; translate: 0 6px; }
+    from { block-size: 0; opacity: 0; }
+    to { block-size: 20px; opacity: 1; }
   }
 
   /* The command is typed after the chat line, then sent and cleared just before the reply. */
@@ -581,10 +623,13 @@
   }
 
   /* Install & play, the install filling the button, then Play: three faces in one cell. */
+  /* Sized to its label like the real button; while it installs it dims and carries the same
+     slow sweep as Browse's busy install button, then turns into Play. */
   :where([data-vesta='scene-join-button']) {
+    position: relative;
     display: grid;
-    min-inline-size: 132px;
     block-size: 32px;
+    padding-inline: 12px;
     overflow: hidden;
     border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-accent);
@@ -607,18 +652,16 @@
     animation: scene-join-install var(--scene-run) linear both;
   }
 
-  :where([data-vesta='scene-join-progress']) {
-    padding-inline: 14px;
+  :where([data-vesta='scene-join-button'])::after {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--vesta-color-on-accent) 30%, transparent), transparent);
+    background-size: 200% 100%;
+    content: '';
     opacity: 0;
-    animation: scene-join-progress var(--scene-run) linear both;
-  }
-
-  :where([data-vesta='scene-join-progress']) > i {
-    flex: 1;
-    block-size: 4px;
-    border-radius: var(--vesta-radius-full);
-    background: linear-gradient(to right, var(--vesta-color-on-accent) var(--fill, 100%), color-mix(in oklab, var(--vesta-color-on-accent) 30%, transparent) 0);
-    animation: scene-join-fill var(--scene-run) linear both;
+    animation:
+      scene-join-busy var(--scene-run) linear both,
+      scene-join-sweep 1.4s linear infinite;
   }
 
   :where([data-vesta='scene-join-play']) {
@@ -637,18 +680,19 @@
 
   @keyframes scene-join-install {
     0%, 26% { opacity: 1; }
-    28%, 100% { opacity: 0; }
+    28%, 62% { opacity: 0.6; }
+    64%, 100% { opacity: 0; }
   }
 
-  @keyframes scene-join-progress {
+  @keyframes scene-join-busy {
     0%, 26% { opacity: 0; }
     28%, 62% { opacity: 1; }
     64%, 100% { opacity: 0; }
   }
 
-  @keyframes scene-join-fill {
-    0%, 28% { --fill: 0%; }
-    62%, 100% { --fill: 100%; }
+  @keyframes scene-join-sweep {
+    from { background-position: 100% 0; }
+    to { background-position: -100% 0; }
   }
 
   @keyframes scene-join-play {
