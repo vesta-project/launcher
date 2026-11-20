@@ -197,7 +197,7 @@ export function InstanceSettingsTab(props: {
   );
   const [gameOptionsOpen, setGameOptionsOpen] = createSignal(false, { name: 'instanceGameOptionsOpen' });
   const [current, setCurrent] = createSignal("general");
-  let jumpedAt = 0;
+  let pinned = false;
   const [confirm, setConfirm] = createSignal<"reset" | "delete">();
   let scroller: HTMLDivElement | undefined;
 
@@ -237,30 +237,56 @@ export function InstanceSettingsTab(props: {
   };
   const memoryHigh = () => !!(nativeMemory() || !nativeInstances) && draft().maxMemory >= systemMemoryMb() * 0.9;
 
-  // The section nearest the top of the scroller is the current one.
+  // The current section is the last one whose top has passed a reading line near the top of
+  // the scroller. Short sections at the end can never reach that line, so over the final
+  // screen of scrolling the line slides down to the bottom edge: every section gets its turn
+  // and the last one is current at the very bottom.
   onSettled(() => {
     void loadSystemMemory();
-    if (!scroller) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (performance.now() - jumpedAt < 900) return;
-        const visible = entries.find((entry) => entry.isIntersecting);
-        if (visible) setCurrent(visible.target.id.replace("settings-", ""));
-      },
-      { root: scroller, rootMargin: "0px 0px -70% 0px" },
-    );
-    for (const section of scroller.querySelectorAll("section[id]"))
-      observer.observe(section);
-    return () => observer.disconnect();
+    const box = scroller;
+    if (!box) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      if (pinned) return;
+      const sections = [...box.querySelectorAll<HTMLElement>("section[id]")];
+      if (!sections.length) return;
+      const view = box.clientHeight;
+      const remaining = box.scrollHeight - view - box.scrollTop;
+      const top = view * 0.3;
+      const line = remaining >= view ? top : top + (view - top - 1) * (1 - Math.max(remaining, 0) / view);
+      const origin = box.getBoundingClientRect().top;
+      let found = sections[0]!;
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top - origin <= line) found = section;
+        else break;
+      }
+      setCurrent(found.id.replace("settings-", ""));
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
+    // A click on the list holds its choice until the person scrolls on their own.
+    const release = () => { pinned = false; schedule(); };
+    box.addEventListener("scroll", schedule, { passive: true });
+    for (const name of ["wheel", "touchstart", "keydown", "pointerdown"] as const)
+      box.addEventListener(name, release, { passive: true });
+    const resize = new ResizeObserver(schedule);
+    resize.observe(box);
+    schedule();
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      box.removeEventListener("scroll", schedule);
+      for (const name of ["wheel", "touchstart", "keydown", "pointerdown"] as const)
+        box.removeEventListener(name, release);
+    };
   });
   const jump = (section: string) => {
-    jumpedAt = performance.now();
+    pinned = true;
     setCurrent(section);
     scroller
       ?.querySelector(`#settings-${section}`)
       ?.scrollIntoView({ block: "start", behavior: reducedMotion() ? "instant" : "smooth" });
   };
-
   /**
    * A setting that follows the launcher's default until switched to Custom. While it
    * follows, the row shows the default; Custom reveals the fields underneath.
