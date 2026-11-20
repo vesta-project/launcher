@@ -34,16 +34,13 @@ whats-new-look-title = A fresh coat of paint
 whats-new-look-body = A calmer, cleaner launcher that's easy to make your own. Pick a theme, an accent and even the window glass.
 whats-new-look-action = Try a theme
 
-whats-new-browse-title = Browse that feels like browsing
-whats-new-browse-body = Mods, modpacks, shaders and more get proper pages with screenshots, versions and one click installs.
-whats-new-browse-action = Go browse
-
-whats-new-status-title = Always know what's going on
-whats-new-status-body = Downloads and installs live in the status pill up top, so you can keep playing around while they finish.
-
 whats-new-servers-title = Servers for you and your friends
 whats-new-servers-body = Set up a Vesta Server, install a modpack on it and invite your friends, all from the launcher.
 whats-new-servers-action = See servers
 
-whats-new-wardrobe-title = A wardrobe for your skins
-whats-new-wardrobe-body = Try on skins and capes in 3D and switch looks without leaving the launcher.
+whats-new-speed-title = Snappier all round
+whats-new-speed-body = Browse answers your clicks straight away and pages open without the wait, even with a big library.
+
+whats-new-scene-server-name = Survival
+whats-new-scene-server-starting = Starting
+whats-new-scene-server-online = Online

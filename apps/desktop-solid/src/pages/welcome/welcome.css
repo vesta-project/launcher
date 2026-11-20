@@ -993,14 +993,23 @@
     }
   }
 
+  /* Reduced motion: the orbs hold still and the specks go, since frozen they only read as dust. */
   @media (prefers-reduced-motion: reduce) {
-    :where([data-vesta='welcome-orb'], [data-vesta='welcome-speck']) {
+    :where([data-vesta='welcome-orb']) {
       animation: none;
+    }
+
+    :where([data-vesta='welcome-specks']) {
+      display: none;
     }
   }
 
-  html[data-vesta-reduced-motion] :where([data-vesta='welcome-orb'], [data-vesta='welcome-speck']) {
+  html[data-vesta-reduced-motion] :where([data-vesta='welcome-orb']) {
     animation: none;
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='welcome-specks']) {
+    display: none;
   }
 }
 

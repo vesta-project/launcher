@@ -5,7 +5,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { Icon } from '../../../components/icon';
 import { loadReleases, sameVersion, type Release } from '../../../features/changelog/changelog';
 import { changelogOpen, setChangelogOpen } from '../../../features/changelog/dialog-state';
-import { highlightsFor, whatsNew } from '../../../features/whats-new';
+import { highlightsFor, sceneIcons, whatsNew } from '../../../features/whats-new';
 import { openExternal } from '../../../features/links/external-links';
 import { formatDate, t } from '../../../localization';
 import { RichTextView } from '../../browse/project/rich-text-view';
@@ -137,7 +137,7 @@ export function ChangelogDialog(props: { open: boolean; onOpenChange: (open: boo
                           >
                             <span data-vesta="changelog-highlights-art" aria-hidden="true">
                               <For each={featured().highlights.slice(0, 4)}>
-                                {(highlight) => <span><Icon name={highlight.art.icon} size={14} /></span>}
+                                {(highlight) => <span><Icon name={sceneIcons[highlight.scene]} size={14} /></span>}
                               </For>
                             </span>
                             <span data-vesta="changelog-highlights-label">{t('whats-new.watch')}</span>

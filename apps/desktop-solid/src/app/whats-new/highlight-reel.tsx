@@ -1,34 +1,15 @@
 import { Button } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createEffect, createSignal } from 'solid-js';
-import { Icon } from '../../components/icon';
 import type { FeatureRelease, Highlight } from '../../features/whats-new';
 import { t } from '../../localization';
 import { reducedMotion } from '../../pages/welcome/welcome-intro';
+import { Scene } from './scenes';
 
 /** How long each highlight stays up before the reel moves on by itself. */
 const DWELL_MS = 8000;
 
-/** The scene shown for a highlight without a clip: a hero icon with a few drifting around it. */
-function HighlightArt(props: { art: Highlight['art'] }) {
-  return (
-    <div data-vesta="reel-art" aria-hidden="true">
-      <i data-vesta="reel-art-glow" />
-      <span data-vesta="reel-art-hero">
-        <Icon name={props.art.icon} size={44} />
-      </span>
-      <For each={props.art.around}>
-        {(name, index) => (
-          <span data-vesta="reel-art-orb" style={{ '--orb': index() }}>
-            <Icon name={name} size={18} />
-          </span>
-        )}
-      </For>
-    </div>
-  );
-}
-
-function HighlightMedia(props: { highlight: Highlight; active: boolean }) {
+function HighlightMedia(props: { highlight: Highlight; active: boolean; lap: number }) {
   let video: HTMLVideoElement | undefined;
   // Only the showing clip plays, from the start each time it comes round.
   createEffect(
@@ -43,7 +24,8 @@ function HighlightMedia(props: { highlight: Highlight; active: boolean }) {
   );
   return (
     <div data-vesta="reel-media" data-active={props.active ? '' : undefined}>
-      <Show when={props.highlight.clip} fallback={<HighlightArt art={props.highlight.art} />}>
+      {/* The scene is rebuilt each time its highlight comes round, so its story starts over. */}
+      <Show when={props.highlight.clip} fallback={<Show when={props.active && props.lap + 1} keyed><Scene name={props.highlight.scene} /></Show>}>
         {(clip) => (
           <video
             data-vesta="reel-clip"
@@ -67,19 +49,27 @@ function HighlightMedia(props: { highlight: Highlight; active: boolean }) {
  * A release's highlights one at a time, like stories: the media stage on top with a progress
  * segment per highlight, the words underneath. It moves on by itself (held while the picture is
  * pointed at, never with reduced motion) and stops on the last one, where `finish` takes over.
+ * Highlights that can be tried straight away are offered together on that last step, so opening
+ * one never cuts the reel short.
  */
 export function HighlightReel(props: {
   release: FeatureRelease;
   /** The buttons on the last highlight. */
   finish: JSX.Element;
-  /** Highlights can offer to open the feature; the reel's owner decides what that means. */
+  /** Opens a highlight's feature from the last step; the reel's owner decides what that means. */
   onAction?: (route: string) => void;
 }) {
   const [index, setIndex] = createSignal(0, { name: 'reelIndex' });
   const highlights = () => props.release.highlights;
   const current = () => highlights()[index()]!;
   const last = () => index() === highlights().length - 1;
-  const go = (next: number) => setIndex(Math.min(Math.max(next, 0), highlights().length - 1));
+  /** Bumped on every move, so picking a bar (even the current one) restarts its fill and scene. */
+  const [lap, setLap] = createSignal(0, { name: 'reelLap' });
+  const go = (next: number) => {
+    setIndex(Math.min(Math.max(next, 0), highlights().length - 1));
+    setLap((value) => value + 1);
+  };
+  const actions = () => highlights().flatMap((highlight) => (highlight.action ? [highlight.action] : []));
   let root: HTMLDivElement | undefined;
   // The button pressed may be gone on the next highlight (Next becomes the finish), so keep focus in the reel.
   createEffect(index, () => queueMicrotask(() => {
@@ -99,7 +89,7 @@ export function HighlightReel(props: {
     >
       <div data-vesta="reel-stage">
         <For each={highlights()}>
-          {(highlight, at) => <HighlightMedia highlight={highlight} active={at() === index()} />}
+          {(highlight, at) => <HighlightMedia highlight={highlight} active={at() === index()} lap={lap()} />}
         </For>
         <div data-vesta="reel-segments">
           <For each={highlights()}>
@@ -114,7 +104,7 @@ export function HighlightReel(props: {
                 onClick={() => go(at())}
               >
                 {/* Remounted each time it becomes current, so the fill always starts from empty. */}
-                <Show when={at() === index()} fallback={<i data-vesta="reel-segment-fill" />}>
+                <Show when={at() === index() && lap() + 1} keyed fallback={<i data-vesta="reel-segment-fill" />}>
                   <i
                     data-vesta="reel-segment-fill"
                     style={{ '--reel-dwell': `${DWELL_MS}ms` }}
@@ -138,12 +128,14 @@ export function HighlightReel(props: {
       </Show>
 
       <footer data-vesta="reel-actions">
-        <Show when={props.onAction && current().action}>
-          {(action) => (
-            <Button size="sm" variant="ghost" onClick={() => props.onAction?.(action().route)}>
-              {t(action().label)}
-            </Button>
-          )}
+        <Show when={props.onAction && last()}>
+          <For each={actions()}>
+            {(action) => (
+              <Button size="sm" variant="ghost" onClick={() => props.onAction?.(action.route)}>
+                {t(action.label)}
+              </Button>
+            )}
+          </For>
         </Show>
         <span data-vesta="reel-spacer" />
         <Show when={index() > 0}>

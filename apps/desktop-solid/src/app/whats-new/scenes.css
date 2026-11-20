@@ -1,0 +1,381 @@
+/*
+ * What's new scenes (scenes.tsx): one small story per highlight, drawn from theme tokens.
+ *
+ * Hooks:  [data-vesta=scene] (data-scene = paint | server | speed)
+ *         paint: -paint-window, -paint-rail, -paint-grid, -paint-swatches (children --i)
+ *         server: -server-card, -server-head, -server-icon, -server-status, -server-starting,
+ *                 -server-online, -server-players (li --i), -server-console (i --i)
+ *         speed: -speed-page, -speed-search, -speed-grid, -speed-card (--i)
+ * Knobs:  --scene-run (how long one telling lasts; matches the reel's dwell)
+ *
+ * Every element's resting style is its finished frame, and the animations only travel to it,
+ * so reduced motion (animation: none) shows a complete, still picture.
+ */
+@property --paint-shift {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --paint-step {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@layer launcher {
+  :where([data-vesta='scene']) {
+    --scene-run: 8s;
+    --scene-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --scene-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 8% 10%;
+  }
+
+  /* Pointing at the picture holds it, like the progress bars above it. */
+  :where([data-vesta='reel-media']:hover) :where([data-vesta='scene'] *) {
+    animation-play-state: paused;
+  }
+
+  /* ---------- Fresh paint: the window repaints through four accents and comes home ---------- */
+  :where([data-vesta='scene'][data-scene='paint']) {
+    --paint: oklch(from var(--vesta-color-accent) l c calc(h + var(--paint-shift)));
+
+    grid-template-rows: auto auto;
+    align-content: center;
+    gap: 7%;
+    animation: scene-paint-shift var(--scene-run) var(--scene-ease) both;
+  }
+
+  :where([data-vesta='scene-paint-window']) {
+    display: grid;
+    grid-template-columns: 11% 1fr;
+    gap: 5%;
+    inline-size: min(100%, 26rem);
+    aspect-ratio: 16 / 8.5;
+    padding: 4%;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface);
+    box-shadow:
+      0 24px 48px -24px color-mix(in oklab, var(--paint) 55%, transparent),
+      var(--vesta-shadow-md);
+  }
+
+  :where([data-vesta='scene-paint-rail']) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :where([data-vesta='scene-paint-rail']) > i {
+    inline-size: 72%;
+    aspect-ratio: 1;
+    border-radius: 28%;
+    background: var(--vesta-color-fill);
+  }
+
+  :where([data-vesta='scene-paint-rail']) > i:first-child {
+    background: color-mix(in oklab, var(--paint) 35%, var(--vesta-color-fill));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--paint) 70%, transparent);
+  }
+
+  :where([data-vesta='scene-paint-grid']) {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6%;
+  }
+
+  :where([data-vesta='scene-paint-grid']) > i {
+    border-radius: var(--vesta-radius-md);
+    background:
+      linear-gradient(
+        calc(150deg + var(--i) * 25deg),
+        color-mix(in oklab, var(--paint) calc(80% - var(--i) * 8%), var(--vesta-color-surface)),
+        color-mix(in oklab, var(--paint) 18%, var(--vesta-color-surface-sunken))
+      );
+  }
+
+  :where([data-vesta='scene-paint-swatches']) {
+    --swatch: 1.6rem;
+    --swatch-gap: 0.7rem;
+
+    position: relative;
+    display: flex;
+    gap: var(--swatch-gap);
+    animation: scene-paint-step var(--scene-run) var(--scene-ease) both;
+  }
+
+  :where([data-vesta='scene-paint-swatches']) > i {
+    inline-size: var(--swatch);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: oklch(from var(--vesta-color-accent) l c calc(h + var(--i) * 90));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--vesta-color-text) 12%, transparent);
+  }
+
+  /* The fifth swatch is the ring that walks along the four colours. */
+  :where([data-vesta='scene-paint-swatches']) > i:last-child {
+    position: absolute;
+    inset-block: -4px;
+    inset-inline-start: -4px;
+    inline-size: auto;
+    aspect-ratio: 1;
+    background: none;
+    box-shadow: 0 0 0 2px var(--vesta-color-text);
+    translate: calc(var(--paint-step) * (var(--swatch) + var(--swatch-gap))) 0;
+  }
+
+  /* Hold, sweep, hold: 0 → 90 → 180 → 270 → home. */
+  @keyframes scene-paint-shift {
+    0%, 12% { --paint-shift: 0; }
+    20%, 32% { --paint-shift: 90; }
+    40%, 52% { --paint-shift: 180; }
+    60%, 72% { --paint-shift: 270; }
+    80%, 100% { --paint-shift: 360; }
+  }
+
+  @keyframes scene-paint-step {
+    0%, 12% { --paint-step: 0; }
+    20%, 32% { --paint-step: 1; }
+    40%, 52% { --paint-step: 2; }
+    60%, 72% { --paint-step: 3; }
+    80%, 100% { --paint-step: 0; }
+  }
+
+  /* ---------- Vesta Server: it starts, turns green, friends drop in, the console talks ---------- */
+  :where([data-vesta='scene-server-card']) {
+    display: grid;
+    gap: var(--vesta-space-3);
+    inline-size: min(100%, 24rem);
+    padding: var(--vesta-space-4);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface-raised);
+    box-shadow: var(--vesta-shadow-md);
+    animation: scene-rise 0.6s var(--scene-ease) both;
+  }
+
+  :where([data-vesta='scene-server-head']) {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='scene-server-icon']) {
+    inline-size: 1.75rem;
+    aspect-ratio: 1;
+    border-radius: var(--vesta-radius-md);
+    background: linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 40%, var(--vesta-color-surface-sunken)));
+  }
+
+  :where([data-vesta='scene-server-status']) {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 6px;
+    margin-inline-start: auto;
+    padding: 3px 9px 3px 7px;
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-success) 16%, transparent);
+    color: var(--vesta-color-success-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: 600;
+    animation: scene-server-tone var(--scene-run) linear both;
+  }
+
+  :where([data-vesta='scene-server-status']) > i {
+    inline-size: 7px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Both labels share one cell, so the pill keeps its place while the words swap. */
+  :where([data-vesta='scene-server-starting'], [data-vesta='scene-server-online']) {
+    grid-area: 1 / 2;
+  }
+
+  :where([data-vesta='scene-server-starting']) {
+    opacity: 0;
+    animation: scene-server-starting var(--scene-run) linear both;
+  }
+
+  :where([data-vesta='scene-server-online']) {
+    animation: scene-server-online var(--scene-run) linear both;
+  }
+
+  :where([data-vesta='scene-server-players']) {
+    display: flex;
+    gap: var(--vesta-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='scene-server-players']) > li {
+    inline-size: 2rem;
+    aspect-ratio: 1;
+    border-radius: var(--vesta-radius-sm);
+    background:
+      linear-gradient(transparent 55%, color-mix(in oklab, var(--vesta-color-text) 18%, transparent) 55% 70%, transparent 70%),
+      oklch(from var(--vesta-color-accent) l c calc(h + 40 + var(--i) * 75));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--vesta-color-text) 14%, transparent);
+    animation: scene-join calc(var(--scene-run) * 0.07) var(--scene-pop) calc(var(--scene-run) * (0.36 + var(--i) * 0.09)) both;
+  }
+
+  :where([data-vesta='scene-server-console']) {
+    display: grid;
+    gap: 7px;
+    padding: var(--vesta-space-3);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-sunken);
+  }
+
+  :where([data-vesta='scene-server-console']) > i {
+    block-size: 6px;
+    inline-size: 80%;
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-text) 22%, transparent);
+    transform-origin: left;
+    animation: scene-type calc(var(--scene-run) * 0.06) var(--scene-ease) calc(var(--scene-run) * (0.06 + var(--i) * 0.13)) both;
+  }
+
+  :where([data-vesta='scene-server-console']) > i:nth-child(2) { inline-size: 55%; }
+  :where([data-vesta='scene-server-console']) > i:nth-child(3) { inline-size: 68%; }
+
+  :where([data-vesta='scene-server-console']) > i:last-child {
+    inline-size: 42%;
+    background: color-mix(in oklab, var(--vesta-color-success) 55%, transparent);
+  }
+
+  @keyframes scene-server-tone {
+    0%, 30% {
+      background: color-mix(in oklab, var(--vesta-color-warning) 16%, transparent);
+      color: var(--vesta-color-warning-text);
+    }
+    34%, 100% {
+      background: color-mix(in oklab, var(--vesta-color-success) 16%, transparent);
+      color: var(--vesta-color-success-text);
+    }
+  }
+
+  @keyframes scene-server-starting {
+    0%, 30% { opacity: 1; }
+    34%, 100% { opacity: 0; }
+  }
+
+  @keyframes scene-server-online {
+    0%, 30% { opacity: 0; }
+    34%, 100% { opacity: 1; }
+  }
+
+  @keyframes scene-join {
+    from { opacity: 0; scale: 0.4; }
+  }
+
+  @keyframes scene-type {
+    from { scale: 0 1; }
+  }
+
+  @keyframes scene-rise {
+    from { opacity: 0; translate: 0 12px; }
+  }
+
+  /* ---------- Faster: the search settles and the results are already there, again and again ---------- */
+  :where([data-vesta='scene-speed-page']) {
+    --speed-loop: 2.4s;
+
+    display: grid;
+    gap: var(--vesta-space-3);
+    inline-size: min(100%, 26rem);
+  }
+
+  :where([data-vesta='scene-speed-search']) {
+    display: flex;
+    align-items: center;
+    block-size: 1.9rem;
+    padding-inline: var(--vesta-space-3);
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+  }
+
+  :where([data-vesta='scene-speed-search']) > i {
+    block-size: 6px;
+    inline-size: 34%;
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-text) 40%, transparent);
+    transform-origin: left;
+    animation: scene-speed-type var(--speed-loop) var(--scene-ease) infinite both;
+  }
+
+  :where([data-vesta='scene-speed-grid']) {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='scene-speed-card']) {
+    display: grid;
+    gap: 5px;
+    padding: 6px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-md);
+    background: var(--vesta-color-surface-raised);
+    animation: scene-speed-card var(--speed-loop) var(--scene-ease) calc(var(--i) * 25ms) infinite both;
+  }
+
+  :where([data-vesta='scene-speed-card']) > i {
+    aspect-ratio: 16 / 9;
+    border-radius: var(--vesta-radius-sm);
+    background: linear-gradient(
+      135deg,
+      oklch(from var(--vesta-color-accent) l c calc(h + var(--i) * 50)),
+      color-mix(in oklab, var(--vesta-color-accent) 20%, var(--vesta-color-surface-sunken))
+    );
+  }
+
+  :where([data-vesta='scene-speed-card']) > b {
+    block-size: 5px;
+    inline-size: 80%;
+    border-radius: var(--vesta-radius-full);
+    background: color-mix(in oklab, var(--vesta-color-text) 24%, transparent);
+  }
+
+  :where([data-vesta='scene-speed-card']) > b:last-child {
+    inline-size: 50%;
+    background: color-mix(in oklab, var(--vesta-color-text) 12%, transparent);
+  }
+
+  /* Type, results land almost at once, hold, clear for the next search. */
+  @keyframes scene-speed-type {
+    0% { scale: 0 1; }
+    14%, 88% { scale: 1 1; }
+    96%, 100% { scale: 0 1; }
+  }
+
+  @keyframes scene-speed-card {
+    0%, 16% { opacity: 0; translate: 0 6px; }
+    22%, 88% { opacity: 1; translate: 0 0; }
+    96%, 100% { opacity: 0; translate: 0 0; }
+  }
+
+  /* ---------- Reduced motion: every scene rests on its finished frame ---------- */
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='scene'], [data-vesta='scene'] *) {
+      animation: none;
+    }
+  }
+
+  html[data-vesta-reduced-motion] :where([data-vesta='scene'], [data-vesta='scene'] *) {
+    animation: none;
+  }
+}

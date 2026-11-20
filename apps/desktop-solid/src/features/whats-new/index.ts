@@ -2,8 +2,9 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { REWRITE_VERSION, compareCores, momentFor, type LaunchVersions, type Moment } from './moments';
 import { featuredVersions, findRelease, releases } from './releases';
+export { sceneIcons } from './releases';
 export type { Moment } from './moments';
-export type { FeatureRelease, Highlight } from './releases';
+export type { FeatureRelease, Highlight, SceneName } from './releases';
 
 /**
  * "What's new" after an update. The host remembers the version of the previous launch; the
