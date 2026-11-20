@@ -12,7 +12,7 @@ import { HostGuide } from './onboarding';
 import { addRoute } from '../../features/servers/onboarding-model';
 import { groupServers } from '../../features/servers/host-model';
 import { serverArt } from '../../features/servers/art';
-import { addConnectionId, clearAdd, hostReach, hosts, serverAddJob, serverAddJobs, vestaHost, type AddTask } from '../../features/servers/hosts-store';
+import { addConnectionId, clearAdd, hostReach, hosts, loadHostServers, serverAddJob, serverAddJobs, vestaHost, type AddTask } from '../../features/servers/hosts-store';
 import type { VestaHost } from '../../features/servers/native-hosts';
 import type { ServerSnapshot } from '../../features/servers/native';
 import { HostAdd, ProgressStep } from './host-add';
@@ -21,7 +21,6 @@ import { ServerCard } from './server-card';
 import { ServerWorkspace } from './server-page';
 import { ServerErrorNote } from './parts';
 import { VestaSetup } from './vesta-setup';
-import { Reach } from './vesta-parts';
 import '../library/library-page.css';
 import './servers.css';
 import './vesta-server.css';
@@ -80,12 +79,6 @@ function ServerList() {
   const empty = () => serverSnapshots().length === 0 && serverAddJobs().length === 0;
   return (
     <Board>
-      <Show when={!empty() && single()}>
-        {(host) => <header data-vesta="vesta-group-header">
-          <h2><Button size="sm" variant="ghost" icon={<Icon name="icons/rail/servers" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>{host().name}</Button></h2>
-          <Reach hostId={host().id} />
-        </header>}
-      </Show>
       <ServerErrorNote error={serversListError()} onRetry={() => void refreshServers()} />
       <Switch>
         <Match when={empty() && hosts().length === 0}>
@@ -102,8 +95,8 @@ function ServerList() {
           <For each={groups()} keyed={(group) => group.key}>
             {(group) => (
               <ServerGroup host={group().host} other={group().key === 'other'} servers={group().servers} now={now()}
-                hostId={group().host?.id ?? single()?.id}
-                addTo={group().host?.id ?? (group().key === 'all' ? single()?.id ?? null : undefined)} />
+                foldable={groups().length > 1} hostId={group().host?.id}
+                addTo={group().host?.id ?? (group().key === 'all' ? null : undefined)} />
             )}
           </For>
         </Match>
@@ -117,12 +110,14 @@ function ServerList() {
   );
 }
 
-/** One machine, no servers yet: the machine, whether it's online, and the one next step. */
+/** One machine, no servers yet: the machine, and the one next step it can take right now. */
 function MachineEmpty(props: { host: VestaHost }) {
   return (
-    <EmptyState icon="icons/rail/servers" title={props.host.name} status={<Reach hostId={props.host.id} />}
+    <EmptyState icon="icons/rail/servers" title={props.host.name} status={<MachineState hostId={props.host.id} />}
       description={t(hostReach(props.host.id) === 'offline' ? 'vesta-server.list.machine-offline' : 'vesta-server.list.machine-empty', { name: props.host.name })}>
-      <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/add`)}>{t('vesta-server.list.add-first')}</Button>
+      <Show when={hostReach(props.host.id) !== 'offline'}>
+        <Button tone="accent" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo(`/servers/host/${props.host.id}/add`)}>{t('vesta-server.list.add-first')}</Button>
+      </Show>
       <Button variant="ghost" icon={<Icon name="icons/rail/settings" />} onClick={() => transitionTo(`/servers/host/${props.host.id}`)}>{t('vesta-server.list.machine-settings')}</Button>
     </EmptyState>
   );
@@ -159,23 +154,58 @@ function ServerGrid(props: { servers: ServerSnapshot[]; now: number; label: stri
   );
 }
 
-function ServerGroup(props: { host: VestaHost | null; other: boolean; servers: ServerSnapshot[]; now: number; hostId?: string; addTo: string | null | undefined }) {
-  const [expanded, setExpanded] = createSignal(true);
+/**
+ * One machine and its servers. The heading is the machine's name and its settings; it only
+ * folds when there is more than one group. A machine that answers says nothing more. One that
+ * doesn't greys its cards out, hides adding a server, and offers to try again.
+ */
+function ServerGroup(props: { host: VestaHost | null; other: boolean; foldable: boolean; servers: ServerSnapshot[]; now: number; hostId?: string; addTo: string | null | undefined }) {
+  const [expanded, setExpanded] = createSignal(true, { name: 'servers:group-expanded' });
   const label = () => props.host?.name ?? t(props.other ? 'vesta-server.list.other' : 'servers.title');
+  const reach = () => (props.host ? hostReach(props.host.id) : undefined);
+  const open = () => expanded() || !props.foldable;
   return (
-    <section data-vesta="vesta-server-group" aria-label={label()}>
+    <section data-vesta="vesta-server-group" data-reach={reach()} aria-label={label()}>
       <Show when={props.host} fallback={<Show when={props.other}><header data-vesta="vesta-group-header"><h2>{label()}</h2></header></Show>}>
         {(host) => <header data-vesta="vesta-group-header">
-          <h2><Button size="sm" variant="ghost" aria-expanded={expanded() ? 'true' : 'false'}
-            icon={<Icon name={expanded() ? 'icons/controls/chevron-down' : 'icons/controls/chevron-right'} size={14} />}
-            onClick={() => setExpanded(!expanded())}>{label()}</Button></h2>
-          <Reach hostId={host().id} />
+          <Show when={props.foldable} fallback={<h2>{label()}</h2>}>
+            <h2><Button size="sm" variant="ghost" aria-expanded={expanded() ? 'true' : 'false'}
+              icon={<Icon name={expanded() ? 'icons/controls/chevron-down' : 'icons/controls/chevron-right'} size={14} />}
+              onClick={() => setExpanded(!expanded())}>{label()}</Button></h2>
+          </Show>
           <IconButton size="sm" variant="ghost" label={t('vesta-server.list.settings', { name: label() })} icon={<Icon name="icons/rail/settings" />}
             onClick={() => transitionTo(`/servers/host/${host().id}`)} />
+          <MachineState hostId={host().id} />
         </header>}
       </Show>
-      <Show when={expanded()}><ServerGrid servers={props.servers} now={props.now} label={label()} hostId={props.hostId} addTo={props.addTo} /></Show>
+      <Show when={open()}>
+        <ServerGrid servers={props.servers} now={props.now} label={label()} hostId={props.hostId}
+          addTo={reach() === 'offline' ? undefined : props.addTo} />
+      </Show>
     </section>
+  );
+}
+
+/** Nothing while the machine answers; a quiet word while checking; when it doesn't, a way to try again. */
+function MachineState(props: { hostId: string }) {
+  const [retrying, setRetrying] = createSignal(false, { name: 'servers:machine-retrying' });
+  const retry = async () => {
+    setRetrying(true);
+    try { await loadHostServers(props.hostId); await refreshServers(); } finally { setRetrying(false); }
+  };
+  return (
+    <Switch>
+      <Match when={hostReach(props.hostId) === 'checking' || retrying()}>
+        <span data-vesta="vesta-machine-state" role="status">{t('vesta-server.list.checking')}</span>
+      </Match>
+      <Match when={hostReach(props.hostId) === 'offline'}>
+        <span data-vesta="vesta-machine-state" data-state="offline" role="status">
+          <Icon name="icons/status/connection-lost" size={14} />
+          {t('vesta-server.list.not-answering')}
+          <Button size="sm" variant="ghost" onClick={() => void retry()}>{t('vesta-server.list.try-again')}</Button>
+        </span>
+      </Match>
+    </Switch>
   );
 }
 

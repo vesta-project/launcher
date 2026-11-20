@@ -4187,6 +4187,8 @@ export const messageIds = [
   "vesta-server.list.settings",
   "vesta-server.list.add-first",
   "vesta-server.list.checking",
+  "vesta-server.list.not-answering",
+  "vesta-server.list.try-again",
   "vesta-server.list.machine-empty",
   "vesta-server.list.machine-offline",
   "vesta-server.list.offline",

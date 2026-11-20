@@ -118,6 +118,8 @@ vesta-server-list-add-first = Create your first server
 vesta-server-list-online = Online
 vesta-server-list-offline = Offline
 vesta-server-list-checking = Checking
+vesta-server-list-not-answering = Not answering
+vesta-server-list-try-again = Try again
 vesta-server-list-importing = Adding { $name } ({ $percent }%)
 
 vesta-server-connection-runs-on = Runs on

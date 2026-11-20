@@ -507,7 +507,7 @@ export interface ServerGroup<S> { key: string; host: VestaHost | null; servers: 
  * With one machine (or none) everything is a single unnamed group, as before.
  */
 export function groupServers<S extends Pick<ServerSnapshot, 'connection'>>(snapshots: readonly S[], hosts: readonly VestaHost[]): ServerGroup<S>[] {
-  if (hosts.length < 2) return [{ key: 'all', host: null, servers: [...snapshots] }];
+  if (hosts.length === 0) return [{ key: 'all', host: null, servers: [...snapshots] }];
   const groups: ServerGroup<S>[] = hosts.map((host) => ({ key: `host:${host.id}`, host, servers: [] }));
   const other: ServerGroup<S> = { key: 'other', host: null, servers: [] };
   for (const snapshot of snapshots) {

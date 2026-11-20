@@ -309,12 +309,12 @@ describe('[hosts] folders on the machine', () => {
 });
 
 describe('[hosts] servers list', () => {
-  test('servers group under their machine only when there is more than one machine', () => {
+  test('servers group under their machine as soon as there is one', () => {
     const list = [snapshot('h1:s1'), snapshot('h2:s2'), snapshot('legacy', 'pairing_code'), snapshot('h1:s3')];
     expect(hostIdOf(list[0])).toBe('h1');
     expect(hostIdOf(list[2])).toBeNull();
     expect(groupServers(list, []).map((group) => group.servers.length)).toEqual([4]);
-    expect(groupServers(list, [host('h1')])).toEqual([{ key: 'all', host: null, servers: list }]);
+    expect(groupServers(list, [host('h1')]).map((group) => [group.key, group.servers.length])).toEqual([['host:h1', 2], ['other', 2]]);
     const grouped = groupServers(list, [host('h1', 'people-server'), host('h2', 'attic')]);
     expect(grouped.map((group) => [group.key, group.servers.map((entry) => entry.connection.id)])).toEqual([
       ['host:h1', ['h1:s1', 'h1:s3']], ['host:h2', ['h2:s2']], ['other', ['legacy']],
