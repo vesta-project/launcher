@@ -150,6 +150,7 @@ function seedRoot(): Root {
   text('eula.txt', '#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://aka.ms/MinecraftEULA).\n#Tue Sep 30 18:02:11 UTC 2026\neula=true\n', 21 * DAY);
   text('whitelist.json', '[\n  {\n    "uuid": "853c80ef-3c37-49fd-aa49-938b674adae6",\n    "name": "Alex"\n  }\n]\n');
   text('ops.json', '[]\n');
+  text('README.md', '# Riverside SMP\n\nA friendly survival server. **Be nice**, build big.\n\n## Rules\n\n- No griefing\n- Ask before using `/tp`\n- Have fun\n\n```\nview-distance=12\n```\n\nSee [the wiki](https://example.com) for more.\n');
   text('banned-players.json', '[]\n');
   text('banned-ips.json', '[]\n');
   text('usercache.json', '[{"name":"Alex","uuid":"853c80ef-3c37-49fd-aa49-938b674adae6","expiresOn":"2026-11-18 09:12:40 +0000"}]\n', 3600_000);

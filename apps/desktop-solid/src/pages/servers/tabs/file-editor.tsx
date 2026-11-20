@@ -1,8 +1,11 @@
-import { Badge, Button, Dialog, IconButton, Skeleton, TextArea, toast } from '@vesta/ui';
+import { Badge, Button, Dialog, IconButton, SegmentedControl, Skeleton, TextArea, toast } from '@vesta/ui';
 import { Show, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 import { navigate, setLeaveGuard } from '../../../app/router';
 import { transitionTo } from '../../../app/transition';
 import { Icon } from '../../../components/icon';
+import { CodeEditor } from '../../../components/code-editor/code-editor';
+import { languageFor } from '../../../components/code-editor/highlight';
+import { RichTextView } from '../../browse/project/rich-text-view';
 import { t } from '../../../localization';
 import { baseName, changedLineCount, fileActions, fileIcon, fileKind, formatBytes, saveText, saveTextFile, type TextFileSource } from '../../../features/servers/files-model';
 import { IntentMemo } from '../../../features/servers/model';
@@ -50,6 +53,9 @@ export function FileEditor(props: {
   /** Where the user tried to go with unsaved edits: a route, or `close` for the Back button. */
   const [leaving, setLeaving] = createSignal<string | null>(null, { name: 'server-file-editor:leaving' });
   let rawLeave: string | null = null;
+  const language = () => languageFor(props.path);
+  /** Markdown opens as a page to read; Edit switches to the text. */
+  const [mode, setMode] = createSignal<'preview' | 'edit'>(languageFor(untrack(() => props.path)) === 'markdown' ? 'preview' : 'edit', { name: 'server-file-editor:mode' });
   const saveKeys = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S';
 
   const load = async () => {
@@ -194,6 +200,10 @@ export function FileEditor(props: {
         <Show when={file()}>{(current) => <span data-vesta="server-file-meta">{formatBytes(current().size)}</span>}</Show>
         <Show when={file() && !editable()}><Badge size="sm" variant="soft">{t('server-files.read-only')}</Badge></Show>
         <span data-vesta="server-toolbar-spacer" />
+        <Show when={language() === 'markdown' && file() && !file()!.binary}>
+          <SegmentedControl size="sm" aria-label={t('editor.preview')} value={mode()} onChange={(value) => setMode(value as 'preview' | 'edit')}
+            options={[{ value: 'preview', label: t('editor.preview') }, { value: 'edit', label: t('editor.edit') }]} />
+        </Show>
         {/* Save lives in the bar, always in the same place, so editing never moves the page. */}
         <Show when={dirty()}>
           <span data-vesta="server-file-dirty" role="status">
@@ -224,8 +234,14 @@ export function FileEditor(props: {
         <Show when={gone()}><p data-vesta="server-callout" data-tone="warning">{t('server-files.deleted-on-server')}</p></Show>
         <Show when={file()} fallback={<Show when={!error()}><Skeleton height={240} /></Show>}>
           <Show when={!file()!.binary} fallback={<p data-vesta="server-muted">{t('server-files.binary')}</p>}>
-            <TextArea class="server-file-textarea" aria-label={t('server-files.editor', { name: baseName(props.path) })}
-              value={draft()} onChange={setDraft} readOnly={!editable()} spellcheck={false} wrap="off" />
+            <Show when={language() === 'markdown' && mode() === 'preview'} fallback={
+              <CodeEditor class="server-file-code" language={language()} aria-label={t('server-files.editor', { name: baseName(props.path) })}
+                value={draft()} onChange={setDraft} readOnly={!editable()} />
+            }>
+              <div data-vesta="server-file-preview">
+                <RichTextView source={draft()} format="markdown" aria-label={baseName(props.path)} />
+              </div>
+            </Show>
           </Show>
         </Show>
       </div>

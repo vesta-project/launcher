@@ -1,0 +1,131 @@
+/*
+ * Code editor: a transparent textarea over a coloured copy of the visible lines.
+ * Hooks:  [data-vesta=code-editor] (data-language) -find -count -body -overlay -input
+ *         overlay tokens: span[data-token=key|string|number|literal|comment|section|punct|
+ *         heading|code|warn|error|muted], mark (data-current)
+ * Knobs:  --code-editor-font-size
+ *
+ * The textarea and the overlay share font, size, line height (20px), padding and tab size, so
+ * each character of the overlay sits exactly under the caret's text.
+ */
+@layer launcher {
+  :where([data-vesta='code-editor']) {
+    --code-editor-font-size: 12.5px;
+    --_pad-block: var(--vesta-space-2);
+    --_pad-inline: var(--vesta-space-3);
+
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 240px;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+  }
+
+  :where([data-vesta='code-editor']):focus-within {
+    border-color: var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='code-editor-find']) {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    padding: var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-1) var(--vesta-space-3);
+    border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-panel);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='code-editor-find']) > input {
+    flex: 1;
+    min-inline-size: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--vesta-color-text);
+    font: inherit;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='code-editor-count']) {
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='code-editor-body']) {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+    overflow: hidden;
+  }
+
+  :where([data-vesta='code-editor-overlay'], [data-vesta='code-editor-input']) {
+    margin: 0;
+    padding: var(--_pad-block) var(--_pad-inline);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--code-editor-font-size);
+    font-variant-ligatures: none;
+    line-height: 20px;
+    tab-size: 4;
+    white-space: pre;
+    letter-spacing: 0;
+  }
+
+  :where([data-vesta='code-editor-overlay']) {
+    position: absolute;
+    inset: 0 auto auto 0;
+    min-inline-size: 100%;
+    color: var(--vesta-color-text);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  :where([data-vesta='code-editor-input']) {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    overflow: auto;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--vesta-color-text);
+    resize: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--vesta-color-border-strong) transparent;
+  }
+
+  :where([data-vesta='code-editor-input'])::selection {
+    background: color-mix(in oklab, var(--vesta-color-accent) 35%, transparent);
+    color: transparent;
+  }
+
+  /* ---- Token colours, from the theme ---- */
+  :where([data-vesta='code-editor-overlay'] [data-token='key']) { color: var(--vesta-color-accent-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='string']) { color: var(--vesta-color-success-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='number'], [data-vesta='code-editor-overlay'] [data-token='literal']) { color: var(--vesta-color-warning-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='comment'], [data-vesta='code-editor-overlay'] [data-token='muted']) { color: var(--vesta-color-text-subtle); }
+  :where([data-vesta='code-editor-overlay'] [data-token='section']) { color: var(--vesta-color-info-text); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta='code-editor-overlay'] [data-token='punct']) { color: var(--vesta-color-text-muted); }
+  :where([data-vesta='code-editor-overlay'] [data-token='heading']) { color: var(--vesta-color-accent-text); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta='code-editor-overlay'] [data-token='code']) { color: var(--vesta-color-info-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='warn']) { color: var(--vesta-color-warning-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='error']) { color: var(--vesta-color-danger-text); }
+
+  :where([data-vesta='code-editor-overlay'] mark) {
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--vesta-color-warning) 30%, transparent);
+    color: inherit;
+  }
+
+  :where([data-vesta='code-editor-overlay'] mark[data-current]) {
+    background: color-mix(in oklab, var(--vesta-color-warning) 65%, transparent);
+    outline: 1px solid var(--vesta-color-warning);
+  }
+}

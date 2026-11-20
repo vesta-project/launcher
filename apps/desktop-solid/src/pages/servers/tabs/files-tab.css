@@ -187,6 +187,23 @@
     background: var(--vesta-color-warning);
   }
 
+  /* The code editor fills the pane below the file bar. */
+  :where(.server-file-code) {
+    min-block-size: 320px;
+  }
+
+  /* Markdown, read as a page: the same rich text as a project's description in Browse. */
+  :where([data-vesta="server-file-preview"]) {
+    flex: 1;
+    min-block-size: 320px;
+    max-inline-size: 80ch;
+    padding: var(--vesta-space-4) var(--vesta-space-5);
+    overflow: auto;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface);
+  }
+
   :where(.server-file-textarea) {
     display: flex;
     flex: 1;
