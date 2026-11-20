@@ -13,13 +13,8 @@ const presets = [
   { id: 'paranoid', icon: 'icons/security/lock', reach: 1, name: 'prefs.sandbox.preset-paranoid', text: 'prefs.sandbox.preset-paranoid-description' },
 ] as const;
 
-/** Wrapper order, as the layers around the game from the outside in. */
-const nestings = [
-  { id: 'sandbox-outside', outer: 'sandbox', inner: 'wrapper', label: 'prefs.sandbox.nesting-sandbox' },
-  { id: 'wrapper-outside', outer: 'wrapper', inner: 'sandbox', label: 'prefs.sandbox.nesting-wrapper' },
-] as const;
-
-const layerLabels = { sandbox: 'prefs.sandbox.layer-sandbox', wrapper: 'prefs.sandbox.layer-wrapper' } as const;
+/** The places a game might want, from its own folder outwards; a preset reaches the first few. */
+const places = ['prefs.sandbox.reach-instance', 'prefs.sandbox.reach-game', 'prefs.sandbox.reach-home'] as const;
 
 export function SandboxSettings() {
   const [folder, setFolder] = createSignal('');
@@ -35,14 +30,15 @@ export function SandboxSettings() {
     onChange: (value: string) => updateSetting(key, value.trim() ? value : null),
   });
   const preset = () => presets.find((entry) => entry.id === setting('default_sandbox_preset')) ?? presets[0];
+  /** The sandbox wraps the wrapper (the default), or the other way round. */
+  const outerFirst = () => setting('default_sandbox_wrapper_nesting') !== 'wrapper-outside';
   const hasHooks = () =>
     !!(setting('default_pre_launch_hook') || setting('default_wrapper_command') || setting('default_post_exit_hook'));
   return (
     <>
       {/*
-        One card for what the game may reach: the presets as a scale from open to locked down
-        (each with how far it reaches), and the wrapper order drawn as the layers around the game,
-        the sandbox layer in the chosen preset's colour.
+        What the game may reach: the presets, then plainly what the chosen one lets it touch, and
+        the order the wrapper and sandbox wrap the game in, as one line with a swap.
       */}
       <Card title={t('prefs.sandbox.preset')} description={t('prefs.sandbox.preset-description')}>
         <div data-vesta="prefs-sandbox" data-preset={preset().id}>
@@ -52,44 +48,44 @@ export function SandboxSettings() {
                 <li>
                   <button type="button" role="radio" data-preset={entry.id}
                     aria-checked={preset().id === entry.id ? 'true' : 'false'}
+                    title={t(entry.text)}
                     onClick={() => updateSetting('default_sandbox_preset', entry.id)}>
                     <Icon name={entry.icon} size={20} />
                     <strong>{t(entry.name)}</strong>
-                    <span data-vesta="prefs-preset-reach" aria-hidden="true">
-                      <For each={[1, 2, 3]}>{(step) => <i data-on={step <= entry.reach ? '' : undefined} />}</For>
-                    </span>
-                    <small>{t(entry.text)}</small>
                   </button>
                 </li>
               )}
             </For>
           </ul>
 
-          <div data-vesta="prefs-nesting">
-            <div>
-              <strong>{t('prefs.sandbox.nesting')}</strong>
-              <small>{t('prefs.sandbox.nesting-description')}</small>
-            </div>
-            <ul role="radiogroup" aria-label={t('prefs.sandbox.nesting')}>
-              <For each={nestings}>
-                {(entry) => (
-                  <li>
-                    <button type="button" role="radio" aria-label={t(entry.label)}
-                      aria-checked={setting('default_sandbox_wrapper_nesting') === entry.id ? 'true' : 'false'}
-                      onClick={() => updateSetting('default_sandbox_wrapper_nesting', entry.id as never)}>
-                      <span data-vesta="prefs-layer" data-layer={entry.outer}>
-                        <small>{t(layerLabels[entry.outer])}</small>
-                        <span data-vesta="prefs-layer" data-layer={entry.inner}>
-                          <small>{t(layerLabels[entry.inner])}</small>
-                          <span data-vesta="prefs-layer" data-layer="game"><small>{t('prefs.sandbox.layer-game')}</small></span>
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </div>
+          <dl data-vesta="prefs-sandbox-facts">
+            <dt>{t('prefs.sandbox.reach')}</dt>
+            <dd>
+              <ul data-vesta="prefs-reach">
+                <For each={[...places]}>
+                  {(place, index) => (
+                    <li data-allowed={index() < preset().reach ? '' : undefined}>
+                      <Icon name={index() < preset().reach ? 'icons/controls/check' : 'icons/actions/close'} size={14} />
+                      {t(place)}
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </dd>
+            <dt>{t('prefs.sandbox.nesting')}</dt>
+            <dd data-vesta="prefs-order" title={t('prefs.sandbox.nesting-description')}>
+              <span>{t(outerFirst() ? 'prefs.sandbox.layer-sandbox' : 'prefs.sandbox.layer-wrapper')}</span>
+              <Icon name="icons/controls/chevron-right" size={12} />
+              <span>{t(outerFirst() ? 'prefs.sandbox.layer-wrapper' : 'prefs.sandbox.layer-sandbox')}</span>
+              <Icon name="icons/controls/chevron-right" size={12} />
+              <span>{t('prefs.sandbox.layer-game')}</span>
+              <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/swap" />}
+                aria-label={t(outerFirst() ? 'prefs.sandbox.nesting-wrapper' : 'prefs.sandbox.nesting-sandbox')}
+                onClick={() => updateSetting('default_sandbox_wrapper_nesting', (outerFirst() ? 'wrapper-outside' : 'sandbox-outside') as never)}>
+                {t('prefs.sandbox.swap')}
+              </Button>
+            </dd>
+          </dl>
         </div>
       </Card>
 

@@ -1,6 +1,6 @@
 /*
  * Sandbox page: presets and wrapper order in one card, extra folders.
- * Hooks: [data-vesta=prefs-sandbox] (data-preset), -presets, -preset-reach, -nesting, -layer (data-layer),
+ * Hooks: [data-vesta=prefs-sandbox] (data-preset), -presets, -sandbox-facts, -reach (li data-allowed), -order,
  *        [data-vesta=prefs-folders] [data-vesta=prefs-add-folder]
  * Knobs: --preset-tone
  */
@@ -29,10 +29,9 @@
   }
 
   :where([data-vesta='prefs-presets'] button) {
-    display: grid;
-    grid-template-columns: auto 1fr;
+    display: flex;
     align-items: center;
-    gap: var(--vesta-space-1) var(--vesta-space-2);
+    gap: var(--vesta-space-2);
     inline-size: 100%;
     block-size: 100%;
     padding: var(--vesta-space-3);
@@ -67,126 +66,63 @@
     outline-offset: var(--vesta-focus-offset);
   }
 
-  :where([data-vesta='prefs-presets'] button) > small {
-    grid-column: 1 / -1;
+  /* What the chosen preset lets the game touch, and the order around it: two quiet lines. */
+  :where([data-vesta='prefs-sandbox-facts']) {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-4);
+    margin: 0;
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='prefs-sandbox-facts']) > dt {
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
   }
 
-  /* How far the game reaches: three steps, filled in the preset's tone. */
-  :where([data-vesta='prefs-preset-reach']) {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
-    margin-block: var(--vesta-space-1);
+  :where([data-vesta='prefs-sandbox-facts']) > dd {
+    margin: 0;
   }
 
-  :where([data-vesta='prefs-preset-reach']) > i {
-    block-size: 4px;
-    border-radius: var(--vesta-radius-full);
-    background: var(--vesta-color-fill-active);
-  }
-
-  :where([data-vesta='prefs-preset-reach']) > i[data-on] {
-    background: var(--preset-tone);
-  }
-
-  /* Wrapper order: the layers around the game, drawn from the outside in. */
-  :where([data-vesta='prefs-nesting']) {
-    display: grid;
-    gap: var(--vesta-space-2);
-    padding-block-start: var(--vesta-space-4);
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
-  }
-
-  :where([data-vesta='prefs-nesting']) > div {
-    display: grid;
-    gap: 2px;
-  }
-
-  :where([data-vesta='prefs-nesting']) > div > strong {
-    font-size: var(--vesta-text-sm);
-    font-weight: var(--vesta-weight-semibold);
-  }
-
-  :where([data-vesta='prefs-nesting']) > div > small {
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-sm);
-  }
-
-  :where([data-vesta='prefs-nesting']) > ul {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--vesta-space-2);
+  :where([data-vesta='prefs-reach']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vesta-space-1) var(--vesta-space-4);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  :where([data-vesta='prefs-nesting'] button) {
-    display: block;
-    inline-size: 100%;
-    padding: var(--vesta-space-2);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-surface);
-    font: inherit;
-    cursor: default;
-    transition: border-color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  :where([data-vesta='prefs-reach']) > li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-1-5);
+    color: var(--vesta-color-text-subtle);
+    text-decoration: line-through;
   }
 
-  :where([data-vesta='prefs-nesting'] button:hover) {
-    border-color: var(--vesta-color-border-strong);
+  :where([data-vesta='prefs-reach']) > li[data-allowed] {
+    color: var(--vesta-color-text);
+    text-decoration: none;
   }
 
-  :where([data-vesta='prefs-nesting'] button[aria-checked='true']) {
-    border-color: var(--vesta-color-accent);
-    box-shadow: inset 0 0 0 1px var(--vesta-color-accent);
-  }
-
-  :where([data-vesta='prefs-nesting'] button:focus-visible) {
-    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
-    outline-offset: var(--vesta-focus-offset);
-  }
-
-  :where([data-vesta='prefs-layer']) {
-    display: grid;
-    gap: var(--vesta-space-1);
-    padding: var(--vesta-space-1-5) var(--vesta-space-2) var(--vesta-space-2);
-    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
-    border-radius: var(--vesta-radius-md);
-    text-align: start;
-  }
-
-  :where([data-vesta='prefs-layer']) > small {
-    color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-    font-weight: var(--vesta-weight-medium);
-  }
-
-  :where([data-vesta='prefs-layer'][data-layer='sandbox']) {
-    border-color: color-mix(in oklab, var(--preset-tone) 70%, transparent);
-    background: color-mix(in oklab, var(--preset-tone) 8%, transparent);
-  }
-
-  :where([data-vesta='prefs-layer'][data-layer='sandbox']) > small {
+  :where([data-vesta='prefs-reach']) > li[data-allowed] > [data-vesta='icon'] {
     color: var(--preset-tone);
   }
 
-  :where([data-vesta='prefs-layer'][data-layer='wrapper']) {
-    border-style: dashed;
+  :where([data-vesta='prefs-order']) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
   }
 
-  :where([data-vesta='prefs-layer'][data-layer='game']) {
-    padding-block: var(--vesta-space-2);
-    border-color: transparent;
-    background: var(--vesta-color-fill-active);
-    text-align: center;
+  :where([data-vesta='prefs-order']) > [data-vesta='icon'] {
+    color: var(--vesta-color-text-subtle);
   }
 
-  :where([data-vesta='prefs-layer'][data-layer='game']) > small {
-    color: var(--vesta-color-text);
+  :where([data-vesta='prefs-order']) > [data-vesta='button'] {
+    margin-inline-start: var(--vesta-space-1);
   }
 
   :where([data-vesta='prefs-folders']) {
