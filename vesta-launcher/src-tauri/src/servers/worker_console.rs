@@ -610,6 +610,7 @@ mod tests {
                 items: vec![line(0, "recovered"), line(1, "duplicate live cursor")],
                 next_cursor: None,
                 latest_cursor: "cursor-1".into(),
+                previous_cursor: None,
             },
             discontinuity: true,
         })
