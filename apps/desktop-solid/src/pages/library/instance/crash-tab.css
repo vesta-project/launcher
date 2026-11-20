@@ -50,7 +50,7 @@
   :where([data-vesta="crash-copy"] h2) {
     margin: 0;
     font-size: var(--vesta-text-xl);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
   }
 
   :where([data-vesta="crash-copy"] code) {
@@ -134,7 +134,7 @@
     background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
     color: var(--vesta-color-accent-text);
     font-size: var(--vesta-text-xs);
-    font-weight: 700;
+    font-weight: var(--vesta-weight-bold);
     content: counter(crash-step);
   }
 

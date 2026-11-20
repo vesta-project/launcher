@@ -65,7 +65,7 @@
   }
 
   :where([data-vesta="console-level-option"]) {
-    --log-level-color: var(--vesta-color-info-text);
+    --log-level-color: var(--vesta-color-info-text, color-mix(in oklab, var(--vesta-color-accent-text) 55%, var(--vesta-color-danger-text)));
     display: flex;
     align-items: center;
     gap: var(--vesta-space-2);

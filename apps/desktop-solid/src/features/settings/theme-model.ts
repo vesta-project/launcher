@@ -11,6 +11,7 @@ export const themeFields = {
   theme_gradient_angle: "gradientAngle",
   theme_gradient_harmony: "gradientHarmony",
   theme_border_width: "borderWidth",
+  theme_weight: "weight",
 } as const;
 export const defaultTheme = {
   id: "vesta",
@@ -24,6 +25,7 @@ export const defaultTheme = {
   gradientAngle: 135,
   gradientHarmony: "analogous",
   borderWidth: 1,
+  weight: "regular",
 } as const;
 
 export function themeSettings(theme: Record<string, unknown>): Record<string, unknown> {
@@ -84,8 +86,8 @@ export interface ThemeDefinition {
   fixedHues?: [number, number, number];
   /** Background accent strengths (percent) when the default is too quiet (Legacy's bold wash). */
   backgroundStrengths?: [number, number, number];
-  /** Type weight: `heavy` sets labels and titles a step bolder (Legacy's chunkier look). */
-  weight?: "standard" | "heavy";
+  /** The weight the preset starts with (Legacy is heavy); people can change it in Appearance. */
+  weight?: Weight;
   /**
    * The old launcher's look: the titlebar and rail draw nothing of their own and the library
    * and server card fields keep only a share of the panel tint, so the background gradient is
@@ -236,6 +238,31 @@ function presetValues(definition: ThemeDefinition): ThemeValues {
     gradient: definition.background !== "none",
     gradientType: definition.background === "gradient" ? "linear" : "radial",
     gradientAngle: definition.gradientAngle ?? defaultTheme.gradientAngle,
+    weight: definition.weight ?? defaultTheme.weight,
+  };
+}
+
+export type Weight = "light" | "regular" | "heavy";
+export const weights: readonly Weight[] = ["light", "regular", "heavy"];
+
+/** How much room things take at each weight: spacing and control heights scale by this. */
+export const densities: Record<Weight, number> = { light: 0.875, regular: 1, heavy: 1.15 };
+
+/**
+ * Weight is how heavy the launcher feels: spacing, control heights and text weight together.
+ * Spacing follows the preset's own unit, scaled. Text steps are body, medium, semibold, bold and
+ * heavy; Segoe UI Variable and SF Pro are variable, so in-between steps draw as asked (a static
+ * font rounds to its nearest face).
+ */
+export function weightTokens(weight: string, spaceUnit: string): Record<string, string> {
+  const key: Weight = weight === "light" || weight === "heavy" ? weight : "regular";
+  const steps = key === "light" ? [370, 460, 560, 660, 760] : key === "heavy" ? [450, 560, 680, 760, 860] : [400, 500, 600, 700, 800];
+  const names = ["regular", "medium", "semibold", "bold", "heavy"];
+  const unit = Number.parseFloat(spaceUnit) || 4;
+  return {
+    "--vesta-density": String(densities[key]),
+    "--vesta-space-unit": `${+(unit * densities[key]).toFixed(3)}px`,
+    ...Object.fromEntries(names.map((name, index) => [`--vesta-weight-${name}`, String(steps[index])])),
   };
 }
 
@@ -376,11 +403,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-theme-neutral-tint-2": String(def.neutral.tint ?? 0.4),
     "--vesta-theme-accent-chroma-dark": String(def.accentChroma.dark),
     "--vesta-theme-accent-chroma-light": String(def.accentChroma.light),
-    "--vesta-space-unit": def.spaceUnit,
-    // Body text stays regular; medium, semibold and bold move up a step for heavy presets.
-    "--vesta-weight-medium": def.weight === "heavy" ? "600" : "500",
-    "--vesta-weight-semibold": def.weight === "heavy" ? "700" : "600",
-    "--vesta-weight-bold": def.weight === "heavy" ? "800" : "700",
+    ...weightTokens(theme.weight, def.spaceUnit),
     "--vesta-radius-factor": String(def.radius),
     "--vesta-border-width": `${theme.borderWidth}px`,
     "--vesta-theme-canvas-opacity": pct(canvas),

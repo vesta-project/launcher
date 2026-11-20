@@ -75,7 +75,7 @@
     margin: 0;
     overflow: hidden;
     font-size: var(--vesta-text-xl);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     line-height: var(--vesta-leading-tight);
     text-overflow: ellipsis;
     white-space: nowrap;

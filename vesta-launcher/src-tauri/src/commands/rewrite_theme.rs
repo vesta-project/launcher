@@ -18,6 +18,12 @@ pub struct Theme {
     gradient_angle: f64,
     gradient_harmony: String,
     border_width: f64,
+    /// Added after v1 shipped: files written before it read as "regular".
+    #[serde(default = "regular_weight")]
+    weight: String,
+}
+fn regular_weight() -> String {
+    "regular".into()
 }
 impl Default for Theme {
     fn default() -> Self {
@@ -33,6 +39,7 @@ impl Default for Theme {
             gradient_angle: 135.0,
             gradient_harmony: "analogous".into(),
             border_width: 1.0,
+            weight: regular_weight(),
         }
     }
 }
@@ -48,6 +55,7 @@ impl Theme {
             || !["linear", "radial"].contains(&self.gradient_type.as_str())
             || !["none", "analogous", "complementary", "triadic"]
                 .contains(&self.gradient_harmony.as_str())
+            || !["light", "regular", "heavy"].contains(&self.weight.as_str())
         {
             return Err("Unsupported rewrite theme value".into());
         }

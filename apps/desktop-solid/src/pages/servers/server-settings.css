@@ -294,7 +294,7 @@
   }
   :where([data-vesta="server-motd-field"]) > textarea::selection { background: color-mix(in oklab, var(--vesta-color-accent) 45%, transparent); color: transparent; }
   :where([data-vesta="server-motd-field"]) > textarea::placeholder { color: color-mix(in oklab, var(--vesta-color-media-text) 35%, transparent); }
-  :where([data-vesta="server-motd-mirror"]) [data-code] { color: color-mix(in oklab, var(--vesta-color-media-text) 28%, transparent); text-shadow: none; font-weight: 400; font-style: normal; text-decoration: none; }
+  :where([data-vesta="server-motd-mirror"]) [data-code] { color: color-mix(in oklab, var(--vesta-color-media-text) 28%, transparent); text-shadow: none; font-weight: var(--vesta-weight-regular); font-style: normal; text-decoration: none; }
   :where([data-vesta="server-motd-mirror"]) [data-placeholder] { border-radius: var(--vesta-radius-sm); background: color-mix(in oklab, var(--vesta-color-media-text) 10%, transparent); }
   :where([data-vesta="server-motd-meta"]) { display: flex; justify-content: space-between; gap: var(--vesta-space-3); margin-block-start: calc(-1 * var(--vesta-space-2)); color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
   :where([data-vesta="server-motd-meta"][data-tone="danger"]) { color: var(--vesta-color-danger-text); }

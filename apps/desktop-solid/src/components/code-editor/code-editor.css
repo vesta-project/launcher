@@ -111,10 +111,10 @@
   :where([data-vesta='code-editor-overlay'] [data-token='string']) { color: var(--vesta-color-success-text); }
   :where([data-vesta='code-editor-overlay'] [data-token='number'], [data-vesta='code-editor-overlay'] [data-token='literal']) { color: var(--vesta-color-warning-text); }
   :where([data-vesta='code-editor-overlay'] [data-token='comment'], [data-vesta='code-editor-overlay'] [data-token='muted']) { color: var(--vesta-color-text-subtle); }
-  :where([data-vesta='code-editor-overlay'] [data-token='section']) { color: var(--vesta-color-info-text); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta='code-editor-overlay'] [data-token='section']) { color: var(--vesta-color-info-text, color-mix(in oklab, var(--vesta-color-accent-text) 55%, var(--vesta-color-danger-text))); font-weight: var(--vesta-weight-semibold); }
   :where([data-vesta='code-editor-overlay'] [data-token='punct']) { color: var(--vesta-color-text-muted); }
   :where([data-vesta='code-editor-overlay'] [data-token='heading']) { color: var(--vesta-color-accent-text); font-weight: var(--vesta-weight-semibold); }
-  :where([data-vesta='code-editor-overlay'] [data-token='code']) { color: var(--vesta-color-info-text); }
+  :where([data-vesta='code-editor-overlay'] [data-token='code']) { color: var(--vesta-color-info-text, color-mix(in oklab, var(--vesta-color-accent-text) 55%, var(--vesta-color-danger-text))); }
   :where([data-vesta='code-editor-overlay'] [data-token='warn']) { color: var(--vesta-color-warning-text); }
   :where([data-vesta='code-editor-overlay'] [data-token='error']) { color: var(--vesta-color-danger-text); }
 

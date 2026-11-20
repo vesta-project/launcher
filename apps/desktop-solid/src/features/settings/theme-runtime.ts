@@ -67,6 +67,7 @@ export function useThemeRuntime() {
       gradientAngle: setting("theme_gradient_angle"),
       gradientHarmony: setting("theme_gradient_harmony"),
       borderWidth: setting("theme_border_width"),
+      weight: setting("theme_weight"),
     }),
     { name: "resolvedThemeSettings" },
   );

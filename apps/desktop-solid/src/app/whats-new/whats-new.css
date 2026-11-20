@@ -68,13 +68,13 @@
   :where([data-vesta='whats-new-kicker']) {
     color: var(--vesta-color-accent-text);
     font-size: var(--vesta-text-sm);
-    font-weight: 500;
+    font-weight: var(--vesta-weight-medium);
   }
 
   :where([data-vesta='whats-new-title']) {
     margin: 0;
     font-size: var(--vesta-text-xl);
-    font-weight: 650;
+    font-weight: var(--vesta-weight-semibold);
   }
 
   /* ---------- The reel ---------- */
@@ -187,7 +187,7 @@
   :where([data-vesta='reel-title']) {
     margin: 0;
     font-size: var(--vesta-text-lg);
-    font-weight: 650;
+    font-weight: var(--vesta-weight-semibold);
   }
 
   :where([data-vesta='reel-body']) {
@@ -273,14 +273,14 @@
   :where([data-vesta='welcome-back-title']) {
     margin: var(--vesta-space-2) 0 0;
     font-size: clamp(1.6rem, 4vw, 2.25rem);
-    font-weight: 700;
+    font-weight: var(--vesta-weight-bold);
     letter-spacing: -0.01em;
   }
 
   :where([data-vesta='welcome-back-scene'][data-wide]) :where([data-vesta='welcome-back-title']) {
     margin: 0;
     font-size: var(--vesta-text-xl);
-    font-weight: 650;
+    font-weight: var(--vesta-weight-semibold);
   }
 
   :where([data-vesta='welcome-back-lede']) {

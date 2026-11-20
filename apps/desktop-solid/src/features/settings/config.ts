@@ -62,6 +62,7 @@ export interface LauncherConfig {
   theme_gradient_angle: number;
   theme_gradient_harmony: "none" | "complementary" | "analogous" | "triadic";
   theme_border_width: number;
+  theme_weight: "light" | "regular" | "heavy";
 
   default_width: number;
   default_height: number;
@@ -120,6 +121,7 @@ export const configDefaults: LauncherConfig = {
   theme_gradient_angle: 135,
   theme_gradient_harmony: "analogous",
   theme_border_width: 1,
+  theme_weight: "regular",
 
   default_width: 854,
   default_height: 480,

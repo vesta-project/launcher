@@ -14,11 +14,18 @@
     overscroll-behavior: none;
   }
 
+  /* Bold runs follow the theme's weight scale rather than the browser's fixed 700. */
+  b,
+  strong {
+    font-weight: var(--vesta-weight-bold);
+  }
+
   body {
     background: var(--vesta-color-canvas);
     color: var(--vesta-color-text);
     font-family: var(--vesta-font-sans);
     font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-regular);
     line-height: var(--vesta-leading-normal);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;

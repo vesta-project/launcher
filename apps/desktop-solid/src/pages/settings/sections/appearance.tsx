@@ -42,6 +42,7 @@ function currentTheme(): ThemeValues {
     gradientAngle: setting("theme_gradient_angle"),
     gradientHarmony: setting("theme_gradient_harmony"),
     borderWidth: setting("theme_border_width"),
+    weight: setting("theme_weight"),
   };
 }
 
@@ -392,6 +393,22 @@ export function AppearanceSettings() {
                 </Show>
               </Show>
             </Show>
+            <SettingRow
+              label={t("prefs.appearance.weight")}
+              description={t("prefs.appearance.weight-description")}
+            >
+              <SegmentedControl
+                size="md"
+                aria-label={t("prefs.appearance.weight")}
+                value={setting("theme_weight")}
+                onChange={(value) => updateSetting("theme_weight", value as never)}
+                options={[
+                  { value: "light", label: t("prefs.appearance.weight-light") },
+                  { value: "regular", label: t("prefs.appearance.weight-regular") },
+                  { value: "heavy", label: t("prefs.appearance.weight-heavy") },
+                ]}
+              />
+            </SettingRow>
             <SettingRow
               label={t("prefs.appearance.border")}
               description={t("prefs.appearance.border-description")}

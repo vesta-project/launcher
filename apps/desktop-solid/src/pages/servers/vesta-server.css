@@ -53,7 +53,7 @@
   /* Codes and commands */
   /* Segmented code cells: grouped like the machine prints the code */
   :where([data-vesta="vesta-code-input"]) { display: flex; flex-direction: column; gap: var(--vesta-space-1-5); }
-  :where([data-vesta="vesta-code-label"]) { color: var(--vesta-color-text); font-size: var(--vesta-text-sm); font-weight: 600; }
+  :where([data-vesta="vesta-code-label"]) { color: var(--vesta-color-text); font-size: var(--vesta-text-sm); font-weight: var(--vesta-weight-semibold); }
   :where([data-vesta="vesta-code-cells"]) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--vesta-space-1-5); }
   :where([data-vesta="vesta-code-group"]) { display: flex; align-items: center; gap: var(--vesta-space-1); }
   :where([data-vesta="vesta-code-dash"]) {
@@ -75,7 +75,7 @@
     caret-color: var(--vesta-color-accent);
     font-family: var(--vesta-font-mono);
     font-size: var(--vesta-text-lg);
-    font-weight: 600;
+    font-weight: var(--vesta-weight-semibold);
     text-align: center;
     text-transform: uppercase;
     transition: border-color var(--vesta-duration-fast) var(--vesta-ease-standard), background-color var(--vesta-duration-fast) var(--vesta-ease-standard);

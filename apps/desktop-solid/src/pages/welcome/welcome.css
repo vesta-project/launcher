@@ -292,7 +292,7 @@
   :where([data-vesta='welcome-wordmark']) {
     margin: 0;
     font-size: clamp(44px, 7vh, 64px);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     letter-spacing: -0.045em;
     line-height: 1;
     background: linear-gradient(160deg, var(--vesta-color-text) 25%, var(--vesta-color-accent-text) 100%);

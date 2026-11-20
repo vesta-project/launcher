@@ -138,7 +138,7 @@
   :where([data-vesta="modpack-first-head"] h2) {
     margin: 0;
     font-size: var(--vesta-text-xl);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
   }
 
   :where([data-vesta="modpack-first-head"] p) {
@@ -265,7 +265,7 @@
   :where([data-vesta="modpack-card-head"] h3) {
     margin: 0;
     font-size: var(--vesta-text-lg);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
   }
 
   :where([data-vesta="modpack-card-head"] img) {
@@ -948,7 +948,7 @@
   :where([data-vesta="modpack-link-name"] strong) {
     overflow: hidden;
     font-size: var(--vesta-text-lg);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

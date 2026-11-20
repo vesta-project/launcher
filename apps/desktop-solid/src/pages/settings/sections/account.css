@@ -84,7 +84,7 @@
     margin: 0;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-sm);
-    font-weight: 600;
+    font-weight: var(--vesta-weight-semibold);
   }
 
   :where([data-vesta='skin-note'], [data-vesta='skin-hint']) {
@@ -206,7 +206,7 @@
     padding-block: 2px;
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
-    font-weight: 600;
+    font-weight: var(--vesta-weight-semibold);
     list-style: none;
     cursor: default;
     user-select: none;
@@ -236,7 +236,7 @@
 
   :where([data-vesta='skin-pack-head']) > :where(small) {
     color: var(--vesta-color-text-subtle);
-    font-weight: 500;
+    font-weight: var(--vesta-weight-medium);
   }
 
   :where([data-vesta='skin-pack'][open]) > :where([data-vesta='skin-pack-head']) {

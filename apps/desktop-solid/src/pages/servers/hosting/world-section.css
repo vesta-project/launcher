@@ -131,7 +131,7 @@
   :where([data-vesta="server-world-stat"]) small {
     color: var(--vesta-color-text-muted);
     font-size: var(--vesta-text-xs);
-    font-weight: normal;
+    font-weight: var(--vesta-weight-regular);
   }
 
   /* ---- Dimensions ---- */

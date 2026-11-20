@@ -53,7 +53,7 @@
   }
   :where([data-vesta="memory-comparison"]) strong {
     font-size: 12px;
-    font-weight: 700;
+    font-weight: var(--vesta-weight-bold);
   }
   :where([data-vesta="memory-comparison"]) button {
     inline-size: fit-content;
@@ -63,7 +63,7 @@
     background: transparent;
     color: var(--vesta-color-text);
     font-size: 20px;
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     line-height: 1.05;
     cursor: default;
   }

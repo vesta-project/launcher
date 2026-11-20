@@ -208,6 +208,10 @@ vesta-server-storage-part-logs = Logs
 vesta-server-storage-part-software = Server software
 vesta-server-storage-part-trash = Trash
 vesta-server-storage-part-other = Other
+vesta-server-storage-unavailable = This server doesn't report its storage.
+vesta-server-storage-on-volume = { $free } free on { $name }
+vesta-server-storage-largest = Biggest folders
+vesta-server-storage-show = Show what's using it
 
 vesta-server-link-action = Link a device
 vesta-server-link-title = Link a device

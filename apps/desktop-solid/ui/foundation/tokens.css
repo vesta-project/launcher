@@ -24,15 +24,19 @@
     --vesta-space-12: calc(var(--vesta-space-unit) * 12);
 
     /* Sizing — fixed control heights keep rows aligned across component families. */
-    --vesta-size-control-sm: 24px;
-    --vesta-size-control-md: 28px;
-    --vesta-size-control-lg: 32px;
+    /* Weight (Appearance) scales spacing and control heights together; 1 is Regular. */
+    --vesta-density: 1;
+    --vesta-size-control-sm: calc(24px * var(--vesta-density));
+    --vesta-size-control-md: calc(28px * var(--vesta-density));
+    --vesta-size-control-lg: calc(32px * var(--vesta-density));
     --vesta-size-icon-sm: 14px;
     --vesta-size-icon-md: 16px;
     --vesta-size-icon-lg: 18px;
 
     /* Typography — desktop-scale text, 13px body. */
-    --vesta-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+    /* Segoe UI Variable (Windows 11) first: it draws every weight, so the text weight setting
+       works in fine steps; plain Segoe UI only has a few fixed weights. */
+    --vesta-font-sans: 'Segoe UI Variable Text', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
     --vesta-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     --vesta-text-xs: 11px;
     --vesta-text-sm: 12px;
@@ -46,6 +50,8 @@
     --vesta-weight-medium: 500;
     --vesta-weight-semibold: 600;
     --vesta-weight-bold: 700;
+    /* Display numbers and the biggest titles. */
+    --vesta-weight-heavy: 800;
 
     /* Radii — one factor scales every corner (0 = square theme). */
     --vesta-radius-factor: 1;

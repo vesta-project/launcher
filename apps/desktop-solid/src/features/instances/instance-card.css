@@ -271,7 +271,7 @@
     inline-size: 100%;
     margin: 0;
     font-size: var(--vesta-text-md);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     line-height: 1.2;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -332,7 +332,7 @@
   :where([data-vesta='instance-card-overlay-name']) {
     margin: 0;
     font-size: var(--vesta-text-md);
-    font-weight: 800;
+    font-weight: var(--vesta-weight-heavy);
     line-height: 1.2;
     overflow-wrap: break-word;
   }

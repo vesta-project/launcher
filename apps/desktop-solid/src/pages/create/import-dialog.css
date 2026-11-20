@@ -12,7 +12,7 @@
   :where([data-vesta="install-import"]) small {
     display: block;
     font-size: var(--vesta-text-xs);
-    font-weight: 400;
+    font-weight: var(--vesta-weight-regular);
     color: var(--vesta-color-text-muted);
   }
   :where([data-vesta="install-import"]) p {
@@ -79,7 +79,7 @@
   }
   :where(.install-import-row-title) {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: var(--vesta-weight-semibold);
     color: var(--vesta-color-text);
   }
   :where(.install-import-row-desc) {

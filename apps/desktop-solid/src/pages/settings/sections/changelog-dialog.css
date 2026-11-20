@@ -235,6 +235,6 @@
   :where([data-vesta='changelog-highlights-label']) {
     flex: 1;
     margin-inline-start: var(--vesta-space-2);
-    font-weight: 600;
+    font-weight: var(--vesta-weight-semibold);
   }
 }
