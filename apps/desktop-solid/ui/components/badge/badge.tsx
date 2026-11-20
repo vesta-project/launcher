@@ -35,7 +35,7 @@ export function Badge(props: BadgeProps) {
       data-tone={props.tone ?? 'neutral'}
       data-variant={props.variant ?? 'soft'}
       data-size={props.size ?? 'md'}
-      title={props.title}
+      data-tip={props.title}
       class={props.class}
       style={props.style}
     >

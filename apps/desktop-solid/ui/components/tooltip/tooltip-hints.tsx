@@ -32,6 +32,8 @@ export function TooltipHints(props: TooltipHintsProps) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let cool: ReturnType<typeof setTimeout> | undefined;
     let warm = false;
+    let pointerDown = false;
+    let dragging = false;
 
     const place = (element: HTMLElement) => {
       const gap = 6;
@@ -53,7 +55,9 @@ export function TooltipHints(props: TooltipHintsProps) {
     const show = (element: HTMLElement) => {
       const overflow = element.hasAttribute('data-tip-overflow');
       const text = element.dataset.tip || (overflow ? element.textContent?.trim() : undefined);
-      if (!text || !element.isConnected) return;
+      if (pointerDown || dragging || !text || !element.isConnected) return;
+      const layer = element.closest<HTMLElement>('dialog[open], [role="dialog"]');
+      if (layer && tip.parentElement !== layer) layer.append(tip);
       if (overflow && !truncated(element)) return;
       tip.textContent = text;
       tip.style.display = 'block';
@@ -85,7 +89,7 @@ export function TooltipHints(props: TooltipHintsProps) {
     };
 
     const onOver = (event: PointerEvent) => {
-      if (event.pointerType === 'touch') return;
+      if (event.pointerType === 'touch' || pointerDown || dragging) { hide(); return; }
       arm(target(event.target));
     };
     const onFocus = (event: FocusEvent) => {
@@ -93,11 +97,19 @@ export function TooltipHints(props: TooltipHintsProps) {
       if (element?.matches(':focus-visible')) arm(element);
     };
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && hide();
+    const onPointerDown = () => { pointerDown = true; hide(); };
+    const onPointerUp = () => { pointerDown = false; };
+    const onDragStart = () => { dragging = true; hide(); };
+    const onDragEnd = () => { dragging = false; };
 
     document.addEventListener('pointerover', onOver);
     document.addEventListener('focusin', onFocus);
     document.addEventListener('focusout', hide);
-    document.addEventListener('pointerdown', hide, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerUp, true);
+    document.addEventListener('dragstart', onDragStart, true);
+    document.addEventListener('dragend', onDragEnd, true);
     document.addEventListener('scroll', hide, true);
     document.addEventListener('keydown', onKey);
     document.documentElement.addEventListener('pointerleave', hide);
@@ -109,7 +121,11 @@ export function TooltipHints(props: TooltipHintsProps) {
       document.removeEventListener('pointerover', onOver);
       document.removeEventListener('focusin', onFocus);
       document.removeEventListener('focusout', hide);
-      document.removeEventListener('pointerdown', hide, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+      document.removeEventListener('pointercancel', onPointerUp, true);
+      document.removeEventListener('dragstart', onDragStart, true);
+      document.removeEventListener('dragend', onDragEnd, true);
       document.removeEventListener('scroll', hide, true);
       document.removeEventListener('keydown', onKey);
       document.documentElement.removeEventListener('pointerleave', hide);
