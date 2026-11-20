@@ -387,10 +387,8 @@
   }
 
   :where([data-vesta='welcome-credit-name']) {
-    font-size: 10px;
+    font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='welcome-credits-hint']) {

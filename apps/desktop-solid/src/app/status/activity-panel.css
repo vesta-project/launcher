@@ -27,10 +27,8 @@
   .inbox-panel :where([data-vesta='popover-title']) {
     padding: 10px 12px 6px;
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   .activity-panel-clear,
@@ -286,10 +284,8 @@
   :where([data-vesta='activity-section-title']) {
     margin: 4px 12px;
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='activity-background-row']) {

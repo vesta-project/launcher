@@ -1565,10 +1565,8 @@
     gap: var(--vesta-space-2);
     margin: 0;
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='pack-contents-head'] [data-vesta='project-muted']) {

@@ -85,10 +85,8 @@
   :where([data-vesta="server-software-hero-copy"]) { display: flex; flex: 1; flex-direction: column; gap: 2px; min-inline-size: 0; }
   :where([data-vesta="server-software-eyebrow"]) {
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   :where([data-vesta="server-software-hero-copy"]) h2 {
     margin: 0;

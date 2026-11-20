@@ -142,11 +142,9 @@
     block-size: 32px;
     padding-block: 0;
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
     text-align: start;
-    text-transform: uppercase;
   }
 
   .resource-table [data-vesta="table-head"][data-numeric] {
@@ -243,10 +241,9 @@
     border-radius: var(--vesta-radius-sm);;
     background: color-mix(in oklab, var(--vesta-color-accent) 18%, transparent);
     color: var(--vesta-color-accent-text);
-    font-size: 10px;
+    font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
     line-height: 15px;
-    text-transform: uppercase;
   }
 
   :where([data-vesta="resource-kind"][data-kind="resourcepack"]) {

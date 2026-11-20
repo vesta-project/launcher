@@ -148,10 +148,8 @@
     margin: 0;
     padding: var(--vesta-space-3) var(--vesta-space-4) var(--vesta-space-1);
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta="settings-panel"][data-danger]) {

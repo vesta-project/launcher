@@ -182,26 +182,32 @@
   }
 
   :where([data-vesta='instance-card-tag']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 5px var(--vesta-space-2);
     border: var(--vesta-border-width) solid var(--instance-card-tag-border);
     border-radius: var(--vesta-radius-sm);
     background: var(--instance-card-tag-bg);
     box-shadow: var(--vesta-shadow-md);
-    font-size: 9px;
-    font-weight: var(--vesta-weight-bold);
-    letter-spacing: 0.04em;
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
     line-height: 1;
-    text-transform: uppercase;
     white-space: nowrap;
     cursor: default;
   }
 
-  :where([data-vesta='instance-card-tag'][data-status='running']) {
-    color: var(--vesta-color-success-text);
+  /* Live states carry the status dot; the words stay in the card's text colour. */
+  :where([data-vesta='instance-card-tag'][data-status='running'], [data-vesta='instance-card-tag'][data-status='warming'])::before {
+    content: '';
+    inline-size: 6px;
+    block-size: 6px;
+    border-radius: 50%;
+    background: var(--vesta-color-success);
   }
 
-  :where([data-vesta='instance-card-tag'][data-status='warming']) {
-    color: var(--vesta-color-warning-text);
+  :where([data-vesta='instance-card-tag'][data-status='warming'])::before {
+    background: var(--vesta-color-warning);
   }
 
   :where([data-vesta='instance-card-tag'][data-status='crashed']) {

@@ -916,10 +916,8 @@
     margin: 0;
     padding-inline: var(--vesta-space-2);
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-medium);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='browse-picker-connection']) {

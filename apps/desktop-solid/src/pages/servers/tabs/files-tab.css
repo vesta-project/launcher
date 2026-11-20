@@ -53,10 +53,8 @@
     padding: 0 var(--vesta-space-1) var(--vesta-space-1-5);
     border-block-end: var(--vesta-border-width) solid var(--vesta-color-border);
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta="server-file-row"]) {

@@ -42,10 +42,8 @@
     margin: 0;
     padding: var(--vesta-space-1) var(--vesta-space-2) var(--vesta-space-0-5);
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-medium);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='browse-target-row']) {

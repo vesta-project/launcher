@@ -69,10 +69,8 @@
   }
   :where([data-vesta="server-world-seed-label"]) {
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   :where([data-vesta="server-world-seed-row"]) { display: flex; align-items: center; gap: var(--vesta-space-1); }
   :where([data-vesta="server-world-seed-value"]) {

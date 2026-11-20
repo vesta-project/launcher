@@ -9,6 +9,10 @@
  *
  * Variant and size rules only reassign knobs; the base rule is the single
  * place that turns knobs into properties.
+ *
+ * The default badge is quiet text in its tone: no fill and no padding, so a row of facts reads
+ * as words rather than a row of pills; the row's own gap keeps them apart.
+ * Pick solid or outline only where a label has to stand off its surroundings.
  */
 /* Repeated so the order holds even if this file loads first. */
 @layer ui.tokens, ui.base, ui.components;
@@ -21,7 +25,7 @@
     --badge-radius: var(--vesta-radius-sm);
     --badge-font-size: var(--vesta-text-sm);
     --badge-icon-size: 12px;
-    --badge-bg: var(--tone-soft);
+    --badge-bg: transparent;
     --badge-fg: var(--tone-text);
     --badge-border-color: transparent;
 
@@ -45,6 +49,15 @@
     vertical-align: middle;
     cursor: default;
     user-select: none;
+  }
+
+  /* Quiet (the default): words, not pills. */
+  :where([data-vesta='badge']:not([data-variant='solid'], [data-variant='outline'])) {
+    --badge-padding-x: 0;
+  }
+
+  :where([data-vesta='badge'][data-tone='neutral']:not([data-variant='solid'], [data-variant='outline'])) {
+    --badge-fg: var(--vesta-color-text-muted);
   }
 
   /* Variants */

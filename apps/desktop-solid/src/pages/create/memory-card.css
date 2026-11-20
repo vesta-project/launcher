@@ -17,11 +17,9 @@
   }
   :where([data-vesta="install-memory-card"]) h2 {
     margin: 0;
-    font-size: var(--vesta-text-xs);
-    font-weight: 700;
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
     color: var(--vesta-color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   }
   :where([data-vesta="install-memory-card"]) header p {
     margin: 3px 0 0;
@@ -49,11 +47,9 @@
     background: var(--memory-selected-bg, color-mix(in oklab, var(--vesta-color-accent) 11%, var(--vesta-color-surface-sunken)));
   }
   :where([data-vesta="memory-comparison"]) span {
-    font-size: 9px;
-    font-weight: 700;
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-semibold);
     color: var(--vesta-color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   }
   :where([data-vesta="memory-comparison"]) strong {
     font-size: 12px;
