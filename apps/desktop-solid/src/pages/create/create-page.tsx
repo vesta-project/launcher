@@ -543,7 +543,6 @@ function InstanceInstallForm() {
                             <Combobox
                               value={selectedMinecraft()}
                               options={versions()}
-                              maxOptions={80}
                               onChange={(value) => {
                                 setMinecraft(value);
                                 setLoaderVersion("");
@@ -565,7 +564,6 @@ function InstanceInstallForm() {
                             <Combobox
                               value={selectedLoader()}
                               options={loaderComboboxOptions()}
-                              maxOptions={80}
                               onChange={setLoaderVersion}
                               disabled={locked() || !loaderOptions().length}
                               aria-label={t("management.loader-version")}
@@ -593,7 +591,6 @@ function InstanceInstallForm() {
                             value: item.id,
                             label: item.version_number,
                           }))}
-                          pageSize={80}
                           onChange={chooseRelease}
                           aria-label={t("install.release")}
                           disabled={locked()}

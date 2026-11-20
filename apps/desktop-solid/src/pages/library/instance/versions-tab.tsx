@@ -200,7 +200,6 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                 <Combobox
                   aria-label={t("versions.minecraft-version")}
                   options={mcOptions()}
-                  maxOptions={80}
                   value={minecraft()}
                   onChange={chooseMinecraft}
                 />
@@ -213,7 +212,6 @@ export function VersionsTab(props: { entry: InstanceEntry }) {
                     value={loaderVersion()}
                     onChange={setLoaderVersion}
                     options={loaderOptions()}
-                    maxOptions={80}
                   />
                 </div>
               </Show>

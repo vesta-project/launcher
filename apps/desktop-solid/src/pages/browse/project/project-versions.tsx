@@ -231,7 +231,6 @@ export function ProjectVersions(props: { data: ProjectData; project: ResourcePro
           aria-label={t('browse.section-version')}
           placeholder={t('browse.any-version')}
           options={gameOptions()}
-          maxOptions={120}
           value={filter().gameVersion ?? ''}
           onChange={(value) => updateVersionFilter(key, { gameVersion: value || null })}
         />

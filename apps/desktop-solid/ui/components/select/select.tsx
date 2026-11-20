@@ -1,6 +1,7 @@
 import { Select as KobalteSelect } from "@kobalte/core/select";
 import type { JSX } from "@solidjs/web";
-import { children, createMemo, Show, untrack, useContext } from "solid-js";
+import { children, createMemo, createSignal, Show, untrack, useContext } from "solid-js";
+import { LONG_LIST, PAGE_SIZE, boundOptions, nearEnd } from "../combobox/options";
 import type { ControlSize } from "../../foundation/types";
 import { CheckGlyph, ChevronDownGlyph } from "../../internal/icons";
 import { useOverlayMount } from "../overlay/mount";
@@ -27,6 +28,8 @@ export interface SelectOption {
 
 export interface SelectProps {
   options: SelectOption[];
+  /** Options drawn per page for long lists (default 30 past 60 options); more as the menu scrolls. */
+  pageSize?: number;
   value?: string;
   defaultValue?: string;
   onChange?: (value: string) => void;
@@ -62,6 +65,21 @@ export function Select(props: SelectProps) {
   const value = createMemo(() => props.value);
   const find = (value: string | undefined) =>
     options().find((option) => option.value === value);
+  // Long lists are drawn a page at a time (see combobox/options.ts); the chosen option is
+  // always in the collection so the trigger keeps its label.
+  const [pages, setPages] = createSignal(1, { name: "selectPages" });
+  const pageSize = () => props.pageSize ?? (options().length > LONG_LIST ? PAGE_SIZE : undefined);
+  const selected = createMemo(() => find(value()), { name: "selectSelected" });
+  const displayed = createMemo(() => {
+    const size = pageSize();
+    return size === undefined ? options() : boundOptions(options(), () => true, selected(), size * pages());
+  }, { name: "selectCollection" });
+  const revealMore = (event: Event & { currentTarget: HTMLDivElement }) => {
+    const size = untrack(pageSize);
+    if (size !== undefined && size * untrack(pages) < untrack(options).length && nearEnd(event.currentTarget)) {
+      setPages((count) => count + 1);
+    }
+  };
 
   return (
     <KobalteSelect<SelectOption>
@@ -72,12 +90,13 @@ export function Select(props: SelectProps) {
       // Omit unset id — Kobalte stringifies undefined into the literal "undefined".
       {...(props.id != null ? { id: props.id } : {})}
       name={props.name}
-      options={options()}
+      options={displayed()}
+      onOpenChange={(open) => { if (!open) setPages(1); }}
       optionValue="value"
       optionTextValue="label"
       optionDisabled="disabled"
       {...(value() !== undefined
-        ? { value: find(value()) ?? null }
+        ? { value: selected() ?? null }
         : {})}
       {...(value() === undefined && props.defaultValue !== undefined
         ? { defaultValue: find(props.defaultValue) }
@@ -157,7 +176,7 @@ export function Select(props: SelectProps) {
         </KobalteSelect.ErrorMessage>
       </Show>
       <KobalteSelect.Portal mount={mount}>
-        <KobalteSelect.Content data-vesta="select-content" data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
+        <KobalteSelect.Content data-vesta="select-content" onScroll={revealMore} data-vesta-popover-owner={popoverOwners.join(' ') || undefined}>
           <KobalteSelect.Listbox data-vesta="select-listbox" />
         </KobalteSelect.Content>
       </KobalteSelect.Portal>

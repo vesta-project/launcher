@@ -2,7 +2,7 @@ import { Combobox as KobalteCombobox } from '@kobalte/core/combobox';
 import { createFilter } from '@kobalte/core/i18n';
 import type { JSX } from '@solidjs/web';
 import { children, Show, createMemo, createSignal, untrack, useContext } from 'solid-js';
-import { boundOptions } from './options';
+import { LONG_LIST, PAGE_SIZE, boundOptions, nearEnd } from './options';
 import type { ControlSize } from '../../foundation/types';
 import { CheckGlyph, ChevronDownGlyph } from '../../internal/icons';
 import { useOverlayMount } from '../overlay/mount';
@@ -19,9 +19,12 @@ export type ComboboxOption = SelectOption;
 
 export interface ComboboxProps {
   options: ComboboxOption[];
-  /** Bound large catalogues; searching still considers every option. */
+  /** @deprecated Same as pageSize: long lists are paged, never cut off. */
   maxOptions?: number;
-  /** Render an initial batch, then append more near the bottom of the menu. */
+  /**
+   * Options drawn per page; more are drawn as the menu scrolls towards the end. Lists longer
+   * than 60 options page by 30 unless this says otherwise. Search always covers every option.
+   */
   pageSize?: number;
   value?: string;
   defaultValue?: string;
@@ -75,15 +78,16 @@ export function Combobox(props: ComboboxProps) {
   const value = createMemo(() => props.value, { name: 'comboboxValue' });
   const find = (key: string | undefined) => options().find((option) => option.value === key);
   const selected = createMemo(() => find(value()), { name: 'comboboxSelected' });
-  const batchSize = () => props.pageSize === undefined ? undefined : Math.max(1, Math.floor(props.pageSize));
+  const batchSize = () => {
+    const size = props.pageSize ?? props.maxOptions ?? (options().length > LONG_LIST ? PAGE_SIZE : undefined);
+    return size === undefined ? undefined : Math.max(1, Math.floor(size));
+  };
   const displayed = createMemo(() => boundOptions(options(), matches, selected(),
-    batchSize() === undefined ? props.maxOptions : batchSize()! * pages()),
+    batchSize() === undefined ? undefined : batchSize()! * pages()),
     { name: 'comboboxCollection' });
   const revealMore = (event: Event & { currentTarget: HTMLDivElement }) => {
-    const size = batchSize();
-    const menu = event.currentTarget;
-    if (size !== undefined && size * untrack(pages) < untrack(options).length
-      && menu.scrollHeight - menu.scrollTop - menu.clientHeight < 100) {
+    const size = untrack(batchSize);
+    if (size !== undefined && size * untrack(pages) < untrack(options).length && nearEnd(event.currentTarget)) {
       setPages((count) => count + 1);
     }
   };
@@ -115,7 +119,7 @@ export function Combobox(props: ComboboxProps) {
       readOnly={props.readOnly}
       validationState={error() == null ? 'valid' : 'invalid'}
       defaultFilter={matches}
-      onOpenChange={(open) => { isOpen = open; }}
+      onOpenChange={(open) => { isOpen = open; if (!open) setPages(1); }}
       triggerMode="focus"
       placement={props.placement ?? 'bottom-start'}
       gutter={4}

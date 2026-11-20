@@ -578,7 +578,7 @@ function NewServerFields(props: {
       <div data-vesta="add-version-row">
         <div data-vesta="add-field">
           <label>{t('management.minecraft')}</label>
-          <Combobox disabled={!props.versions} aria-label={t('management.minecraft')} options={versionChoices()} pageSize={80} value={props.version ?? undefined}
+          <Combobox disabled={!props.versions} aria-label={t('management.minecraft')} options={versionChoices()} value={props.version ?? undefined}
               onChange={props.onVersion} />
         </div>
         <Toggle label={t('versions.show-snapshots')} checked={props.snapshots} onChange={props.onSnapshots} />
@@ -606,7 +606,7 @@ function NewServerFields(props: {
       <Show when={props.kindId !== 'vanilla' && builds().length > 0}>
         <div data-vesta="add-field">
           <label>{t(loaderKind() ? 'server-add.software.loader' : 'server-add.software.build')}</label>
-          <Combobox aria-label={t(loaderKind() ? 'server-add.software.loader' : 'server-add.software.build')} options={builds()} pageSize={80}
+          <Combobox aria-label={t(loaderKind() ? 'server-add.software.loader' : 'server-add.software.build')} options={builds()}
             value={shownBuild()} placeholder={t('server-add.software.pick-build')} onChange={props.onBuild} />
           <Show when={!recommendedBuild(kind())}><p data-vesta="add-note">{t('server-add.software.no-recommended')}</p></Show>
         </div>

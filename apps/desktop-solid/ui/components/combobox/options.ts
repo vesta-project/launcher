@@ -13,3 +13,15 @@ export function boundOptions<T>(options: T[], matches: (option: T) => boolean, s
   if (selected && !result.includes(selected)) result.push(selected);
   return result;
 }
+
+/**
+ * Long lists are drawn a page at a time: each item costs a few milliseconds to build, so a few
+ * hundred versions drawn at once kept a menu from opening for seconds. The first page shows at
+ * once, the next is drawn as you scroll towards the end, and search always covers every option.
+ */
+export const LONG_LIST = 60;
+export const PAGE_SIZE = 30;
+/** How close to the bottom (px) scrolling has to get before the next page is drawn. */
+const REVEAL_DISTANCE = 480;
+
+export const nearEnd = (menu: HTMLElement) => menu.scrollHeight - menu.scrollTop - menu.clientHeight < REVEAL_DISTANCE;

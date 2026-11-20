@@ -344,14 +344,14 @@ export function ChangeFlow(props: {
           <Field label={t('server-hosting.version-label')}>
             <Show when={!versions.loading() || versionList()} fallback={<Skeleton height={32} />}>
               <Combobox aria-label={t('server-hosting.version-label')} placeholder={t('server-hosting.version-placeholder')}
-                options={minecraftOptions()} pageSize={80} value={minecraft() ?? undefined}
+                options={minecraftOptions()} value={minecraft() ?? undefined}
                 onChange={setWanted} disabled={locked() || !minecraftOptions().length} />
             </Show>
           </Field>
           <Show when={latestLabel()}>
             {(_label) => (
               <Field label={t('server-hosting.software-version-label')}>
-                <Combobox aria-label={t('server-hosting.software-version-label')} options={releaseOptions()} pageSize={80}
+                <Combobox aria-label={t('server-hosting.software-version-label')} options={releaseOptions()}
                   value={selectedRelease()} onChange={(value) => setPickedRelease({ key: releaseKey(), id: value })}
                   disabled={locked()} />
               </Field>
