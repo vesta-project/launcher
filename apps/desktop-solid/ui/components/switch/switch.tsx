@@ -1,6 +1,7 @@
 import { Switch as KobalteSwitch } from '@kobalte/core/switch';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { children, Show, untrack } from 'solid-js';
+import { NativeChoice } from '../../internal/native-choice';
 import type { ControlSize } from '../../foundation/types';
 import '../field/field.css';
 import '../choice/choice.css';
@@ -28,6 +29,19 @@ export interface SwitchProps {
 }
 
 export function Switch(props: SwitchProps) {
+  // Checked with `in` so JSX slots aren't created just to look. A bare controlled switch (no label, text or error), the kind lists repeat per row, skips
+  // Kobalte for a native input with the same look.
+  if (untrack(() => props.checked !== undefined && !('label' in props) && !('description' in props) && !('error' in props) && !props.readOnly && !props.required)) {
+    return (
+      <NativeChoice kind="switch" checked={!!props.checked} onChange={props.onChange} disabled={props.disabled}
+        name={props.name} value={props.value} size={props.size} id={props.id} class={props.class} style={props.style}
+        aria-label={props['aria-label']}>
+        <span data-vesta="switch-track" data-checked={props.checked ? '' : undefined}>
+          <span data-vesta="switch-thumb" data-checked={props.checked ? '' : undefined} />
+        </span>
+      </NativeChoice>
+    );
+  }
   // Slots are resolved once; reading a JSX prop twice would create it twice.
   const label = children(() => props.label);
   const description = children(() => props.description);

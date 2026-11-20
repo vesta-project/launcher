@@ -1,6 +1,7 @@
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
 import type { JSX } from '@solidjs/web';
-import { children, Show } from 'solid-js';
+import { children, Show, untrack } from 'solid-js';
+import { NativeChoice } from '../../internal/native-choice';
 import type { ControlSize } from '../../foundation/types';
 import { CheckGlyph, MinusGlyph } from '../../internal/icons';
 import '../field/field.css';
@@ -31,6 +32,21 @@ export interface CheckboxProps {
 }
 
 export function Checkbox(props: CheckboxProps) {
+  // Checked with `in` so JSX slots aren't created just to look. A bare controlled checkbox (no label, text, error or mixed state), the kind lists repeat per
+  // row, skips Kobalte for a native input with the same look.
+  if (untrack(() => props.checked !== undefined && props.indeterminate === undefined && !('label' in props) && !('description' in props) && !('error' in props) && !props.readOnly && !props.required)) {
+    return (
+      <NativeChoice kind="checkbox" checked={!!props.checked} onChange={props.onChange} disabled={props.disabled}
+        name={props.name} value={props.value} size={props.size} id={props.id} class={props.class} style={props.style}
+        aria-label={props['aria-label']}>
+        <span data-vesta="checkbox-control" data-checked={props.checked ? '' : undefined}>
+          <Show when={props.checked}>
+            <span data-vesta="checkbox-indicator"><CheckGlyph /></span>
+          </Show>
+        </span>
+      </NativeChoice>
+    );
+  }
   // Slots are resolved once; reading a JSX prop twice would create it twice.
   const label = children(() => props.label);
   const description = children(() => props.description);

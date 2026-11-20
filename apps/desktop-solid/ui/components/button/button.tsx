@@ -1,4 +1,3 @@
-import { Button as KobalteButton } from '@kobalte/core/button';
 import type { JSX } from '@solidjs/web';
 import { children, omit, Show } from 'solid-js';
 import type { ControlSize, Tone } from '../../foundation/types';
@@ -27,7 +26,7 @@ export interface ButtonProps
   children?: JSX.Element;
 }
 
-const LOCAL_PROPS = ['variant', 'tone', 'size', 'icon', 'iconEnd', 'children'] as const;
+const LOCAL_PROPS = ['variant', 'tone', 'size', 'icon', 'iconEnd', 'children', 'type', 'disabled'] as const;
 
 export function Button(props: ButtonProps) {
   // Defaults use `??` rather than merge(): callers forwarding an optional prop
@@ -39,9 +38,14 @@ export function Button(props: ButtonProps) {
   const label = children(() => props.children);
   const iconOnly = () => icon() != null && label() == null;
 
+  // A plain <button>: Kobalte's Button only adds polymorphism we never use, and lists render
+  // hundreds of these (row menus, updates), where its extra layers were most of the cost.
   return (
-    <KobalteButton
+    <button
       {...rest}
+      type={props.type ?? 'button'}
+      disabled={props.disabled}
+      data-disabled={props.disabled ? '' : undefined}
       data-vesta="button"
       data-variant={props.variant ?? 'solid'}
       data-tone={props.tone ?? 'neutral'}
@@ -61,7 +65,7 @@ export function Button(props: ButtonProps) {
           {iconEnd()}
         </span>
       </Show>
-    </KobalteButton>
+    </button>
   );
 }
 

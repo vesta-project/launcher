@@ -11,6 +11,7 @@ import { createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { Match, Switch, Show, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/catalog';
+import { loadMetadata } from '../features/instances/metadata';
 import { AccountLoginDialog } from '../features/accounts/account-login-dialog';
 import { ExternalLinkDialog } from '../features/links/external-link-dialog';
 import { LinkPreview } from '../features/links/link-preview';
@@ -78,7 +79,12 @@ export function Shell() {
   let visitedBrowse = false;
   const [browseWarm, setBrowseWarm] = createSignal(false, { name: 'browseWarm' });
   onSettled(() => {
-    const warm = () => setBrowseWarm(true);
+    // Also fetch the Minecraft and loader version lists ahead, so Create, Versions, Browse's
+    // filters and the server pack pages open with them ready instead of waiting on the host.
+    const warm = () => {
+      setBrowseWarm(true);
+      void loadMetadata();
+    };
     const idle = window.requestIdleCallback?.(warm, { timeout: 4000 });
     const timer = idle === undefined ? window.setTimeout(warm, 1500) : undefined;
     return () => {
