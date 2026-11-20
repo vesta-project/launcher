@@ -84,8 +84,15 @@ export interface ThemeDefinition {
   shadows: "soft" | "crisp" | "none";
   /** A fixed palette that ignores colour harmony (Aurora). */
   fixedHues?: [number, number, number];
-  /** Background accent strengths (percent) when the default is too quiet (Legacy's bold wash). */
+  /** Background accent strengths (percent) when the default is too quiet. */
   backgroundStrengths?: [number, number, number];
+  /**
+   * Exact background colours, drawn at full strength instead of a tint of the canvas (Legacy
+   * copies the old launcher's deep teal-to-magenta wash). Use light-dark() for both schemes.
+   */
+  gradientColors?: [string, string, string];
+  /** Positions (percent) of the three colours along a linear gradient. */
+  gradientStops?: [number, number, number];
   /** The weight the preset starts with (Legacy is heavy); people can change it in Appearance. */
   weight?: Weight;
   /**
@@ -95,6 +102,8 @@ export interface ThemeDefinition {
    * reads better than a see-through field next to a tinted rail.
    */
   seeThrough?: boolean;
+  /** Most a page panel may cover (percent); Legacy lets the wash tint its panels, as the old launcher did. */
+  panelOpacity?: number;
 }
 
 export const themeDefinitions: readonly ThemeDefinition[] = [
@@ -191,27 +200,34 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
   {
     id: "legacy",
     name: "Legacy Vesta",
-    hue: 195,
+    hue: 187,
     hueAdjustable: false,
-    // The old launcher: a teal top fading to purple, under cool purple-grey panels (no third,
-    // warm stop: teal and orange mix to green in the middle).
+    // The old launcher, sampled from its screenshots: a deep teal corner (#1f5e5b) through slate
+    // blue (#263e4c) to deep magenta-purple (#4f2159), under dark slate panels that let it tint
+    // through. Light mode keeps the same path in pale tints.
     neutral: {
-      hue: 285,
-      chroma: { dark: 0.02, light: 0.02 },
-      lift: { dark: 0.06, light: -0.06 },
-      tint: 0.7,
+      hue: 225,
+      chroma: { dark: 0.014, light: 0.012 },
+      lift: { dark: 0.04, light: 0 },
+      tint: 0.6,
     },
     accentChroma: { dark: 0.105, light: 0.12 },
     radius: 1,
     spaceUnit: "4px",
     background: "gradient",
-    gradientAngle: 180,
+    gradientAngle: 135,
     material: "glass",
     shadows: "soft",
-    fixedHues: [192, 300, 305],
-    backgroundStrengths: [34, 26, 34],
+    gradientColors: [
+      "light-dark(oklch(0.88 0.05 185), #1f5e5b)",
+      "light-dark(oklch(0.9 0.025 245), #263e4c)",
+      "light-dark(oklch(0.86 0.06 320), #4f2159)",
+    ],
+    // Teal only owns the top-left corner; purple has the far half, as in the old launcher.
+    gradientStops: [0, 25, 55],
     weight: "heavy",
     seeThrough: true,
+    panelOpacity: 80,
   },
 ];
 
@@ -345,7 +361,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
           : hue;
   const end = harmony === "triadic" ? hue + 240 : harmony === "analogous" ? hue - 30 : hue;
   const vestaSignature = def.id === "vesta" && harmony === "analogous";
-  const colors: [string, string, string] = def.fixedHues
+  const colors: [string, string, string] = def.gradientColors ?? (def.fixedHues
     ? [
         `oklch(0.74 0.14 ${def.fixedHues[0]})`,
         `oklch(0.62 0.2 ${def.fixedHues[1]})`,
@@ -355,17 +371,20 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
         `oklch(0.74 0.13 ${hue})`,
         vestaSignature ? "oklch(0.6 0.2 285)" : `oklch(0.6 0.12 ${wrap(secondary)})`,
         vestaSignature ? "oklch(0.76 0.15 60)" : `oklch(0.76 0.12 ${wrap(end)})`,
-      ];
+      ]);
   // Strength scales with --vesta-bg-strength (stronger in light mode); see theme-runtime.css.
+  // Capped at 100%: exact colours (strength 100) stay valid when light mode raises the strength.
   const mix = (color: string, strength: number) =>
-    `color-mix(in oklab, ${color} calc(${strength}% * var(--vesta-bg-strength, 1)), transparent)`;
+    `color-mix(in oklab, ${color} min(100%, calc(${strength}% * var(--vesta-bg-strength, 1))), transparent)`;
   const strengths: [number, number, number] =
-    def.backgroundStrengths ?? (def.background === "gradient" ? [20, 18, 20] : [13, 13, 12]);
+    def.backgroundStrengths ?? (def.gradientColors ? [100, 100, 100] : def.background === "gradient" ? [20, 18, 20] : [13, 13, 12]);
   const spot = (x: number, y: number) => {
     const angle = ((theme.gradientAngle - 135) * Math.PI) / 180;
     return `${50 + (x - 50) * Math.cos(angle) - (y - 50) * Math.sin(angle)}% ${50 + (x - 50) * Math.sin(angle) + (y - 50) * Math.cos(angle)}%`;
   };
   const radians = (theme.gradientAngle * Math.PI) / 180;
+  // Where each colour sits along a linear gradient; evenly spread unless the preset says.
+  const at = (index: number) => (def.gradientStops ? ` ${def.gradientStops[index]}%` : "");
   let background = "none";
   if (def.background !== "none" && theme.gradient) {
     background =
@@ -373,7 +392,7 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
         ? def.background === "spots"
           ? `radial-gradient(55% 50% at ${spot(0, 0)}, ${mix(colors[0], strengths[0])}, transparent 72%), radial-gradient(50% 55% at ${spot(100, 100)}, ${mix(colors[1], strengths[1])}, transparent 72%), radial-gradient(30% 30% at ${spot(62, 108)}, ${mix(colors[2], strengths[2])}, transparent 75%)`
           : `radial-gradient(ellipse at ${50 + 40 * Math.cos(radians)}% ${50 + 40 * Math.sin(radians)}%, ${mix(colors[0], strengths[0])}, ${mix(colors[1], strengths[1] * 0.6)} 55%, ${mix(colors[2], strengths[2] * 0.4)} 100%)`
-        : `linear-gradient(${theme.gradientAngle}deg, ${mix(colors[0], strengths[0])}, ${mix(colors[1], strengths[1])}, ${mix(colors[2], strengths[2])})`;
+        : `linear-gradient(${theme.gradientAngle}deg, ${mix(colors[0], strengths[0])}${at(0)}, ${mix(colors[1], strengths[1])}${at(1)}, ${mix(colors[2], strengths[2])}${at(2)})`;
   }
 
   const neutralHue = def.neutral.hue === "accent" ? hue : def.neutral.hue;
@@ -409,10 +428,15 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-theme-canvas-opacity": pct(canvas),
     "--vesta-theme-canvas-opacity-light": pct(canvasLight),
     "--vesta-theme-library-board-scale": pct(libraryScale),
-    "--vesta-theme-chrome-opacity": pct(def.seeThrough && !flat ? 0 : chrome),
+    "--vesta-theme-chrome-opacity": pct(chrome),
+    // See-through presets: the titlebar and rail draw no fill under glass and a light frost under
+    // frosted. Only the frame: instance and server pages keep the chrome colour.
+    ...(def.seeThrough && !flat
+      ? { "--vesta-theme-frame-fill": frosted ? "color-mix(in oklab, var(--vesta-color-chrome) 50%, transparent)" : "transparent" }
+      : {}),
     // The card fields' tint with no window effect: a see-through share for see-through presets.
     "--vesta-theme-field-scale": pct(def.seeThrough && !flat ? libraryScale : 100),
-    "--vesta-theme-panel-opacity": pct(panel),
+    "--vesta-theme-panel-opacity": pct(def.panelOpacity !== undefined && !flat ? Math.min(panel, def.panelOpacity) : panel),
     "--vesta-theme-overlay-opacity": pct(overlay),
     "--vesta-theme-overlay-blur": flat
       ? "none"

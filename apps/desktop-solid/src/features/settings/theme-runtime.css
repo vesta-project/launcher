@@ -39,8 +39,9 @@
   :where(:root[data-vesta-material='glass']) {
     --vesta-edge-highlight: inset 0 1px 0 color-mix(in oklab, var(--vesta-color-text) 8%, transparent);
   }
+  /* Light glass: the edge is a white sheen; the text colour is dark there and drew a black line. */
   :where(:root[data-vesta-material='glass'][data-vesta-scheme='light']) {
-    --vesta-edge-highlight: inset 0 1px 0 color-mix(in oklab, var(--vesta-color-text) 60%, transparent);
+    --vesta-edge-highlight: inset 0 1px 0 color-mix(in oklab, white 70%, transparent);
   }
 
   :where([data-vesta='popover'], [data-vesta='menu'], [data-vesta='select-content'], [data-vesta='dialog']) {

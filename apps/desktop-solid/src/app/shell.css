@@ -60,11 +60,11 @@
 
   /* Chrome (titlebar, rail) is a slightly tinted layer above the canvas, below the board. */
   [data-vesta='titlebar'] {
-    background: var(--vesta-color-chrome);
+    background: var(--vesta-theme-frame-fill, var(--vesta-color-chrome));
   }
 
   [data-vesta='rail'] {
-    --rail-bg: var(--vesta-color-chrome);
+    --rail-bg: var(--vesta-theme-frame-fill, var(--vesta-color-chrome));
   }
 
   /*

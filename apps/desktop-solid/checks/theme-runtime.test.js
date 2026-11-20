@@ -22,12 +22,16 @@ test("built-ins declare capabilities; only Vesta opts into glow spots", () => {
   expect(byId.slate["--vesta-theme-background"]).toBe("none");
   expect(byId.mono["--vesta-theme-background"]).toBe("none");
   expect(byId.aurora["--vesta-theme-background"]).toContain("linear-gradient");
-  expect(byId.legacy["--vesta-theme-background"]).toContain("linear-gradient(180deg");
-  expect(byId.legacy["--vesta-theme-accent-hue"]).toBe("195");
+  expect(byId.legacy["--vesta-theme-background"]).toContain("linear-gradient(135deg");
+  // The old launcher's exact wash: deep teal through slate to magenta-purple, and a see-through frame.
+  expect(byId.legacy["--vesta-theme-background"]).toContain("#4f2159");
+  expect(byId.legacy["--vesta-theme-frame-fill"]).toBe("transparent");
+  expect(byId.vesta["--vesta-theme-frame-fill"]).toBeUndefined();
+  expect(byId.legacy["--vesta-theme-accent-hue"]).toBe("187");
   expect(presetUpdates(definitions.legacy)).toMatchObject({
     theme_id: "legacy",
     theme_style: "glass",
-    theme_gradient_angle: 180,
+    theme_gradient_angle: 135,
   });
   expect(byId.slate["--vesta-radius-factor"]).not.toBe(byId.vesta["--vesta-radius-factor"]);
   expect(byId.slate["--vesta-space-unit"]).not.toBe(byId.vesta["--vesta-space-unit"]);
