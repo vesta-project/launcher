@@ -1,4 +1,4 @@
-import { Button, Pagination, Progress, Select, Skeleton } from '@vesta/ui';
+import { Button, Pagination, Select, Skeleton } from '@vesta/ui';
 import { createEffect, createMemo, createSignal, For, Match, onSettled, Show, Switch, untrack } from 'solid-js';
 import { EmptyState } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
@@ -200,11 +200,6 @@ export function Results(props: { active: () => boolean }) {
           if (props.active()) top = event.currentTarget.scrollTop;
         }}
       >
-        <Show when={pending()}>
-          <div data-vesta="browse-progress">
-            <Progress size="sm" aria-label={t('browse.loading')} />
-          </div>
-        </Show>
         <NoticeBar />
         <Show when={warning()}>
           <p data-vesta="browse-warning" role="status">

@@ -1,6 +1,6 @@
 /*
  * Browse search box and filter panel.
- * Hooks: [data-vesta=browse-search-wrap] -search -search-icon -chips -chip -chip-body
+ * Hooks: [data-vesta=browse-search-wrap] -search -search-icon -search-spinner -chips -chip -chip-body
  *        -chip-remove -search-input -scope -search-count -filters-slot -filters-button
  *        -filters-count -url-hint
  *        -panel -panel-body -section -section-head -section-title -section-note -row -pair
@@ -56,7 +56,64 @@
   :where([data-vesta='browse-search-icon']) {
     display: inline-flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: 14px;
+    block-size: 14px;
     color: var(--vesta-color-text-muted);
+  }
+
+  /* ---- Loading: a spinner in place of the glyph, and a line sweeping the bottom edge ---- */
+  :where([data-vesta='browse-search']) {
+    position: relative;
+  }
+
+  :where([data-vesta='browse-search-spinner']) {
+    inline-size: 12px;
+    block-size: 12px;
+    border: 2px solid color-mix(in oklab, var(--vesta-color-accent) 25%, transparent);
+    border-block-start-color: var(--vesta-color-accent);
+    border-radius: 50%;
+    animation: browse-search-spin 0.7s linear infinite;
+  }
+
+  :where([data-vesta='browse-search'][data-pending])::after {
+    position: absolute;
+    inset: auto 0 0;
+    block-size: 2px;
+    background: linear-gradient(90deg, transparent, var(--vesta-color-accent), transparent);
+    background-repeat: no-repeat;
+    background-size: 40% 100%;
+    content: '';
+    pointer-events: none;
+    animation: browse-search-sweep 1.2s var(--vesta-ease-standard) infinite;
+  }
+
+  @keyframes browse-search-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @keyframes browse-search-sweep {
+    from {
+      background-position: -60% 0;
+    }
+
+    to {
+      background-position: 160% 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :where([data-vesta='browse-search-spinner']),
+    :where([data-vesta='browse-search'][data-pending])::after {
+      animation: none;
+    }
+
+    :where([data-vesta='browse-search'][data-pending])::after {
+      background-position: 50% 0;
+    }
   }
 
   :where([data-vesta='browse-chips']) {

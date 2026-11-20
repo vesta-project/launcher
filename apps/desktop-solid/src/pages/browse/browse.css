@@ -4,7 +4,7 @@
  *
  * Hooks: [data-vesta=browse] -toolbar -types -view -sort -target-icon
  *        -toggle -toggle-label -category-icon
- *        -results -pane -progress -notice -notice-close -warning -error -list -pages -page-size
+ *        -results -pane -notice -notice-close -warning -error -list -pages -page-size
  *        -card -card-banner -card-body -card-icon -card-initial -card-title -card-name
  *        -card-meta -card-author -card-stat -card-action -card-action-wrap -card-summary
  *        -card-tags -tag -tags-more
@@ -247,15 +247,6 @@
     overflow: hidden auto;
     scrollbar-width: thin;
     scrollbar-color: var(--vesta-color-border-strong) transparent;
-  }
-
-  /* Takes no space: a 3px line over the top edge of the pane while a query is in flight. */
-  :where([data-vesta='browse-progress']) {
-    position: sticky;
-    inset-block-start: 0;
-    z-index: 2;
-    block-size: 3px;
-    margin-block-end: -3px;
   }
 
   :where([data-vesta='browse-pane']) > * {

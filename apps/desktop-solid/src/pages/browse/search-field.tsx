@@ -23,6 +23,7 @@ import {
   gameVersion,
   hasActiveFilters,
   loader,
+  pending,
   replaceText,
   server,
   setClient,
@@ -201,6 +202,8 @@ export function SearchField() {
     <div data-vesta="browse-search-wrap">
       <div
         data-vesta="browse-search"
+        data-pending={pending() ? '' : undefined}
+        aria-busy={pending() ? 'true' : undefined}
         ref={(element: HTMLDivElement) => (box = element)}
         onClick={(event) => {
           if (event.target === event.currentTarget) searchInput.element?.focus();
@@ -215,9 +218,15 @@ export function SearchField() {
             <TargetSelect class="browse-scope-select" aria-label={t('browse.install-to')} />
           </span>
         </Show>
+        {/* While a query is in flight the glyph turns into a small spinner and a line sweeps
+            along the box's bottom edge, so loading shows where you typed, and nothing below
+            moves when the results arrive. */}
         <span data-vesta="browse-search-icon" aria-hidden="true">
-          <Icon name="icons/content/search" size={14} />
+          <Show when={pending()} fallback={<Icon name="icons/content/search" size={14} />}>
+            <span data-vesta="browse-search-spinner" />
+          </Show>
         </span>
+        <span data-vesta="sr-only" role="status">{pending() ? t('browse.loading') : ''}</span>
         <div data-vesta="browse-chips">
           <For each={shown()} keyed={(chip) => chip.key}>
             {(chip) => (
