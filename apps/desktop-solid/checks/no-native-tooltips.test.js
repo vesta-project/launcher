@@ -1,17 +1,24 @@
 import { expect, test } from 'bun:test';
-import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
 // Heading-style component props remain component APIs; these names are not DOM nodes.
-const headingProps = new Set(['Card', 'Dialog', 'EmptyState', 'Panel', 'SettingsPanel', 'Section', 'Popover']);
+const headingProps = new Set([
+  'Card', // Card title is the visible heading for a card.
+  'Dialog', // Dialog title labels the dialog.
+  'EmptyState', // EmptyState title is its visible headline.
+  'Panel', // Panel title is its visible section heading.
+  'SettingsPanel', // SettingsPanel title labels its settings section.
+  'Section', // Section title is its visible heading.
+  'Popover', // Popover title is its visible overlay heading.
+]);
 // Temporary exceptions: another parallel task owns these tooltip conversions.
 const parallelAllowList = [
-  { test: (file) => file === 'src/components/empty-state.tsx', reason: 'converting in parallel' },
-  { test: (file) => file.startsWith('src/pages/library/instance/'), reason: 'converting in parallel' },
-  { test: (file) => file === 'src/pages/servers/server-card.tsx', reason: 'converting in parallel' },
-  { test: (file) => file.startsWith('src/components/log-view/'), reason: 'converting in parallel' },
+  { test: (file) => file === 'src/components/empty-state.tsx', reason: 'converting in parallel' }, // The empty state owner is converting its DOM hint.
+  { test: (file) => file.startsWith('src/pages/library/instance/'), reason: 'converting in parallel' }, // The instance page owner is converting its DOM hints.
+  { test: (file) => file === 'src/pages/servers/server-card.tsx', reason: 'converting in parallel' }, // The server card owner is converting its DOM hint.
+  { test: (file) => file.startsWith('src/components/log-view/'), reason: 'converting in parallel' }, // The log view owner is converting its DOM hints.
 ];
 
 function sourceFiles(dir) {
@@ -33,12 +40,12 @@ test('DOM JSX does not use native title tooltips', () => {
         const tag = node.tagName.getText(ast);
         const title = node.attributes.properties.find((prop) => ts.isJsxAttribute(prop) && prop.name.getText(ast) === 'title');
         // Lowercase tags are native DOM; <title> itself is document/SVG content, not an attribute tooltip.
-        if (title && /^[a-z]/.test(tag) && tag !== 'title' && !allowed) {
+        const nativeElement = /^[a-z]/.test(tag) && tag !== 'title';
+        const headingComponentProp = headingProps.has(tag);
+        if (title && nativeElement && !headingComponentProp && !allowed) {
           const { line } = ast.getLineAndCharacterOfPosition(title.getStart(ast));
           violations.push(`${file}:${line + 1} <${tag}> title`);
         }
-        // Keep heading component exceptions explicit so future changes are reviewed intentionally.
-        if (title && headingProps.has(tag)) void tag;
       }
       ts.forEachChild(node, visit);
     }
