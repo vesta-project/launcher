@@ -412,8 +412,41 @@ async function readConsoleTail(id: ConnectionId) {
   const added = buffer.merge(page.items);
   // Only the first tail decides where history starts; later recoveries leave scrolled history alone.
   if (buffer.older === undefined) buffer.older = page.previousCursor ?? null;
+  // A stream hiccup with nothing missed leaves no marker behind.
+  buffer.settleTail(page.latestCursor);
   bumpConsole(id);
+  // Servers with history can hand back lines the stream skipped; older servers send no cursor.
+  if (page.previousCursor !== undefined) void fillConsoleGaps(id);
   return added;
+}
+
+const GAP_PAGES = 3;
+const gapFills = new Set<ConnectionId>();
+/**
+ * Reads lines the live stream skipped (the server was busy) back from the server's history,
+ * a page at a time and at most a few pages per gap, so a long stall costs a bounded amount.
+ * A gap that can't be closed (the lines are no longer retained) stays as a marker.
+ */
+async function fillConsoleGaps(id: ConnectionId) {
+  if (gapFills.has(id)) return;
+  gapFills.add(id);
+  try {
+    const buffer = consoleBuffer(id);
+    for (let page = 0; page < GAP_PAGES; page++) {
+      const before = buffer.gapEnd();
+      if (!before) break;
+      const reply = await serverCommand((client) => client.consoleHistory(id, before, 200)).catch(() => null);
+      // Only lines from the same live run can close the gap; log-file lines belong to scrolling up.
+      const scope = before.slice(0, before.lastIndexOf('.') + 1);
+      const items = reply?.items.filter((line) => line.cursor.startsWith(scope)) ?? [];
+      if (!items.length) break;
+      const added = buffer.merge(items);
+      bumpConsole(id);
+      if (!added) break;
+    }
+  } finally {
+    gapFills.delete(id);
+  }
 }
 
 const historyLoads = new Map<ConnectionId, Promise<number>>();

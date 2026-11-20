@@ -23,3 +23,19 @@ test('scrolled-in history sits above the live limit until live output pushes it 
   buffer.clear();
   expect(buffer.older).toBeUndefined();
 });
+
+test('a gap at the end goes once the newest line is shown; interior gaps report where they end', () => {
+  const buffer = new ConsoleBuffer(50);
+  buffer.append([line('s.console.1'), line('s.console.2')]);
+  buffer.gap('resync');
+  expect(buffer.settleTail('s.console.5')).toBe(false);
+  expect(buffer.settleTail('s.console.2')).toBe(true);
+  expect(buffer.entries.at(-1).kind).toBe('line');
+  buffer.gap('s.console.9');
+  buffer.append([line('s.console.9')]);
+  expect(buffer.gapEnd()).toBe('s.console.9');
+  // The missing lines come back from history and the marker closes.
+  buffer.merge([line('s.console.3'), line('s.console.4'), line('s.console.5'), line('s.console.6'), line('s.console.7'), line('s.console.8')]);
+  expect(buffer.entries.some((entry) => entry.kind === 'gap')).toBe(false);
+  expect(buffer.gapEnd()).toBeUndefined();
+});

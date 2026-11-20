@@ -184,6 +184,37 @@ export class ConsoleBuffer {
   }
 
   /**
+   * A gap at the very end only says the stream was interrupted. Once the server's newest line
+   * (`latestCursor` from a tail read) is already shown, nothing was missed and the marker goes.
+   * Returns whether it was removed.
+   */
+  settleTail(latestCursor: string | null | undefined): boolean {
+    const last = this.entries.at(-1);
+    if (last?.kind !== 'gap' || !latestCursor) return false;
+    const line = this.entries.findLast((entry) => entry.kind === 'line');
+    const latest = position(latestCursor);
+    const shown = line ? position(line.cursor) : null;
+    const caughtUp = line?.cursor === latestCursor || (!!latest && !!shown && latest.scope === shown.scope && latest.value <= shown.value);
+    if (!caughtUp) return false;
+    this.invalidatePrefix();
+    this.entries.pop();
+    return true;
+  }
+
+  /**
+   * The line just after the first gap that has lines on both sides, as a `before` cursor for
+   * reading the missing lines back from history; undefined when there is no such gap.
+   */
+  gapEnd(): string | undefined {
+    for (let index = 1; index < this.entries.length - 1; index++) {
+      const entry = this.entries[index]!;
+      const next = this.entries[index + 1]!;
+      if (entry.kind === 'gap' && this.entries[index - 1]!.kind === 'line' && next.kind === 'line') return next.cursor;
+    }
+    return undefined;
+  }
+
+  /**
    * Puts a page of older history (oldest first, all before the first line shown) on top.
    * Lines already present are skipped. Returns how many were added.
    */

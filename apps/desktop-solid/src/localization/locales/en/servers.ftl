@@ -218,8 +218,8 @@ servers-console-send = Send
 servers-console-empty = Enter a command.
 servers-console-too-long = Commands can be at most 1,024 bytes.
 servers-console-control-characters = Commands can't contain line breaks or control characters.
-servers-console-gap = Lines skipped while the server was busy
-servers-console-gap-latest-log = Older lines are in logs/latest.log
+servers-console-gap = Some lines didn't arrive here
+servers-console-gap-latest-log = They're still in logs/latest.log on the server
 
 # Moderation
 servers-moderate-kick = Kick
