@@ -550,6 +550,11 @@
     opacity: 1;
   }
 
+  /* The initial only stands in until the icon arrives; transparent icons must not show it. */
+  :where([data-vesta='browse-card-icon'] > img[data-loaded]) ~ :where([data-vesta='browse-card-initial']) {
+    visibility: hidden;
+  }
+
   :where([data-vesta='browse-card-title']) {
     display: flex;
     flex-direction: column;

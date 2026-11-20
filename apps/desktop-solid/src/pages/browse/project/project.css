@@ -1448,6 +1448,12 @@
     color: var(--vesta-color-text-subtle);
   }
 
+  /* The initial only stands in until the icon arrives; transparent icons must not show it. */
+  :where([data-vesta='project-icon'], [data-vesta='project-header-icon'], [data-vesta='project-dependency-icon'])
+    > :where(img[data-loaded]) ~ :where([data-vesta='project-icon-initial']) {
+    visibility: hidden;
+  }
+
   :where([data-vesta='project-dependency-icon']) > :where([data-vesta='project-icon-initial']) {
     font-size: var(--vesta-text-xs);
   }

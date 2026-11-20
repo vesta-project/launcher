@@ -55,10 +55,11 @@ export const formatDay = (value: string | null | undefined) => {
 export function ProjectIcon(props: { project: Pick<ResourceProject, 'name' | 'icon_url'>; hook?: string }) {
   return (
     <span data-vesta={props.hook ?? 'project-icon'} aria-hidden="true">
-      <span data-vesta="project-icon-initial">{initialOf(props.project.name)}</span>
       <Show when={props.project.icon_url}>
         {(url) => <ResourceImage src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
       </Show>
+      {/* After the image, so a loaded icon hides it (it showed through transparent icons). */}
+      <span data-vesta="project-icon-initial">{initialOf(props.project.name)}</span>
     </span>
   );
 }

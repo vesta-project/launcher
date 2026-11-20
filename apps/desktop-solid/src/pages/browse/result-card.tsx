@@ -143,10 +143,11 @@ export function ResultCard(props: { project: () => ResourceProject; index: () =>
       </Show>
       <div data-vesta="browse-card-body">
         <span data-vesta="browse-card-icon" aria-hidden="true">
-          <span data-vesta="browse-card-initial">{initialOf(project().name)}</span>
           <Show when={project().icon_url}>
             {(url) => <ResourceImage src={url()} alt="" loading="lazy" decoding="async" onLoad={loaded} onError={failed} />}
           </Show>
+          {/* After the image, so a loaded icon hides it (it showed through transparent icons). */}
+          <span data-vesta="browse-card-initial">{initialOf(project().name)}</span>
         </span>
         <div data-vesta="browse-card-title">
           <a
