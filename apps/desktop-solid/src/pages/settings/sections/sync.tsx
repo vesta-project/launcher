@@ -1,5 +1,4 @@
 import '../../../components/metadata.css';
-import { IconTile } from '../../../components/icon-tile';
 import { Badge, Button, Checkbox, IconButton, SegmentedControl, Skeleton, Switch, TextField } from '@vesta/ui';
 import type { JSX } from '@solidjs/web';
 import { For, Show, createMemo, createSignal, untrack } from 'solid-js';
@@ -108,9 +107,7 @@ function Overview(props: { onOpen: (id: SyncCategoryId) => void }) {
               const live = () => !category.disabled && state().enabled;
               return (
                 <li data-disabled={category.disabled ? '' : undefined} data-on={live() ? '' : undefined}>
-                  <IconTile hook="prefs-sync-icon" size={32} tone={live() ? 'accent' : 'neutral'}>
-                    <Icon name={category.icon} size={18} />
-                  </IconTile>
+                  <span data-vesta="prefs-sync-icon" aria-hidden="true"><Icon name={category.icon} size={16} /></span>
                   <div data-vesta="prefs-sync-summary">
                     <strong>{t(category.label)}</strong>
                     <span>

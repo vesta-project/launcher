@@ -62,10 +62,10 @@ const FirstRun: Story = {
         description="Instances you create or import appear here. Each one keeps its own Minecraft version, mods and worlds."
         suggestionsLabel="Get started"
         suggestions={[
-          { icon: 'icons/actions/add', label: 'Create a new instance', description: 'Pick a Minecraft version and modloader.', onSelect: () => {} },
-          { icon: 'icons/content/modpack', label: 'Install a modpack', description: 'Browse ready-made packs from Modrinth and CurseForge.', onSelect: () => {} },
-          { icon: 'icons/actions/move', label: 'Import from another launcher', description: 'Bring over instances from Prism, MultiMC, CurseForge and others.', onSelect: () => {} },
-          { icon: 'icons/content/file', label: 'Import a modpack file', description: 'Open a .mrpack or .zip you already have.', onSelect: () => {} },
+          { label: 'Create a new instance', description: 'Pick a Minecraft version and modloader.', onSelect: () => {} },
+          { label: 'Install a modpack', description: 'Browse ready-made packs from Modrinth and CurseForge.', onSelect: () => {} },
+          { label: 'Import from another launcher', description: 'Bring over instances from Prism, MultiMC, CurseForge and others.', onSelect: () => {} },
+          { label: 'Import a modpack file', description: 'Open a .mrpack or .zip you already have.', onSelect: () => {} },
         ]}
       />
     </Surface>
@@ -83,10 +83,10 @@ const Suggestions: Story = {
         description="Workflows run on a schedule or when something happens on the server."
         suggestionsLabel="Start from a template"
         suggestions={[
-          { icon: 'icons/content/storage', label: 'Nightly backup', description: 'Back up the world every night at 04:00.', onSelect: () => {} },
-          { icon: 'icons/actions/reload', label: 'Restart every 12 hours', description: 'Warn players, then restart Minecraft.', onSelect: () => {} },
-          { icon: 'icons/content/chat', label: 'Announce on first join', description: 'Greet players the first time they join.', onSelect: () => {} },
-          { icon: 'icons/actions/add', label: 'Blank workflow', onSelect: () => {} },
+          { label: 'Nightly backup', description: 'Back up the world every night at 04:00.', onSelect: () => {} },
+          { label: 'Restart every 12 hours', description: 'Warn players, then restart Minecraft.', onSelect: () => {} },
+          { label: 'Announce on first join', description: 'Greet players the first time they join.', onSelect: () => {} },
+          { label: 'Blank workflow', onSelect: () => {} },
         ]}
       />
     </Surface>

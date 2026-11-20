@@ -38,6 +38,19 @@
     padding: var(--vesta-space-2) var(--vesta-space-3);
   }
 
+  /* What each kind of data is, as a plain muted icon in one column. */
+  :where([data-vesta='prefs-sync-icon']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 20px;
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='prefs-sync-cards'] > li[data-on]) [data-vesta='prefs-sync-icon'] {
+    color: var(--vesta-color-accent-text);
+  }
+
   :where([data-vesta='prefs-sync-cards'] > li + li) {
     border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
@@ -221,10 +234,8 @@
 
   :where([data-vesta='prefs-sync-group'] > button > strong) {
     color: var(--vesta-color-text);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='prefs-sync-group'] > button > small) {

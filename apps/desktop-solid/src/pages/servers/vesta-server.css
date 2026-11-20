@@ -396,15 +396,6 @@
   :where([data-vesta="vesta-host-header"]) { display: flex; flex-direction: column; align-items: start; gap: var(--vesta-space-3); }
   :where([data-vesta="vesta-host-header"]) > div { display: flex; align-items: center; gap: var(--vesta-space-3); }
   :where([data-vesta="vesta-host-header"]) h1 { margin: 0; font-size: var(--vesta-text-xl, var(--vesta-text-lg)); }
-  :where([data-vesta="vesta-host-icon"]) {
-    display: grid;
-    place-items: center;
-    inline-size: 40px;
-    block-size: 40px;
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-accent-text);
-  }
   :where([data-vesta="vesta-devices"]) { gap: 0; }
   :where([data-vesta="vesta-devices"]) li {
     display: flex;

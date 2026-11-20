@@ -1,6 +1,6 @@
 /*
  * Java page: one card per game generation with its runtimes.
- * Hooks: [data-vesta=prefs-java] -java-mark -java-radio -java-toolbar
+ * Hooks: [data-vesta=prefs-java] -java-source -java-radio -java-toolbar
  * States: prefs-java: data-using; runtime row: data-active; test result: data-state
  */
 @layer launcher {
@@ -53,7 +53,6 @@
     font-size: var(--vesta-text-xs);
   }
 
-  :where([data-vesta='prefs-java-mark']) { font-family: var(--vesta-font-mono); }
 
   :where([data-vesta='prefs-java'] ul) {
     display: flex;
@@ -102,9 +101,18 @@
     min-inline-size: 0;
   }
 
-  :where([data-vesta='prefs-java'] li > div:not([data-vesta]) > span:not([data-vesta])) {
+  /* Where the runtime came from, in words; the one in use says so quietly beside it. */
+  :where([data-vesta='prefs-java-source']) {
     display: flex;
-    gap: var(--vesta-space-1-5);
+    align-items: baseline;
+    gap: var(--vesta-space-2);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='prefs-java-source'] > small) {
+    color: var(--vesta-color-accent-text);
+    font-weight: var(--vesta-weight-regular);
   }
 
   :where([data-vesta='prefs-java'] code) {

@@ -35,7 +35,6 @@
     font-weight: var(--vesta-weight-semibold);
   }
   :where([data-vesta="server-java-group"]) > header p { margin: 2px 0 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-xs); }
-  :where([data-vesta="server-java-mark"]) { font-family: var(--vesta-font-mono); }
   :where([data-vesta="server-java-group"]) ul { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
   :where([data-vesta="server-java-group"]) li {
     display: flex;

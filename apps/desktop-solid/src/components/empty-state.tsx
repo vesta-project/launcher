@@ -7,14 +7,12 @@ import './empty-state.css';
 export interface EmptyStateSuggestion {
   label: string;
   description?: string;
-  /** Bundled icon name, e.g. `icons/content/storage`. */
-  icon?: string;
   disabled?: boolean;
   onSelect: () => void;
 }
 
 export interface EmptyStateProps {
-  /** Bundled icon name. Optional: a title alone is often enough inline. */
+  /** Bundled icon name, for the inline variant only: a page names itself with its title. */
   icon?: string;
   title: string;
   /** A small status beside the title, e.g. whether a machine is online. */
@@ -27,7 +25,7 @@ export interface EmptyStateProps {
    * - `inline`: replaces a list or panel body. Icon beside the text, aligned with the rows.
    */
   variant?: 'page' | 'inline';
-  /** Choices to start from, shown as a short list of rows (best for 2–5 options). */
+  /** Choices to start from, shown as a short list of plain text rows (best for 2–5 options). */
   suggestions?: readonly EmptyStateSuggestion[];
   /** Small heading above the suggestions, e.g. "Start from a template". */
   suggestionsLabel?: string;
@@ -46,7 +44,7 @@ export function EmptyState(props: EmptyStateProps) {
   const status = children(() => props.status);
   return (
     <div data-vesta="empty-state" data-variant={props.variant ?? 'page'} class={props.class}>
-      <Show when={props.icon}>
+      <Show when={props.variant === 'inline' && props.icon}>
         {(icon) => (
           <span data-vesta="empty-state-icon">
             <Icon name={icon()} size={props.variant === 'inline' ? 16 : 20} />
@@ -78,13 +76,6 @@ export function EmptyState(props: EmptyStateProps) {
                       disabled={suggestion.disabled}
                       onClick={() => suggestion.onSelect()}
                     >
-                      <Show when={suggestion.icon}>
-                        {(icon) => (
-                          <span data-vesta="empty-state-suggestion-icon">
-                            <Icon name={icon()} size={16} />
-                          </span>
-                        )}
-                      </Show>
                       <span data-vesta="empty-state-suggestion-text">
                         <span data-vesta="empty-state-suggestion-label">{suggestion.label}</span>
                         <Show when={suggestion.description}>

@@ -2,7 +2,6 @@ import { Metadata } from '../../../components/metadata';
 import { Badge, Button, IconButton, Menu, MenuItem, Progress, Skeleton, TextField, toast } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
-import { IconTile } from '../../../components/icon-tile';
 import { t } from '../../../localization';
 import { gameStopped, jobActive } from '../../../features/servers/hosting-model';
 import type { SoftwareJob } from '../../../features/servers/hosting-native';
@@ -89,7 +88,6 @@ export function JavaPanel(props: {
             {(group) => (
               <section data-vesta="server-java-group" data-in-use={group().inUse ? '' : undefined} aria-label={t('server-hosting.java-version', { version: String(group().major) })}>
                 <header>
-                  <IconTile hook="server-java-mark" tone={group().inUse ? 'accent' : 'neutral'}>{group().major}</IconTile>
                   <div>
                     <h4>
                       {t('server-hosting.java-version', { version: String(group().major) })}

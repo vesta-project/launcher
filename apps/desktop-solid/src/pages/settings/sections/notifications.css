@@ -1,6 +1,6 @@
 /*
  * Notifications page: subscription rows.
- * Hooks: [data-vesta=prefs-feeds] -feed-icon [data-vesta=prefs-add-feed] [data-vesta=prefs-note-line]
+ * Hooks: [data-vesta=prefs-feeds] [data-vesta=prefs-add-feed] [data-vesta=prefs-note-line]
  */
 @layer launcher {
   :where([data-vesta='prefs-feeds']) {

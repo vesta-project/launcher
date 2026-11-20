@@ -10,19 +10,16 @@ import './sandbox.css';
 const presets = [
   {
     id: 'trusted',
-    icon: 'icons/security/shield-check',
     name: 'prefs.sandbox.preset-trusted',
     text: 'prefs.sandbox.preset-trusted-description',
   },
   {
     id: 'modded',
-    icon: 'icons/security/shield',
     name: 'prefs.sandbox.preset-modded',
     text: 'prefs.sandbox.preset-modded-description',
   },
   {
     id: 'paranoid',
-    icon: 'icons/security/lock',
     name: 'prefs.sandbox.preset-paranoid',
     text: 'prefs.sandbox.preset-paranoid-description',
   },
@@ -41,30 +38,23 @@ export function SandboxSettings() {
     value: setting(key) ?? '',
     onChange: (value: string) => updateSetting(key, value.trim() ? value : null),
   });
+  const presetText = () => (presets.find((preset) => preset.id === setting('default_sandbox_preset')) ?? presets[0]).text;
   const hasHooks = () =>
     !!(setting('default_pre_launch_hook') || setting('default_wrapper_command') || setting('default_post_exit_hook'));
   return (
     <>
+      {/* The presets are steps on one scale, from open to shut, so they read as one control. */}
       <Card title={t('prefs.sandbox.preset')} description={t('prefs.sandbox.preset-description')}>
-        <ul data-vesta="prefs-presets" role="radiogroup" aria-label={t('prefs.sandbox.preset')}>
-          <For each={presets}>
-            {(preset) => (
-              <li>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={setting('default_sandbox_preset') === preset.id ? 'true' : 'false'}
-                  data-preset={preset.id}
-                  onClick={() => updateSetting('default_sandbox_preset', preset.id)}
-                >
-                  <Icon name={preset.icon} size={20} />
-                  <strong>{t(preset.name)}</strong>
-                  <span>{t(preset.text)}</span>
-                </button>
-              </li>
-            )}
-          </For>
-        </ul>
+        <div data-vesta="prefs-block">
+          <SegmentedControl
+            fill
+            aria-label={t('prefs.sandbox.preset')}
+            value={setting('default_sandbox_preset')}
+            onChange={(value) => updateSetting('default_sandbox_preset', value as never)}
+            options={presets.map((preset) => ({ value: preset.id, label: t(preset.name) }))}
+          />
+          <p data-vesta="prefs-preset-note">{t(presetText())}</p>
+        </div>
       </Card>
 
       <Card title={t('prefs.sandbox.nesting')} description={t('prefs.sandbox.nesting-description')}>

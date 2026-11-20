@@ -54,10 +54,8 @@
   :where([data-vesta='prefs-nav-heading']) {
     padding: 0 var(--vesta-space-3) var(--vesta-space-1);
     color: var(--vesta-color-text-subtle);
-    font-size: 11px;
+    font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta='prefs-nav-item']) {
@@ -143,7 +141,7 @@
 
   :where([data-vesta='prefs-page-header'] h2) {
     margin: 0;
-    font-size: var(--vesta-text-lg);
+    font-size: var(--vesta-text-xl);
     font-weight: var(--vesta-weight-semibold);
   }
 

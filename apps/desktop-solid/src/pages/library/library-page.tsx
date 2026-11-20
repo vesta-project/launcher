@@ -431,11 +431,11 @@ function LibraryEmpty() {
       description={t('management.empty-description')}
       suggestionsLabel={t('management.start-label')}
       suggestions={[
-        { icon: 'icons/actions/add', label: t('management.start-new'), description: t('management.start-new-help'), onSelect: () => requestCreateAction('new') },
-        { icon: 'icons/content/modpack', label: t('management.start-modpack'), description: t('management.start-modpack-help'), onSelect: () => { setType('modpack'); transitionTo('/browse'); } },
-        { icon: 'icons/actions/download', label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
+        { label: t('management.start-new'), description: t('management.start-new-help'), onSelect: () => requestCreateAction('new') },
+        { label: t('management.start-modpack'), description: t('management.start-modpack-help'), onSelect: () => { setType('modpack'); transitionTo('/browse'); } },
+        { label: t('management.start-launcher'), description: t('management.start-launcher-help'), onSelect: () => requestCreateAction('launchers') },
         // Opening a file needs the native picker; the browser preview has none.
-        ...(nativeInstances ? [{ icon: 'icons/content/file', label: t('management.start-file'), description: t('management.start-file-help'), onSelect: () => requestCreateAction('file') }] : []),
+        ...(nativeInstances ? [{ label: t('management.start-file'), description: t('management.start-file-help'), onSelect: () => requestCreateAction('file') }] : []),
       ]}
     />
   );

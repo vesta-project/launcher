@@ -1,61 +1,13 @@
 /*
- * Sandbox page: preset cards, extra folders.
- * Hooks: [data-vesta=prefs-presets] [data-vesta=prefs-folders] [data-vesta=prefs-add-folder]
- * States: preset button: aria-checked, data-preset
+ * Sandbox page: preset scale, extra folders.
+ * Hooks: [data-vesta=prefs-preset-note] [data-vesta=prefs-folders] [data-vesta=prefs-add-folder]
  */
 @layer launcher {
-  :where([data-vesta='prefs-presets']) {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--vesta-space-2);
-    margin: 0;
-    padding: 0 var(--vesta-space-3) var(--vesta-space-3);
-    list-style: none;
-  }
-
-  :where([data-vesta='prefs-presets'] button) {
-    --preset-hue: 150;
-
-    display: flex;
-    flex-direction: column;
-    gap: var(--vesta-space-1);
-    align-items: flex-start;
-    inline-size: 100%;
-    block-size: 100%;
-    padding: var(--vesta-space-3);
-    border: calc(var(--vesta-border-width) * 2) solid transparent;
-    border-radius: var(--vesta-radius-container);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text);
-    font: inherit;
-    text-align: start;
-    cursor: default;
-  }
-
-  :where([data-vesta='prefs-presets'] button[data-preset='modded']) {
-    --preset-hue: 80;
-  }
-
-  :where([data-vesta='prefs-presets'] button[data-preset='paranoid']) {
-    --preset-hue: 25;
-  }
-
-  :where([data-vesta='prefs-presets'] button > [data-vesta='icon']) {
-    color: var(--vesta-color-accent-text);
-  }
-
-  :where([data-vesta='prefs-presets'] button > span:not([data-vesta])) {
+  /* What the chosen preset lets the game reach, under the scale. */
+  :where([data-vesta='prefs-preset-note']) {
+    margin: var(--vesta-space-2) 0 0;
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
-  }
-
-  :where([data-vesta='prefs-presets'] button:hover) {
-    background: var(--vesta-color-fill-hover);
-  }
-
-  :where([data-vesta='prefs-presets'] button[aria-checked='true']) {
-    border-color: var(--vesta-color-accent-text);
-    background: color-mix(in oklab, var(--vesta-color-accent) 12%, transparent);
+    font-size: var(--vesta-text-sm);
   }
 
   :where([data-vesta='prefs-folders']) {

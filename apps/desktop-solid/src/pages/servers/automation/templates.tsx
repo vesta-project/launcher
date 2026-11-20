@@ -52,7 +52,6 @@ export function AutomationEmpty(props: { canManage: boolean; busy: boolean; onPi
       suggestions={props.canManage ? SUGGESTED.map((template) => ({
         label: t(templateLabels[template].name),
         description: t(templateLabels[template].description),
-        icon: templateLabels[template].icon,
         disabled: props.busy,
         onSelect: () => props.onPick(template),
       })) : undefined}

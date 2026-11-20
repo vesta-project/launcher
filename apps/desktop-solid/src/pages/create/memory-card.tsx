@@ -21,7 +21,8 @@ export function InstallMemoryCard(props: {
   disabled: boolean;
 }) {
   const [editing, setEditing] = createSignal(false, { name: "installMemoryEditing" });
-  const [unit, setUnit] = createSignal<"MB" | "GB">("MB", { name: "installMemoryUnit" });
+  // GB to match the default beside it; MB is a click away for fine figures.
+  const [unit, setUnit] = createSignal<"MB" | "GB">("GB", { name: "installMemoryUnit" });
   const format = (mb: number) =>
     `${formatNumber(unit() === "MB" ? mb : mb / 1024, { maximumFractionDigits: unit() === "MB" ? 0 : 1 })} ${unit()}`;
   const compact = (mb: number) =>

@@ -5,7 +5,7 @@
  *
  * Hooks:  [data-vesta=empty-state][data-variant=page|inline] -icon -body -heading -title
  *         -description -actions -suggestions -suggestions-label -suggestion
- *         -suggestion-icon -suggestion-text -suggestion-label -suggestion-description
+ *         -suggestion-text -suggestion-label -suggestion-description
  *         [data-vesta=empty-line]
  * Knobs:  --empty-state-inset (inline padding; match the surface's gutter),
  *         --empty-state-block (block padding), --empty-line-inset
@@ -59,7 +59,7 @@
 
   :where([data-vesta='empty-state-title']) {
     margin: 0;
-    font-size: var(--vesta-text-lg);
+    font-size: var(--vesta-text-xl);
     font-weight: var(--vesta-weight-semibold);
     line-height: 1.35;
   }
@@ -103,35 +103,29 @@
 
   :where([data-vesta='empty-state-suggestions-label']) {
     color: var(--vesta-color-text-subtle);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
+  /* Plain rows: the name over what it does, and a faint arrow that brightens when pointed at. */
   :where([data-vesta='empty-state-suggestions'] > ul) {
     display: grid;
-    margin: 0;
+    gap: 2px;
+    margin: 0 0 0 calc(-1 * var(--vesta-space-2));
     padding: 0;
-    overflow: hidden;
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-container);
     list-style: none;
-  }
-
-  :where([data-vesta='empty-state-suggestions'] li + li) {
-    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
   }
 
   :where([data-vesta='empty-state-suggestion']) {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--vesta-space-3);
     inline-size: 100%;
-    min-block-size: 48px;
-    padding: var(--vesta-space-2) var(--vesta-space-3);
+    min-block-size: 36px;
+    padding: var(--vesta-space-1-5) var(--vesta-space-2);
     border: 0;
+    border-radius: var(--vesta-radius-control);
     background: transparent;
     color: var(--vesta-color-text);
     font: inherit;
@@ -157,21 +151,6 @@
     opacity: 0.5;
   }
 
-  /* No icon: the text takes the first column. */
-  :where([data-vesta='empty-state-suggestion']:not(:has([data-vesta='empty-state-suggestion-icon']))) {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  :where([data-vesta='empty-state-suggestion-icon']) {
-    display: grid;
-    place-items: center;
-    inline-size: 28px;
-    block-size: 28px;
-    border-radius: var(--vesta-radius-control);
-    background: var(--vesta-color-fill);
-    color: var(--vesta-color-text-muted);
-  }
-
   :where([data-vesta='empty-state-suggestion-text']) {
     display: grid;
     gap: 1px;
@@ -190,6 +169,11 @@
 
   :where(.empty-state-suggestion-chevron) {
     color: var(--vesta-color-text-subtle);
+    transition: color var(--vesta-duration-fast) var(--vesta-ease-standard);
+  }
+
+  :where([data-vesta='empty-state-suggestion']:hover, [data-vesta='empty-state-suggestion']:focus-visible) .empty-state-suggestion-chevron {
+    color: var(--vesta-color-text);
   }
 
   /* ---- One-liner, for menus, popovers, pickers and small lists ---- */

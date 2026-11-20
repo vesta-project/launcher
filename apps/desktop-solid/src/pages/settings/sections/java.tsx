@@ -1,6 +1,5 @@
-import { IconTile } from '../../../components/icon-tile';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { Badge, Button, IconButton, Menu, MenuItem, Skeleton } from '@vesta/ui';
+import { Button, IconButton, Menu, MenuItem, Skeleton } from '@vesta/ui';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../../components/icon';
 import { buildJavaEnvironments, type JavaEnvironment, type JavaRuntime } from '../../../features/settings/java-model';
@@ -173,9 +172,6 @@ export function JavaSettings() {
               aria-label={environment.name}
             >
               <header>
-                <IconTile hook="prefs-java-mark" tone={environment.active ? 'accent' : 'neutral'}>
-                  {environment.major}
-                </IconTile>
                 <div>
                   <h3>{environment.name}</h3>
                   <p>
@@ -205,14 +201,10 @@ export function JavaSettings() {
                       <li data-active={runtime.active ? '' : undefined}>
                         <span data-vesta="prefs-java-radio" aria-hidden="true" />
                         <div>
-                          <span>
-                            <Badge size="sm" tone={runtime.source === 'managed' ? 'accent' : undefined}>
-                              {sourceLabel(runtime.source)}
-                            </Badge>
+                          <span data-vesta="prefs-java-source">
+                            {sourceLabel(runtime.source)}
                             <Show when={runtime.active}>
-                              <Badge size="sm" tone="success">
-                                {t('prefs.java.active')}
-                              </Badge>
+                              <small>{t('prefs.java.active')}</small>
                             </Show>
                           </span>
                           <code>{runtime.path ?? t('prefs.java.not-installed')}</code>
@@ -229,7 +221,7 @@ export function JavaSettings() {
                           fallback={
                             <Button
                               size="sm"
-                              tone="accent"
+                              variant="outline"
                               disabled={downloading().has(environment.major)}
                               icon={<Icon name="icons/actions/download" />}
                               onClick={() => void download(environment.major)}
