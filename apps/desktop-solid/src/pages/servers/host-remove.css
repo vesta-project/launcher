@@ -1,4 +1,5 @@
-/* Removing a server from its Vesta Server: the confirm field, then one line when the machine says no. */
+/* Removing a server from its Vesta Server (or deleting one for good): the confirm field, the
+   delete-for-good choices, then one line when the machine says no. */
 @layer launcher {
   :where([data-vesta="host-remove"]) {
     display: flex;
@@ -6,4 +7,7 @@
     gap: var(--vesta-space-3);
   }
   :where([data-vesta="host-remove"]) > [data-vesta="server-callout"] { margin: 0; }
+  /* The delete-for-good choices line up with the field above them. */
+  :where([data-vesta="host-remove"] [data-vesta="setting-row"]) { padding-inline: 0; }
+  :where([data-vesta="host-remove"]) > [data-vesta="server-muted"] { margin: 0; }
 }

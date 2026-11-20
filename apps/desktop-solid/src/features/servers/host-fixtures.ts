@@ -8,8 +8,9 @@
 //   vesta.fixtures.signin = 'no-access' (the account has no role on attic-pc) | 'approval' (attic-pc wants a link code)
 //   vesta.fixtures.create = see fixtures-create.ts
 //   vesta.fixtures.remove = 'busy' (the server has a job running, so removing it waits) | 'old' (a machine that can't remove from here)
+//                           | 'basic' (removes, but has no removed list, deleting for good or storage yet)
 import { createCreateFixtures, realFixtureClock, type FixtureClock } from './fixtures-create';
-import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, VestaHost } from './native-hosts';
+import type { hostsNative, Folder, FolderCheck, HostDevice, HostDiscovery, HostInfo, HostServer, HostStorage, ImportJob, ImportReview, LinkResult, NewDeviceSignIn, RemovedServer, ServerRestored, VestaHost } from './native-hosts';
 
 export type HostsApi = typeof hostsNative;
 
@@ -79,8 +80,55 @@ interface FixtureJob extends ImportJob { startedAt: number; folder: string; name
 
 export function createHostFixtures(options: { hosts?: string | null; found?: string | null; signin?: string | null; create?: string | null; remove?: string | null } = {}, clock: FixtureClock = realFixtureClock): HostsApi {
   const removals = new Map<string, { serverId: string; removedAt: string; restoreUntil: string }>();
+  /** Servers removed in this session, so restoring brings back what was there. */
+  const parked = new Map<string, HostServer>();
   // An older machine doesn't list removal, so the launcher never offers it there.
-  const capabilities = () => (options.remove === 'old' ? CAPABILITIES : [...CAPABILITIES, 'server-remove']);
+  const capabilities = () => (options.remove === 'old' ? CAPABILITIES
+    : options.remove === 'basic' ? [...CAPABILITIES, 'server-remove']
+    : [...CAPABILITIES, 'server-remove', 'removed-servers', 'server-purge', 'storage', 'removed-server-retention']);
+  const retention = new Map<string, number>();
+  const restores = new Map<string, ServerRestored>();
+  const GB = 1024 ** 3;
+  // Waiting in the retention window: one two days from going, one whose name is taken again
+  // (it comes back as "Lobby (restored)"), and one already being deleted.
+  const removed = new Map<string, RemovedServer[]>();
+  const seedRemoved = (hostId: string): RemovedServer[] => {
+    const day = 86_400_000;
+    const at = (ms: number) => new Date(clock.now() + ms).toISOString();
+    return [
+      { serverId: '00000000-0000-4000-8000-0000000000a1', name: 'Old Survival', removedAt: at(-5 * day), restoreUntil: at(2 * day + 3_600_000), removedBy: 'fixture-account', state: 'restorable', bytes: 3.4 * GB, minecraftVersion: '1.20.1', software: { kind: 'fabric', version: '0.15.11' } },
+      { serverId: '00000000-0000-4000-8000-0000000000a2', name: 'Lobby', removedAt: at(-1 * day), restoreUntil: at(6 * day), removedBy: 'fixture-account', state: 'restorable', bytes: 820 * 1024 ** 2, minecraftVersion: '1.21.4', software: { kind: 'paper', version: '1.21.4-130' } },
+      { serverId: '00000000-0000-4000-8000-0000000000a3', name: 'Skyblock test', removedAt: at(-7 * day), restoreUntil: at(-60_000), removedBy: null, state: 'purging', bytes: null, minecraftVersion: '1.21.1', software: null },
+    ].filter((server) => hostId === 'host-people' || server.state !== 'purging') as RemovedServer[];
+  };
+  const removedOf = (hostId: string) => {
+    if (!removed.has(hostId)) removed.set(hostId, seedRemoved(hostId));
+    return removed.get(hostId)!;
+  };
+  let measuring = 0;
+  const storageOf = (hostId: string): HostStorage => {
+    const list = servers.get(hostId) ?? [];
+    const named = list.length ? list.map((server) => server.name) : ['Lobby', 'Survival'];
+    const sizes = [6.2, 2.1, 1.3, 0.6];
+    const gone = removedOf(hostId);
+    return {
+      measuredAt: new Date(clock.now() - 14 * 60_000).toISOString(),
+      measuring: measuring > clock.now(),
+      volumes: [
+        { volumeId: 'data', label: 'Data drive', displayPath: '/var/lib/vesta', totalBytes: 256 * GB, freeBytes: 21 * GB, holds: ['servers', 'backups', 'state'], lowAt: 10 * GB },
+        { volumeId: 'cache', label: 'System drive', displayPath: '/', totalBytes: 64 * GB, freeBytes: 5 * GB, holds: ['caches'], lowAt: 8 * GB },
+      ],
+      servers: named.map((name, index) => {
+        const bytes = (sizes[index] ?? 0.4) * GB;
+        return { serverId: list[index]?.serverId ?? `srv-${index}`, name, volumeId: 'data', bytes,
+          parts: { worlds: bytes * 0.5, backups: bytes * 0.3, content: bytes * 0.12, logs: bytes * 0.03, software: bytes * 0.03, trash: 0, other: bytes * 0.02 } };
+      }),
+      removed: { count: gone.length, bytes: gone.reduce((sum, server) => sum + (server.bytes ?? 0), 0) },
+      backups: { bytes: 4.8 * GB, outsideServers: 1 },
+      caches: [{ kind: 'java', bytes: 1.1 * GB, removable: false }, { kind: 'software_downloads', bytes: 640 * 1024 ** 2, removable: true }],
+      other: 120 * 1024 ** 2,
+    };
+  };
   const lan: HostDiscovery[] = [
     { hostId: 'host-people', name: 'people-server', fingerprint: 'a'.repeat(64), address: '192.168.1.67:25500', state: 'unclaimed' },
     { hostId: 'host-attic', name: 'attic-pc', fingerprint: 'b'.repeat(64), address: '192.168.1.80:25500', state: 'claimed' },
@@ -226,7 +274,8 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
     },
     info: async (hostId): Promise<HostInfo> => {
       const found = await need(hostId);
-      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: capabilities(), role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account' };
+      return { hostId, name: found.name, fingerprint: found.fingerprint, endpoints: found.endpoints, authGeneration: '1', capabilities: capabilities(), role: 'primary_owner', revision: '1', newDeviceSignIn: signInPolicy.get(hostId) ?? 'account',
+        ...(capabilities().includes('removed-server-retention') ? { removedServerRetentionDays: retention.get(hostId) ?? 7 } : {}) };
     },
     update: async (hostId, body) => {
       const found = await need(hostId);
@@ -239,6 +288,11 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
         if (listed) listed.name = name;
       }
       if (body.newDeviceSignIn) signInPolicy.set(hostId, body.newDeviceSignIn);
+      if (body.removedServerRetentionDays !== undefined) {
+        const days = body.removedServerRetentionDays;
+        if (!Number.isInteger(days) || days < 1 || days > 365) return reject('invalid_input', 'invalid_request');
+        retention.set(hostId, days);
+      }
       return { hostId, name: found.name, newDeviceSignIn: signInPolicy.get(hostId) ?? 'account', revision: '2' };
     },
     owners: async (hostId) => {
@@ -391,9 +445,72 @@ export function createHostFixtures(options: { hosts?: string | null; found?: str
       if (options.remove === 'busy') return reject('server_busy', 'server_busy');
       servers.set(hostId, list.filter((server) => server.serverId !== serverId));
       const removedAt = new Date(clock.now());
-      const receipt = { serverId, removedAt: removedAt.toISOString(), restoreUntil: new Date(removedAt.getTime() + 7 * 86_400_000).toISOString() };
+      const gone = list.find((server) => server.serverId === serverId);
+      const receipt = { serverId, removedAt: removedAt.toISOString(), restoreUntil: new Date(removedAt.getTime() + (retention.get(hostId) ?? 7) * 86_400_000).toISOString() };
       removals.set(idempotencyKey, receipt);
+      if (capabilities().includes('removed-servers')) {
+        removedOf(hostId).unshift({ serverId, name, removedAt: receipt.removedAt, restoreUntil: receipt.restoreUntil, removedBy: 'fixture-account', state: 'restorable',
+          bytes: 1.8 * GB, minecraftVersion: gone?.minecraftVersion ?? '1.21.4', software: gone?.software ?? null });
+        if (gone) parked.set(serverId, gone);
+      }
       return receipt;
+    },
+    purgeServer: async (hostId, serverId, confirmName) => {
+      await need(hostId);
+      await clock.wait(700);
+      const list = servers.get(hostId) ?? [];
+      const name = list.find((server) => server.serverId === serverId)?.name ?? (serverId === 'srv-lobby' ? 'Lobby' : null);
+      if (!name) return reject('not_found', 'not_found');
+      if (confirmName !== name) return reject('invalid_input', 'confirm_name_mismatch');
+      if (options.remove === 'busy') return reject('server_busy', 'server_busy');
+      servers.set(hostId, list.filter((server) => server.serverId !== serverId));
+      return { serverId, purgeStartedAt: new Date(clock.now()).toISOString(), bytes: 1.8 * GB };
+    },
+    removedServers: async (hostId) => {
+      await need(hostId);
+      await clock.wait(300);
+      return { servers: removedOf(hostId).map((server) => ({ ...server })), nextCursor: null };
+    },
+    restoreServer: async (hostId, serverId, idempotencyKey) => {
+      await need(hostId);
+      await clock.wait(900);
+      const done = restores.get(idempotencyKey);
+      if (done) return done;
+      const list = removedOf(hostId);
+      const found = list.find((server) => server.serverId === serverId);
+      if (!found) return reject('not_found', 'gone');
+      if (found.state === 'purging') return reject('invalid_input', 'purging');
+      const active = servers.get(hostId) ?? [];
+      const taken = (name: string) => active.some((server) => server.name === name) || (name === 'Lobby' && hostId === 'host-people');
+      let name = found.name;
+      for (let attempt = 1; taken(name); attempt++) name = attempt === 1 ? `${found.name} (restored)` : `${found.name} (restored ${attempt})`;
+      const back = parked.get(serverId);
+      const gamePort = name === found.name ? (back?.gamePort ?? 25565) : 25570;
+      active.push({ ...(back ?? { serverId, state: 'stopped', role: 'owner', minecraftVersion: found.minecraftVersion, software: found.software }), name, gamePort, state: 'stopped' } as HostServer);
+      servers.set(hostId, active);
+      removed.set(hostId, list.filter((server) => server.serverId !== serverId));
+      const receipt = { serverId, name, gamePort, restoredAt: new Date(clock.now()).toISOString() };
+      restores.set(idempotencyKey, receipt);
+      return receipt;
+    },
+    purgeRemovedServer: async (hostId, serverId, confirmName) => {
+      await need(hostId);
+      await clock.wait(700);
+      const list = removedOf(hostId);
+      const found = list.find((server) => server.serverId === serverId);
+      if (!found) return reject('not_found', 'gone');
+      if (confirmName !== found.name) return reject('invalid_input', 'confirm_name_mismatch');
+      found.state = 'purging';
+      // The fixture finishes the purge a few seconds later.
+      void clock.wait(4000).then(() => removed.set(hostId, removedOf(hostId).filter((server) => server.serverId !== serverId)));
+      return { serverId, purgeStartedAt: new Date(clock.now()).toISOString(), bytes: found.bytes };
+    },
+    storage: async (hostId) => { await need(hostId); await clock.wait(200); return storageOf(hostId); },
+    measureStorage: async (hostId) => {
+      await need(hostId);
+      if (measuring > clock.now()) return { measuring: true };
+      measuring = clock.now() + 5000;
+      return { measuring: true };
     },
   };
 }

@@ -1,0 +1,103 @@
+/*
+ * Machine settings: removed servers and storage.
+ * Hooks:  [data-vesta=host-removed-list] -row (data-state restorable | restoring | purging)
+ *         -text -name -meta -deadline -actions
+ *         [data-vesta=host-storage] -volume (data-low) -volume-label -low -list -text -name
+ *         -meta -size
+ * Rows match the Devices list on the same page: full-bleed rows split by hairlines.
+ */
+@layer launcher {
+  :where([data-vesta='host-removed-list'], [data-vesta='host-storage-list']) {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='host-removed-list'], [data-vesta='host-storage-list']) > li {
+    display: flex;
+    align-items: center;
+    gap: var(--vesta-space-3);
+    min-block-size: 52px;
+    padding: var(--vesta-space-2) var(--vesta-space-4);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    color: var(--vesta-color-text-muted);
+  }
+
+  :where([data-vesta='host-removed-list']) > li:first-child {
+    border-block-start: 0;
+  }
+
+  :where([data-vesta='host-removed-text'], [data-vesta='host-storage-text']) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  :where([data-vesta='host-removed-name'], [data-vesta='host-storage-name']) {
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='host-removed-meta'], [data-vesta='host-storage-meta']) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--vesta-space-2);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='host-removed-row'][data-state='purging']) :where([data-vesta='host-removed-deadline']) {
+    color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta='host-removed-actions']) {
+    display: flex;
+    flex: none;
+    gap: var(--vesta-space-1);
+  }
+
+  :where([data-vesta='host-storage']) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  :where([data-vesta='host-storage-volume']) {
+    padding: var(--vesta-space-2) var(--vesta-space-4) var(--vesta-space-3);
+  }
+
+  :where([data-vesta='host-storage-volume-label']) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
+  :where([data-vesta='host-storage-low']) {
+    color: var(--vesta-color-danger-text);
+    font-size: var(--vesta-text-xs);
+    font-weight: var(--vesta-weight-medium);
+  }
+
+  :where([data-vesta='host-storage-size']) {
+    flex: none;
+    color: var(--vesta-color-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @container (max-width: 420px) {
+    :where([data-vesta='host-removed-row']) {
+      flex-wrap: wrap;
+    }
+
+    :where([data-vesta='host-removed-actions']) {
+      inline-size: 100%;
+      justify-content: end;
+    }
+  }
+}

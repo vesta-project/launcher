@@ -482,3 +482,22 @@ export async function removeHostServer(hostId: string, serverId: string, confirm
   void loadHostServers(hostId).catch(() => { /* The list catches up on its own. */ });
   return receipt;
 }
+
+/**
+ * Owners only, `server-purge`: stop the server and delete it now instead of keeping it in the
+ * removed list. Same list update as removing; the purge itself finishes in the background.
+ */
+export async function purgeHostServer(hostId: string, serverId: string, confirmName: string, keepBackups: boolean, idempotencyKey: string) {
+  const receipt = await hostCommand((client) => client.purgeServer(hostId, serverId, confirmName, keepBackups, idempotencyKey));
+  if (addState[hostId]?.serverId === serverId) clearAdd(hostId);
+  patch(setHostServerLists, hostId, hostServers(hostId).filter((server) => server.serverId !== serverId));
+  void loadHostServers(hostId).catch(() => { /* The list catches up on its own. */ });
+  return receipt;
+}
+
+/** Brings a removed server back (stopped); the machine's server list is read again so its card returns. */
+export async function restoreHostServer(hostId: string, serverId: string, idempotencyKey: string) {
+  const receipt = await hostCommand((client) => client.restoreServer(hostId, serverId, idempotencyKey));
+  await loadHostServers(hostId).catch(() => { /* The list catches up on its own. */ });
+  return receipt;
+}

@@ -19,6 +19,8 @@ import type { ServerCommandError } from '../../features/servers/native';
 import { refreshServers, serverSnapshots, useServersClock } from '../../features/servers/store';
 import { Card as Panel } from '../settings/parts';
 import { ServerErrorNote } from './parts';
+import { RemovedServersPanel } from './host-removed';
+import { StoragePanel } from './host-storage';
 import { SettingsColumns } from './settings-parts';
 import '../library/instance/settings-tab.css';
 import './vesta-server.css';
@@ -54,6 +56,8 @@ function HostSettingsContent(props: { host: VestaHost }) {
   const [draft, setDraft] = createSignal('', { name: 'host-settings:name-draft' });
   const [saving, setSaving] = createSignal<'name' | 'approval' | null>(null, { name: 'host-settings:saving' });
   const nameProblem = () => hostNameProblem(draft());
+  /** Bumped when a restore or delete changes what the machine stores, so Storage reads again. */
+  const [changes, setChanges] = createSignal(0, { name: 'host-settings:changes' });
 
   const loadDevices = async () => {
     try {
@@ -217,6 +221,11 @@ function HostSettingsContent(props: { host: VestaHost }) {
                 )}
               </Show>
             </Panel>
+          </Show>
+
+          <Show when={owner()}>
+            <RemovedServersPanel hostId={id()} onChanged={() => { setChanges((count) => count + 1); void refreshServers(); }} />
+            <StoragePanel hostId={id()} refresh={changes()} />
           </Show>
         </SettingsColumns>
       </div>

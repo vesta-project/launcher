@@ -155,6 +155,11 @@ pub enum HostAction {
     CreateResume,
     CreateStart,
     ServerRemove,
+    ServersRemoved,
+    ServerRestore,
+    ServerPurge,
+    Storage,
+    StorageMeasure,
 }
 /// A Minecraft version id for a catalogue query: short, and only characters a version uses.
 fn version_query(body: Option<&Value>) -> Result<String> {
@@ -172,13 +177,67 @@ fn version_query(body: Option<&Value>) -> Result<String> {
 }
 /// Removing a server: the name typed to confirm (exactly as typed, case and all) and the
 /// attempt's idempotency key, so a retry of the same attempt gets the same receipt.
-fn remove_body(body: Option<&Value>, idempotency_key: &str) -> Result<Value> {
-    let name = body
-        .and_then(|body| body.get("confirmName"))
+fn confirm_name(body: Option<&Value>) -> Result<&str> {
+    body.and_then(|body| body.get("confirmName"))
         .and_then(Value::as_str)
         .filter(|name| !name.is_empty() && name.len() <= 256)
-        .ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
-    Ok(json!({ "confirmName": name, "idempotencyKey": idempotency_key }))
+        .ok_or_else(|| Error::new(ErrorCode::InvalidInput))
+}
+/// An optional boolean the page may send; anything else is dropped.
+fn flag(body: Option<&Value>, key: &str) -> Option<bool> {
+    body.and_then(|body| body.get(key)).and_then(Value::as_bool)
+}
+fn remove_body(body: Option<&Value>, idempotency_key: &str) -> Result<Value> {
+    let mut out = json!({ "confirmName": confirm_name(body)?, "idempotencyKey": idempotency_key });
+    // Deleting for good (and whether to keep backups) only travels when the page asked for it.
+    if flag(body, "permanently") == Some(true) {
+        out["permanently"] = json!(true);
+        if let Some(keep) = flag(body, "keepBackups") {
+            out["keepBackups"] = json!(keep);
+        }
+    }
+    Ok(out)
+}
+/// Deleting a removed server for good: the typed name and the backup choice, nothing else.
+fn purge_body(body: Option<&Value>) -> Result<Value> {
+    let mut out = json!({ "confirmName": confirm_name(body)? });
+    if let Some(keep) = flag(body, "keepBackups") {
+        out["keepBackups"] = json!(keep);
+    }
+    Ok(out)
+}
+/// Restoring: an optional new name and port; the machine picks free ones when they're absent.
+fn restore_body(body: Option<&Value>) -> Result<Value> {
+    let mut out = json!({});
+    if let Some(name) = body.and_then(|body| body.get("name")).and_then(Value::as_str) {
+        if name.trim().is_empty() || name.len() > 256 {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        out["name"] = json!(name);
+    }
+    if let Some(port) = body.and_then(|body| body.get("gamePort")).and_then(Value::as_u64) {
+        if !(1..=65535).contains(&port) {
+            return Err(Error::new(ErrorCode::InvalidInput));
+        }
+        out["gamePort"] = json!(port);
+    }
+    Ok(out)
+}
+/// A list cursor for a query string: the opaque token the machine handed out, nothing more.
+fn cursor_query(body: Option<&Value>) -> Result<String> {
+    match body.and_then(|body| body.get("cursor")).and_then(Value::as_str) {
+        None => Ok(String::new()),
+        Some(cursor)
+            if !cursor.is_empty()
+                && cursor.len() <= 512
+                && cursor
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~')) =>
+        {
+            Ok(format!("?cursor={cursor}"))
+        }
+        Some(_) => Err(Error::new(ErrorCode::InvalidInput)),
+    }
 }
 #[cfg(test)]
 mod remove_tests {
@@ -190,6 +249,22 @@ mod remove_tests {
             remove_body(Some(&body), "k-1").unwrap(),
             json!({ "confirmName": "Lobby ", "idempotencyKey": "k-1" })
         );
+        let forever = json!({ "confirmName": "Lobby", "permanently": true, "keepBackups": false });
+        assert_eq!(
+            remove_body(Some(&forever), "k-2").unwrap(),
+            json!({ "confirmName": "Lobby", "idempotencyKey": "k-2", "permanently": true, "keepBackups": false })
+        );
+        assert_eq!(
+            purge_body(Some(&json!({ "confirmName": "Lobby", "keepBackups": true, "x": 1 }))).unwrap(),
+            json!({ "confirmName": "Lobby", "keepBackups": true })
+        );
+        assert_eq!(
+            restore_body(Some(&json!({ "gamePort": 25570, "x": 1 }))).unwrap(),
+            json!({ "gamePort": 25570 })
+        );
+        assert!(restore_body(Some(&json!({ "gamePort": 70000 }))).is_err());
+        assert_eq!(cursor_query(Some(&json!({ "cursor": "abc-1" }))).unwrap(), "?cursor=abc-1");
+        assert!(cursor_query(Some(&json!({ "cursor": "a&b=c" }))).is_err());
         assert!(remove_body(Some(&json!({ "confirmName": "" })), "k").is_err());
         assert!(remove_body(None, "k").is_err());
     }
@@ -325,6 +400,11 @@ async fn dispatch(
         CreateResume => ("POST", format!("/creates/jobs/{}/resume", id()?)),
         CreateStart => ("POST", format!("/creates/jobs/{}/start", id()?)),
         ServerRemove => ("DELETE", format!("/servers/{}", id()?)),
+        ServersRemoved => ("GET", format!("/servers/removed{}", cursor_query(body.as_ref())?)),
+        ServerRestore => ("POST", format!("/servers/removed/{}/restore", id()?)),
+        ServerPurge => ("DELETE", format!("/servers/removed/{}", id()?)),
+        Storage => ("GET", "/storage".into()),
+        StorageMeasure => ("POST", "/storage/measure".into()),
         _ => unreachable!(),
     };
     // Reads carry no body: a catalogue query travels in the path.
@@ -333,6 +413,12 @@ async fn dispatch(
     } else if matches!(action, ServerRemove) {
         // Built here: only the typed name travels from the page, the key is this attempt's.
         Some(remove_body(body.as_ref(), &idempotency_key)?)
+    } else if matches!(action, ServerPurge) {
+        Some(purge_body(body.as_ref())?)
+    } else if matches!(action, ServerRestore) {
+        Some(restore_body(body.as_ref())?)
+    } else if matches!(action, StorageMeasure) {
+        Some(json!({}))
     } else {
         body
     };

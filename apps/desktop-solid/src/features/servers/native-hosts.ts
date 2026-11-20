@@ -5,11 +5,12 @@ export const hostConnectionId = (ref: ServerRef) => `${ref.hostId}:${ref.serverI
 export interface VestaHost { id: string; name: string; fingerprint: string; endpoints: string[]; deviceId: string; keyReference: string; accountId: string; authRevision: string }
 export interface HostDiscovery { hostId: string; name: string | null; fingerprint: string; address: string; state: 'claimed' | 'unclaimed' | null }
 /** `newDeviceSignIn` is only sent to owners: `account` lets a new device sign in with its Minecraft account, `approval` needs a link code. */
-export interface HostInfo { hostId: string; name: string; fingerprint: string; endpoints: unknown[]; authGeneration: string; capabilities: string[]; role: string; revision: string; newDeviceSignIn?: NewDeviceSignIn }
+/** `newDeviceSignIn` and `removedServerRetentionDays` are only sent to owners (the second by newer machines). */
+export interface HostInfo { hostId: string; name: string; fingerprint: string; endpoints: unknown[]; authGeneration: string; capabilities: string[]; role: string; revision: string; newDeviceSignIn?: NewDeviceSignIn; removedServerRetentionDays?: number }
 export type NewDeviceSignIn = 'account' | 'approval';
 /** `name` is the last Minecraft name the machine verified for that account, or null. */
 export interface HostOwner { accountId: string; role: 'primary_owner' | 'owner'; name: string | null }
-export interface HostUpdate { name?: string; newDeviceSignIn?: NewDeviceSignIn }
+export interface HostUpdate { name?: string; newDeviceSignIn?: NewDeviceSignIn; removedServerRetentionDays?: number }
 /** `software`, `minecraftVersion` and `iconEtag` are absent on older machines; null means unknown or no icon. */
 export interface HostServer { serverId: string; name: string; gamePort: number; state: string; role: string; software?: { kind: string; version: string | null } | null; minecraftVersion?: string | null; iconEtag?: string | null }
 export interface HostDevice { deviceId: string; name: string; accountId: string; revoked: boolean; createdAt: string }
@@ -27,7 +28,8 @@ export type ImportState = 'planning' | 'review' | 'applying' | 'ready' | 'starti
 export interface ImportJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: { filesDone: number; filesTotal: number; bytesDone: number; bytesTotal: number }; review: ImportReview | null; serverId: string | null }
 export interface ImportReview { planId: string; confirmation: string | null; expiresAt: string; blockers: string[]; warnings: string[]; source: { displayPath: string; snapshot: string; files: number; bytes: number }; detected: unknown; runtime: unknown; destination: { serverId: string; displayPath: string; freeBytes: number }; resources: { gamePort: number; memoryMiB: number }; processes: unknown[]; ports: unknown[]; inspection: unknown }
 export type HostAction = 'info' | 'update' | 'owners' | 'devices' | 'link_code' | 'link_status' | 'link_approve' | 'device_revoke' | 'owner_promote' | 'owner_demote' | 'ownership_transfer' | 'folder_roots' | 'folder_resolve' | 'folder_list' | 'folder_check' | 'import_candidates' | 'import_inspect' | 'import_resources' | 'import_plan' | 'import_apply' | 'import_job' | 'import_cancel' | 'import_resume' | 'import_start' | 'import_readiness'
-  | 'catalogue_minecraft' | 'catalogue_software' | 'create_defaults' | 'create_restore_sources' | 'create_plan' | 'create_apply' | 'create_job' | 'create_cancel' | 'create_resume' | 'create_start' | 'server_remove';
+  | 'catalogue_minecraft' | 'catalogue_software' | 'create_defaults' | 'create_restore_sources' | 'create_plan' | 'create_apply' | 'create_job' | 'create_cancel' | 'create_resume' | 'create_start' | 'server_remove'
+  | 'servers_removed' | 'server_restore' | 'server_purge' | 'storage' | 'storage_measure';
 // Creating a server on the machine (create.md): new, from a modpack, or restored from a backup.
 export interface CatalogueVersion { id: string; stable: boolean; experimental: boolean; recommended: boolean }
 export interface MinecraftCatalogue { versions: CatalogueVersion[]; latestStable: string | null }
@@ -64,6 +66,37 @@ export interface CreateReview { planId: string; confirmation: string | null; exp
 export interface CreateJob { jobId: string; state: ImportState; phase: string; error: string | null; progress: ImportJob['progress']; review: CreateReview | null; serverId: string | null }
 /** The machine's receipt for a removed server; `restoreUntil` is when it can no longer be brought back. */
 export interface ServerRemoved { serverId: string; removedAt: string; restoreUntil: string }
+/** Deleting for good has started; `bytes` is what it frees, null until the machine has measured. */
+export interface ServerPurging { serverId: string; purgeStartedAt: string; bytes: number | null }
+/** A server waiting in the machine's retention window. */
+export interface RemovedServer {
+  serverId: string;
+  name: string;
+  removedAt: string;
+  restoreUntil: string;
+  removedBy: string | null;
+  state: 'restorable' | 'restoring' | 'purging';
+  bytes: number | null;
+  minecraftVersion: string | null;
+  software: { kind: string; version: string | null } | null;
+}
+/** The name and port a restored server came back with (both may differ from before). */
+export interface ServerRestored { serverId: string; name: string; gamePort: number; restoredAt: string }
+export interface StorageParts { worlds: number; backups: number; content: number; logs: number; software: number; trash: number; other: number }
+export interface StorageVolume { volumeId: string; label: string; displayPath: string; totalBytes: number; freeBytes: number; holds: Array<'servers' | 'backups' | 'caches' | 'state'>; lowAt: number }
+export interface ServerStorage { serverId: string; name: string; volumeId: string; bytes: number; parts: StorageParts }
+export interface StorageCache { kind: 'java' | 'software_downloads' | 'catalogue' | 'pack_staging' | 'temp'; bytes: number; removable: boolean }
+/** The machine's disk use, from its last background measurement. */
+export interface HostStorage {
+  measuredAt: string | null;
+  measuring: boolean;
+  volumes: StorageVolume[];
+  servers: ServerStorage[];
+  removed: { count: number; bytes: number };
+  backups: { bytes: number; outsideServers: number };
+  caches: StorageCache[];
+  other: number;
+}
 export interface HostRequestOptions { id?: string; body?: unknown; revision?: string; idempotencyKey?: string }
 const request = <T>(hostId: string, action: HostAction, options: HostRequestOptions = {}) => invoke<T>('host_request', { hostId, action, ...options });
 export const hostsNative = {
@@ -125,4 +158,20 @@ export const hostsNative = {
    */
   removeServer: (hostId: string, serverId: string, confirmName: string, idempotencyKey: string) =>
     request<ServerRemoved>(hostId, 'server_remove', { id: serverId, body: { confirmName }, idempotencyKey }),
+  /** Owners only, `server-purge`: stop a server and delete it now, skipping the removed list. */
+  purgeServer: (hostId: string, serverId: string, confirmName: string, keepBackups: boolean, idempotencyKey: string) =>
+    request<ServerPurging>(hostId, 'server_remove', { id: serverId, body: { confirmName, permanently: true, keepBackups }, idempotencyKey }),
+  /** Owners only, `removed-servers`: servers that can still be brought back, newest first. */
+  removedServers: (hostId: string, cursor: string | null = null) =>
+    request<{ servers: RemovedServer[]; nextCursor: string | null }>(hostId, 'servers_removed', cursor ? { body: { cursor } } : {}),
+  /** Brings a removed server back, stopped. The machine picks a free name and port if its old ones are taken. */
+  restoreServer: (hostId: string, serverId: string, idempotencyKey: string) =>
+    request<ServerRestored>(hostId, 'server_restore', { id: serverId, body: {}, idempotencyKey }),
+  /** Owners only, `server-purge`: delete a removed server for good now. */
+  purgeRemovedServer: (hostId: string, serverId: string, confirmName: string, keepBackups: boolean, idempotencyKey: string) =>
+    request<ServerPurging>(hostId, 'server_purge', { id: serverId, body: { confirmName, keepBackups }, idempotencyKey }),
+  /** Owners only, `storage`: answered from the last measurement, so it is quick. */
+  storage: (hostId: string) => request<HostStorage>(hostId, 'storage'),
+  /** Asks for a fresh measurement; poll `storage` while `measuring` is true. */
+  measureStorage: (hostId: string) => request<{ measuring: boolean }>(hostId, 'storage_measure', { body: {} }),
 };

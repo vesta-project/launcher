@@ -156,6 +156,59 @@ vesta-server-host-remove-help = Its servers keep running on the machine. To get 
 vesta-server-host-import-running = { $name } is still being added.
 vesta-server-host-import-open = Show
 
+vesta-server-removed-title = Removed servers
+vesta-server-removed-help = Removed servers wait on the machine for a while, so you can bring them back.
+vesta-server-removed-empty = Nothing removed lately.
+vesta-server-removed-retention = Keep removed servers for
+vesta-server-removed-retention-help = Applies to servers removed from now on.
+vesta-server-removed-days = { $count ->
+    [one] 1 day
+   *[other] { $count } days
+}
+vesta-server-removed-purge-in = Deleted for good in { $time }
+vesta-server-removed-purge-soon = Deleted for good soon
+vesta-server-removed-purging = Deleting for good
+vesta-server-removed-restoring = Bringing back
+vesta-server-removed-restore = Restore
+vesta-server-removed-delete = Delete now
+vesta-server-removed-more = Show older
+vesta-server-removed-restored = { $name } is back
+vesta-server-removed-restored-as = Its old name or port was taken, so it's now { $server } on port { $port }.
+vesta-server-removed-error-purging = { $name } is already being deleted.
+vesta-server-removed-error-gone = { $name } has already been deleted.
+vesta-server-removed-error-forbidden = Only owners of { $machine } can do that.
+vesta-server-removed-error-port = No free game port for it on { $machine }. Free one up and try again.
+vesta-server-removed-error-other = Vesta Server couldn't do that. Try again.
+
+vesta-server-purge-title = Delete { $name } for good?
+vesta-server-purge-description = This can't be undone. Its worlds, settings and files are deleted from { $machine }.
+vesta-server-purge-frees = Frees about { $value }.
+vesta-server-purge-keep-backups = Keep its backups
+vesta-server-purge-keep-backups-help = They stay on the machine, so you can still make a server from one.
+vesta-server-purge-action = Delete for good
+vesta-server-purge-deleting = Deleting
+vesta-server-purge-done = { $name } is being deleted from { $machine }
+
+vesta-server-storage-title = Storage
+vesta-server-storage-measured = Measured { $time } ago
+vesta-server-storage-measuring = Measuring now
+vesta-server-storage-never = Not measured yet
+vesta-server-storage-measure = Measure now
+vesta-server-storage-free = { $free } free of { $value }
+vesta-server-storage-low = Running low
+vesta-server-storage-removed = Removed servers
+vesta-server-storage-backups = Backups kept outside servers
+vesta-server-storage-caches = Downloads Vesta can get again
+vesta-server-storage-other = Other Vesta data
+vesta-server-storage-rate-limited = It was measured a moment ago. Try again in a minute.
+vesta-server-storage-part-worlds = Worlds
+vesta-server-storage-part-backups = Backups
+vesta-server-storage-part-content = Mods and plugins
+vesta-server-storage-part-logs = Logs
+vesta-server-storage-part-software = Server software
+vesta-server-storage-part-trash = Trash
+vesta-server-storage-part-other = Other
+
 vesta-server-link-action = Link a device
 vesta-server-link-title = Link a device
 vesta-server-link-help = On the other device, open Connect a Vesta Server, pick { $name } and enter this code.
