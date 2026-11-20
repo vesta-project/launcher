@@ -18,7 +18,7 @@ test('/servers/add routes to setup, the install guide, connect, or re-pairing', 
   expect(addRoute('fixture-survival')).toEqual({ kind: 'reconnect', connectionId: 'fixture-survival' });
 });
 
-test('the guide is one install command on the server machine, then Set up a Vesta Server', () => {
+test('the guide is one install command on the server machine, then Connect a Vesta Server', () => {
   expect(VESTA_INSTALL_COMMAND).toStartWith('curl -fsSL https://raw.githubusercontent.com/vesta-project/server/');
   expect(VESTA_INSTALL_COMMAND).toContain('sudo bash /tmp/vesta-install.sh');
   const guide = source('src/pages/servers/onboarding.tsx');

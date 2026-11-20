@@ -1,8 +1,8 @@
 ## Vesta Server: setting up a machine, adding its servers and managing it.
 ## Keep copy short and friendly. Say "Vesta Server". Commands are shown separately with a copy button.
 
-vesta-server-setup-title = Set up a Vesta Server
-vesta-server-setup-description = Vesta Server runs on another computer, like a spare PC or a VPS. Pick it below or type its address.
+vesta-server-setup-title = Connect a Vesta Server
+vesta-server-setup-description = Pick the computer that runs Vesta Server, like a spare PC or a VPS, or type its address. If it's new, you'll set it up on the way.
 vesta-server-setup-on-network = On your network
 vesta-server-setup-looking = Looking for machines
 vesta-server-setup-none-found = Nothing found nearby. Type its address instead.
@@ -108,14 +108,13 @@ vesta-server-role-admin = Admin
 vesta-server-role-moderator = Moderator
 vesta-server-role-member = Member
 
-vesta-server-list-empty-description = Set up a Vesta Server on a spare PC or a VPS, then make your servers there.
+vesta-server-list-empty-description = Connect the computer that runs Vesta Server, like a spare PC or a VPS, then make your servers there.
 vesta-server-list-other = Other servers
 vesta-server-list-settings = { $name } settings
 vesta-server-list-machine-settings = Machine settings
 vesta-server-list-machine-empty = No servers here yet. Make your first one on { $name }.
 vesta-server-list-machine-offline = { $name } isn't answering right now. Check that it's on and connected.
 vesta-server-list-add-first = Create your first server
-vesta-server-list-set-up-another = Set up another Vesta Server
 vesta-server-list-online = Online
 vesta-server-list-offline = Offline
 vesta-server-list-checking = Checking
@@ -157,7 +156,7 @@ vesta-server-host-import-open = Show
 
 vesta-server-link-action = Link a device
 vesta-server-link-title = Link a device
-vesta-server-link-help = On the other device, open Set up a Vesta Server, pick { $name } and enter this code.
+vesta-server-link-help = On the other device, open Connect a Vesta Server, pick { $name } and enter this code.
 vesta-server-link-expires = Expires in { $time }
 vesta-server-link-expired = This code has expired.
 vesta-server-link-new-code = Get a new code

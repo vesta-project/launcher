@@ -68,9 +68,10 @@ function AddPage() {
 }
 
 /**
- * The server grid, laid out exactly like the Library: cards, then an add tile. One machine
- * with no servers yet is a single calm empty state for that machine; machines only get their
- * own headings once there are two or more.
+ * The server grid, laid out exactly like the Library: cards, then an add tile, under a heading
+ * per machine. One machine with no servers yet is a single calm empty state for that machine.
+ * Connecting another machine is one quiet button after the last group: it is the same step
+ * whether or not that machine was set up before (setup happens on the way when it wasn't).
  */
 function ServerList() {
   const now = useServersClock();
@@ -79,15 +80,11 @@ function ServerList() {
   const empty = () => serverSnapshots().length === 0 && serverAddJobs().length === 0;
   return (
     <Board>
-      <Show when={hosts().length > 0 && !(empty() && single())}>
-        <header data-vesta="vesta-group-header" data-list-header>
-          <Show when={single()}>
-            {(host) => <Button size="sm" variant="ghost" icon={<Icon name="icons/rail/servers" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>
-              {host().name}<Reach hostId={host().id} />
-            </Button>}
-          </Show>
-          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.list.set-up-another')}</Button>
-        </header>
+      <Show when={!empty() && single()}>
+        {(host) => <header data-vesta="vesta-group-header">
+          <h2><Button size="sm" variant="ghost" icon={<Icon name="icons/rail/servers" />} onClick={() => transitionTo(`/servers/host/${host().id}`)}>{host().name}</Button></h2>
+          <Reach hostId={host().id} />
+        </header>}
       </Show>
       <ServerErrorNote error={serversListError()} onRetry={() => void refreshServers()} />
       <Switch>
@@ -111,6 +108,11 @@ function ServerList() {
           </For>
         </Match>
       </Switch>
+      <Show when={hosts().length > 0 && !(empty() && single())}>
+        <footer data-vesta="vesta-connect-row">
+          <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/add" />} onClick={() => transitionTo('/servers/setup')}>{t('vesta-server.setup.title')}</Button>
+        </footer>
+      </Show>
     </Board>
   );
 }

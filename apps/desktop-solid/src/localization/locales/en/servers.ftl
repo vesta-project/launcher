@@ -922,7 +922,7 @@ servers-host-intro = Vesta Server runs your Minecraft servers on a computer that
 }
 
 servers-host-set-up = Set it up from here
-servers-host-set-up-help = When it finishes it shows a setup code. Choose Set up a Vesta Server and enter it.
+servers-host-set-up-help = When it finishes it shows a setup code. Choose Connect a Vesta Server and enter it.
 
 ## Removing a server from its Vesta Server, owners only
 
