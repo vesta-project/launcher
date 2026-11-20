@@ -348,7 +348,7 @@ export function LogView(props: LogViewProps) {
           </Show>
         </Show>
       </div>
-      <footer data-vesta="console-status" title={props.footerTitle?.()}>
+      <footer data-vesta="console-status" data-tip={props.footerTitle?.()}>
         <span role="status">
           {copyStatus() ||
             (props.live() && !props.state().follow
@@ -394,14 +394,12 @@ function LogLine(props: { entry: LogEntry }) {
     <div
       data-vesta="log-line"
       data-level={line()?.level}
-      title={`${line()?.level}
-${line()?.thread}`}
     >
       <time>{line()?.timestamp}</time>
       <span data-vesta="log-level">
         {line()?.level === "UNKNOWN" ? "" : line()?.level}
       </span>
-      <span data-vesta="log-thread" title={line()?.thread}>
+      <span data-vesta="log-thread" data-tip-overflow="">
         {line()?.thread}
       </span>
       <span data-vesta="log-text">
@@ -411,7 +409,7 @@ ${line()?.thread}`}
             data-vesta="log-truncated"
             role="img"
             aria-label={t("console.line-truncated")}
-            title={t("console.line-truncated")}
+            data-tip={t("console.line-truncated")}
           >
             …
           </span>

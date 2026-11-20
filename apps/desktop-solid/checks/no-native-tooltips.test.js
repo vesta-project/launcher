@@ -13,13 +13,8 @@ const headingProps = new Set([
   'Section', // Section title is its visible heading.
   'Popover', // Popover title is its visible overlay heading.
 ]);
-// Temporary exceptions: another parallel task owns these tooltip conversions.
-const parallelAllowList = [
-  { test: (file) => file === 'src/components/empty-state.tsx', reason: 'converting in parallel' }, // The empty state owner is converting its DOM hint.
-  { test: (file) => file.startsWith('src/pages/library/instance/'), reason: 'converting in parallel' }, // The instance page owner is converting its DOM hints.
-  { test: (file) => file === 'src/pages/servers/server-card.tsx', reason: 'converting in parallel' }, // The server card owner is converting its DOM hint.
-  { test: (file) => file.startsWith('src/components/log-view/'), reason: 'converting in parallel' }, // The log view owner is converting its DOM hints.
-];
+// Temporary exceptions for files another task is converting; empty when none are.
+const parallelAllowList = [];
 
 function sourceFiles(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

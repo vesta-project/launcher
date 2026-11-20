@@ -98,7 +98,7 @@ export function LinkedPack(props: { instanceId: string }) {
             } />
             <div data-vesta="pack-status">
               <Show when={!unfinished() && sync.status()?.availability !== undefined && sync.status()!.availability !== 'online'}>
-                <Badge size="sm" variant="soft" tone="warning" title={t('server-pack.unavailable')}>{t('server-pack.unavailable-short')}</Badge>
+                <Badge size="sm" variant="soft" tone="warning" data-tip={t('server-pack.unavailable')}>{t('server-pack.unavailable-short')}</Badge>
               </Show>
               <Show when={!unfinished() && available()} fallback={
                 <Show when={verifiedCurrent()}><span data-vesta="pack-current"><Icon name="icons/controls/check" size={12} />{t('versions.up-to-date')}</span></Show>

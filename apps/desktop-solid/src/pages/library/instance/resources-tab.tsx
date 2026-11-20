@@ -291,7 +291,7 @@ function ResourceList(props: {
                   {t(kindLabel[item().kind])}
                 </span>
               </Show>
-              <span data-vesta="resource-file" title={item().filename}>
+              <span data-vesta="resource-file" data-tip={item().filename}>
                 {item().author || item().filename}
               </span>
             </span>
@@ -300,7 +300,7 @@ function ResourceList(props: {
       </div>
       <div data-vesta="table-cell" role="cell" class="col-version">
         <span data-vesta="resource-version">
-          <span title={item().version}>{item().version}</span>
+          <span data-tip-overflow="">{item().version}</span>
           <Show when={item().update}>
             <IconButton
               size="sm"
