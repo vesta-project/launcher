@@ -1,5 +1,5 @@
 import { IconButton, SegmentedControl, Select } from '@vesta/ui';
-import { createMemo, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onSettled, Show } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { sourceById, sources, type ResourceType, type SourceId } from '../../features/browse/browse-model';
 import { serverTypes } from '../../features/browse/browse-targets';
@@ -80,8 +80,35 @@ export function Toolbar() {
     { name: 'browseLayoutOptions' },
   );
 
+  // The tabs become a Select as soon as they would push sort and layout onto a second line.
+  // Measured rather than a fixed breakpoint: how wide the tabs are depends on the source, the
+  // server target and the language. The tabs stay laid out (hidden) so they can be measured.
+  let bar: HTMLDivElement | undefined;
+  let tabs: HTMLElement | undefined;
+  const [collapsed, setCollapsed] = createSignal(false, { name: 'browseTabsCollapsed' });
+  onSettled(() => {
+    if (!bar) return;
+    tabs = bar.querySelector<HTMLElement>('.browse-type-tabs') ?? undefined;
+    const fit = () => {
+      if (!bar || !tabs) return;
+      const gap = Number.parseFloat(getComputedStyle(bar).columnGap) || 0;
+      const others = [...bar.children].filter((child) => child.getAttribute('data-vesta') !== 'browse-types');
+      const needed = others.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0) + tabs.scrollWidth + gap * others.length;
+      // A few pixels of slack: rounding would otherwise let the row wrap before this trips.
+      const tight = needed + 4 > bar.clientWidth;
+      setCollapsed(tight);
+      // Hidden tabs leave the tab order and the accessibility tree; the Select stands in.
+      tabs.inert = tight;
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(bar);
+    if (tabs) observer.observe(tabs);
+    fit();
+    return () => observer.disconnect();
+  });
+
   return (
-    <div data-vesta="browse-toolbar">
+    <div data-vesta="browse-toolbar" ref={(element: HTMLDivElement) => (bar = element)} data-tabs-collapsed={collapsed() ? '' : undefined}>
       <SegmentedControl
         size="sm"
         iconOnly
@@ -95,6 +122,7 @@ export function Toolbar() {
         <SegmentedControl
           size="sm"
           class="browse-type-tabs"
+          aria-hidden={collapsed() ? 'true' : undefined}
           aria-label={t('browse.type-label')}
           options={typeOptions()}
           value={type()}

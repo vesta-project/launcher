@@ -82,6 +82,26 @@
     min-inline-size: 9rem;
   }
 
+  /*
+   * Too narrow for the tabs on one line with sort and layout (measured in toolbar.tsx): a Select.
+   * The tabs stay laid out but out of flow and invisible, so their width can still be measured.
+   */
+  :where([data-vesta='browse-toolbar'][data-tabs-collapsed]) :where([data-vesta='browse-types']) {
+    position: relative;
+  }
+
+  :where([data-vesta='browse-toolbar'][data-tabs-collapsed]) :where(.browse-type-tabs) {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :where([data-vesta='browse-toolbar'][data-tabs-collapsed]) :where(.browse-type-select) {
+    display: flex;
+  }
+
   :where([data-vesta='browse-view']),
   :where([data-vesta='browse-sort']) {
     display: flex;
@@ -102,14 +122,6 @@
   @container browse (max-width: 720px) {
     :where([data-vesta='browse']) {
       --browse-card-min: 240px;
-    }
-
-    :where(.browse-type-tabs) {
-      display: none;
-    }
-
-    :where(.browse-type-select) {
-      display: flex;
     }
 
     :where(.browse-sort-select) {
