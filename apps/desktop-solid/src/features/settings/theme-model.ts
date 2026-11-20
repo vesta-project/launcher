@@ -76,6 +76,7 @@ export interface ThemeDefinition {
   spaceUnit: string;
   /** spots = the Vesta signature glow only. */
   background: "spots" | "gradient" | "none";
+  gradientAngle?: number;
   /** Default material. */
   material: "glass" | "frosted" | "flat";
   shadows: "soft" | "crisp" | "none";
@@ -174,6 +175,26 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
     material: "glass",
     shadows: "soft",
   },
+  {
+    id: "legacy",
+    name: "Legacy Vesta",
+    hue: 195,
+    hueAdjustable: false,
+    neutral: {
+      hue: "accent",
+      chroma: { dark: 0.024, light: 0.024 },
+      lift: { dark: 0.075, light: -0.06 },
+      tint: 0.7,
+    },
+    accentChroma: { dark: 0.105, light: 0.12 },
+    radius: 1,
+    spaceUnit: "4px",
+    background: "gradient",
+    gradientAngle: 180,
+    material: "glass",
+    shadows: "soft",
+    fixedHues: [195, 310, 67],
+  },
 ];
 
 /** Unknown stored ids fall back to Vesta. */
@@ -198,6 +219,7 @@ function presetValues(definition: ThemeDefinition): ThemeValues {
     material: definition.material,
     gradient: definition.background !== "none",
     gradientType: definition.background === "gradient" ? "linear" : "radial",
+    gradientAngle: definition.gradientAngle ?? defaultTheme.gradientAngle,
   };
 }
 

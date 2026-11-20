@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   themePresets,
   defaultTheme,
+  presetUpdates,
   resolveThemeTokens,
 } from "../src/features/settings/theme-model";
 import { SettingsWriteQueue } from "../src/features/settings/write-queue";
@@ -10,7 +11,7 @@ test("built-ins declare capabilities; only Vesta opts into glow spots", () => {
   const byId = Object.fromEntries(
     themePresets.map((preset) => [preset.id, resolveThemeTokens(preset.values)]),
   );
-  expect(themePresets.map((preset) => preset.id)).toEqual(["vesta", "slate", "mono", "aurora", "haze", "sorbet"]);
+  expect(themePresets.map((preset) => preset.id)).toEqual(["vesta", "slate", "mono", "aurora", "haze", "sorbet", "legacy"]);
   const definitions = Object.fromEntries(themePresets.map((p) => [p.id, p.definition]));
   expect(definitions.mono.hue).toBeNull();
   expect(definitions.mono.hueAdjustable).toBe(false);
@@ -21,6 +22,13 @@ test("built-ins declare capabilities; only Vesta opts into glow spots", () => {
   expect(byId.slate["--vesta-theme-background"]).toBe("none");
   expect(byId.mono["--vesta-theme-background"]).toBe("none");
   expect(byId.aurora["--vesta-theme-background"]).toContain("linear-gradient");
+  expect(byId.legacy["--vesta-theme-background"]).toContain("linear-gradient(180deg");
+  expect(byId.legacy["--vesta-theme-accent-hue"]).toBe("195");
+  expect(presetUpdates(definitions.legacy)).toMatchObject({
+    theme_id: "legacy",
+    theme_style: "glass",
+    theme_gradient_angle: 180,
+  });
   expect(byId.slate["--vesta-radius-factor"]).not.toBe(byId.vesta["--vesta-radius-factor"]);
   expect(byId.slate["--vesta-space-unit"]).not.toBe(byId.vesta["--vesta-space-unit"]);
   expect(byId.slate["--vesta-neutral-hue"]).toBe("255");

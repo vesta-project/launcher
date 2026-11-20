@@ -40,7 +40,7 @@ impl Theme {
     pub(crate) fn validate(&self) -> Result<(), String> {
         // Retain readable Paper documents from the earlier rewrite preset catalog.
         if ![
-            "vesta", "slate", "mono", "aurora", "haze", "sorbet", "paper",
+            "vesta", "slate", "mono", "aurora", "haze", "sorbet", "legacy", "paper",
         ]
         .contains(&self.id.as_str())
             || !["system", "light", "dark"].contains(&self.mode.as_str())
