@@ -184,8 +184,17 @@
     );
   }
 
+  /* Neutral news (a restart to apply settings) is not an alarm: a plain shaded strip. */
+  :where([data-vesta="instance-notice"][data-tone="neutral"]) {
+    background: color-mix(in oklab, var(--vesta-color-media-shade) 55%, transparent);
+  }
+
   :where([data-vesta="instance-notice"]) > :where([data-vesta="icon"]) {
     color: var(--vesta-color-danger-text);
+  }
+
+  :where([data-vesta="instance-notice"][data-tone="neutral"]) > :where([data-vesta="icon"]) {
+    color: color-mix(in oklab, var(--vesta-color-media-text) 75%, transparent);
   }
 
   :where([data-vesta="instance-notice"][data-tone="warning"])

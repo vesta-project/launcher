@@ -50,6 +50,12 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
     return Object.fromEntries(GRAPH_METRICS.map((metric) => [metric, graphPoints({ ...input, metric })])) as Record<GraphMetric, GraphPoint[]>;
   }, { name: 'server-graphs:series' });
   const shown = () => GRAPH_METRICS.filter((metric) => metricPresent(series()[metric]));
+  /** One graph leads (who's on, when the server reports it); the rest sit smaller beneath it. */
+  const ordered = () => {
+    const metrics = shown();
+    const lead = metrics.includes('players') ? 'players' : metrics[0];
+    return lead ? [lead, ...metrics.filter((metric) => metric !== lead)] : [];
+  };
   const bucketMillis = () => history.value()?.bucketMillis ?? RANGE_SPEC[range()].bucketMillis;
   const memoryLimit = () => {
     const raw = samples().at(-1)?.memoryMaxBytes;
@@ -89,9 +95,10 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
         >
           <Show when={shown().length > 0} fallback={<p data-vesta="server-muted">{t('servers.graphs.empty')}</p>}>
             <div data-vesta="server-graphs-grid">
-              <For each={shown()}>
-                {(metric) => (
+              <For each={ordered()}>
+                {(metric, index) => (
                   <MetricGraph
+                    lead={index() === 0}
                     metric={metric}
                     points={series()[metric]}
                     range={range()}
@@ -111,6 +118,7 @@ export function OverviewGraphs(props: { snapshot: ServerSnapshot; id: Connection
 }
 
 function MetricGraph(props: {
+  lead: boolean;
   metric: GraphMetric; points: GraphPoint[]; range: GraphRange; nowMs: number; bucketMillis: number; limit: number | null;
   /** Set while Minecraft isn't running: the history stays, but there is no current value. */
   idle: MessageId | null;
@@ -165,7 +173,7 @@ function MetricGraph(props: {
   };
 
   return (
-    <figure data-vesta="server-graph" data-metric={props.metric}>
+    <figure data-vesta="server-graph" data-metric={props.metric} data-lead={props.lead ? '' : undefined}>
       <figcaption data-vesta="server-graph-head">
         <span data-vesta="server-graph-label">{t(metricLabels[props.metric])}</span>
         <Show

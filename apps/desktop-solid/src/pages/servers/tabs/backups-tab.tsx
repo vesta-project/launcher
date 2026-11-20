@@ -82,7 +82,7 @@ export function BackupsTab(props: { snapshot: ServerSnapshot }) {
   const profileActions = (name: string) => (
     <>
       <Show when={can('backups.create')}>
-        <Button size="sm" tone="accent" icon={<Icon name="icons/actions/download" />} onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
+        <Button size="sm" variant="outline" onClick={() => void start(name)}>{t('servers.backups.run')}</Button>
       </Show>
     </>
   );

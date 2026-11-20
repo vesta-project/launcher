@@ -306,7 +306,7 @@ server-pack-history-overrides = { $count ->
    *[other] { $count } files
 }
 server-pack-no-loader-versions = No compatible versions found
-server-pack-provider-not-configured = CurseForge isn't configured on this server. Its API key must be set on the agent before linking this pack.
+server-pack-provider-not-configured = CurseForge isn't configured on this server. Its API key must be set on Vesta Server before linking this pack.
 server-pack-download-unavailable = CurseForge refused this file's download or no longer hosts it. Try another pack version or install its server files manually.
 server-pack-metadata-invalid = The provider returned invalid file details while preparing this pack. Retry or choose another version.
 server-pack-download-failed = A pack file couldn't be downloaded. Check the server's connection and retry.
@@ -602,7 +602,7 @@ server-pack-job-title-adopted = Installing a modpack
 server-pack-job-elapsed = { $time } elapsed
 server-pack-job-quiet = Large modpacks can take a few minutes here.
 server-pack-job-leave = You can leave this page. The install keeps going.
-server-pack-job-no-cancel = This can't be cancelled while the agent applies server files because stopping midway could leave a partial install.
+server-pack-job-no-cancel = This can't be cancelled while Vesta Server applies server files because stopping midway could leave a partial install.
 server-pack-job-cancel = Cancel install
 server-pack-job-dismiss = Dismiss
 server-pack-job-try-again = Try again

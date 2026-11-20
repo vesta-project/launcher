@@ -44,14 +44,12 @@
     :where([data-vesta="server-automation-row-last"]) { grid-column: 2; grid-row: 2; justify-content: flex-start; min-inline-size: 0; }
   }
 
+  /* What starts the workflow, as a plain icon in one column: no box around it. */
   :where([data-vesta="server-automation-tile"]) {
     display: grid;
     flex: none;
     place-items: center;
-    inline-size: 32px;
-    block-size: 32px;
-    border-radius: var(--vesta-radius-sm);
-    background: var(--vesta-color-fill);
+    inline-size: 20px;
     color: var(--vesta-color-text-muted);
   }
   :where([data-vesta="server-automation-name"]) {
@@ -161,10 +159,8 @@
   :where([data-vesta="server-automation-section-title"]) {
     margin: 0;
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   :where([data-vesta="server-automation-canvas-panel"]) {
     position: sticky;

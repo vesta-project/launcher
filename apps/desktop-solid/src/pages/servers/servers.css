@@ -62,16 +62,14 @@
   :where([data-vesta="server-add-steps"]) li[data-state="current"] { color: var(--vesta-color-text); font-weight: var(--vesta-weight-medium); }
   :where([data-vesta="server-add-steps"]) li[data-state="current"] span { border-color: var(--vesta-color-accent); background: var(--vesta-color-accent); color: var(--vesta-color-on-accent); }
   :where([data-vesta="server-add-steps"]) li[data-state="done"] span { border-color: var(--vesta-color-accent); color: var(--vesta-color-accent-text); }
+  /* A step is the page itself, under the steps: no card floating in the board. */
   :where([data-vesta="server-add-panel"]) {
     display: flex;
     flex-direction: column;
     gap: var(--vesta-space-4);
-    padding: var(--vesta-space-6);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    background: var(--vesta-color-surface);
   }
-  :where([data-vesta="server-add-panel"]) h1 { margin: 0; font-size: var(--vesta-text-lg); }
+  :where([data-vesta="server-add-panel"]) h1 { margin: 0; font-size: var(--vesta-text-xl); font-weight: var(--vesta-weight-semibold); }
+  :where([data-vesta="server-add-panel"]) h1 + p { margin-block-start: calc(-1 * var(--vesta-space-2)); color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-auth-account"]) {
     display: flex;
     align-items: center;
@@ -172,10 +170,8 @@
   :where([data-vesta="server-recent"]) h2 {
     margin: 0;
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   :where([data-vesta="server-stat"]) dl {
     display: grid;
@@ -374,7 +370,8 @@
     font-size: var(--vesta-text-xs);
     font-weight: var(--vesta-weight-bold);
   }
-  :where([data-vesta="server-activity-avatar"][data-automated]) { background: var(--vesta-color-fill); color: var(--vesta-color-text-muted); }
+  /* Work the server did by itself shows its kind as a plain icon; people keep their avatars. */
+  :where([data-vesta="server-activity-avatar"][data-automated]) { background: none; color: var(--vesta-color-text-muted); }
   :where([data-vesta="server-activity-body"]) { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; }
   :where([data-vesta="server-activity-line"]) { margin: 0; font-size: var(--vesta-text-sm); line-height: 1.4; }
   :where([data-vesta="server-activity-command"]) {
@@ -389,7 +386,7 @@
     white-space: pre-wrap;
   }
   :where([data-vesta="server-activity-command"])::before { content: "/"; color: var(--vesta-color-text-subtle); }
-  :where([data-vesta="server-activity-detail"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); font-style: italic; }
+  :where([data-vesta="server-activity-detail"]) { margin: 0; color: var(--vesta-color-text-muted); font-size: var(--vesta-text-sm); }
   :where([data-vesta="server-activity-meta"]) { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; color: var(--vesta-color-text-subtle); font-size: var(--vesta-text-xs); }
 
   :where(.servers-workspace [data-vesta="instance-settings-scroll"] > *, .servers-workspace [data-vesta="server-activity"] > [data-vesta="server-pane-body"] > *) {
@@ -678,16 +675,14 @@
   :where([data-vesta="server-graphs-head"]) h2 {
     margin: 0;
     color: var(--vesta-color-text-muted);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   :where([data-vesta="server-graphs-head"]) > :last-child { margin-inline-start: auto; }
   :where([data-vesta="server-graphs-grid"]) {
     display: grid;
-    /* Two across at most, so four graphs form a calm 2 × 2 rather than 3 + 1. */
-    grid-template-columns: repeat(auto-fit, minmax(max(280px, calc(50% - var(--vesta-space-3))), 1fr));
+    /* The lead graph spans the row; the others share the row beneath it. */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--vesta-space-3);
   }
   :where([data-vesta="server-graph"]) {
@@ -744,7 +739,10 @@
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
   }
-  :where([data-vesta="server-graph-canvas"]) { position: relative; block-size: 96px; }
+  :where([data-vesta="server-graph-canvas"]) { position: relative; block-size: 72px; }
+  :where([data-vesta="server-graph"][data-lead]) { grid-column: 1 / -1; }
+  :where([data-vesta="server-graph"][data-lead]) [data-vesta="server-graph-canvas"] { block-size: 160px; }
+  :where([data-vesta="server-graph"]:not([data-lead])) [data-vesta="server-graph-value"] strong { font-size: var(--vesta-text-xl); }
   :where([data-vesta="server-graph-tick"]) {
     align-self: flex-end;
     color: var(--vesta-color-text-subtle);

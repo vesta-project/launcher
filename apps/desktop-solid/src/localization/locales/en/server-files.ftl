@@ -204,7 +204,7 @@ server-settings-summary-edited = { $count ->
     [one] { $count } unsaved change
    *[other] { $count } unsaved changes
   }
-server-settings-unreported = The agent didn't report: { $name }. They keep their current values.
+server-settings-unreported = Vesta Server didn't report: { $name }. They keep their current values.
 
 # Game setting explanations.
 server-settings-help-motd = The message under the server name in the multiplayer list.

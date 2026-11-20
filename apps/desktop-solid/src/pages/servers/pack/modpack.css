@@ -275,10 +275,8 @@
     gap: 4px;
     margin: 0;
     color: var(--vesta-color-accent-text);
-    font-size: var(--vesta-text-xs);
+    font-size: var(--vesta-text-sm);
     font-weight: var(--vesta-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
 
   :where([data-vesta="modpack-card-title"]) {
@@ -1095,7 +1093,6 @@
 
   :where([data-vesta="modpack-mode-note"]) {
     color: var(--vesta-color-text-subtle, var(--vesta-color-text-muted));
-    font-style: italic;
   }
 
   :where([data-vesta="modpack-mode-save"]), :where([data-vesta="modpack-offer"]) {
