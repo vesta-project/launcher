@@ -33,6 +33,8 @@ export interface PackRelease {
   game_versions: string[];
   loaders: string[];
   download_url: string;
+  /** Modrinth lists a pack's content as `embedded` dependencies; Browse shows the same list. */
+  dependencies?: { dependency_type: string; file_name?: string | null }[];
 }
 export type PackSource = { kind: "file" | "url"; value: string; online?: OnlinePackSelection };
 export interface InstallDraft {

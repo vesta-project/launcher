@@ -34,3 +34,14 @@ test('release changes retain the project and map only supported loaders for eith
       version: 'Pack 3.0', modpackPlatform: 'curseforge', description: 'Short summary' });
   expect(onlinePackInfo({ project, release: { ...release, loaders: ['mrpack'] } }).modloader).toBe('vanilla');
 });
+
+test('a release that lists its content sizes the memory suggestion by its mods', () => {
+  const dependencies = [
+    ...Array.from({ length: 180 }, () => ({ dependency_type: 'embedded', file_name: null })),
+    { dependency_type: 'embedded', file_name: 'Faithful.zip' },
+    { dependency_type: 'embedded', file_name: 'sodium.jar' },
+    { dependency_type: 'required', file_name: null },
+  ];
+  expect(onlinePackInfo({ project, release: { ...release, dependencies } }).modCount).toBe(181);
+  expect(onlinePackInfo({ project, release }).modCount).toBe(0);
+});

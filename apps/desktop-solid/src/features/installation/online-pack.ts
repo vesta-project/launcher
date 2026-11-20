@@ -14,6 +14,16 @@ export interface OnlinePackSelection {
   release: PackRelease;
 }
 
+/**
+ * How many mods a provider release carries, from the content it lists (Modrinth's embedded
+ * dependencies, the list Browse shows as the pack's contents). Files named as something other
+ * than a jar are resource packs or shaders and don't count. 0 when the release lists nothing.
+ */
+export function listedModCount(release: PackRelease): number {
+  return (release.dependencies ?? []).filter((item) =>
+    item.dependency_type === 'embedded' && (!item.file_name || item.file_name.toLowerCase().endsWith('.jar'))).length;
+}
+
 export function onlinePackInfo({ project, release }: OnlinePackSelection): PackInfo {
   return {
     name: project.name,
@@ -26,7 +36,8 @@ export function onlinePackInfo({ project, release }: OnlinePackSelection): PackI
     // Provider format tags (notably Modrinth's `mrpack`) are not modloaders.
     modloader: release.loaders.find((loader) => ['fabric', 'forge', 'neoforge', 'quilt'].includes(loader)) ?? 'vanilla',
     modloaderVersion: null,
-    modCount: 0,
+    // Sizes the memory suggestion; without it every big pack got the plain default.
+    modCount: listedModCount(release),
     format: project.source === 'curseforge' ? 'CurseForge' : 'Modrinth',
     modpackId: project.id,
     modpackVersionId: release.id,
@@ -42,6 +53,6 @@ export async function resolveOnlinePack(selection: OnlinePackSelection, inspect:
   if (!manifest.minecraftVersion || !manifest.modloader || manifest.modloader === 'unknown')
     throw new Error('Pack manifest does not specify a Minecraft version and loader');
   return { ...info, minecraftVersion: manifest.minecraftVersion, modloader: manifest.modloader,
-    modloaderVersion: manifest.modloaderVersion, modCount: manifest.modCount,
+    modloaderVersion: manifest.modloaderVersion, modCount: manifest.modCount || info.modCount,
     recommendedRamMb: manifest.recommendedRamMb, versionFromManifest: true };
 }
