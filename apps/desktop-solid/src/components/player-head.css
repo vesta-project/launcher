@@ -17,6 +17,7 @@
     color: var(--vesta-color-text-muted);
     font-size: calc(var(--player-head-size, 36px) * 0.4);
     font-weight: var(--vesta-weight-semibold);
+    line-height: 1;
   }
 
   :where([data-vesta='player-head']) > img {
@@ -26,8 +27,9 @@
     image-rendering: pixelated;
   }
 
-  /* Someone on the server right now. */
+  /* Someone on the server right now: a whole-pixel ring with a gap, centred on the face. */
   :where([data-vesta='player-head'][data-online]) {
-    box-shadow: 0 0 0 2px var(--vesta-color-surface-raised), 0 0 0 3.5px var(--vesta-color-success);
+    outline: 2px solid var(--vesta-color-success);
+    outline-offset: 2px;
   }
 }

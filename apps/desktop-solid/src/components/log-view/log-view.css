@@ -34,6 +34,8 @@
     border: var(--vesta-border-width) solid var(--vesta-color-border);
     border-radius: var(--vesta-radius-control);
     background: var(--vesta-color-surface-sunken);
+    /* Segment highlights stay inside the field's rounded edge. */
+    overflow: hidden;
   }
 
   :where([data-vesta="console-search-group"]) :where(.console-search, .console-source) {
@@ -47,9 +49,19 @@
     border-radius: 0;
   }
 
+  /* The level filter is a full-height segment at the end of the field, like Browse's filters. */
   :where([data-vesta="console-search-group"]) .console-level-filter {
+    align-self: stretch;
+    block-size: auto;
+    inline-size: auto;
+    min-inline-size: 32px;
+    padding-inline: var(--vesta-space-2);
     border-inline-end: 0;
-    border-inline-start-color: var(--vesta-color-border);
+    border-inline-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="console-search-group"]) .console-level-filter:focus-visible {
+    outline-offset: calc(var(--vesta-focus-width) * -1);
   }
 
   :where([data-vesta="console-level-option"]) {

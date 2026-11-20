@@ -91,15 +91,20 @@ export function ImportDialog(props: {
     description: string,
     onClick: () => void,
     disabled = false,
+    working = () => false,
   ) => (
     <button
       type="button"
       class="install-import-row"
       onClick={onClick}
       disabled={busy() || disabled}
+      aria-busy={working() ? 'true' : undefined}
     >
+      {/* The row that is working shows it in place, so the dialog keeps its height. */}
       <IconTile hook="install-import-icon" class="install-import-row-icon">
-        <Icon name={icon} size={20} />
+        <Show when={!working()} fallback={<span class="install-import-spinner" aria-hidden="true" />}>
+          <Icon name={icon} size={20} />
+        </Show>
       </IconTile>
       <span class="install-import-row-copy">
         <span class="install-import-row-title">{title}</span>
@@ -154,6 +159,7 @@ export function ImportDialog(props: {
               t("install.local-file-description"),
               () => void local(),
               !nativeInstances,
+              busy,
             )}
             {methodRow(
               "icons/content/search",
@@ -251,7 +257,7 @@ export function ImportDialog(props: {
           </div>
         </Show>
         <Show when={busy()}>
-          <p role="status">{t("install.working")}</p>
+          <p role="status" class="install-import-status">{t("install.working")}</p>
         </Show>
         <Show when={error()}>
           <p role="alert">{error()}</p>

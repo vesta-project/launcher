@@ -7,7 +7,7 @@ import { useNativeDropZone, watchFileDrag } from '../features/file-drop/zone';
 import { FileDragHint } from '../features/file-drop/drag-hint';
 import { DropTargetDialog, reviewUntargetedDrop } from '../features/file-drop/drop-target-dialog';
 import { startNativeFileDrop } from '../features/file-drop/native-bridge';
-import { createMemo, onSettled, untrack } from 'solid-js';
+import { createMemo, createSignal, onSettled, untrack } from 'solid-js';
 import { Match, Switch, Show, onCleanup } from 'solid-js';
 import { isServer } from '@solidjs/web';
 import { findInstance } from '../features/instances/catalog';
@@ -73,8 +73,20 @@ export function Shell() {
   let visitedCreate = false;
   const keepCreate = createMemo(() => { visitedCreate ||= route().page === 'create'; return visitedCreate; }, { name: 'createSessionMounted' });
   // A page of results is costly to build, so Browse is kept as it was left rather than rebuilt.
+  // It is also built ahead, once the app is idle after starting, so the first visit opens at
+  // once (on its loading state if the results are still on their way).
   let visitedBrowse = false;
-  const keepBrowse = createMemo(() => { visitedBrowse ||= route().page === 'browse'; return visitedBrowse; }, { name: 'browseSessionMounted' });
+  const [browseWarm, setBrowseWarm] = createSignal(false, { name: 'browseWarm' });
+  onSettled(() => {
+    const warm = () => setBrowseWarm(true);
+    const idle = window.requestIdleCallback?.(warm, { timeout: 4000 });
+    const timer = idle === undefined ? window.setTimeout(warm, 1500) : undefined;
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback?.(idle);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  });
+  const keepBrowse = createMemo(() => { visitedBrowse ||= route().page === 'browse' || browseWarm(); return visitedBrowse; }, { name: 'browseSessionMounted' });
   let shellElement!: HTMLDivElement;
   onSettled(() => watchFrameSplit(shellElement));
   let dropElement: HTMLElement | undefined;

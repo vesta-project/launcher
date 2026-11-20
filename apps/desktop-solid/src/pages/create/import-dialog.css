@@ -162,4 +162,33 @@
   @keyframes install-import-in-back {
     from { opacity: 0; transform: translateX(-16px); }
   }
+
+  /* Picking a file: the row's icon turns into a spinner; the words are for screen readers. */
+  .install-import-spinner {
+    display: block;
+    box-sizing: border-box;
+    inline-size: 18px;
+    block-size: 18px;
+    border: 2px solid color-mix(in oklab, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: install-import-spin 0.9s linear infinite;
+  }
+
+  .install-import-status {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @keyframes install-import-spin {
+    to { rotate: 1turn; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .install-import-spinner { animation-duration: 2.4s; }
+  }
 }

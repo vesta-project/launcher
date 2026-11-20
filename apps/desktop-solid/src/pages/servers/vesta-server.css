@@ -370,7 +370,7 @@
   }
   :where([data-vesta="vesta-server-group"][data-reach="offline"]) [data-vesta="library-card-slot"]:hover { opacity: 0.8; }
   /* A heading sits close to its own cards; the space between machines does the grouping. */
-  :where([data-vesta="vesta-group-header"] ~ [data-vesta="library-grid"], [data-vesta="vesta-server-group"] > [data-vesta="library-grid"]) { padding-block-start: var(--vesta-space-3); }
+  :where([data-vesta="vesta-group-header"] ~ [data-vesta="library-grid"]) { padding-block-start: var(--vesta-space-3); }
   :where([data-vesta="vesta-server-group"] > [data-vesta="library-grid"]) { padding-block-end: var(--vesta-space-4); }
   /* Folding a machine is a disclosure, not a held menu, so an open one stays flat. */
   :where([data-vesta="vesta-group-header"] [data-vesta="button"][aria-expanded]:not(:hover, :active)) { background: transparent; }
