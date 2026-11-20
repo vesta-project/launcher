@@ -931,7 +931,9 @@ impl SmithedSource {
         if !Self::is_safe_description_url(url) {
             return Err(anyhow!("Blocked description URL: {url}"));
         }
-        let response = self.description_client.get(url).send().await?;
+        let fetch_url = Self::description_fetch_url(url)
+            .ok_or_else(|| anyhow!("Invalid description URL: {url}"))?;
+        let response = self.description_client.get(fetch_url).send().await?;
         if !response.status().is_success() {
             return Err(anyhow!(
                 "Failed to fetch description page ({}): {}",
@@ -978,6 +980,25 @@ impl SmithedSource {
             && url.username().is_empty()
             && url.password().is_none())
         .then_some(url)
+    }
+
+    /// Smithed accepts GitHub file-view links as well as raw Markdown URLs.
+    /// Fetch the file itself; the HTML repository page is not a description.
+    fn description_fetch_url(value: &str) -> Option<url::Url> {
+        let mut url = Self::secure_description_url(value)?;
+        if url.host_str() == Some("github.com") {
+            let path = url.path().to_string();
+            let parts: Vec<_> = path.trim_start_matches('/').splitn(4, '/').collect();
+            if let [owner, repo, "blob", file] = parts.as_slice() {
+                if !owner.is_empty() && !repo.is_empty() && file.contains('/') {
+                    url.set_host(Some("raw.githubusercontent.com")).ok()?;
+                    url.set_path(&format!("/{owner}/{repo}/{file}"));
+                    url.set_query(None);
+                    url.set_fragment(None);
+                }
+            }
+        }
+        Some(url)
     }
 
     fn is_safe_description_url(value: &str) -> bool {
@@ -1796,6 +1817,53 @@ mod tests {
                 "https://example.invalid/custom.png".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn github_description_files_use_raw_markdown() {
+        for suffix in ["", "?raw=true", "#readme"] {
+            let url =
+                format!("https://github.com/The-Atlas-Hub/Light-It-Up/blob/main/README.md{suffix}");
+            let fetch = SmithedSource::description_fetch_url(&url).unwrap();
+            assert_eq!(
+                fetch.as_str(),
+                "https://raw.githubusercontent.com/The-Atlas-Hub/Light-It-Up/main/README.md"
+            );
+            assert!(SmithedSource::is_safe_description_url(fetch.as_str()));
+        }
+        assert_eq!(
+            SmithedSource::description_fetch_url(
+                "https://github.com/owner/repo/blob/v1/docs/My%20Pack.md"
+            )
+            .unwrap()
+            .as_str(),
+            "https://raw.githubusercontent.com/owner/repo/v1/docs/My%20Pack.md"
+        );
+    }
+
+    #[test]
+    fn description_fetch_preserves_other_urls() {
+        for value in [
+            "https://raw.githubusercontent.com/owner/repo/main/README.md",
+            "https://github.com/owner/repo",
+            "https://github.com/owner/repo/blob/main",
+            "https://github.com.attacker.example/owner/repo/blob/main/README.md",
+        ] {
+            assert_eq!(
+                SmithedSource::description_fetch_url(value)
+                    .unwrap()
+                    .as_str(),
+                value
+            );
+        }
+        assert!(SmithedSource::description_fetch_url(
+            "http://github.com/owner/repo/blob/main/README.md"
+        )
+        .is_none());
+        assert!(SmithedSource::description_fetch_url(
+            "https://user:pass@github.com/owner/repo/blob/main/README.md"
+        )
+        .is_none());
     }
 
     #[test]
