@@ -86,6 +86,13 @@ export interface ThemeDefinition {
   backgroundStrengths?: [number, number, number];
   /** Type weight: `heavy` sets labels and titles a step bolder (Legacy's chunkier look). */
   weight?: "standard" | "heavy";
+  /**
+   * The old launcher's look: the titlebar and rail draw nothing of their own and the library
+   * and server card fields keep only a share of the panel tint, so the background gradient is
+   * the frame and shows behind the cards. Other presets keep solid chrome and boards, which
+   * reads better than a see-through field next to a tinted rail.
+   */
+  seeThrough?: boolean;
 }
 
 export const themeDefinitions: readonly ThemeDefinition[] = [
@@ -202,6 +209,7 @@ export const themeDefinitions: readonly ThemeDefinition[] = [
     fixedHues: [192, 300, 305],
     backgroundStrengths: [34, 26, 34],
     weight: "heavy",
+    seeThrough: true,
   },
 ];
 
@@ -378,7 +386,9 @@ export function resolveThemeTokens(theme: ThemeValues): Record<string, string> {
     "--vesta-theme-canvas-opacity": pct(canvas),
     "--vesta-theme-canvas-opacity-light": pct(canvasLight),
     "--vesta-theme-library-board-scale": pct(libraryScale),
-    "--vesta-theme-chrome-opacity": pct(chrome),
+    "--vesta-theme-chrome-opacity": pct(def.seeThrough && !flat ? 0 : chrome),
+    // The card fields' tint with no window effect: a see-through share for see-through presets.
+    "--vesta-theme-field-scale": pct(def.seeThrough && !flat ? libraryScale : 100),
     "--vesta-theme-panel-opacity": pct(panel),
     "--vesta-theme-overlay-opacity": pct(overlay),
     "--vesta-theme-overlay-blur": flat

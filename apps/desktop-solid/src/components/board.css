@@ -26,13 +26,21 @@
   }
 
   /*
-   * Showcase (the library and server card fields): the board keeps only a share of the panel tint
-   * (~30% alpha at glass/60), so the frame's gradient, or the native material when an effect is
-   * applied, reads as the field's backdrop and the cards sit on it. Cards are opaque; loose text
-   * needs local backing. Other boards keep the panel tint. Flat material and author themes keep
-   * their own panel.
+   * Showcase (the library and server card fields). See-through presets (Legacy) keep only a share
+   * of the panel tint, so the frame's gradient reads as the field's backdrop; the rest keep a
+   * solid field (`--vesta-theme-field-scale` is 100%). Cards are opaque; loose text needs local
+   * backing. Flat material and author themes keep their own panel.
    */
   :root:not([data-vesta-material='flat']):not([data-vesta-author-theme]) :where([data-vesta='board'][data-showcase]) {
+    --board-bg: color-mix(in oklab, var(--vesta-color-panel) var(--vesta-theme-field-scale, 100%), transparent);
+  }
+
+  /*
+   * With an applied effect and a built-in theme the field lets the native material through
+   * (~30% alpha at glass/60, ~67% coverage over the frame), whatever the preset.
+   */
+  :root[data-vesta-window-effect]:not([data-vesta-window-effect='none']):not([data-vesta-material='flat']):not([data-vesta-author-theme])
+    :where([data-vesta='board'][data-showcase]) {
     --board-bg: color-mix(in oklab, var(--vesta-color-panel) var(--vesta-theme-library-board-scale, 100%), transparent);
   }
 
