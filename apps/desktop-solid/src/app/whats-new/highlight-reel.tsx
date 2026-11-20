@@ -49,15 +49,11 @@ function HighlightMedia(props: { highlight: Highlight; active: boolean; lap: num
  * A release's highlights one at a time, like stories: the media stage on top with a progress
  * segment per highlight, the words underneath. It moves on by itself (held while the picture is
  * pointed at, never with reduced motion) and stops on the last one, where `finish` takes over.
- * Highlights that can be tried straight away are offered together on that last step, so opening
- * one never cuts the reel short.
  */
 export function HighlightReel(props: {
   release: FeatureRelease;
   /** The buttons on the last highlight. */
   finish: JSX.Element;
-  /** Opens a highlight's feature from the last step; the reel's owner decides what that means. */
-  onAction?: (route: string) => void;
 }) {
   const [index, setIndex] = createSignal(0, { name: 'reelIndex' });
   const highlights = () => props.release.highlights;
@@ -69,7 +65,6 @@ export function HighlightReel(props: {
     setIndex(Math.min(Math.max(next, 0), highlights().length - 1));
     setLap((value) => value + 1);
   };
-  const actions = () => highlights().flatMap((highlight) => (highlight.action ? [highlight.action] : []));
   let root: HTMLDivElement | undefined;
   // The button pressed may be gone on the next highlight (Next becomes the finish), so keep focus in the reel.
   createEffect(index, () => queueMicrotask(() => {
@@ -128,15 +123,6 @@ export function HighlightReel(props: {
       </Show>
 
       <footer data-vesta="reel-actions">
-        <Show when={props.onAction && last()}>
-          <For each={actions()}>
-            {(action) => (
-              <Button size="sm" variant="ghost" onClick={() => props.onAction?.(action.route)}>
-                {t(action.label)}
-              </Button>
-            )}
-          </For>
-        </Show>
         <span data-vesta="reel-spacer" />
         <Show when={index() > 0}>
           <Button size="sm" variant="ghost" onClick={() => go(index() - 1)}>{t('whats-new.back')}</Button>

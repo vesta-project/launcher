@@ -60,10 +60,8 @@
 
   :where([data-vesta='whats-new-kicker']) {
     color: var(--vesta-color-accent-text);
-    font-size: var(--vesta-text-xs);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: var(--vesta-text-sm);
+    font-weight: 500;
   }
 
   :where([data-vesta='whats-new-title']) {

@@ -31,16 +31,16 @@ whats-new-kept-next = So what's new?
 whats-new-release-0-2-title = Vesta 0.2, rebuilt
 
 whats-new-look-title = A fresh coat of paint
-whats-new-look-body = A calmer, cleaner launcher that's easy to make your own. Pick a theme, an accent and even the window glass.
-whats-new-look-action = Try a theme
+whats-new-look-body = Six themes to start from, each with its own colours and corners. Then pick an accent, light or dark, and how much of your desktop shows through.
 
-whats-new-servers-title = Servers for you and your friends
-whats-new-servers-body = Set up a Vesta Server, install a modpack on it and invite your friends, all from the launcher.
-whats-new-servers-action = See servers
+whats-new-servers-title = Run your own servers
+whats-new-servers-body = Put Vesta Server on a spare PC or a VPS, then start servers, follow the console, back up worlds and choose who gets in, all from here.
+
+whats-new-join-title = Servers in Browse
+whats-new-join-body = Browse now lists Modrinth servers and who's on them. Install & play sets up the server's modpack in one go, and it keeps up when the server updates.
 
 whats-new-speed-title = Snappier all round
 whats-new-speed-body = Browse answers your clicks straight away and pages open without the wait, even with a big library.
 
-whats-new-scene-server-name = Survival
-whats-new-scene-server-starting = Starting
+whats-new-scene-server-name = Riverside SMP
 whats-new-scene-server-online = Online

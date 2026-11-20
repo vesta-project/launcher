@@ -1,39 +1,35 @@
 /*
- * What's new scenes (scenes.tsx): one small story per highlight, drawn from theme tokens.
+ * What's new scenes (scenes.tsx): real launcher screens drawn small, one per highlight.
  *
- * Hooks:  [data-vesta=scene] (data-scene = paint | server | speed)
- *         paint: -paint-window, -paint-rail, -paint-grid, -paint-swatches (children --i)
- *         server: -server-card, -server-head, -server-icon, -server-status, -server-starting,
- *                 -server-online, -server-players (li --i), -server-console (i --i)
- *         speed: -speed-page, -speed-search, -speed-grid, -speed-card (--i)
- * Knobs:  --scene-run (how long one telling lasts; matches the reel's dwell)
+ * Hooks:  [data-vesta=scene] (data-scene = paint | server | join | speed), -fit, -fit-body,
+ *         -caption, -window, -rail, -rail-head, -rail-item (data-current), -rail-rule,
+ *         -rail-instance (data-joined), -rail-gap, -titlebar, -board, -button (data-tone)
+ *         paint: -paint-look (--i), -themed, -library, -card (data-current), -play
+ *         server: -server, -server-head, -server-icon, -server-who, -server-status,
+ *                 -server-starting, -server-online, -server-body, -server-tabs, -console,
+ *                 -console-input, -console-typed
+ *         join: -browse, -search, -listings, -listing (data-current), -listing-text, -live,
+ *               -join-button, -join-install, -join-progress, -join-play
+ *         speed: -speed-query, -speed-results, -result (--r), -result-initial (--tint)
+ * Knobs:  --scene-run (one telling; matches the reel's dwell), --scene-k (scale, set by Fit)
  *
- * Every element's resting style is its finished frame, and the animations only travel to it,
- * so reduced motion (animation: none) shows a complete, still picture.
+ * Screens are laid out at desktop size (Fit's width) and scaled, so they keep the app's real
+ * spacing, type and corners. Every element's resting style is its finished frame and the
+ * animations only travel to it, so reduced motion (animation: none) shows a complete picture.
  */
-@property --paint-shift {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 0;
-}
-
-@property --paint-step {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 0;
+@property --fill {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 100%;
 }
 
 @layer launcher {
   :where([data-vesta='scene']) {
     --scene-run: 8s;
     --scene-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --scene-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
 
     position: absolute;
     inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 8% 10%;
   }
 
   /* Pointing at the picture holds it, like the progress bars above it. */
@@ -41,164 +37,315 @@
     animation-play-state: paused;
   }
 
-  /* ---------- Fresh paint: the window repaints through four accents and comes home ---------- */
-  :where([data-vesta='scene'][data-scene='paint']) {
-    --paint: oklch(from var(--vesta-color-accent) l c calc(h + var(--paint-shift)));
-
-    grid-template-rows: auto auto;
-    align-content: center;
-    gap: 7%;
-    animation: scene-paint-shift var(--scene-run) var(--scene-ease) both;
+  /* The screen rises from the bottom edge of the stage and runs past it. */
+  :where([data-vesta='scene-fit']) {
+    position: absolute;
+    inset: 40px 28px auto;
+    overflow: visible;
   }
 
-  :where([data-vesta='scene-paint-window']) {
+  :where([data-vesta='scene-fit-body']) {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: var(--scene-w);
+    transform: scale(var(--scene-k, 0.7));
+    transform-origin: 0 0;
+  }
+
+  :where([data-vesta='scene-caption']) {
+    position: absolute;
+    inset-block-start: 18px;
+    inset-inline-start: 28px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-xs);
+  }
+
+  /* ---------- The launcher frame ---------- */
+  :where([data-vesta='scene-themed']) {
+    /* Geometry follows the theme drawn here, not the one in use. */
+    --vesta-radius-sm: calc(4px * var(--vesta-radius-factor));
+    --vesta-radius-md: calc(6px * var(--vesta-radius-factor));
+    --vesta-radius-lg: calc(8px * var(--vesta-radius-factor));
+    --vesta-radius-xl: calc(12px * var(--vesta-radius-factor));
+    --vesta-radius-control: var(--vesta-radius-md);
+    --vesta-radius-container: var(--vesta-radius-lg);
+
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='scene-window']) {
     display: grid;
-    grid-template-columns: 11% 1fr;
-    gap: 5%;
-    inline-size: min(100%, 26rem);
-    aspect-ratio: 16 / 8.5;
-    padding: 4%;
+    grid-template-columns: 56px 1fr;
+    grid-template-rows: 32px 1fr;
+    block-size: var(--scene-h, 470px);
+    overflow: hidden;
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    background: var(--vesta-color-surface);
-    box-shadow:
-      0 24px 48px -24px color-mix(in oklab, var(--paint) 55%, transparent),
-      var(--vesta-shadow-md);
+    border-radius: var(--vesta-radius-xl);
+    background: var(--vesta-theme-background, none), var(--vesta-color-canvas);
+    box-shadow: var(--vesta-shadow-lg);
+    color: var(--vesta-color-text);
+    font-size: var(--vesta-text-md);
+    line-height: var(--vesta-leading-normal);
   }
 
-  :where([data-vesta='scene-paint-rail']) {
+  :where([data-vesta='scene-rail']) {
+    grid-row: 1 / -1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    padding-block: 8px 12px;
   }
 
-  :where([data-vesta='scene-paint-rail']) > i {
-    inline-size: 72%;
-    aspect-ratio: 1;
-    border-radius: 28%;
+  :where([data-vesta='scene-rail-head'], [data-vesta='scene-rail-item'], [data-vesta='scene-rail-instance']) {
+    flex: none;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: var(--vesta-radius-container);
+  }
+
+  :where([data-vesta='scene-rail-head']) {
+    margin-block-end: 4px;
     background: var(--vesta-color-fill);
   }
 
-  :where([data-vesta='scene-paint-rail']) > i:first-child {
-    background: color-mix(in oklab, var(--paint) 35%, var(--vesta-color-fill));
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--paint) 70%, transparent);
-  }
-
-  :where([data-vesta='scene-paint-grid']) {
+  :where([data-vesta='scene-rail-item']) {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6%;
+    place-items: center;
+    color: var(--vesta-color-text-muted);
   }
 
-  :where([data-vesta='scene-paint-grid']) > i {
-    border-radius: var(--vesta-radius-md);
-    background:
-      linear-gradient(
-        calc(150deg + var(--i) * 25deg),
-        color-mix(in oklab, var(--paint) calc(80% - var(--i) * 8%), var(--vesta-color-surface)),
-        color-mix(in oklab, var(--paint) 18%, var(--vesta-color-surface-sunken))
-      );
+  :where([data-vesta='scene-rail-item'][data-current]) {
+    background: color-mix(in oklab, var(--vesta-color-accent) 16%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--vesta-color-accent) 60%, transparent);
+    color: var(--vesta-color-accent-text);
   }
 
-  :where([data-vesta='scene-paint-swatches']) {
-    --swatch: 1.6rem;
-    --swatch-gap: 0.7rem;
-
-    position: relative;
-    display: flex;
-    gap: var(--swatch-gap);
-    animation: scene-paint-step var(--scene-run) var(--scene-ease) both;
+  :where([data-vesta='scene-rail-rule']) {
+    inline-size: 28px;
+    block-size: 1px;
+    margin-block: 4px;
+    background: var(--vesta-color-border);
   }
 
-  :where([data-vesta='scene-paint-swatches']) > i {
-    inline-size: var(--swatch);
-    aspect-ratio: 1;
-    border-radius: 50%;
-    background: oklch(from var(--vesta-color-accent) l c calc(h + var(--i) * 90));
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--vesta-color-text) 12%, transparent);
+  :where([data-vesta='scene-rail-instance']) {
+    object-fit: cover;
   }
 
-  /* The fifth swatch is the ring that walks along the four colours. */
-  :where([data-vesta='scene-paint-swatches']) > i:last-child {
-    position: absolute;
-    inset-block: -4px;
-    inset-inline-start: -4px;
-    inline-size: auto;
-    aspect-ratio: 1;
-    background: none;
-    box-shadow: 0 0 0 2px var(--vesta-color-text);
-    translate: calc(var(--paint-step) * (var(--swatch) + var(--swatch-gap))) 0;
+  :where([data-vesta='scene-rail-gap']) {
+    flex: 1;
   }
 
-  /* Hold, sweep, hold: 0 → 90 → 180 → 270 → home. */
-  @keyframes scene-paint-shift {
-    0%, 12% { --paint-shift: 0; }
-    20%, 32% { --paint-shift: 90; }
-    40%, 52% { --paint-shift: 180; }
-    60%, 72% { --paint-shift: 270; }
-    80%, 100% { --paint-shift: 360; }
-  }
-
-  @keyframes scene-paint-step {
-    0%, 12% { --paint-step: 0; }
-    20%, 32% { --paint-step: 1; }
-    40%, 52% { --paint-step: 2; }
-    60%, 72% { --paint-step: 3; }
-    80%, 100% { --paint-step: 0; }
-  }
-
-  /* ---------- Vesta Server: it starts, turns green, friends drop in, the console talks ---------- */
-  :where([data-vesta='scene-server-card']) {
-    display: grid;
-    gap: var(--vesta-space-3);
-    inline-size: min(100%, 24rem);
-    padding: var(--vesta-space-4);
-    border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-lg);
-    background: var(--vesta-color-surface-raised);
-    box-shadow: var(--vesta-shadow-md);
-    animation: scene-rise 0.6s var(--scene-ease) both;
-  }
-
-  :where([data-vesta='scene-server-head']) {
+  :where([data-vesta='scene-titlebar']) {
     display: flex;
     align-items: center;
-    gap: var(--vesta-space-2);
+    justify-content: center;
+    gap: 6px;
+    color: var(--vesta-color-text-subtle);
     font-size: var(--vesta-text-sm);
   }
 
-  :where([data-vesta='scene-server-icon']) {
-    inline-size: 1.75rem;
+  :where([data-vesta='scene-titlebar']) > [data-current] {
+    color: var(--vesta-color-text-muted);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='scene-board']) {
+    position: relative;
+    min-inline-size: 0;
+    margin: 0 12px 12px 0;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-xl);
+    background: var(--vesta-color-panel);
+  }
+
+  :where([data-vesta='scene-button']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 28px;
+    padding-inline: 12px;
+    border-radius: var(--vesta-radius-control);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    white-space: nowrap;
+  }
+
+  :where([data-vesta='scene-button'][data-tone='outline']) {
+    border: var(--vesta-border-width) solid var(--vesta-color-border-strong);
+  }
+
+  :where([data-vesta='scene-button'][data-tone='quiet']) {
+    background: var(--vesta-color-fill);
+  }
+
+  /* ---------- Fresh paint: the library under each theme in turn ---------- */
+  :where([data-vesta='scene-paint-look']) {
+    position: absolute;
+    inset: 0;
+    animation: scene-paint-slot var(--scene-run) linear calc(var(--scene-run) * (var(--i) / 5 - 1)) infinite both;
+  }
+
+  :where([data-vesta='scene-paint-look']):not(:first-child) {
+    opacity: 0;
+  }
+
+  :where([data-vesta='scene-library']) {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin: 0;
+    padding: 32px;
+    list-style: none;
+  }
+
+  :where([data-vesta='scene-card']) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
     aspect-ratio: 1;
-    border-radius: var(--vesta-radius-md);
-    background: linear-gradient(150deg, var(--vesta-color-accent), color-mix(in oklab, var(--vesta-color-accent) 40%, var(--vesta-color-surface-sunken)));
+    padding: 12px;
+    overflow: hidden;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-lg);
+    background-position: center;
+    background-size: cover;
+    color: var(--vesta-color-media-text);
+    text-shadow: var(--vesta-shadow-text);
+  }
+
+  :where([data-vesta='scene-card'])::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, color-mix(in oklab, var(--vesta-color-media-shade) 70%, transparent), transparent 60%);
+  }
+
+  :where([data-vesta='scene-card']) > * {
+    position: relative;
+  }
+
+  :where([data-vesta='scene-card']) > b {
+    font-size: var(--vesta-text-md);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='scene-card']) > small {
+    font-size: var(--vesta-text-xs);
+    opacity: 0.85;
+  }
+
+  :where([data-vesta='scene-card'][data-current]) {
+    border-color: var(--vesta-color-accent);
+    box-shadow: 0 0 0 1px var(--vesta-color-accent);
+  }
+
+  :where([data-vesta='scene-play']) {
+    position: absolute;
+    inset-block-start: 10px;
+    inset-inline-end: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    block-size: 26px;
+    padding-inline: 10px;
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-accent);
+    color: var(--vesta-color-on-accent);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    text-shadow: none;
+  }
+
+  /* Five looks, one fifth of the run each; the next fades in before the last one leaves. */
+  @keyframes scene-paint-slot {
+    0%, 20% { opacity: 1; }
+    23%, 97% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+
+  /* ---------- Vesta Server: it starts, people join, you talk to them ---------- */
+  :where([data-vesta='scene-server']) {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    block-size: 100%;
+  }
+
+  :where([data-vesta='scene-server-head']) {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 36px 20px 16px;
+    background-position: center 30%;
+    background-size: cover;
+    color: var(--vesta-color-media-text);
+  }
+
+  :where([data-vesta='scene-server-head'])::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, var(--vesta-color-panel) 10%, color-mix(in oklab, var(--vesta-color-panel) 55%, transparent));
+  }
+
+  :where([data-vesta='scene-server-head']) > * {
+    position: relative;
+  }
+
+  :where([data-vesta='scene-server-icon']) {
+    display: grid;
+    place-items: center;
+    inline-size: 44px;
+    block-size: 44px;
+    border-radius: var(--vesta-radius-lg);
+    background: color-mix(in oklab, var(--vesta-color-success) 70%, var(--vesta-color-surface));
+    font-weight: var(--vesta-weight-bold);
+  }
+
+  :where([data-vesta='scene-server-who']) {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    color: var(--vesta-color-text);
+  }
+
+  :where([data-vesta='scene-server-who']) > b {
+    font-size: var(--vesta-text-lg);
+  }
+
+  :where([data-vesta='scene-server-who']) > small {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='scene-server-head']) > [data-vesta='scene-button'] {
+    color: var(--vesta-color-text);
   }
 
   :where([data-vesta='scene-server-status']) {
-    position: relative;
     display: inline-grid;
     grid-template-columns: auto auto;
     align-items: center;
     gap: 6px;
-    margin-inline-start: auto;
-    padding: 3px 9px 3px 7px;
-    border-radius: var(--vesta-radius-full);
-    background: color-mix(in oklab, var(--vesta-color-success) 16%, transparent);
-    color: var(--vesta-color-success-text);
-    font-size: var(--vesta-text-xs);
-    font-weight: 600;
-    animation: scene-server-tone var(--scene-run) linear both;
+    color: var(--vesta-color-text);
   }
 
   :where([data-vesta='scene-server-status']) > i {
-    inline-size: 7px;
-    aspect-ratio: 1;
+    inline-size: 8px;
+    block-size: 8px;
     border-radius: 50%;
-    background: currentColor;
+    background: var(--vesta-color-success);
+    animation: scene-server-dot var(--scene-run) linear both;
   }
 
-  /* Both labels share one cell, so the pill keeps its place while the words swap. */
+  /* Both words share one cell, so nothing shifts when Starting turns Online. */
   :where([data-vesta='scene-server-starting'], [data-vesta='scene-server-online']) {
     grid-area: 1 / 2;
   }
@@ -212,160 +359,393 @@
     animation: scene-server-online var(--scene-run) linear both;
   }
 
-  :where([data-vesta='scene-server-players']) {
+  :where([data-vesta='scene-server-body']) {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    min-block-size: 0;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='scene-server-tabs']) {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    margin: 0;
+    padding: 8px;
+    list-style: none;
+    border-inline-end: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta='scene-server-tabs']) > li {
     display: flex;
-    gap: var(--vesta-space-2);
+    align-items: center;
+    gap: 8px;
+    block-size: 32px;
+    padding-inline: 10px;
+    border-radius: var(--vesta-radius-control);
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='scene-server-tabs']) > li[data-current] {
+    background: var(--vesta-color-fill);
+    color: var(--vesta-color-text);
+    font-weight: var(--vesta-weight-semibold);
+  }
+
+  :where([data-vesta='scene-console']) {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-block-size: 0;
+    background: var(--vesta-color-surface-sunken);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-xs);
+  }
+
+  :where([data-vesta='scene-console']) > ol {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 4px;
+    margin: 0;
+    padding: 12px 16px;
+    overflow: hidden;
+    list-style: none;
+  }
+
+  :where([data-vesta='scene-console']) li {
+    display: flex;
+    gap: 12px;
+    white-space: nowrap;
+    animation: scene-line 0.25s var(--scene-ease) calc(var(--scene-run) * var(--at, 0)) both;
+  }
+
+  :where([data-vesta='scene-console']) time {
+    color: var(--vesta-color-text-subtle);
+  }
+
+  :where([data-vesta='scene-console']) li[data-kind='done'] {
+    color: var(--vesta-color-success-text);
+  }
+
+  :where([data-vesta='scene-console']) li[data-kind='said'] {
+    color: var(--vesta-color-accent-text);
+  }
+
+  /* When each line arrives, as a share of the run: boot, three people join, a chat, your reply. */
+  :where([data-vesta='scene-console']) li:nth-child(1) { --at: 0.03; }
+  :where([data-vesta='scene-console']) li:nth-child(2) { --at: 0.08; }
+  :where([data-vesta='scene-console']) li:nth-child(3) { --at: 0.15; }
+  :where([data-vesta='scene-console']) li:nth-child(4) { --at: 0.27; }
+  :where([data-vesta='scene-console']) li:nth-child(5) { --at: 0.36; }
+  :where([data-vesta='scene-console']) li:nth-child(6) { --at: 0.43; }
+  :where([data-vesta='scene-console']) li:nth-child(7) { --at: 0.5; }
+  :where([data-vesta='scene-console']) li:nth-child(8) { --at: 0.8; }
+
+  :where([data-vesta='scene-console-input']) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+    background: var(--vesta-color-surface);
+  }
+
+  :where([data-vesta='scene-console-typed']) {
+    flex: 1;
+    overflow: hidden;
+    color: var(--vesta-color-text);
+    white-space: nowrap;
+    animation: scene-type var(--scene-run) steps(19, end) both;
+  }
+
+  :where([data-vesta='scene-console-input']) > [data-vesta='scene-button'] {
+    font-family: var(--vesta-font-sans);
+  }
+
+  @keyframes scene-server-dot {
+    0%, 15% { background: var(--vesta-color-warning); }
+    16%, 100% { background: var(--vesta-color-success); }
+  }
+
+  @keyframes scene-server-starting {
+    0%, 15% { opacity: 1; }
+    16%, 100% { opacity: 0; }
+  }
+
+  @keyframes scene-server-online {
+    0%, 15% { opacity: 0; }
+    16%, 100% { opacity: 1; }
+  }
+
+  @keyframes scene-line {
+    from { opacity: 0; translate: 0 6px; }
+  }
+
+  /* The command is typed after the chat line, then sent and cleared just before the reply. */
+  @keyframes scene-type {
+    0%, 56% { clip-path: inset(0 100% 0 0); }
+    74%, 78% { clip-path: inset(0 0 0 0); }
+    79%, 100% { clip-path: inset(0 100% 0 0); }
+  }
+
+  /* ---------- Servers in Browse: install & play, and the instance lands in the rail ---------- */
+  :where([data-vesta='scene-browse']) {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    align-content: start;
+    gap: 16px;
+    padding: 24px 28px;
+  }
+
+  :where([data-vesta='scene-search']) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 8px;
+    block-size: 32px;
+    padding-inline: 12px;
+    border: var(--vesta-border-width) solid var(--vesta-color-border);
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-surface-sunken);
+    color: var(--vesta-color-text-subtle);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='scene-listings']) {
+    display: grid;
+    gap: 12px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  :where([data-vesta='scene-server-players']) > li {
-    inline-size: 2rem;
-    aspect-ratio: 1;
-    border-radius: var(--vesta-radius-sm);
-    background:
-      linear-gradient(transparent 55%, color-mix(in oklab, var(--vesta-color-text) 18%, transparent) 55% 70%, transparent 70%),
-      oklch(from var(--vesta-color-accent) l c calc(h + 40 + var(--i) * 75));
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--vesta-color-text) 14%, transparent);
-    animation: scene-join calc(var(--scene-run) * 0.07) var(--scene-pop) calc(var(--scene-run) * (0.36 + var(--i) * 0.09)) both;
-  }
-
-  :where([data-vesta='scene-server-console']) {
-    display: grid;
-    gap: 7px;
-    padding: var(--vesta-space-3);
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-surface-sunken);
-  }
-
-  :where([data-vesta='scene-server-console']) > i {
-    block-size: 6px;
-    inline-size: 80%;
-    border-radius: var(--vesta-radius-full);
-    background: color-mix(in oklab, var(--vesta-color-text) 22%, transparent);
-    transform-origin: left;
-    animation: scene-type calc(var(--scene-run) * 0.06) var(--scene-ease) calc(var(--scene-run) * (0.06 + var(--i) * 0.13)) both;
-  }
-
-  :where([data-vesta='scene-server-console']) > i:nth-child(2) { inline-size: 55%; }
-  :where([data-vesta='scene-server-console']) > i:nth-child(3) { inline-size: 68%; }
-
-  :where([data-vesta='scene-server-console']) > i:last-child {
-    inline-size: 42%;
-    background: color-mix(in oklab, var(--vesta-color-success) 55%, transparent);
-  }
-
-  @keyframes scene-server-tone {
-    0%, 30% {
-      background: color-mix(in oklab, var(--vesta-color-warning) 16%, transparent);
-      color: var(--vesta-color-warning-text);
-    }
-    34%, 100% {
-      background: color-mix(in oklab, var(--vesta-color-success) 16%, transparent);
-      color: var(--vesta-color-success-text);
-    }
-  }
-
-  @keyframes scene-server-starting {
-    0%, 30% { opacity: 1; }
-    34%, 100% { opacity: 0; }
-  }
-
-  @keyframes scene-server-online {
-    0%, 30% { opacity: 0; }
-    34%, 100% { opacity: 1; }
-  }
-
-  @keyframes scene-join {
-    from { opacity: 0; scale: 0.4; }
-  }
-
-  @keyframes scene-type {
-    from { scale: 0 1; }
-  }
-
-  @keyframes scene-rise {
-    from { opacity: 0; translate: 0 12px; }
-  }
-
-  /* ---------- Faster: the search settles and the results are already there, again and again ---------- */
-  :where([data-vesta='scene-speed-page']) {
-    --speed-loop: 2.4s;
-
-    display: grid;
-    gap: var(--vesta-space-3);
-    inline-size: min(100%, 26rem);
-  }
-
-  :where([data-vesta='scene-speed-search']) {
+  :where([data-vesta='scene-listing']) {
     display: flex;
     align-items: center;
-    block-size: 1.9rem;
-    padding-inline: var(--vesta-space-3);
+    gap: 16px;
+    padding: 12px;
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-control);
+    border-radius: var(--vesta-radius-lg);
     background: var(--vesta-color-surface);
   }
 
-  :where([data-vesta='scene-speed-search']) > i {
-    block-size: 6px;
-    inline-size: 34%;
+  :where([data-vesta='scene-listing']) > img {
+    inline-size: 64px;
+    block-size: 64px;
+    border-radius: var(--vesta-radius-lg);
+    object-fit: cover;
+  }
+
+  :where([data-vesta='scene-listing-text']) {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+  }
+
+  :where([data-vesta='scene-listing-text']) > b {
+    font-size: var(--vesta-text-md);
+  }
+
+  :where([data-vesta='scene-listing-text']) > small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--vesta-color-text-muted);
+    font-size: var(--vesta-text-sm);
+  }
+
+  :where([data-vesta='scene-live']) {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--vesta-color-success);
+  }
+
+  /* Install & play, the install filling the button, then Play: three faces in one cell. */
+  :where([data-vesta='scene-join-button']) {
+    display: grid;
+    min-inline-size: 132px;
+    block-size: 32px;
+    overflow: hidden;
+    border-radius: var(--vesta-radius-control);
+    background: var(--vesta-color-accent);
+    color: var(--vesta-color-on-accent);
+    font-size: var(--vesta-text-sm);
+    font-weight: var(--vesta-weight-semibold);
+    animation: scene-press var(--scene-run) var(--scene-ease) both;
+  }
+
+  :where([data-vesta='scene-join-button']) > * {
+    grid-area: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  :where([data-vesta='scene-join-install']) {
+    opacity: 0;
+    animation: scene-join-install var(--scene-run) linear both;
+  }
+
+  :where([data-vesta='scene-join-progress']) {
+    padding-inline: 14px;
+    opacity: 0;
+    animation: scene-join-progress var(--scene-run) linear both;
+  }
+
+  :where([data-vesta='scene-join-progress']) > i {
+    flex: 1;
+    block-size: 4px;
     border-radius: var(--vesta-radius-full);
-    background: color-mix(in oklab, var(--vesta-color-text) 40%, transparent);
-    transform-origin: left;
-    animation: scene-speed-type var(--speed-loop) var(--scene-ease) infinite both;
+    background: linear-gradient(to right, var(--vesta-color-on-accent) var(--fill, 100%), color-mix(in oklab, var(--vesta-color-on-accent) 30%, transparent) 0);
+    animation: scene-join-fill var(--scene-run) linear both;
   }
 
-  :where([data-vesta='scene-speed-grid']) {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--vesta-space-2);
+  :where([data-vesta='scene-join-play']) {
+    animation: scene-join-play var(--scene-run) linear both;
   }
 
-  :where([data-vesta='scene-speed-card']) {
+  :where([data-vesta='scene-rail-instance'][data-joined]) {
+    animation: scene-joined var(--scene-run) var(--scene-ease) both;
+  }
+
+  @keyframes scene-press {
+    0%, 24% { scale: 1; }
+    26% { scale: 0.96; }
+    29%, 100% { scale: 1; }
+  }
+
+  @keyframes scene-join-install {
+    0%, 26% { opacity: 1; }
+    28%, 100% { opacity: 0; }
+  }
+
+  @keyframes scene-join-progress {
+    0%, 26% { opacity: 0; }
+    28%, 62% { opacity: 1; }
+    64%, 100% { opacity: 0; }
+  }
+
+  @keyframes scene-join-fill {
+    0%, 28% { --fill: 0%; }
+    62%, 100% { --fill: 100%; }
+  }
+
+  @keyframes scene-join-play {
+    0%, 62% { opacity: 0; }
+    64%, 100% { opacity: 1; }
+  }
+
+  @keyframes scene-joined {
+    0%, 63% { opacity: 0; scale: 0.4; box-shadow: 0 0 0 2px var(--vesta-color-accent); }
+    68% { opacity: 1; scale: 1; }
+    85% { box-shadow: 0 0 0 2px var(--vesta-color-accent); }
+    100% { opacity: 1; scale: 1; box-shadow: 0 0 0 0 transparent; }
+  }
+
+  /* ---------- Snappier: each search lands with its results already there ---------- */
+  :where([data-vesta='scene-speed-query']) {
+    grid-area: 1 / 2;
+    color: var(--vesta-color-text);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  :where([data-vesta='scene-speed-query'][data-set='0']) {
+    clip-path: inset(0 100% 0 0);
+    animation: scene-speed-type-1 var(--scene-run) steps(11, end) both;
+  }
+
+  :where([data-vesta='scene-speed-query'][data-set='1']) {
+    animation: scene-speed-type-2 var(--scene-run) steps(7, end) both;
+  }
+
+  :where([data-vesta='scene-speed-results']) {
+    grid-area: 2 / 1;
     display: grid;
-    gap: 5px;
-    padding: 6px;
+    grid-template-columns: 1fr 1fr;
+    align-content: start;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  :where([data-vesta='scene-speed-results'][data-set='0']) {
+    visibility: hidden;
+    animation: scene-speed-set-1 var(--scene-run) step-end both;
+  }
+
+  :where([data-vesta='scene-speed-results'][data-set='1']) {
+    animation: scene-speed-set-2 var(--scene-run) step-end both;
+  }
+
+  :where([data-vesta='scene-result']) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
     border: var(--vesta-border-width) solid var(--vesta-color-border);
-    border-radius: var(--vesta-radius-md);
-    background: var(--vesta-color-surface-raised);
-    animation: scene-speed-card var(--speed-loop) var(--scene-ease) calc(var(--i) * 25ms) infinite both;
+    border-radius: var(--vesta-radius-lg);
+    background: var(--vesta-color-surface);
+    animation: scene-result-in 0.2s var(--scene-ease) both;
   }
 
-  :where([data-vesta='scene-speed-card']) > i {
-    aspect-ratio: 16 / 9;
-    border-radius: var(--vesta-radius-sm);
-    background: linear-gradient(
-      135deg,
-      oklch(from var(--vesta-color-accent) l c calc(h + var(--i) * 50)),
-      color-mix(in oklab, var(--vesta-color-accent) 20%, var(--vesta-color-surface-sunken))
-    );
+  /* Each set lands a beat after its search, the cards a few frames apart. */
+  :where([data-vesta='scene-speed-results'][data-set='0']) > [data-vesta='scene-result'] {
+    animation-delay: calc(var(--scene-run) * 0.15 + var(--r) * 30ms);
   }
 
-  :where([data-vesta='scene-speed-card']) > b {
-    block-size: 5px;
-    inline-size: 80%;
-    border-radius: var(--vesta-radius-full);
-    background: color-mix(in oklab, var(--vesta-color-text) 24%, transparent);
+  :where([data-vesta='scene-speed-results'][data-set='1']) > [data-vesta='scene-result'] {
+    animation-delay: calc(var(--scene-run) * 0.64 + var(--r) * 30ms);
   }
 
-  :where([data-vesta='scene-speed-card']) > b:last-child {
-    inline-size: 50%;
-    background: color-mix(in oklab, var(--vesta-color-text) 12%, transparent);
+  :where([data-vesta='scene-result-initial']) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 48px;
+    block-size: 48px;
+    border-radius: var(--vesta-radius-lg);
+    background: oklch(from var(--vesta-color-accent) l c calc(h + var(--tint)));
+    color: var(--vesta-color-on-accent);
+    font-size: var(--vesta-text-lg);
+    font-weight: var(--vesta-weight-semibold);
   }
 
-  /* Type, results land almost at once, hold, clear for the next search. */
-  @keyframes scene-speed-type {
-    0% { scale: 0 1; }
-    14%, 88% { scale: 1 1; }
-    96%, 100% { scale: 0 1; }
+  :where([data-vesta='scene-result']) small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  @keyframes scene-speed-card {
-    0%, 16% { opacity: 0; translate: 0 6px; }
-    22%, 88% { opacity: 1; translate: 0 0; }
-    96%, 100% { opacity: 0; translate: 0 0; }
+  @keyframes scene-speed-type-1 {
+    0% { clip-path: inset(0 100% 0 0); }
+    12%, 50% { clip-path: inset(0 0 0 0); }
+    50.01%, 100% { clip-path: inset(0 100% 0 0); }
+  }
+
+  @keyframes scene-speed-type-2 {
+    0%, 52% { clip-path: inset(0 100% 0 0); }
+    62%, 100% { clip-path: inset(0 0 0 0); }
+  }
+
+  @keyframes scene-speed-set-1 {
+    0% { visibility: hidden; }
+    14% { visibility: visible; }
+    51%, 100% { visibility: hidden; }
+  }
+
+  @keyframes scene-speed-set-2 {
+    0% { visibility: hidden; }
+    63%, 100% { visibility: visible; }
+  }
+
+  @keyframes scene-result-in {
+    from { opacity: 0; translate: 0 4px; }
   }
 
   /* ---------- Reduced motion: every scene rests on its finished frame ---------- */

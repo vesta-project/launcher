@@ -14,12 +14,10 @@ describe('[whats-new] the highlight reel', () => {
     }
   });
 
-  test('feature links wait for the last step, so the reel is never cut short', () => {
-    const reel = read('src/app/whats-new/highlight-reel.tsx');
-    expect(reel).toMatch(/<Show when=\{props\.onAction && last\(\)\}>/);
-    expect(reel).not.toContain('current().action');
-    // Both the update card and the welcome back sequence offer them.
-    expect(read('src/app/whats-new/whats-new.tsx').match(/onAction=/g)?.length).toBe(2);
+  test('nothing in the reel sends you elsewhere before it is over', () => {
+    for (const release of releases) for (const highlight of release.highlights) expect('action' in highlight).toBe(false);
+    expect(read('src/app/whats-new/highlight-reel.tsx')).not.toContain('onAction');
+    expect(read('src/app/whats-new/whats-new.tsx')).not.toContain('onAction');
   });
 
   test('picking a bar restarts its fill and scene, and only the picture holds the reel', () => {
@@ -29,6 +27,12 @@ describe('[whats-new] the highlight reel', () => {
     const css = read('src/app/whats-new/whats-new.css');
     expect(css).toContain("[data-vesta='reel-media']:hover) ~ :where([data-vesta='reel-segments'])");
     expect(css).not.toContain("[data-vesta='reel-stage']:hover");
+  });
+
+  test('the paint scene shows the real themes, drawn with their own tokens', () => {
+    const scenes = read('src/app/whats-new/scenes.tsx');
+    expect(scenes).toContain('resolveThemeTokens(');
+    expect(scenes).toMatch(/data-vesta-scheme=\{look\.scheme\}/);
   });
 
   test('reduced motion stills every scene and removes the drifting specks', () => {

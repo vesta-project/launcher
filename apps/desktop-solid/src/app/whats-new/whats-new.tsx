@@ -8,7 +8,6 @@ import { whatsNew, type FeatureRelease } from '../../features/whats-new';
 import { t } from '../../localization';
 import { Atmosphere } from '../../pages/welcome/atmosphere';
 import { Warp } from '../../pages/welcome/welcome-warp';
-import { navigate } from '../router';
 import { HighlightReel } from './highlight-reel';
 import './whats-new.css';
 
@@ -38,10 +37,6 @@ function holdFocus(root: () => HTMLElement | undefined, onEscape: () => void) {
 function Showcase(props: { release: FeatureRelease }) {
   let root: HTMLDivElement | undefined;
   holdFocus(() => root, whatsNew.close);
-  const open = (route: string) => {
-    whatsNew.close();
-    navigate(route);
-  };
 
   return (
     <div data-vesta="whats-new" ref={(element: HTMLDivElement) => (root = element)}>
@@ -55,7 +50,6 @@ function Showcase(props: { release: FeatureRelease }) {
         </header>
         <HighlightReel
           release={props.release}
-          onAction={open}
           finish={<Button size="sm" tone="accent" data-autofocus onClick={whatsNew.close}>{t('whats-new.done')}</Button>}
         />
       </section>
@@ -72,8 +66,8 @@ type Scene = 'hello' | 'kept' | 'reel';
 function WelcomeBack(props: { release: FeatureRelease | undefined }) {
   let root: HTMLDivElement | undefined;
   const [scene, setScene] = createSignal<Scene>('hello', { name: 'welcomeBackScene' });
-  const [leaving, setLeaving] = createSignal<{ tour: boolean; route?: string } | undefined>(undefined, { name: 'welcomeBackLeaving' });
-  const leave = (withTour: boolean, route?: string) => { if (!untrack(leaving)) setLeaving({ tour: withTour, route }); };
+  const [leaving, setLeaving] = createSignal<{ tour: boolean } | undefined>(undefined, { name: 'welcomeBackLeaving' });
+  const leave = (withTour: boolean) => { if (!untrack(leaving)) setLeaving({ tour: withTour }); };
   holdFocus(() => root, () => leave(false));
   // Each scene starts on its main button.
   createEffect(scene, () => queueMicrotask(() => root?.querySelector<HTMLElement>("[data-autofocus]")?.focus()));
@@ -149,7 +143,7 @@ function WelcomeBack(props: { release: FeatureRelease | undefined }) {
               <div data-vesta="welcome-back-scene" data-wide="">
                 <span data-vesta="whats-new-kicker">{t('whats-new.kicker')}</span>
                 <h1 id="welcome-back-heading" data-vesta="welcome-back-title">{t(release().title)}</h1>
-                <HighlightReel release={release()} finish={finish} onAction={(route) => leave(false, route)} />
+                <HighlightReel release={release()} finish={finish} />
               </div>
             )}
           </Match>
@@ -160,9 +154,7 @@ function WelcomeBack(props: { release: FeatureRelease | undefined }) {
           <Warp
             onDone={() => {
               whatsNew.close();
-              const route = choice().route;
-              if (route) navigate(route);
-              else if (choice().tour) tour.replay();
+              if (choice().tour) tour.replay();
             }}
           />
         )}

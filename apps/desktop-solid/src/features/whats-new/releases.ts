@@ -10,12 +10,13 @@ import type { MessageId } from '../../localization/messages';
  * Keep them under ~2 MB, 16:9, and record them in the default theme.
  */
 /** The animated pictures a highlight can use (app/whats-new/scenes.tsx). */
-export type SceneName = 'paint' | 'server' | 'speed';
+export type SceneName = 'paint' | 'server' | 'join' | 'speed';
 
 /** A small icon per scene, for places that list the highlights (the changelog's tile). */
 export const sceneIcons: Record<SceneName, string> = {
   paint: 'icons/content/palette',
   server: 'icons/rail/servers',
+  join: 'icons/rail/browse',
   speed: 'icons/content/timer',
 };
 
@@ -26,8 +27,6 @@ export interface Highlight {
   /** The scene shown without a clip. Give each highlight in a release its own. */
   scene: SceneName;
   clip?: { src: string; poster?: string };
-  /** Somewhere to try it. Offered once the reel is over, so nobody is pulled out half way. */
-  action?: { label: MessageId; route: string };
 }
 
 export interface FeatureRelease {
@@ -46,14 +45,18 @@ export const releases: FeatureRelease[] = [
         title: 'whats-new.look-title',
         body: 'whats-new.look-body',
         scene: 'paint',
-        action: { label: 'whats-new.look-action', route: '/settings/appearance' },
       },
       {
         id: 'servers',
         title: 'whats-new.servers-title',
         body: 'whats-new.servers-body',
         scene: 'server',
-        action: { label: 'whats-new.servers-action', route: '/servers' },
+      },
+      {
+        id: 'join',
+        title: 'whats-new.join-title',
+        body: 'whats-new.join-body',
+        scene: 'join',
       },
       {
         id: 'speed',
