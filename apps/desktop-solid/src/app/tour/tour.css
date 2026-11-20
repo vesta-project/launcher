@@ -202,4 +202,11 @@
     opacity: 1;
     transform: none;
   }
+
+  /* An idle pill keeps its last face for the collapse animation; at dot size that face is a
+     clipped scrap of old text ("alled"), so the tour shows the dot empty. */
+  html[data-tour-step='status'] [data-vesta='status-pill'][data-collapsed] > [data-vesta='status-pill-content'],
+  html[data-tour-step='status'] [data-vesta='status-pill'][data-collapsed] > [data-vesta='status-pill-fill'] {
+    visibility: hidden;
+  }
 }
