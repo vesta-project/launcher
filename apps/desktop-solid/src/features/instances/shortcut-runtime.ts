@@ -16,13 +16,14 @@ import {
 import {
   parseInstanceShortcutArgs,
   type InstanceShortcutIntent,
+  type ProjectShortcutIntent,
   type QueuedShortcutIntent,
 } from "./shortcut-intent-model";
 
 /** Subscribe before marking the frontend ready; retain cold-start intents until identity data loads. */
 export function useInstanceShortcutRuntime() {
   if (!nativeInstances) return;
-  const [queue, setQueue] = createSignal<InstanceShortcutIntent[]>([], {
+  const [queue, setQueue] = createSignal<(InstanceShortcutIntent | ProjectShortcutIntent)[]>([], {
     name: "instanceShortcutIntents",
   });
   let disposed = false;
@@ -64,17 +65,36 @@ export function useInstanceShortcutRuntime() {
   createEffect(
     () => ({ ready: instancesLoaded(), accountsReady: accountsLoaded(), intents: queue() }),
     ({ ready, accountsReady, intents }) => {
-      if (!ready || !intents.length || processing || disposed) return;
-      // Opening details does not require account loading; direct launch does.
-      if (intents[0].launch && !accountsReady) return;
+      if (!intents.length || processing || disposed) return;
+      // Only instance intents depend on the Library, and only launches require an account.
+      const canHandle = (intent: InstanceShortcutIntent | ProjectShortcutIntent) =>
+        "projectId" in intent || (ready && (!intent.launch || accountsReady));
+      if (!canHandle(intents[0])) return;
       processing = true;
       let consumed = 0;
       // External requests launch once. They never use the card's launch/stop toggle.
       void (async () => {
         try {
           for (const intent of intents) {
-            if (disposed || (intent.launch && !accountsReady)) return;
+            if (disposed || !canHandle(intent)) return;
             consumed++;
+            if ("projectId" in intent) {
+              const { projectPath } = await import("../browse/browse-model");
+              if (disposed) return;
+              if (intent.installPack) {
+                const [{ fetchProject }, { openLocalPackInstall }] = await Promise.all([
+                  import("../browse/browse-api"), import("../../pages/browse/install-actions"),
+                ]);
+                const project = await fetchProject(intent.platform, intent.projectId);
+                if (disposed) return;
+                if (project.resource_type === "modpack") {
+                  openLocalPackInstall(project, undefined, { minecraft: null, loader: null });
+                  continue;
+                }
+              }
+              navigate(projectPath(intent.platform, intent.projectId));
+              continue;
+            }
             const matches = untrack(nativeRecords).filter(
               (item) => instanceSlug(item.name) === intent.slug,
             );

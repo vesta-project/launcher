@@ -17,7 +17,6 @@ const args = {
   stage: "Downloading",
   when: "just now",
   done: "12 MB",
-  source: "Original",
   target: "Copy",
   amount: 16,
   author: "Pack author",
@@ -42,7 +41,6 @@ const args = {
   path: "/tmp/folder",
   size: 18,
   source: "managed",
-  time: "1 hour",
   title: "Test screenshot",
   type: "mods",
   value: "16 GB",
@@ -61,13 +59,13 @@ const args = {
   list: "the newest 7 and one per day for 14 days",
   server: "Survival",
   time: "1:24",
-  address: "localhost:8443",
   free: "12 GB",
   port: 25565,
   files: 1200,
   percent: 45,
   address: "192.168.1.67:25500",
   machine: "people-server",
+  world: "Test world",
 };
 
 describe("localization catalogs", () => {

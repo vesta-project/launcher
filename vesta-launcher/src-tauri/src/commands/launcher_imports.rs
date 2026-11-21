@@ -1,6 +1,7 @@
 use std::path::Path;
 use tauri::{AppHandle, State};
 
+use crate::launcher_import::providers::instance_stats::enrich_candidate_stats;
 use crate::launcher_import::types::{
     DetectedLauncher, ExternalInstanceCandidate, ImportExternalInstanceRequest,
     ImportExternalInstanceResponse,
@@ -38,6 +39,7 @@ pub async fn list_external_instances(
     import_manager: State<'_, ImportManager>,
     launcher: crate::launcher_import::types::LauncherKind,
     base_path_override: Option<String>,
+    include_stats: Option<bool>,
 ) -> Result<Vec<ExternalInstanceCandidate>, String> {
     log::info!(
         "[launcher_import] command list_external_instances launcher={:?} override={}",
@@ -49,9 +51,15 @@ pub async fn list_external_instances(
     let base_override = base_path_override;
 
     crate::launcher_import::scan::blocking(std::time::Duration::from_secs(15), move || {
-        manager
+        let mut candidates = manager
             .list_instances(&launcher_kind, base_override.as_deref())
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        if include_stats.unwrap_or(false) {
+            for candidate in &mut candidates {
+                enrich_candidate_stats(candidate);
+            }
+        }
+        Ok(candidates)
     })
     .await
 }

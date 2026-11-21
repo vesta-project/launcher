@@ -56,6 +56,7 @@ export async function listExternalInstances(
 	return await invoke("list_external_instances", {
 		launcher,
 		basePathOverride: basePathOverride ?? null,
+		includeStats: true,
 	});
 }
 

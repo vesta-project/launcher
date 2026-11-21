@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { Button, Skeleton } from '@vesta/ui';
+import { Button, Skeleton, toast } from '@vesta/ui';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { Icon } from '../../components/icon';
 import { Metadata } from '../../components/metadata';
@@ -54,7 +54,16 @@ export function FirstInstanceStep() {
         const { launcher: from, candidates } = imports();
         const result = await firstInstance.importMany(from, candidates);
         // Anything that could not be queued is reported here; what did queue carries on in the pill.
-        if (result.failed.length && !result.queued) throw new Error(result.failed[0]!.error);
+        const firstFailure = result.failed[0];
+        if (firstFailure) {
+          if (!result.queued) throw new Error(firstFailure.error);
+          toast.show({
+            tone: 'warning',
+            title: t('welcome.first-import-partial', { count: result.failed.length }),
+            description: firstFailure.error,
+            persistent: true,
+          });
+        }
       }
       else if (choice() === 'pack' && pack()) await firstInstance.installPack(pack()!);
       else if (choice() === 'blank') await firstInstance.createBlank();

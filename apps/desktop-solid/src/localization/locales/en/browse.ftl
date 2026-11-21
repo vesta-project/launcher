@@ -136,6 +136,8 @@ browse-world-description = { $name } is a data pack, so it goes into one world o
 browse-world-empty = This instance has no worlds yet. Play once to create one, then install.
 browse-world-load-failed = Could not load worlds: { $message }
 browse-world-required = Datapack installation requires a world target.
+browse-world-compatibility-warning = Version { $version } does not list a match for the saved Minecraft version of { $world }. The data pack may not work in this world.
+browse-world-install-anyway = Install anyway
 browse-install-task-failed = Resource installation failed. See notifications for details.
 
 # Project page: header, tabs, facts column, versions list and version view.

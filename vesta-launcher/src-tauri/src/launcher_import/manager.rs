@@ -147,6 +147,7 @@ impl ImportManager {
         let mut seen = HashSet::new();
         let mut skipped_roots = 0usize;
         let mut provider_errors = 0usize;
+        let mut read_root = false;
         for root in roots {
             if !root.exists() {
                 skipped_roots += 1;
@@ -154,6 +155,7 @@ impl ImportManager {
             }
             match provider.list_instances(&root) {
                 Ok(instances) => {
+                    read_root = true;
                     log::info!(
                         "[launcher_import] provider-list-root launcher={:?} root={} found={}",
                         launcher,
@@ -185,7 +187,7 @@ impl ImportManager {
             skipped_roots,
             provider_errors
         );
-        if provider_errors > 0 {
+        if provider_errors > 0 && !read_root {
             return Err(anyhow!(
                 "Unable to read {} launcher root(s); check access and try again",
                 provider_errors
@@ -199,7 +201,10 @@ impl ImportManager {
 mod tests {
     use super::*;
     use std::path::Path;
-    struct Provider(ExternalInstanceCandidate);
+    struct Provider {
+        candidate: ExternalInstanceCandidate,
+        roots: Vec<PathBuf>,
+    }
     impl ExternalLauncherProvider for Provider {
         fn kind(&self) -> LauncherKind {
             LauncherKind::Prism
@@ -208,10 +213,13 @@ mod tests {
             "Test"
         }
         fn detect_paths(&self) -> Vec<PathBuf> {
-            Vec::new()
+            self.roots.clone()
         }
-        fn list_instances(&self, _: &Path) -> Result<Vec<ExternalInstanceCandidate>> {
-            Ok(vec![self.0.clone()])
+        fn list_instances(&self, root: &Path) -> Result<Vec<ExternalInstanceCandidate>> {
+            if root.ends_with("unreadable") {
+                return Err(anyhow!("Unreadable root"));
+            }
+            Ok(vec![self.candidate.clone()])
         }
     }
     #[test]
@@ -221,11 +229,14 @@ mod tests {
         std::fs::write(root.path().join("mods/one.jar"), "mod").unwrap();
         let path = root.path().to_str().unwrap();
         let manager = ImportManager {
-            providers: Arc::new(vec![Arc::new(Provider(ExternalInstanceCandidate {
-                instance_path: path.into(),
-                game_directory: path.into(),
-                ..Default::default()
-            }))]),
+            providers: Arc::new(vec![Arc::new(Provider {
+                candidate: ExternalInstanceCandidate {
+                    instance_path: path.into(),
+                    game_directory: path.into(),
+                    ..Default::default()
+                },
+                roots: vec![],
+            })]),
         };
         let listed = manager
             .list_instances(&LauncherKind::Prism, Some(path))
@@ -238,6 +249,28 @@ mod tests {
         assert_eq!(selected.mods_count, Some(1));
         assert!(manager
             .instance_details(&LauncherKind::Prism, "/unlisted", Some(path))
+            .is_err());
+    }
+
+    #[test]
+    fn a_broken_launcher_root_does_not_hide_candidates_from_healthy_roots() {
+        let root = tempfile::tempdir().unwrap();
+        let unreadable = root.path().join("unreadable");
+        std::fs::create_dir(&unreadable).unwrap();
+        let manager = ImportManager {
+            providers: Arc::new(vec![Arc::new(Provider {
+                candidate: ExternalInstanceCandidate {
+                    instance_path: "instance".into(),
+                    ..Default::default()
+                },
+                roots: vec![unreadable.clone(), root.path().to_owned()],
+            })]),
+        };
+        let candidates = manager.list_instances(&LauncherKind::Prism, None).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].instance_path, "instance");
+        assert!(manager
+            .list_instances(&LauncherKind::Prism, unreadable.to_str())
             .is_err());
     }
 }

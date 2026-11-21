@@ -18,6 +18,20 @@ test('malformed and unrelated arguments cannot launch an instance', () => {
   expect(parseInstanceShortcutArgs(['--launch-instance', '--open-instance', '', 'vesta://launch-instance', 'vesta://open-resource/foo', 'vesta://launch-instance/%ZZ', 'https://example.com'])).toEqual([]);
 });
 
+test('extension links carry a provider project into Browse or local pack review', () => {
+  expect(parseInstanceShortcutArgs([
+    'vesta://install?projectId=8675309&platform=curseforge',
+    'vesta://standalone?projectId=example-mod&platform=modrinth&type=mod',
+    'vesta://open-resource/modrinth/pack?type=modpack',
+    'vesta://install?projectId=foo&platform=unknown',
+    'vesta://standalone?projectId=..%2Ffoo&platform=modrinth',
+  ])).toEqual([
+    { projectId: '8675309', platform: 'curseforge', installPack: true },
+    { projectId: 'example-mod', platform: 'modrinth', installPack: false },
+    { projectId: 'pack', platform: 'modrinth', installPack: true },
+  ]);
+});
+
 async function nativeHarness() {
   const built = await Bun.build({
     entrypoints: [fileURLToPath(new URL('../src/features/instances/native-service.ts', import.meta.url))],

@@ -43,6 +43,10 @@ welcome-first-title = Get something to play
 welcome-first-lead = Pick one starting point. You can always add more from the Library.
 welcome-first-import-title = Bring your instances
 welcome-first-import-from = From { $launcher }
+welcome-first-import-partial = { $count ->
+    [one] One instance could not be queued. Retry it from Create.
+   *[other] { $count } instances could not be queued. Retry them from Create.
+}
 welcome-first-import-count = { $count ->
     [one] One instance in { $launcher }
    *[other] { $count } instances in { $launcher }

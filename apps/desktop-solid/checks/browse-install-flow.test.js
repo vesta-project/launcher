@@ -43,6 +43,9 @@ async function harness(entry, run) {
       target: 'bun', conditions: ['browser', 'development'], plugins: [{ name: 'install-boundaries', setup(build) {
         build.onResolve({ filter: /.*/ }, ({ path }) => path in fixtures ? { path, namespace: 'fixture' } : undefined);
         build.onLoad({ filter: /.*/, namespace: 'fixture' }, ({ path }) => ({ contents: prefix + fixtures[path], loader: 'js' }));
+        build.onLoad({ filter: /install-actions\.ts$/ }, async ({ path }) => ({
+          contents: await Bun.file(path).text() + '\nexport { flush } from "solid-js";', loader: 'ts',
+        }));
       } }] });
     if (!built.success) throw new AggregateError(built.logs, 'Install harness failed');
     const path = join(directory, 'harness.mjs');
@@ -175,14 +178,24 @@ test('a version page installs exactly its version: into the target, through the 
     expect(c.versionReads).toBe(0);
   }));
 
-test('a pinned data pack goes into the chosen world as that version, not the best match for the world', () =>
+test('a mismatched pinned data pack requires consent before installing that exact version', () =>
   harness('pages/browse/install-actions.ts', async (api, c) => {
     const pinned = { ...release, id: 'pinned', loaders: ['datapack'], game_versions: ['1.20.1'] };
     c.versions = [{ ...release, loaders: ['datapack'] }];
     c.invoke = async () => [{ ref: { instanceId: 7, directoryName: 'World' }, displayName: 'World', gameVersion: '1.21.1', running: false }];
     await api.runInstall(project, 'datapack', instance, pinned);
     await api.installIntoWorld(api.worldChoice().worlds[0]);
-    expect(c.installs[0]).toMatchObject({ type: 'datapack', version: { id: 'pinned' } });
+    expect(c.installs).toEqual([]);
+    expect(api.worldChoice().confirmation.version.id).toBe('pinned');
+    api.cancelWorldCompatibility();
+    api.flush();
+    await api.confirmWorldCompatibility();
+    expect(c.installs).toEqual([]);
+    await api.installIntoWorld(api.worldChoice().worlds[0]);
+    await api.confirmWorldCompatibility();
+    expect(c.installs).toEqual([expect.objectContaining({
+      type: 'datapack', version: pinned, compatibilityAcknowledged: true,
+    })]);
   }));
 
 

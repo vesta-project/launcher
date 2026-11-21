@@ -137,6 +137,7 @@ export interface InstallRequest {
   project: ResourceProject;
   version: ResourceVersion;
   type: ResourceType;
+  compatibilityAcknowledged?: boolean;
 }
 
 /** Returns the host task id. */
@@ -152,7 +153,7 @@ export async function installResource(request: InstallRequest): Promise<string> 
       projectName: project.name,
       version,
       installType: type,
-      compatibilityAcknowledged: false,
+      compatibilityAcknowledged: request.compatibilityAcknowledged ?? false,
       replacementResourceId: null,
     });
   }

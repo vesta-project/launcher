@@ -1,9 +1,9 @@
-import { Dialog, Skeleton } from '@vesta/ui';
+import { Button, Dialog, Skeleton } from '@vesta/ui';
 import { For, Match, Switch } from 'solid-js';
 import { EmptyLine } from '../../components/empty-state';
 import { Icon } from '../../components/icon';
 import { t } from '../../localization';
-import { closeWorldChoice, installIntoWorld, worldChoice } from './install-actions';
+import { cancelWorldCompatibility, closeWorldChoice, confirmWorldCompatibility, installIntoWorld, worldChoice } from './install-actions';
 
 /** Data packs live in a world: after the instance is known, choose which of its worlds. */
 export function WorldPickerDialog() {
@@ -22,6 +22,20 @@ export function WorldPickerDialog() {
     >
       <div data-vesta="browse-picker">
         <Switch>
+          <Match when={worldChoice()?.confirmation}>
+            {(confirmation) => (
+              <>
+                <p>{t('browse.world-compatibility-warning', {
+                  version: confirmation().version.version_number,
+                  world: confirmation().world.name,
+                })}</p>
+                <div data-vesta="browse-picker-footer">
+                  <Button variant="ghost" onClick={cancelWorldCompatibility}>{t('common.back')}</Button>
+                  <Button variant="solid" onClick={() => void confirmWorldCompatibility()}>{t('browse.world-install-anyway')}</Button>
+                </div>
+              </>
+            )}
+          </Match>
           <Match when={worldChoice()?.error}>
             {(message) => <EmptyLine role="alert">{message()}</EmptyLine>}
           </Match>

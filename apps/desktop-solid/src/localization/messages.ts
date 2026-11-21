@@ -789,6 +789,7 @@ export const messageIds = [
   "welcome.first-import-from",
   "welcome.first-import-count",
   "welcome.first-import-more",
+  "welcome.first-import-partial",
   "welcome.first-pack-title",
   "welcome.first-pack-detail",
   "welcome.first-blank-title",
@@ -964,6 +965,8 @@ export const messageIds = [
   "browse.world-empty",
   "browse.world-load-failed",
   "browse.world-required",
+  "browse.world-compatibility-warning",
+  "browse.world-install-anyway",
   "browse.install-task-failed",
 
   "common.system-default",

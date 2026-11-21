@@ -70,10 +70,13 @@ function packRelease(versions: readonly ResourceVersion[], minecraft: string | n
   )[0];
 }
 
-function startPack(project: ResourceProject, pinned?: ResourceVersion) {
+export function openLocalPackInstall(
+  project: ResourceProject,
+  pinned?: ResourceVersion,
+  filters = { minecraft: gameVersion(), loader: loader() },
+) {
   // Capture the choice now; later filter changes must not change the requested release.
-  const minecraft = gameVersion();
-  const packLoader = loader();
+  const { minecraft, loader: packLoader } = filters;
   openInstallSource(async () => {
     const release = pinned ?? packRelease(await loadVersions(project.source, project.id), minecraft, packLoader);
     const url = release
@@ -141,7 +144,7 @@ export async function runInstall(
   if (kind === 'server') return openServerPicker(project);
   if (kind === 'modpack') {
     const server = untrack(serverTargetId);
-    if (!server) return startPack(project, pinned);
+    if (!server) return openLocalPackInstall(project, pinned);
     return installModpackOnServer(project, { id: server, name: untrack(serverTarget)?.name ?? server }, pinned);
   }
   if (!target || !canTargetInstance({ ...project, resource_type: kind })) {
@@ -186,6 +189,7 @@ type WorldChoice = {
   /** A specific version to install instead of the best match for the world. */
   version?: ResourceVersion;
   worlds?: WorldOption[];
+  confirmation?: { world: WorldOption; version: ResourceVersion };
   error?: string;
 };
 const [worldChoice, setWorldChoice] = createSignal<WorldChoice | undefined>(undefined, { name: 'browseWorldChoice' });
@@ -237,15 +241,30 @@ async function chooseWorld(
 
 /** Only accept a world from the current choice, including its opaque directory identity. */
 export async function installIntoWorld(world: WorldOption): Promise<void> {
+  await installWorldVersion(world);
+}
+
+export function cancelWorldCompatibility(): void {
+  setWorldChoice((choice) => choice && { ...choice, confirmation: undefined });
+}
+
+export async function confirmWorldCompatibility(): Promise<void> {
+  const confirmation = untrack(worldChoice)?.confirmation;
+  if (confirmation) await installWorldVersion(confirmation.world, confirmation.version);
+}
+
+async function installWorldVersion(world: WorldOption, acknowledgedVersion?: ResourceVersion): Promise<void> {
   const choice = untrack(worldChoice);
   const target = worldTarget;
   if (installingWorld || !choice || !target || !choice.worlds?.some((option) => option.id === world.id)) return;
   const request = worldRequest;
   const game = worldVersions.get(world.id);
+  let needsConfirmation = false;
   installingWorld = true;
   try {
-    const selected = choice.version
-      ? { version: choice.version }
+    const pinned = acknowledgedVersion ?? choice.version;
+    const selected = pinned
+      ? { version: pinned }
       : selectInstallVersion(
           await loadVersions(choice.project.source, choice.project.id),
           { ...target, minecraftVersion: game || target.minecraftVersion },
@@ -256,14 +275,21 @@ export async function installIntoWorld(world: WorldOption): Promise<void> {
     if (!selected) reportOutcome(choice.project, world.name, { kind: 'no-version' });
     else if (!hasDownloadableArtifact(selected.version)) reportOutcome(choice.project, world.name, { kind: 'external' });
     else {
+      const normalize = (version: string) => version.trim().replace(/\.0$/, '');
+      const exactMatch = !!game && selected.version.game_versions.some((version) => normalize(version) === normalize(game));
+      if (!exactMatch && !acknowledgedVersion) {
+        needsConfirmation = true;
+        setWorldChoice({ ...choice, confirmation: { world, version: selected.version } });
+        return;
+      }
       await installResource({ instanceId: target.id, project: choice.project, version: selected.version, type: 'datapack',
-        world: { instanceId: Number(target.id), directoryName: world.id } });
+        world: { instanceId: Number(target.id), directoryName: world.id }, compatibilityAcknowledged: !!acknowledgedVersion });
       reportOutcome(choice.project, world.name, { kind: 'started' });
     }
   } catch (reason) {
     setNotice({ tone: 'danger', text: t('browse.install-failed', { message: String(reason) }) });
   } finally {
     installingWorld = false;
-    if (request === worldRequest) closeWorldChoice();
+    if (!needsConfirmation && request === worldRequest) closeWorldChoice();
   }
 }
