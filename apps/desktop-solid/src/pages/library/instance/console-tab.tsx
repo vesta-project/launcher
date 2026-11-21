@@ -49,6 +49,7 @@ export function ConsoleTab(props: { entry: InstanceEntry }) {
       }
       onSourceChange={(id) => void session.choose(id)}
       ariaLabel={() => t("console.log-output", { name: sourceName() })}
+      loading={() => state().source === "live" && session.loading()}
       emptyText={() => t("console.no-output")}
       footerDetail={() =>
         source().kind === "file"

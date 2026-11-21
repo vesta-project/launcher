@@ -2023,15 +2023,12 @@ pub async fn read_instance_log(
         use std::io::BufRead;
         let file = std::fs::File::open(&log_file)
             .map_err(|e| format!("Failed to open log file: {}", e))?;
-        let reader = std::io::BufReader::new(file);
-
-        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
         if let Some(n) = last_lines {
-            if lines.len() > n {
-                return Ok(lines[lines.len() - n..].to_vec());
-            }
+            return crate::instance::console_tail::read_tail(file, n)
+                .map_err(|e| format!("Failed to read log tail: {e}"));
         }
-        Ok(lines)
+        let reader = std::io::BufReader::new(file);
+        Ok(reader.lines().map_while(Result::ok).collect())
     })
     .await
     .map_err(|e| format!("Failed to read log: {}", e))?
@@ -2113,7 +2110,10 @@ pub fn get_instance_log_history(instance_id_slug: String) -> Result<Vec<LogFileI
 }
 
 #[tauri::command]
-pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
+pub async fn read_specific_log_file(
+    path: String,
+    last_lines: Option<usize>,
+) -> Result<Vec<String>, String> {
     let path_buf = std::path::PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("Log file does not exist".to_string());
@@ -2129,9 +2129,15 @@ pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String>
         if ext == "gz" {
             use flate2::read::GzDecoder;
             let decoder = GzDecoder::new(file);
-            let reader = BufReader::new(decoder);
-            let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
-            Ok(lines)
+            if let Some(n) = last_lines {
+                crate::instance::console_tail::read_stream_tail(decoder, n)
+                    .map_err(|e| format!("Failed to read compressed log tail: {e}"))
+            } else {
+                Ok(BufReader::new(decoder).lines().map_while(Result::ok).collect())
+            }
+        } else if let Some(n) = last_lines {
+            crate::instance::console_tail::read_tail(file, n)
+                .map_err(|e| format!("Failed to read log tail: {e}"))
         } else {
             let reader = BufReader::new(file);
             let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();

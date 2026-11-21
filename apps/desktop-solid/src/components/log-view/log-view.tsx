@@ -16,6 +16,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
 } from "solid-js";
 import { t } from "../../localization";
 import { VirtualList } from "../virtual-list";
@@ -29,6 +30,7 @@ import {
   lineTotal,
   logText,
   type LogEntry,
+  type LogLineEntry,
   type LogViewState,
 } from "./log-model";
 import "./log-view.css";
@@ -36,7 +38,7 @@ import "./log-view.css";
 export type { LogEntry, LogViewState } from "./log-model";
 
 /** Wrapped lines rendered at a time, and how many more each scroll to the top adds. */
-const WRAP_PAGE = 1000;
+const WRAP_PAGE = 160;
 
 const levels = [
   { id: "INFO", label: "Info" },
@@ -69,6 +71,7 @@ export interface LogViewProps {
   sources?: () => LogViewSource[];
   onSourceChange?: (value: string) => void;
   ariaLabel: () => string;
+  loading?: () => boolean;
   /** Shown when nothing is displayed and no filter is narrowing the view. */
   emptyText: () => string;
   /** Owner-specific actions, appended to the log actions menu. */
@@ -124,7 +127,8 @@ export function LogView(props: LogViewProps) {
         a.query === b.query,
     },
   );
-  const sourceLines = createMemo(() => groupLogEntries(props.lines()), {
+  const continuations = new WeakMap<LogLineEntry, LogLineEntry>();
+  const sourceLines = createMemo(() => groupLogEntries(props.lines(), continuations), {
     name: "log-view:source-lines",
   });
   const visible = createMemo(
@@ -166,6 +170,12 @@ export function LogView(props: LogViewProps) {
     const element = viewport();
     if (element) element.scrollTop = 0;
   };
+  let followFrame: number | undefined;
+  const cancelFollow = () => {
+    if (followFrame !== undefined) cancelAnimationFrame(followFrame);
+    followFrame = undefined;
+  };
+  onCleanup(cancelFollow);
   createEffect(
     () => ({
       last: visible().at(-1)?.id,
@@ -175,11 +185,13 @@ export function LogView(props: LogViewProps) {
       live: props.live(),
     }),
     ({ follow, live }) => {
-      if (follow && live)
-        queueMicrotask(() => {
-          const element = viewport();
-          if (element) element.scrollTop = element.scrollHeight;
-        });
+      if (!follow || !live) { cancelFollow(); return; }
+      if (followFrame !== undefined) return;
+      followFrame = requestAnimationFrame(() => {
+        followFrame = undefined;
+        const element = viewport();
+        if (element) element.scrollTop = element.scrollHeight;
+      });
     },
     { name: "log-view:follow" },
   );
@@ -188,7 +200,10 @@ export function LogView(props: LogViewProps) {
     if (!element || !props.live()) return;
     const bottom =
       element.scrollHeight - element.scrollTop - element.clientHeight < 36;
-    if (bottom !== props.state().follow) patch({ follow: bottom });
+    if (bottom !== props.state().follow) {
+      if (bottom) setWrapWindow(WRAP_PAGE);
+      patch({ follow: bottom });
+    }
   };
   /**
    * Near the top with every loaded line shown: ask for older ones. Their arrival grows the
@@ -347,7 +362,7 @@ export function LogView(props: LogViewProps) {
           growWrapped();
           reachTop();
         }}
-        aria-busy={props.loadingEarlier?.() ? "true" : undefined}
+        aria-busy={props.loading?.() || props.loadingEarlier?.() ? "true" : undefined}
       >
         <Show when={props.loadingEarlier?.()}>
           <p data-vesta="console-earlier" role="status"><span>{t("console.loading-earlier")}</span></p>
@@ -356,7 +371,9 @@ export function LogView(props: LogViewProps) {
           when={visible().length}
           fallback={
             <p data-vesta="console-empty">
-              {props.state().query || props.state().levels.length < LOG_LEVELS.length
+              {props.loading?.()
+                ? t("console.loading-output")
+                : props.state().query || props.state().levels.length < LOG_LEVELS.length
                 ? t("console.no-filter-matches")
                 : props.emptyText()}
             </p>

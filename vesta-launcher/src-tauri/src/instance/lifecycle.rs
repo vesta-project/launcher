@@ -233,20 +233,28 @@ fn emit_console_lines(app_handle: &tauri::AppHandle, instance_id: &str, lines: &
     if lines.is_empty() {
         return;
     }
-    let payload: Vec<serde_json::Value> = lines
+
+    #[derive(serde::Serialize)]
+    struct Line<'a> {
+        instance_id: &'a str,
+        line: &'a str,
+        stream: &'static str,
+    }
+
+    #[derive(Clone, serde::Serialize)]
+    struct Batch<'a> {
+        lines: &'a [Line<'a>],
+    }
+
+    let lines: Vec<_> = lines
         .iter()
-        .map(|line| {
-            serde_json::json!({
-                "instance_id": instance_id,
-                "line": line,
-                "stream": "stdout",
-            })
+        .map(|line| Line {
+            instance_id,
+            line,
+            stream: "stdout",
         })
         .collect();
-    let _ = app_handle.emit(
-        "core://instance-log",
-        serde_json::json!({ "lines": payload }),
-    );
+    let _ = app_handle.emit("core://instance-log", Batch { lines: &lines });
 }
 
 async fn read_log_growth(

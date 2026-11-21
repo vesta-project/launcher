@@ -1,6 +1,6 @@
 // Data-source-agnostic rows for the log viewer. Instance logs pass parsed lines as
 // they are; other sources (server consoles) add gap markers and truncation flags.
-import { matchesLog, type ParsedLog } from "../../features/instances/interaction-utils";
+import type { ParsedLog } from "../../features/instances/interaction-utils";
 
 /** A parsed line. `kind` is optional so plain `ParsedLog` arrays are valid entries. */
 export interface LogLineEntry extends ParsedLog {
@@ -34,19 +34,33 @@ export const isGap = (entry: LogEntry): entry is LogGapEntry =>
 
 /** Unprefixed physical lines continue the preceding entry until a parsed
  * header or source gap starts another entry. Raw text stays intact. */
-export function groupLogEntries(entries: readonly LogEntry[]): LogEntry[] {
+export function groupLogEntries(
+  entries: readonly LogEntry[],
+  continuations?: WeakMap<LogLineEntry, LogLineEntry>,
+): readonly LogEntry[] {
   let previous: LogLineEntry | undefined;
-  return entries.map((entry) => {
+  let grouped: LogEntry[] | undefined;
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
     if (isGap(entry)) {
       previous = undefined;
-      return entry;
+    } else if (entry.level === "UNKNOWN" && !entry.timestamp && !entry.thread) {
+      if (previous && (previous.level !== entry.level || previous.thread !== entry.thread)) {
+        let row = continuations?.get(entry);
+        if (row?.level !== previous.level || row.thread !== previous.thread) {
+          row = { ...entry, level: previous.level, thread: previous.thread };
+          continuations?.set(entry, row);
+        }
+        grouped ??= entries.slice(0, index);
+        grouped.push(row);
+        continue;
+      }
+    } else {
+      previous = entry;
     }
-    if (entry.level === "UNKNOWN" && !entry.timestamp && !entry.thread) {
-      return previous ? { ...entry, level: previous.level, thread: previous.thread } : entry;
-    }
-    previous = entry;
-    return entry;
-  });
+    grouped?.push(entry);
+  }
+  return grouped ?? entries;
 }
 
 /**
@@ -58,11 +72,16 @@ export function filterLog(
   hidden: number,
   levels: string[],
   query: string,
-): LogEntry[] {
+): readonly LogEntry[] {
+  const search = query.toLowerCase();
+  const allLevels = LOG_LEVELS.every((level) => levels.includes(level));
+  if (!search && allLevels && (entries[0]?.id ?? 0) >= hidden) return entries;
   return entries.filter(
     (entry) =>
       entry.id >= hidden &&
-      (isGap(entry) || matchesLog(entry, levels, query)),
+      (isGap(entry) ||
+        ((allLevels || entry.level === "UNKNOWN" || levels.includes(entry.level === "FATAL" ? "ERROR" : entry.level)) &&
+          (!search || entry.raw.toLowerCase().includes(search)))),
   );
 }
 

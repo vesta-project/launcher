@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Bundle the real session with inert host/data adapters, without installing global
 // module mocks that would affect the other checks. No DOM or browser is involved.
-async function sessionHarness() {
+async function sessionHarness(native = false) {
   const built = await Bun.build({
     entrypoints: [
       fileURLToPath(new URL("../src/features/instances/console-session.ts", import.meta.url)),
@@ -31,7 +31,7 @@ async function sessionHarness() {
                 ? "export const t = (id) => id;"
                 : path === "./details"
                 ? "export const logFor = () => [];"
-                : "export const nativeInstances = false; export const nativeRecord = () => undefined; export const reportInstanceError = () => {};",
+                : `export const nativeInstances = ${native}; export const nativeRecord = () => ({ name: 'Batch Test' }); export const reportInstanceError = (error) => { throw error; };`,
             loader: "js",
           }));
           build.onLoad(
@@ -43,11 +43,24 @@ async function sessionHarness() {
           export { flushSignals };
           export { captureArtifact, expectNoDiagnostics } from '@solidjs/diagnostics';
           const frames = new Map(); let frameId = 0;
+          const batches = new Map(); let batchId = 0;
+          export const requests = [];
+          const listeners = new Map();
+          export const listenerCount = () => listeners.size;
+          export const send = (name, payload) => listeners.get(name)?.({ payload });
+          export const listen = async (name, listener) => {
+            listeners.set(name, listener);
+            return () => listeners.delete(name);
+          };
+          export const invoke = async (name) => { requests.push(name); return []; };
           function requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; }
           function cancelAnimationFrame(id) { frames.delete(id); }
-          export const pendingFrames = () => frames.size;
+          function setTimeout(callback) { batches.set(++batchId, callback); return batchId; }
+          function clearTimeout(id) { batches.delete(id); }
+          export const pendingBatches = () => batches.size;
           export function flushFrame() { for (const [id, callback] of [...frames]) { frames.delete(id); callback(); } flushSignals(); }
-        ` + (await Bun.file(path).text()),
+          export function flushBatch() { for (const [id, callback] of [...batches]) { batches.delete(id); callback(); } flushSignals(); }
+        ` + (await Bun.file(path).text()).replace(/^import .* from '@tauri-apps\/api\/(core|event)';\r?\n/gm, ""),
               loader: "ts",
             }),
           );
@@ -67,7 +80,38 @@ async function sessionHarness() {
   }
 }
 
-describe("console frame batching", () => {
+describe("console batching", () => {
+  test("waits for a paint before requesting the tail and drops queued work on navigation", async () => {
+    const harness = await sessionHarness(true);
+    const session = harness.consoleSession("native-console");
+    const stop = session.connect();
+    try {
+      expect(harness.listenerCount()).toBe(0);
+      harness.flushFrame();
+      expect(harness.listenerCount()).toBe(0);
+      harness.flushFrame();
+      expect(harness.listenerCount()).toBe(3);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      harness.flushSignals();
+      expect(harness.requests).toEqual(["read_instance_log", "get_instance_log_history"]);
+      expect(session.loading()).toBe(false);
+      harness.send("core://instance-log", { lines: [{ instance_id: "batch-test", line: "queued" }] });
+      expect(harness.pendingBatches()).toBe(1);
+    } finally {
+      stop();
+    }
+    expect(harness.listenerCount()).toBe(0);
+    expect(harness.pendingBatches()).toBe(0);
+    harness.flushBatch();
+    expect(session.lines()).toEqual([]);
+
+    const cancelBeforePaint = session.connect();
+    cancelBeforePaint();
+    harness.flushFrame();
+    harness.flushFrame();
+    expect(harness.requests).toHaveLength(2);
+  });
+
   test("bursts publish once in order, stay capped, and clear includes queued output", async () => {
     const harness = await sessionHarness();
     const { artifact } = await harness.captureArtifact(
@@ -77,9 +121,9 @@ describe("console frame batching", () => {
         const firstId = initial.at(-1).id + 1;
         session.append(["first"]);
         session.append(["second", "third"]);
-        expect(harness.pendingFrames()).toBe(1);
+        expect(harness.pendingBatches()).toBe(1);
         expect(session.lines()).toBe(initial);
-        harness.flushFrame();
+        harness.flushBatch();
         expect(
           session
             .lines()
@@ -92,13 +136,13 @@ describe("console frame batching", () => {
             .slice(-3)
             .map((line) => line.id),
         ).toEqual([firstId, firstId + 1, firstId + 2]);
-        expect(harness.pendingFrames()).toBe(0);
+        expect(harness.pendingBatches()).toBe(0);
 
         const nextId = session.lines().at(-1).id + 1;
         session.append(
           Array.from({ length: 7000 }, (_, index) => `burst ${index}`),
         );
-        harness.flushFrame();
+        harness.flushBatch();
         expect(session.lines()).toHaveLength(5000);
         expect(session.lines()[0]).toMatchObject({
           raw: "burst 2000",
@@ -112,11 +156,11 @@ describe("console frame batching", () => {
         session.append(["before clear"]);
         session.clearDisplay();
         harness.flushSignals();
-        expect(harness.pendingFrames()).toBe(0);
+        expect(harness.pendingBatches()).toBe(0);
         const hidden = session.state().hiddenUntil.live;
         expect(hidden).toBe(session.lines().at(-1).id + 1);
         session.append(["after clear"]);
-        harness.flushFrame();
+        harness.flushBatch();
         expect(
           session
             .lines()
@@ -124,7 +168,7 @@ describe("console frame batching", () => {
             .map((line) => line.raw),
         ).toEqual(["after clear"]);
         session.append(["stack one\r\nstack two\n"]);
-        harness.flushFrame();
+        harness.flushBatch();
         expect(
           session
             .lines()

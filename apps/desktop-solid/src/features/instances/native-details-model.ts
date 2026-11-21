@@ -59,8 +59,13 @@ export function parseNativeCrash(raw?: string | null): NativeCrash {
 }
 /** Merge only overlapping suffix/prefix lines, preserving repeated messages in the stream. */
 export function logCatchup(history: string[], queued: string[]): string[] {
+  return [...history, ...queued.slice(logOverlap(history, queued))];
+}
+
+export function logOverlap(history: readonly string[], queued: readonly string[]): number {
+  if (!history.length || !queued.length) return 0;
   // Prefix-function gives the overlap in linear time, even for thousands of repeated lines.
-  const joined = [...queued, undefined, ...history];
+  const joined = [...queued, undefined, ...history.slice(-queued.length)];
   const borders = Array.from({ length: joined.length }, () => 0);
   for (let index = 1; index < joined.length; index++) {
     let length = borders[index - 1];
@@ -68,7 +73,7 @@ export function logCatchup(history: string[], queued: string[]): string[] {
     if (joined[index] === joined[length]) length++;
     borders[index] = length;
   }
-  return [...history, ...queued.slice(borders.at(-1) ?? 0)];
+  return borders.at(-1) ?? 0;
 }
 
 export function worldRouteId(segment?: string): string | undefined {

@@ -24,19 +24,19 @@ export interface ParsedLog {
   message: string;
   raw: string;
 }
+const LOG_HEADER = /^\[(\d{2}:\d{2}:\d{2})\]\s+\[([^/]+)\/([^\]]+)\]:\s+(.*)$/;
+const PARSED_LEVELS: readonly LogLevel[] = ["INFO", "WARN", "ERROR", "DEBUG", "FATAL"];
+
 /** Same log4j shape and raw fallback as the original console store. */
 export function parseLog(raw: string, id: number): ParsedLog {
-  const match = raw.match(
-    /^\[(\d{2}:\d{2}:\d{2})\]\s+\[([^/]+)\/([^\]]+)\]:\s+(.*)$/,
-  );
-  const valid: LogLevel[] = ["INFO", "WARN", "ERROR", "DEBUG", "FATAL"];
+  const match = raw.match(LOG_HEADER);
   const level = match?.[3].toUpperCase() as LogLevel;
   return match
     ? {
         id,
         timestamp: match[1],
         thread: match[2],
-        level: valid.includes(level) ? level : "UNKNOWN",
+        level: PARSED_LEVELS.includes(level) ? level : "UNKNOWN",
         message: match[4],
         raw,
       }

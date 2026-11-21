@@ -2262,6 +2262,7 @@ export const messageIds = [
   "console.following-paused",
   "console.line-count",
   "console.loading-earlier",
+  "console.loading-output",
   "console.jump-latest",
   "console.copy-status",
   "console.copy-failed",

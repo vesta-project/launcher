@@ -41,6 +41,8 @@
   :where([data-vesta="console-search-group"]) :where(.console-search, .console-source) {
     --field-bg: transparent;
     --field-border-color: transparent;
+    --field-border-color-hover: transparent;
+    --field-radius: 0;
     min-inline-size: 0;
   }
 
@@ -80,6 +82,15 @@
   .console-source {
     flex: 0 1 200px;
     min-inline-size: 140px;
+  }
+
+  .console-source :where([data-vesta="field-control"]):is(:hover, [data-expanded]) {
+    background: var(--vesta-color-fill);
+  }
+
+  :where(.console-source, .console-search) :where([data-vesta="field-control"]):is(:focus-visible, :has(:focus-visible)) {
+    outline: var(--vesta-focus-width) solid var(--vesta-color-focus);
+    outline-offset: calc(var(--vesta-focus-width) * -1);
   }
 
   .console-search {

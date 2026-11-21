@@ -48,6 +48,18 @@ describe('[log view] multiline grouping', () => {
     expect(grouped.map((entry) => entry.level)).toEqual(['FATAL', 'FATAL', undefined, 'UNKNOWN', 'UNKNOWN', 'UNKNOWN']);
     expect(levelCounts(grouped)).toEqual({ ERROR: 2, UNKNOWN: 3 });
   });
+
+  test('new output reuses existing continuation rows and a trimmed header resets inheritance', () => {
+    const header = parseLog('[10:00:00] [main/ERROR]: failed', 0);
+    const trace = parseLog('  stack frame', 1);
+    const next = parseLog('[10:00:01] [main/INFO]: ready', 2);
+    const cache = new WeakMap();
+    const before = groupLogEntries([header, trace], cache);
+    const after = groupLogEntries([header, trace, next], cache);
+    expect(after[1]).toBe(before[1]);
+    expect(groupLogEntries([trace, next], cache)[0]).toBe(trace);
+    expect(filterLog(after, 0, ['INFO', 'WARN', 'ERROR', 'DEBUG'], '')).toBe(after);
+  });
 });
 
 describe('[log view] server console entries', () => {
