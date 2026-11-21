@@ -497,6 +497,7 @@ pub fn run(context: tauri::Context) {
             commands::instances::read_specific_log_file,
             commands::instances::clear_instance_crash,
             commands::instances::open_crash_report,
+            commands::instances::read_crash_report,
             commands::instances::upload_crash_to_mclogs,
             commands::instances::emit_fake_crash,
             commands::instances::emit_fake_crash_scenario,

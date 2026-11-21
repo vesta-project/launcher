@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { nativeInstances, nativeRecord, performNative, reportInstanceError } from "../../../features/instances/native-service";
 import { instanceSlug } from "../../../features/instances/native-model";
 import { parseNativeCrash } from "../../../features/instances/native-details-model";
-import { For, Show, createSignal, createEffect, onCleanup } from "solid-js";
+import { For, Show, createSignal, createEffect, createMemo, onCleanup } from "solid-js";
+import { openExternal } from "../../../features/links/external-links";
 import { navigate } from "../../../app/router";
 import {
   clearInstanceCrash,
@@ -24,25 +25,56 @@ java.lang.OutOfMemoryError: Java heap space
 
 /** Same hierarchy as the original: diagnosis, suggested fixes, then supporting evidence. */
 export function CrashTab(props: { entry: InstanceEntry }) {
-  const [copyStatus, setCopyStatus] = createSignal("");
   const id = () => props.entry.instance.id;
-  const details = () => parseNativeCrash(nativeRecord(id())?.crashDetails);
-  const [fileReport, setFileReport] = createSignal('');
-  let revision = 0;
-  onCleanup(() => { revision++; });
-  createEffect(() => nativeInstances ? details().report_path : undefined, (path) => {
-    const current = ++revision;
-    setFileReport('');
-    if (path) void invoke<string[]>('read_specific_log_file', { path }).then((lines) => {
-      if (current === revision) setFileReport(lines.join('\n'));
-    }).catch((reason) => { if (current === revision) reportInstanceError(reason); });
+  const record = () => nativeRecord(id());
+  const details = createMemo(() => parseNativeCrash(record()?.crashDetails));
+  const crashSource = createMemo(() => {
+    const name = record()?.name;
+    const { crash_id: crashId, report_path: reportPath, log_path: logPath } = details();
+    return { key: JSON.stringify([id(), name, crashId, reportPath, logPath]), name, crashId };
+  }, { name: "crashSource", equals: (previous, next) => previous.key === next.key });
+  const crashKey = () => crashSource().key;
+  const [reportFile, setReportFile] = createSignal<{ key: string; text: string | null } | undefined>(undefined, { name: "crashReport" });
+  const [uploadedLink, setUploadedLink] = createSignal<{ key: string; url: string } | undefined>(undefined, { name: "crashSharedLink" });
+  const [sharingKey, setSharingKey] = createSignal<string | undefined>(undefined, { name: "crashSharing" });
+  const [feedback, setFeedback] = createSignal<{ key: string; message: string } | undefined>(undefined, { name: "crashFeedback" });
+  let disposed = false;
+  onCleanup(() => { disposed = true; });
+  const stillCurrent = (key: string) => !disposed && key === crashKey();
+  createEffect(crashSource, ({ key, name, crashId }) => {
+    if (!nativeInstances || name === undefined) return;
+    const args = { instanceIdSlug: instanceSlug(name), crashId };
+    void invoke<string>('read_crash_report', args).then((text) => {
+      if (stillCurrent(key)) setReportFile({ key, text });
+    }).catch(() => {
+      if (stillCurrent(key)) setReportFile({ key, text: null });
+    });
   });
-  const report = () => nativeInstances ? fileReport() || details().evidence || details().message || '' : fixtureReport;
+  const report = () => {
+    if (!nativeInstances) return fixtureReport;
+    const value = reportFile();
+    return value?.key === crashKey() ? value.text || null : undefined;
+  };
+  const sharedUrl = () => {
+    const value = uploadedLink();
+    return value?.key === crashKey() ? value.url : details().mclogs_url;
+  };
+  const sharing = () => sharingKey() === crashKey();
   const openReport = () => { const path = details().report_path; return performNative(id(), (record) => invoke('open_crash_report', { instanceIdSlug: instanceSlug(record.name), path })); };
-  const share = () => { const crashId = details().crash_id; return performNative(id(), async (record) => {
-    const result = await invoke<{url:string}>('upload_crash_to_mclogs', { instanceIdSlug: instanceSlug(record.name), crashId });
-    setCopyStatus(result.url);
-  }); };
+  const share = async () => {
+    if (sharing()) return;
+    const key = crashKey();
+    const crashId = details().crash_id;
+    setSharingKey(key);
+    setFeedback(undefined);
+    await performNative(id(), async (record) => {
+      const result = await invoke<{ url: string }>('upload_crash_to_mclogs', { instanceIdSlug: instanceSlug(record.name), crashId });
+      if (stillCurrent(key)) setUploadedLink({ key, url: result.url });
+    });
+    if (!stillCurrent(key)) return;
+    setSharingKey(undefined);
+    setFeedback({ key, message: t(sharedUrl() ? "crash.link-ready" : "crash.share-failed") });
+  };
   const summary = () =>
     props.entry.state.kind === "crashed"
       ? props.entry.state.summary
@@ -53,16 +85,20 @@ export function CrashTab(props: { entry: InstanceEntry }) {
     const cleared = await clearInstanceCrash(instanceId);
     if (cleared !== false) navigate(`/library/${instanceId}`, { replace: true });
   };
-  const copy = async () => {
+  const copy = async (text: string | null | undefined, kind: "link" | "report") => {
+    if (!text) return;
+    const key = crashKey();
+    let message: string;
     try {
-      await navigator.clipboard.writeText(report());
-      setCopyStatus(t("crash.report-copied"));
+      await navigator.clipboard.writeText(text);
+      message = t(kind === "link" ? "crash.link-copied" : "crash.report-copied");
     } catch {
-      setCopyStatus(t("crash.report-copy-failed"));
+      message = t(kind === "link" ? "crash.link-copy-failed" : "crash.report-copy-failed");
     }
+    if (stillCurrent(key)) setFeedback({ key, message });
   };
   /** Report lines, with the error itself (and its stack) picked out like the console does. */
-  const lines = () => report().split('\n').map((text) => ({
+  const lines = () => (report() ?? '').split('\n').map((text) => ({
     text,
     tone: /^-{2,}|^Description:/.test(text) ? 'head' : /(Exception|Error|Caused by)/.test(text) ? 'error' : /^\s+(at |\.\.\. \d+ more)/.test(text) ? 'trace' : undefined,
   }));
@@ -80,7 +116,6 @@ export function CrashTab(props: { entry: InstanceEntry }) {
         </div>
         <div data-vesta="crash-actions">
           <Button variant="ghost" onClick={() => void clear()}>{t("crash.clear")}</Button>
-          <Button variant="outline" disabled={!nativeInstances} icon={<Icon name="icons/actions/external-link" />} onClick={() => void share()}>{t("crash.share-log")}</Button>
           <Show when={memory()}>
             <Button tone="accent" icon={<Icon name="icons/content/sliders" />} onClick={() => navigate(`/library/${id()}/settings`)}>{t("crash.open-instance-settings")}</Button>
           </Show>
@@ -107,13 +142,32 @@ export function CrashTab(props: { entry: InstanceEntry }) {
           <header data-vesta="crash-panel-head">
             <h3>{t("crash.log-excerpt")}</h3>
             <span data-vesta="crash-panel-actions">
-              <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/copy" />} onClick={() => void copy()}>{t("crash.copy-report")}</Button>
+              <Button size="sm" variant="ghost" disabled={!report()} icon={<Icon name="icons/actions/copy" />} onClick={() => void copy(report(), "report")}>{t("crash.copy-report")}</Button>
               <Button size="sm" variant="ghost" disabled={!nativeInstances || !details().report_path} onClick={() => void openReport()}>{t("crash.open-file")}</Button>
               <Button size="sm" variant="ghost" iconEnd={<Icon name="icons/navigation/arrow-forward" />} onClick={() => navigate(`/library/${id()}/console`, { replace: true })}>{t("crash.view-full-log")}</Button>
             </span>
           </header>
-          <pre data-vesta="crash-report"><For each={lines()}>{(line) => <span data-tone={line.tone}>{line.text}{'\n'}</span>}</For></pre>
-          <p data-vesta="crash-status" role="status">{copyStatus()}</p>
+          <Show when={report()} fallback={<p data-vesta="crash-note" role="status">{t(report() === undefined ? "crash.loading-report" : "crash.report-unavailable")}</p>}>
+            <pre data-vesta="crash-report"><For each={lines()}>{(line) => <span data-tone={line.tone}>{line.text}{'\n'}</span>}</For></pre>
+          </Show>
+          <Show when={nativeInstances}>
+            <div data-vesta="crash-share">
+              <Show when={sharedUrl()}>
+                {(url) => <code>{url()}</code>}
+              </Show>
+              <div data-vesta="crash-share-actions">
+                <Button size="sm" variant="outline" disabled={sharing() || (!sharedUrl() && !report())} icon={<Icon name="icons/actions/external-link" />} onClick={() => {
+                  const url = sharedUrl();
+                  if (url) void openExternal(url).catch(reportInstanceError);
+                  else void share();
+                }}>{t(sharedUrl() ? "crash.open-shared-log" : sharing() ? "crash.sharing-log" : "crash.share-log")}</Button>
+                <Show when={sharedUrl()}>
+                  {(url) => <Button size="sm" variant="ghost" icon={<Icon name="icons/actions/copy" />} onClick={() => void copy(url(), "link")}>{t("crash.copy-link")}</Button>}
+                </Show>
+              </div>
+            </div>
+          </Show>
+          <p data-vesta="crash-status" role="status">{feedback()?.key === crashKey() ? feedback()?.message : ""}</p>
         </section>
       </div>
     </div>

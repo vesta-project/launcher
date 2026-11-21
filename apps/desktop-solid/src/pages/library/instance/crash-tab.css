@@ -149,6 +149,32 @@
     display: none;
   }
 
+  :where([data-vesta="crash-share"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2) var(--vesta-space-3);
+    padding-block-start: var(--vesta-space-3);
+    border-block-start: var(--vesta-border-width) solid var(--vesta-color-border);
+  }
+
+  :where([data-vesta="crash-share"] > code) {
+    flex: 1 1 16rem;
+    min-inline-size: 0;
+    color: var(--vesta-color-text);
+    font-family: var(--vesta-font-mono);
+    font-size: var(--vesta-text-sm);
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  :where([data-vesta="crash-share-actions"]) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--vesta-space-2);
+  }
+
   /* The excerpt reads like the console: the error stands out, its stack follows it. */
   :where([data-vesta="crash-report"]) {
     max-block-size: 22rem;

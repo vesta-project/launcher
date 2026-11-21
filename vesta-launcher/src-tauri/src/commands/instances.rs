@@ -159,17 +159,25 @@ pub struct MclogsUploadResult {
 }
 
 #[tauri::command]
+pub async fn read_crash_report(
+    instance_id_slug: String,
+    crash_id: Option<String>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        load_redacted_crash_content(&instance_id_slug, crash_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to prepare crash report: {e}"))?
+}
+
+#[tauri::command]
 pub async fn upload_crash_to_mclogs(
     instance_id_slug: String,
     crash_id: Option<String>,
 ) -> Result<MclogsUploadResult, String> {
     let persist_instance_id_slug = instance_id_slug.clone();
     let persist_crash_id = crash_id.clone();
-    let content = tauri::async_runtime::spawn_blocking(move || {
-        load_redacted_crash_content(&instance_id_slug, crash_id)
-    })
-    .await
-    .map_err(|e| format!("Failed to prepare crash log upload: {}", e))??;
+    let content = read_crash_report(instance_id_slug, crash_id).await?;
 
     let value = post_mclogs_json("https://api.mclo.gs/1/log", content).await?;
     if value.get("success").and_then(|v| v.as_bool()) == Some(false) {
@@ -300,9 +308,12 @@ fn load_redacted_crash_content(
         .as_deref()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
 
-    if let (Some(expected), Some(details)) = (expected_crash_id.as_deref(), details.as_ref()) {
-        let actual = details.get("crash_id").and_then(|v| v.as_str());
-        if actual.is_some() && actual != Some(expected) {
+    if let Some(expected) = expected_crash_id.as_deref() {
+        let actual = details
+            .as_ref()
+            .and_then(|details| details.get("crash_id"))
+            .and_then(|value| value.as_str());
+        if actual != Some(expected) {
             return Err("This crash is no longer the latest crash for the instance".to_string());
         }
     }
@@ -313,8 +324,8 @@ fn load_redacted_crash_content(
         .and_then(|value| {
             value
                 .get("report_path")
-                .or_else(|| value.get("log_path"))
                 .and_then(|v| v.as_str())
+                .or_else(|| value.get("log_path").and_then(|v| v.as_str()))
         })
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| game_dir.join("logs").join("latest.log"));
