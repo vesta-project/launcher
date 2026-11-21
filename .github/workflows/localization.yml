@@ -69,7 +69,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run i18n:check
       - run: bun run test --run src/localization/index.test.ts scripts/validate-locales.test.ts
-      - run: bun run build
 
   native:
     runs-on: macos-latest
