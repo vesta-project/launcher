@@ -31,6 +31,7 @@ mod file_tests;
 
 #[derive(Default)]
 struct State {
+    session_nonce: String,
     setup_status_mode: AtomicUsize,
     setup_apply_bodies: Mutex<Vec<Value>>,
     files: file_tests::Files,
@@ -119,7 +120,10 @@ impl Agent {
         let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let state = Arc::new(State::default());
+        let state = Arc::new(State {
+            session_nonce: uuid::Uuid::new_v4().simple().to_string(),
+            ..State::default()
+        });
         let shared = state.clone();
         let task = tokio::spawn(async move {
             loop {
@@ -274,11 +278,11 @@ async fn route(
             assert_eq!(body["device_id"], "device-1");
             if state.wrong_identity.load(Ordering::SeqCst) {
                 return Ok(plain(
-                    json!({"server_id":"other-server","nonce":"nonce","purpose":"vesta.management.session.v1"}),
+                    json!({"server_id":"other-server","nonce":state.session_nonce,"purpose":"vesta.management.session.v1"}),
                 ));
             }
             plain(
-                json!({"server_id":"server-1","nonce":"nonce","purpose":"vesta.management.session.v1","expires_in_seconds":60}),
+                json!({"server_id":"server-1","nonce":state.session_nonce,"purpose":"vesta.management.session.v1","expires_in_seconds":60}),
             )
         }
         "/api/v3/auth/session" => {
@@ -289,7 +293,7 @@ async fn route(
             ed25519_dalek::VerifyingKey::from_bytes(&key)
                 .unwrap()
                 .verify_strict(
-                    &signing_bytes("server-1", "nonce"),
+                    &signing_bytes("server-1", &state.session_nonce),
                     &ed25519_dalek::Signature::from_slice(&signature).unwrap(),
                 )
                 .unwrap();

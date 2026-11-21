@@ -925,7 +925,7 @@ mod sign_in_tests {
     }
 
     /// A host that answers the sign-in routes; returns its address, pin and route hit counts.
-    async fn host(behaviour: Behaviour) -> (String, String, Arc<StdMutex<Vec<String>>>) {
+    async fn host(behaviour: Behaviour, nonce: String) -> (String, String, Arc<StdMutex<Vec<String>>>) {
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let pin = crate::trust::leaf_fingerprint(cert.cert.der());
         let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
@@ -953,6 +953,7 @@ mod sign_in_tests {
                     tls,
                     service_fn(move |req: Request<Body>| {
                         let (seen, fp, challenge) = (seen.clone(), fp.clone(), challenge.clone());
+                        let nonce = nonce.clone();
                         async move {
                             let path = req.uri().path().to_owned();
                             seen.lock().unwrap().push(path.clone());
@@ -963,14 +964,13 @@ mod sign_in_tests {
                             let (status, value) = match path.as_str() {
                                 "/v1/host/discovery" => (200, json!({"hostId":"host","fingerprint":fp,"protocol":"host-v1","name":"attic-pc"})),
                                 "/v1/host/accounts/challenge" => {
-                                    let nonce = "bm9uY2U";
                                     let hash = vesta_host_client::requests::account_server_hash(
                                         "host",
                                         body["deviceKey"].as_str().unwrap(),
                                         body["purpose"].as_str().unwrap(),
                                         body["binding"].as_str().unwrap(),
                                         body["accountId"].as_str().unwrap(),
-                                        nonce,
+                                        &nonce,
                                     );
                                     let hash = if behaviour == Behaviour::WrongHash { "0".repeat(40) } else { hash };
                                     *challenge.lock().unwrap() = body.clone();
@@ -1000,7 +1000,8 @@ mod sign_in_tests {
     }
 
     async fn run(behaviour: Behaviour) -> (Result<Value>, usize, Vec<String>) {
-        let (address, _, routes) = host(behaviour).await;
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let (address, _, routes) = host(behaviour, nonce.clone()).await;
         let signer = crate::auth::Ed25519Signer::from_seed([7; 32]);
         let joins = Arc::new(AtomicUsize::new(0));
         let mut sign_in = AccountSignIn::open(&address, None, Some("host")).await.unwrap();
@@ -1013,7 +1014,7 @@ mod sign_in_tests {
                     assert_eq!(
                         hash,
                         vesta_host_client::requests::account_server_hash(
-                            "host", &key, "signin", &fingerprint, ACCOUNT, "bm9uY2U"
+                            "host", &key, "signin", &fingerprint, ACCOUNT, &nonce
                         )
                     );
                     counted.fetch_add(1, Ordering::SeqCst);
@@ -1068,13 +1069,13 @@ mod sign_in_tests {
 
     #[tokio::test]
     async fn another_machine_at_the_address_is_an_identity_change() {
-        let (address, _, _) = host(Behaviour::Honest).await;
+        let (address, _, _) = host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
         let error = AccountSignIn::open(&address, None, Some("other"))
             .await
             .err()
             .unwrap();
         assert_eq!(error.reason.as_deref(), Some("host_identity_changed"));
-        let (address, _, _) = host(Behaviour::Honest).await;
+        let (address, _, _) = host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
         let error = AccountSignIn::open(&address, Some("ab".repeat(32)), None)
             .await
             .err()
@@ -1084,8 +1085,9 @@ mod sign_in_tests {
 
     #[test]
     fn hash_check_needs_the_nonce_and_exact_values() {
-        let good = vesta_host_client::requests::account_server_hash("h", "k", "signin", "f", "a", "n");
-        let challenge = json!({"serverHash":good,"nonce":"n"});
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let good = vesta_host_client::requests::account_server_hash("h", "k", "signin", "f", "a", &nonce);
+        let challenge = json!({"serverHash":good,"nonce":nonce});
         assert_eq!(
             checked_server_hash(&challenge, "h", "k", "signin", "f", "a").unwrap(),
             good

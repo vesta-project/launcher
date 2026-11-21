@@ -196,7 +196,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn signed() -> (SignedRelease, String) {
+    fn signed(nonce: &str) -> (SignedRelease, String) {
         use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let der = cert.cert.der().to_vec();
@@ -207,7 +207,7 @@ mod tests {
             &rustls::crypto::ring::default_provider(),
         )
         .unwrap();
-        let payload=serde_json::to_vec(&serde_json::json!({"server_id":"server","fingerprint":fingerprint,"revision":"3","minimum_revision":"2","sha256":"a".repeat(64),"size":"12","format":"vestapack","installed_revision":"2","status":"update_available","nonce":"test-nonce"})).unwrap();
+        let payload=serde_json::to_vec(&serde_json::json!({"server_id":"server","fingerprint":fingerprint,"revision":"3","minimum_revision":"2","sha256":"a".repeat(64),"size":"12","format":"vestapack","installed_revision":"2","status":"update_available","nonce":nonce})).unwrap();
         let mut message = b"vesta-pack-sync-v1\0".to_vec();
         message.extend_from_slice(&payload);
         let signer = key
@@ -225,19 +225,20 @@ mod tests {
     }
     #[test]
     fn verifies_paired_tls_key_signature_and_rejects_substitution_replay_or_tamper() {
-        let (mut envelope, fp) = signed();
-        let release = envelope.verify("server", &fp, "test-nonce", 2).unwrap();
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let (mut envelope, fp) = signed(&nonce);
+        let release = envelope.verify("server", &fp, &nonce, 2).unwrap();
         assert_eq!(release.status, SyncStatus::UpdateAvailable);
-        assert!(envelope.verify("other", &fp, "test-nonce", 2).is_err());
+        assert!(envelope.verify("other", &fp, &nonce, 2).is_err());
         assert!(envelope
-            .verify("server", &"b".repeat(64), "test-nonce", 2)
+            .verify("server", &"b".repeat(64), &nonce, 2)
             .is_err());
-        assert!(envelope.verify("server", &fp, "old-nonce", 2).is_err());
-        assert!(envelope.verify("server", &fp, "test-nonce", 1).is_err());
+        assert!(envelope.verify("server", &fp, &format!("{nonce}-old"), 2).is_err());
+        assert!(envelope.verify("server", &fp, &nonce, 1).is_err());
         let mut payload = STANDARD.decode(&envelope.payload_base64).unwrap();
         payload.push(b' ');
         envelope.payload_base64 = STANDARD.encode(payload);
-        assert!(envelope.verify("server", &fp, "test-nonce", 2).is_err());
+        assert!(envelope.verify("server", &fp, &nonce, 2).is_err());
     }
     #[test]
     fn optional_required_and_rollback() {
@@ -248,8 +249,9 @@ mod tests {
         assert!(status(1, 3, 4).is_err());
         assert_eq!(revision("9007199254740993").unwrap(), 9007199254740993);
         assert!(revision("01").is_err());
-        let (envelope, fp) = signed();
-        let release = envelope.verify("server", &fp, "test-nonce", 2).unwrap();
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let (envelope, fp) = signed(&nonce);
+        let release = envelope.verify("server", &fp, &nonce, 2).unwrap();
         assert!(release.reject_rollback("4", "2", &release.sha256).is_err());
         assert!(release.reject_rollback("3", "3", &release.sha256).is_err());
         assert!(release.reject_rollback("3", "2", &"f".repeat(64)).is_err());
