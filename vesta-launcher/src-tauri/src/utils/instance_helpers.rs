@@ -80,12 +80,6 @@ pub fn resolve_instance_game_directory(
     if let Some(stored) = inst.game_directory.as_ref() {
         if !stored.is_empty() {
             let stored_path = PathBuf::from(stored);
-            if stored_path.exists() {
-                return stored_path;
-            }
-            if inst.use_global_game_dir {
-                return instances_root.join(&slug);
-            }
             return stored_path;
         }
     }
@@ -244,6 +238,21 @@ pub async fn download_icon_as_bytes(url: &str) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn renamed_instance_keeps_missing_stored_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let stored = root.path().join("original-2");
+        let instance = Instance {
+            name: "Renamed".to_string(),
+            game_directory: Some(stored.to_string_lossy().into_owned()),
+            use_global_game_dir: true,
+            ..Instance::default()
+        };
+        assert_eq!(
+            resolve_instance_game_directory(&instance, root.path(), root.path()),
+            stored
+        );
+    }
     #[test]
     fn resolve_clone_source_prefers_existing_game_directory() {
         let tmp = tempfile::tempdir().expect("tempdir");

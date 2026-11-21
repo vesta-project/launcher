@@ -990,14 +990,19 @@ pub async fn create_instance(
     );
 
     // Fetch existing instance names and compute their slugs
-    let existing_names: Vec<String> = instance
-        .select(name)
-        .load::<String>(&mut conn)
+    let existing_names: Vec<(String, Option<String>)> = instance
+        .select((name, game_directory))
+        .load(&mut conn)
         .map_err(|e| format!("Failed to query existing instance names: {}", e))?;
 
     let mut seen_names = std::collections::HashSet::new();
     let mut seen_slugs = std::collections::HashSet::new();
-    for existing_name in existing_names {
+    for (existing_name, stored_directory) in existing_names {
+        reserve_stored_slug(
+            &mut seen_slugs,
+            &instances_root,
+            stored_directory.as_deref(),
+        );
         seen_names.insert(existing_name.to_lowercase());
         seen_slugs.insert(crate::utils::sanitize::sanitize_instance_name(
             &existing_name,
@@ -1196,11 +1201,35 @@ pub async fn create_instance(
     Ok(inserted_id)
 }
 
+fn reserve_stored_slug(
+    seen: &mut std::collections::HashSet<String>,
+    root: &Path,
+    stored: Option<&str>,
+) {
+    if let Some(path) = stored.map(Path::new) {
+        if path.parent() == Some(root) {
+            if let Some(slug) = path.file_name().and_then(|part| part.to_str()) {
+                seen.insert(slug.to_string());
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    #[test]
+    fn stored_path_reserves_old_name_even_when_directory_is_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let old_path = root.path().join("original");
+        let mut seen = std::collections::HashSet::new();
+        reserve_stored_slug(&mut seen, root.path(), old_path.to_str());
+        assert_eq!(
+            crate::utils::instance_helpers::compute_unique_slug("original", &seen, root.path()),
+            "original-2"
+        );
+    }
     #[test]
     fn compute_game_dir_uses_slug() {
         let root = PathBuf::from("C:/Users/test/.VestaLauncher/instances");
@@ -1286,91 +1315,42 @@ pub async fn update_instance(
         return Err("Cannot update instance with uninitialized ID".to_string());
     }
 
-    // Fetch the existing row so we can detect name changes and old game_directory
-    let existing_row: (String, Option<String>) = instance
+    // Keep the persisted location, including custom and legacy paths, on rename.
+    let existing: Instance = instance
         .find(update_id)
-        .select((name, game_directory))
         .first(&mut conn)
         .map_err(|e| format!("Failed to query existing instance: {}", e))?;
+    let old_slug = existing.slug();
+    let new_slug = instance_data.slug();
 
-    let old_name = existing_row.0;
-
-    let old_slug = crate::utils::sanitize::sanitize_instance_name(&old_name);
-    let mut new_slug = instance_data.slug();
-
-    // If slug changes, compute unique slug against other instances and filesystem
     if old_slug != new_slug {
-        // Get app config to check for custom instances directory
-        let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-
-        let app_config_dir = crate::utils::db_manager::get_app_config_dir()
-            .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-
-        // Use custom directory if set, otherwise default to the app config directory's instances folder
-        let instances_root = if let Some(ref dir) = config.default_game_dir {
-            if !dir.is_empty() && dir != "/" {
-                std::path::PathBuf::from(dir)
-            } else {
-                app_config_dir.join("instances")
-            }
-        } else {
-            app_config_dir.join("instances")
-        };
-
-        // Build set of seen slugs excluding current row
-        let existing_instances: Vec<(i32, String)> = instance
-            .select((id, name))
+        let other_names: Vec<String> = instance
+            .filter(id.ne(update_id))
+            .select(name)
             .load(&mut conn)
             .map_err(|e| format!("Failed to query existing instances: {}", e))?;
-
-        let mut seen = std::collections::HashSet::new();
-        for (rid, rname) in existing_instances {
-            if rid != update_id {
-                seen.insert(crate::utils::sanitize::sanitize_instance_name(&rname));
-            }
+        if other_names
+            .iter()
+            .any(|other| crate::utils::sanitize::sanitize_instance_name(other) == new_slug)
+        {
+            return Err("Another instance already uses this name".to_string());
         }
-
-        // Avoid filesystem collisions using shared helper
-        new_slug = crate::utils::instance_helpers::compute_unique_slug(
-            &final_instance.name,
-            &seen,
-            &instances_root,
+        let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        let app_config_dir = crate::utils::db_manager::get_app_config_dir()
+            .map_err(|e| format!("Failed to get app config dir: {}", e))?;
+        let instances_root = crate::utils::instance_helpers::resolve_instances_root(
+            &app_config_dir,
+            config.default_game_dir.as_deref(),
         );
-
-        // Attempt to rename the instance directory if it exists
-        let old_dir = instances_root.join(&old_slug);
-        let new_dir = instances_root.join(&new_slug);
-
-        if old_dir.exists() {
-            let rename_result = tokio::task::spawn_blocking({
-                let old_dir = old_dir.clone();
-                let new_dir = new_dir.clone();
-                move || std::fs::rename(&old_dir, &new_dir)
-            })
-            .await
-            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
-            if let Err(e) = rename_result {
-                log::warn!(
-                    "[update_instance] Failed to rename instance dir: {} -> {} : {}",
-                    old_dir.display(),
-                    new_dir.display(),
-                    e
-                );
-                if let Err(e2) = std::fs::create_dir_all(&new_dir) {
-                    return Err(format!("Failed to create new instance directory: {}", e2));
-                }
-            }
-        } else if !new_dir.exists() {
-            // Old dir doesn't exist — create new directory
-            if let Err(e) = std::fs::create_dir_all(&new_dir) {
-                return Err(format!("Failed to create instance directory: {}", e));
-            }
-        }
-
-        // Update the instance.game_directory to the canonical instances root
-        let new_game_dir = compute_instance_game_dir(&instances_root, &new_slug);
-        final_instance.game_directory = Some(new_game_dir);
-
+        final_instance.game_directory = Some(
+            crate::utils::instance_helpers::resolve_instance_game_directory(
+                &existing,
+                &instances_root,
+                &app_config_dir,
+            )
+            .to_string_lossy()
+            .into_owned(),
+        );
         // Move log file if exists
         let app_config_dir = crate::utils::db_manager::get_app_config_dir()
             .map_err(|e| format!("Failed to get app config dir: {}", e))?;
