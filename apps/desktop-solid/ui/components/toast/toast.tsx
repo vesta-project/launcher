@@ -1,7 +1,7 @@
 import { deferAction } from './deferred-action';
 import { Toast as KobalteToast, toaster } from '@kobalte/core/toast';
 import type { JSX } from '@solidjs/web';
-import { createSignal, For, Show, type Accessor } from 'solid-js';
+import { createSignal, For, onCleanup, Show, untrack, type Accessor } from 'solid-js';
 import type { Tone } from '../../foundation/types';
 import { CloseGlyph, DangerGlyph, InfoGlyph, SuccessGlyph, WarningGlyph } from '../../internal/icons';
 import { Button, IconButton } from '../button/button';
@@ -50,9 +50,24 @@ const toneIcons: Partial<Record<Tone, () => JSX.Element>> = {
   danger: DangerGlyph,
 };
 
-const updaters = new Map<number, (patch: Partial<ToastOptions>) => void>();
+const activeToasts = new Map<number, {
+  update: (patch: Partial<ToastOptions>) => void;
+  options: Accessor<ToastOptions>;
+}>();
+
+function finishToast(id: number) {
+  const entry = activeToasts.get(id);
+  if (!entry) return;
+  activeToasts.delete(id);
+  const onDismiss = untrack(entry.options).onDismiss;
+  if (onDismiss) queueMicrotask(onDismiss);
+}
 
 function ToastItem(props: { toastId: number; options: Accessor<ToastOptions> }) {
+  let element: HTMLElement | undefined;
+  onCleanup(() => {
+    if (element?.hasAttribute('data-closed')) finishToast(props.toastId);
+  });
   const options = () => props.options();
   const tone = () => options().tone ?? 'neutral';
   const icon = () => {
@@ -63,10 +78,11 @@ function ToastItem(props: { toastId: number; options: Accessor<ToastOptions> }) 
   };
   const hasProgress = () => options().progress !== undefined;
   const persistent = () => options().persistent ?? (hasProgress() && options().progress !== 100);
-  const close = () => toaster.dismiss(props.toastId);
+  const close = () => toast.dismiss(props.toastId);
 
   return (
     <KobalteToast
+      ref={(node) => { element = node; }}
       toastId={props.toastId}
       data-vesta="toast"
       data-tone={tone()}
@@ -141,20 +157,20 @@ export const toast = {
   show(options: ToastOptions, target?: { region?: string }): number {
     const [state, setState] = createSignal(options);
     const id = toaster.show((data) => <ToastItem toastId={data.toastId} options={state} />, { region: target?.region });
-    updaters.set(id, (patch) => setState((previous) => ({ ...previous, ...patch })));
+    activeToasts.set(id, { options: state, update: (patch) => setState((previous) => ({ ...previous, ...patch })) });
     return id;
   },
   /** Patch a visible toast in place, e.g. to advance its progress. */
   update(id: number, patch: Partial<ToastOptions>) {
-    updaters.get(id)?.(patch);
+    activeToasts.get(id)?.update(patch);
   },
   dismiss(id: number) {
     toaster.dismiss(id);
-    updaters.delete(id);
+    finishToast(id);
   },
   clear() {
     toaster.clear();
-    updaters.clear();
+    for (const id of activeToasts.keys()) finishToast(id);
   },
 };
 
