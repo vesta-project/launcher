@@ -11,6 +11,8 @@
     "workbench": "vite --config workbench/vite.config.ts",
     "lint": "oxlint src ui workbench",
     "typecheck": "tsc",
+    "check": "bun run typecheck && bun run lint",
+    "format": "bunx --package @biomejs/biome@2.6.4 biome format --write src ui workbench checks",
     "test": "bun test --conditions development",
     "tauri": "bun scripts/tauri.mjs",
     "tauri:dev": "bun scripts/tauri.mjs dev",

@@ -27,7 +27,7 @@ export interface CodeEditorProps {
  * text is transparent so the overlay shows through, and only the visible lines are coloured.
  */
 export function CodeEditor(props: CodeEditorProps) {
-  let area!: HTMLTextAreaElement;
+  let area: HTMLTextAreaElement | undefined;
   let findInput: HTMLInputElement | undefined;
   const [scroll, setScroll] = createSignal({ top: 0, left: 0, height: 600 }, { name: 'code-editor:scroll' });
   const [finding, setFinding] = createSignal(false, { name: 'code-editor:finding' });
@@ -45,36 +45,39 @@ export function CodeEditor(props: CodeEditorProps) {
     { name: 'code-editor:html' },
   );
 
-  const sync = () => setScroll({ top: area.scrollTop, left: area.scrollLeft, height: area.clientHeight });
+  const sync = (element: HTMLTextAreaElement) =>
+    setScroll({ top: element.scrollTop, left: element.scrollLeft, height: element.clientHeight });
   onSettled(() => {
-    sync();
-    const observer = new ResizeObserver(sync);
-    observer.observe(area);
+    const element = area;
+    if (!element) return;
+    sync(element);
+    const observer = new ResizeObserver(() => sync(element));
+    observer.observe(element);
     return () => observer.disconnect();
   });
 
   /** Selects match `index` in the text and scrolls it a third of the way down. */
   const reveal = (index: number) => {
     const list = matches();
-    if (!list.length) return;
+    if (!area || !list.length) return;
     const wrapped = ((index % list.length) + list.length) % list.length;
     setCurrent(wrapped);
     const [from, to] = list[wrapped]!;
     area.setSelectionRange(from, to);
     const line = lineAt(starts(), from);
     area.scrollTop = Math.max(0, line * LINE - area.clientHeight / 3);
-    sync();
+    sync(area);
   };
 
   const openFind = () => {
     setFinding(true);
-    const selected = area.value.slice(area.selectionStart, area.selectionEnd);
+    const selected = area?.value.slice(area.selectionStart, area.selectionEnd);
     if (selected && !selected.includes('\n')) setQuery(selected);
     queueMicrotask(() => { findInput?.focus(); findInput?.select(); });
   };
   const closeFind = () => {
     setFinding(false);
-    area.focus();
+    area?.focus();
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -105,7 +108,7 @@ export function CodeEditor(props: CodeEditorProps) {
             value={query()}
             placeholder={t('editor.find')}
             aria-label={t('editor.find')}
-            spellcheck={false}
+            spellcheck="false"
             autocomplete="off"
             onInput={(event) => {
               setQuery(event.currentTarget.value);
@@ -130,19 +133,20 @@ export function CodeEditor(props: CodeEditorProps) {
           data-vesta="code-editor-overlay"
           aria-hidden="true"
           style={{ transform: `translate(${-scroll().left}px, ${first() * LINE - scroll().top}px)` }}
+          // oxlint-disable-next-line solid/no-innerhtml -- highlightWindow escapes every text fragment before inserting fixed markup.
           innerHTML={html()}
         />
         <textarea
-          ref={area}
+          ref={(element) => { area = element; }}
           data-vesta="code-editor-input"
           value={props.value}
           readonly={props.readOnly}
           aria-label={props['aria-label']}
-          spellcheck={false}
+          spellcheck="false"
           autocomplete="off"
           wrap="off"
           onInput={(event) => props.onChange?.(event.currentTarget.value)}
-          onScroll={() => sync()}
+          onScroll={(event) => sync(event.currentTarget)}
         />
       </div>
     </div>
