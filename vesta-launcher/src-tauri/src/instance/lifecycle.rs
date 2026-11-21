@@ -323,12 +323,11 @@ pub(crate) fn spawn_exit_monitor(
     tokio::spawn(async move {
         use sysinfo::System;
 
-        let mut sys = System::new_all();
+        let mut sys = System::new();
         let mut run_state = run_state;
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            sys.refresh_all();
-            if sys.process(sysinfo::Pid::from_u32(run_state.pid)).is_some() {
+            if refresh_pid(&mut sys, run_state.pid) {
                 continue;
             }
 
@@ -1204,10 +1203,18 @@ fn preserve_supervisor_exit(run: &InstanceRunState, code: Option<i32>) -> std::i
 }
 
 fn is_pid_running(pid: u32) -> bool {
-    use sysinfo::System;
-    let mut sys = System::new_all();
-    sys.refresh_all();
-    sys.process(sysinfo::Pid::from_u32(pid)).is_some()
+    refresh_pid(&mut sysinfo::System::new(), pid)
+}
+
+fn refresh_pid(system: &mut sysinfo::System, pid: u32) -> bool {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate};
+    let pid = Pid::from_u32(pid);
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().without_tasks(),
+    );
+    system.process(pid).is_some()
 }
 
 #[cfg(test)]
@@ -1215,6 +1222,14 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::path::PathBuf;
+
+    #[test]
+    fn pid_refresh_only_tracks_the_requested_process() {
+        let mut system = sysinfo::System::new();
+        let pid = std::process::id();
+        assert!(refresh_pid(&mut system, pid));
+        assert_eq!(system.processes().len(), 1);
+    }
 
     fn recovery_run_state(game_dir: PathBuf) -> InstanceRunState {
         InstanceRunState {
