@@ -500,7 +500,7 @@ export const stepIdBase = (kind: ActionKind) => actionIds[kind];
 /** True when the id is still the one generated for `kind` (`wait`, `wait-2`, …), so it may follow the kind. */
 export function isAutoStepId(id: string, kind: ActionKind) {
   const base = actionIds[kind];
-  return id === base || new RegExp(`^${base.replace(/[-]/g, '\\-')}-\\d+$`).test(id);
+  return id === base || (id.startsWith(`${base}-`) && /^\d+$/.test(id.slice(base.length + 1)));
 }
 
 /**

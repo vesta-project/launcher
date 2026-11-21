@@ -7,6 +7,7 @@ import type { NativeVersion, NativeResource } from './native-details-model';
 import { minecraftVersionIds, loaderVersions } from "./metadata";
 import { unlinkBundledResources } from "./details";
 import { editInstance, findInstance, retryInstance } from "./catalog";
+import { changelogPlainText } from './changelog-text';
 
 export interface EngineVersion {
   minecraft: string;
@@ -335,10 +336,6 @@ const fixtureChangelogs: Record<string, string> = {
   "1.2.0": "- Balance changes to early-game recipes\n- Updated 3 mods",
   "1.1.0": "- Initial stable release of this pack line",
 };
-function plainText(raw: string, format: string): string {
-  if (format !== 'html') return raw.trim();
-  return raw.replace(/<br\s*\/?>|<\/(p|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
-}
 export function releaseChangelog(source: PackSource, projectId: string | undefined, releaseId: string): Promise<string | undefined> {
   if (source === "Server") return Promise.resolve(undefined);
   if (nativeInstances && !projectId?.trim()) return Promise.resolve(undefined);
@@ -347,7 +344,7 @@ export function releaseChangelog(source: PackSource, projectId: string | undefin
   if (!cached) {
     cached = nativeInstances
       ? invoke<{ changelog: string | null; changelog_format: string }>('get_resource_version_details', { platform: source.toLowerCase(), projectId, versionId: releaseId })
-          .then((details) => details.changelog ? plainText(details.changelog, details.changelog_format) || undefined : undefined)
+          .then((details) => details.changelog ? changelogPlainText(details.changelog, details.changelog_format) || undefined : undefined)
       : Promise.resolve(fixtureChangelogs[releaseId]);
     cached.catch(() => changelogCache.delete(key));
     changelogCache.set(key, cached);

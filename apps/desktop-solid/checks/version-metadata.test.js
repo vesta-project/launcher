@@ -4,12 +4,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { indexMetadata } from '../src/features/instances/metadata-index';
+import { changelogPlainText } from '../src/features/instances/changelog-text';
 import { boundOptions } from '../ui/components/combobox/options';
 
 const game = (id, stable, loaders = {}) => ({ id, stable, version_type: stable ? 'release' : 'snapshot',
   loaders: Object.fromEntries(Object.entries(loaders).map(([key, values]) => [key, values.map(version => ({version, stable: true}))])) });
 const payload = { game_versions: [game('snapshot', false, {fabric: ['f2', 'f1']}), game('release', true, {fabric: ['f2'], forge: ['g2', 'g1']}), game('legacy', true)],
   latest: {release: 'release', snapshot: 'snapshot'} };
+
+test('HTML changelogs decode each entity once and preserve text line breaks', () => {
+  expect(changelogPlainText('<p>Fix &amp;lt;tag&amp;gt;<br>Use &lt;item&gt; &quot;here&quot;</p>', 'html'))
+    .toBe('Fix &lt;tag&gt;\nUse <item> "here"');
+  expect(changelogPlainText('Fix &amp; use <item>', 'markdown')).toBe('Fix &amp; use <item>');
+});
 
 test('metadata indexes compatibility once and preserves order and array identity', () => {
   const indexed = indexMetadata(payload);
