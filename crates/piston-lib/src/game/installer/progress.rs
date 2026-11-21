@@ -10,6 +10,7 @@ pub struct ProgressRange {
     start: i32,
     end: i32,
     stage: bool,
+    map_bytes: bool,
     last_overall: AtomicI32,
 }
 
@@ -26,6 +27,7 @@ impl ProgressRange {
             start,
             end,
             stage: false,
+            map_bytes: false,
             last_overall: AtomicI32::new(start),
         })
     }
@@ -36,12 +38,31 @@ impl ProgressRange {
         start: i32,
         end: i32,
     ) -> Arc<dyn ProgressReporter> {
+        Self::stage_range(inner, start, end, true)
+    }
+
+    /// Map aggregate stage percentages; individual file transfers can still report bytes.
+    pub fn stage_percent(
+        inner: Arc<dyn ProgressReporter>,
+        start: i32,
+        end: i32,
+    ) -> Arc<dyn ProgressReporter> {
+        Self::stage_range(inner, start, end, false)
+    }
+
+    fn stage_range(
+        inner: Arc<dyn ProgressReporter>,
+        start: i32,
+        end: i32,
+        map_bytes: bool,
+    ) -> Arc<dyn ProgressReporter> {
         inner.set_overall_percent(start);
         Arc::new(Self {
             inner,
             start,
             end,
             stage: true,
+            map_bytes,
             last_overall: AtomicI32::new(start),
         })
     }
@@ -67,7 +88,7 @@ impl ProgressReporter for ProgressRange {
     }
     fn update_bytes(&self, transferred: u64, total: Option<u64>) {
         self.inner.update_bytes(transferred, total);
-        if self.stage {
+        if self.map_bytes {
             if let Some(total) = total.filter(|total| *total > 0) {
                 let percent = (transferred as f64 / total as f64 * 100.0).clamp(0.0, 100.0) as i32;
                 self.emit(percent);

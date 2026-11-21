@@ -525,9 +525,14 @@ async fn install_instance_inner(
     reporter.set_stage("downloading_libraries");
     reporter.start_step("Downloading libraries", None);
 
-    let unified =
-        process_and_download_libraries(&spec, &runtime_plan, client.clone(), reporter.clone())
-            .await?;
+    let unified = process_and_download_libraries(
+        &spec,
+        &runtime_plan,
+        client.clone(),
+        progress::ProgressRange::stage_percent(reporter.clone(), 45, 85),
+    )
+    .await?;
+    reporter.set_overall_percent(85);
 
     // ------------------------------------------------------------------
     // Phase 4: Run Forge/NeoForge processors
@@ -536,7 +541,6 @@ async fn install_instance_inner(
         if let Some(processors) = &profile.processors {
             if !processors.is_empty() {
                 if let Some(data) = &profile.data {
-                    reporter.set_overall_percent(85);
                     reporter.set_stage("running_processors");
                     reporter.start_step("Running forge processors", None);
 
