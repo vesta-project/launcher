@@ -346,7 +346,7 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
                 let _ = app_clone.emit("vesta://auth", AuthStage::Cancelled);
             }
             Err(e) => {
-                log::error!("[auth] Poll for token failed: {}", e.message);
+                log::error!("[auth] Poll for token failed");
                 emit_auth_failure(&app_clone, &e);
             }
         }
@@ -631,11 +631,7 @@ async fn process_login_completion(
         .to_string();
     let cape_url_val = profile.capes.first().map(|c| c.url.clone());
 
-    log::info!(
-        "[auth] Completed token exchange and profile fetch for user {} ({})",
-        profile.name,
-        normalized_uuid
-    );
+    log::info!("[auth] Completed token exchange and profile fetch");
 
     // Save to database
     let mut conn = get_vesta_conn()
@@ -667,7 +663,7 @@ async fn process_login_completion(
 
     if existing_account.is_none() {
         // Insert new account
-        log::info!("[auth] Inserting new account for uuid: {}", normalized_uuid);
+        log::info!("[auth] Inserting new account");
 
         let new_account = NewAccount {
             uuid: normalized_uuid.clone(),
@@ -849,10 +845,7 @@ pub async fn ensure_account_tokens_valid(
     let acct = match acct {
         Some(a) => a,
         None => {
-            log::warn!(
-                "[auth] Account {} not found in database during token validation.",
-                target_uuid
-            );
+            log::warn!("[auth] Account not found during token validation");
             // If this was the active account, try to repair it
             let config = get_app_config().map_err(|error| {
                 AuthFailure::internal(format!("Failed to get app config: {error}"))
@@ -891,29 +884,19 @@ pub async fn ensure_account_tokens_valid(
         };
 
     if needs_refresh {
-        log::info!(
-            "[auth] Token for account {} is expired or expiring soon; refreshing",
-            target_uuid
-        );
+        log::info!("[auth] Session is expired or expiring soon, refreshing");
         match refresh_account_tokens_internal(app_handle, target_uuid.clone()).await {
             Ok(refreshed_account) => {
-                log::info!(
-                    "[auth] Token refresh successful for account {}",
-                    target_uuid
-                );
+                log::info!("[auth] Session refresh succeeded");
                 Ok(refreshed_account)
             }
             Err(e) => {
-                log::error!(
-                    "[auth] Token refresh failed for account {}: {}",
-                    target_uuid,
-                    e.message
-                );
+                log::error!("[auth] Session refresh did not complete");
                 Err(e)
             }
         }
     } else {
-        log::debug!("[auth] Token still valid for account {}", target_uuid);
+        log::debug!("[auth] Session is still valid");
         Ok(acct)
     }
 }
@@ -937,7 +920,7 @@ async fn refresh_account_tokens_internal(
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
-    log::info!("[auth] Refresh requested for account: {}", target_uuid);
+    log::info!("[auth] Session refresh requested");
 
     // Load account to get refresh token
     let mut conn = get_vesta_conn()
@@ -951,7 +934,7 @@ async fn refresh_account_tokens_internal(
     let acct = match acct {
         Some(a) => a,
         None => {
-            log::error!("[auth] No account found to refresh: {}", target_uuid);
+            log::error!("[auth] Account not found during session refresh");
             // If this was the active account, try to repair it
             let config = get_app_config().map_err(|error| {
                 AuthFailure::internal(format!("Failed to get app config: {error}"))
@@ -966,10 +949,7 @@ async fn refresh_account_tokens_internal(
     let refresh_token_val = match acct.refresh_token.clone() {
         Some(rt) => rt,
         None => {
-            log::error!(
-                "[auth] No refresh token present for account: {}",
-                target_uuid
-            );
+            log::error!("[auth] Session has no refresh token");
             return Err(AuthFailure {
                 code: "credentials_missing".to_string(),
                 message: "This account has no refresh token. Sign in again.".to_string(),
@@ -991,7 +971,7 @@ async fn refresh_account_tokens_internal(
         }
     };
 
-    log::info!("[auth] Attempting refresh for account: {}", target_uuid);
+    log::info!("[auth] Attempting session refresh");
 
     // Attempt refresh
     let token_response = match piston_lib::auth::refresh_access_token(
@@ -1002,12 +982,12 @@ async fn refresh_account_tokens_internal(
     {
         Ok(t) => t,
         Err(e) => {
-            log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
+            log::error!("[auth] Microsoft session refresh request failed");
             let failure = AuthFailure::from(e);
 
             // If the session expired, mark it in the database
             if failure.is_session_expired() {
-                log::warn!("[auth] Refresh token for {} is revoked or expired. Marking account as expired.", target_uuid);
+                log::warn!("[auth] Refresh token is revoked or expired. Marking account as expired.");
                 mark_account_expired(&app_handle, &target_uuid);
             }
 
@@ -1024,11 +1004,7 @@ async fn refresh_account_tokens_internal(
         match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token).await {
             Ok(resp) => resp,
             Err(e) => {
-                log::error!(
-                    "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
-                    target_uuid,
-                    e
-                );
+                log::error!("[auth] Microsoft to Minecraft token exchange failed");
 
                 let failure = AuthFailure::from(e);
                 if failure.is_session_expired() {
@@ -1094,10 +1070,7 @@ async fn refresh_account_tokens_internal(
             AuthFailure::internal(format!("Failed to reload refreshed account: {error}"))
         })?;
 
-    log::info!(
-        "[auth] Successfully refreshed tokens for account: {}",
-        target_uuid
-    );
+    log::info!("[auth] Successfully refreshed session");
     let _ = app_handle.emit("core://accounts-changed", ());
     clear_auth_service_unavailable(&app_handle);
     Ok(refreshed_account)
@@ -1309,23 +1282,7 @@ pub async fn fetch_account_profile(
     let profile = match piston_lib::api::mojang::get_minecraft_profile(&token).await {
         Ok(p) => p,
         Err(e) => {
-            // Log full error (includes HTTP status and body from Mojang client)
-            log::warn!(
-                "Failed to get Minecraft profile for account {}: {}",
-                account_model.uuid,
-                e
-            );
-
-            // Helpful debug info without leaking tokens
-            if account_model.refresh_token.is_some() {
-                log::debug!(
-                    "Account {} has a refresh token available",
-                    account_model.uuid
-                );
-            } else {
-                log::debug!("Account {} has no refresh token", account_model.uuid);
-            }
-
+            log::warn!("[auth] Minecraft profile request failed");
             return Err(AuthFailure::from(e));
         }
     };
@@ -1428,10 +1385,7 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
         .map_err(|e| e.to_string())?;
 
     if let Some(next_acc) = all_accounts.first() {
-        log::info!(
-            "[auth] Active account missing, switching to available fallback: {}",
-            next_acc.uuid
-        );
+        log::info!("[auth] Active account missing, switching to available fallback");
 
         // We call our internal command
         set_active_account(app_handle.clone(), next_acc.uuid.clone())?;

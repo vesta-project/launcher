@@ -791,10 +791,7 @@ pub async fn install_instance(
 
     if let Some(acc) = active_account {
         if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
-            log::warn!(
-                "[install_instance] Blocked install attempt from {} account",
-                acc.account_type
-            );
+            log::warn!("[install_instance] Sign-in required to install Minecraft");
 
             // Show notification
             if let Some(nm) =

@@ -45,10 +45,7 @@ pub async fn sync_account_profile_data(
     app_handle: Option<tauri::AppHandle>,
     notify_remote_change: bool,
 ) -> Result<(), String> {
-    info!(
-        "[Sync] Starting profile sync for account={}",
-        normalized_uuid
-    );
+    info!("[Sync] Starting profile sync");
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let mut acc = account::table
         .filter(account::uuid.eq(normalized_uuid))
@@ -56,10 +53,7 @@ pub async fn sync_account_profile_data(
         .map_err(|_| "Account not found".to_string())?;
 
     if acc.account_type == "Guest" || acc.account_type == "Demo" {
-        debug!(
-            "[Sync] Skipping sync for {} account: {}",
-            acc.account_type, acc.uuid
-        );
+        debug!("[Sync] Skipping profile sync for an unsigned session");
         return Ok(());
     }
 
@@ -67,10 +61,7 @@ pub async fn sync_account_profile_data(
     let profile = match fetch_account_profile(normalized_uuid.to_string()).await {
         Ok(p) => p,
         Err(failure) => {
-            warn!(
-                "[Sync] Failed to fetch profile from Mojang for {}: {}",
-                normalized_uuid, failure.message
-            );
+            warn!("[Sync] Failed to fetch Minecraft profile");
             if let Some(app) = app_handle.as_ref() {
                 publish_auth_service_unavailable(app, &failure);
             }
@@ -95,7 +86,7 @@ pub async fn sync_account_profile_data(
     let mut remote_change_detected = false;
 
     if let Some(mojang_skin) = active_skin {
-        info!("[Sync] Active Mojang skin found: {}", mojang_skin.url);
+        info!("[Sync] Active Minecraft skin found");
         let server_variant = if mojang_skin.variant.to_lowercase() == "slim" {
             "slim"
         } else {
@@ -110,7 +101,7 @@ pub async fn sync_account_profile_data(
 
         if skin_url_changed || acc.skin_data.is_none() {
             if skin_url_changed && acc.skin_url.is_some() {
-                info!("[Sync] Remote skin change detected for {}", acc.uuid);
+                info!("[Sync] Remote skin change detected");
                 remote_change_detected = true;
             }
 
@@ -123,13 +114,10 @@ pub async fn sync_account_profile_data(
                     acc.skin_variant = server_variant.to_string();
                     needs_db_update = true;
                 }
-                Err(e) => warn!("[Sync] Failed to download skin to base64: {}", e),
+                Err(_) => warn!("[Sync] Failed to download skin"),
             }
         } else if acc.skin_variant != server_variant {
-            info!(
-                "[Sync] Variant mismatch detected for {}: {} vs {}",
-                acc.uuid, acc.skin_variant, server_variant
-            );
+            info!("[Sync] Skin variant mismatch detected");
             acc.skin_variant = server_variant.to_string();
             needs_db_update = true;
         }
@@ -187,18 +175,8 @@ pub async fn sync_account_profile_data(
                         ))
                         .execute(&mut conn)
                     {
-                        Ok(_) => {
-                            debug!(
-                                "[Sync] Persistence: Upserted skin history for account={} texture_key={}",
-                                acc.uuid, texture_key
-                            );
-                        }
-                        Err(e) => {
-                            warn!(
-                                "[Sync] Persistence: Failed to upsert skin history for account={} texture_key={}: {}",
-                                acc.uuid, texture_key, e
-                            );
-                        }
+                        Ok(_) => debug!("[Sync] Updated skin history"),
+                        Err(_) => warn!("[Sync] Failed to update skin history"),
                     }
                 } else {
                     info!("[Sync] Persistence: Current skin matches a default look. Skipping history.");
@@ -207,16 +185,10 @@ pub async fn sync_account_profile_data(
                 warn!("[Sync] Persistence: Failed to decode base64 data for hashing");
             }
         } else {
-            warn!(
-                "[Sync] Persistence: No image data available to check history for {}",
-                acc.uuid
-            );
+            warn!("[Sync] No image data available to check skin history");
         }
     } else {
-        warn!(
-            "[Sync] No active skin found on Mojang profile for {}",
-            acc.uuid
-        );
+        warn!("[Sync] No active skin found on Minecraft profile");
     }
 
     if let Some(mojang_cape) = active_cape {
@@ -228,11 +200,11 @@ pub async fn sync_account_profile_data(
             needs_db_update = true;
         }
 
-        if let Err(e) =
-            get_or_cache_cape_bytes(app_handle.as_ref(), &acc.uuid, &mojang_cape.id, &cape_url)
-                .await
+        if get_or_cache_cape_bytes(app_handle.as_ref(), &acc.uuid, &mojang_cape.id, &cape_url)
+            .await
+            .is_err()
         {
-            warn!("[Sync] Failed to cache active cape for {}: {}", acc.uuid, e);
+            warn!("[Sync] Failed to cache active cape");
         }
     } else if acc.cape_url.is_some() {
         acc.cape_url = None;

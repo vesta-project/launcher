@@ -257,10 +257,7 @@ pub(crate) async fn prepare_instance_launch(
         || active_account.account_type == ACCOUNT_TYPE_DEMO
         || !is_previously_authenticated_account(&active_account)
     {
-        log::warn!(
-            "[launch_instance] Blocked launch attempt from {} account",
-            active_account.account_type
-        );
+        log::warn!("[launch_instance] Sign-in required to launch Minecraft");
         notify_login_required(app_handle, &active_account.account_type);
         return Err(
             "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
