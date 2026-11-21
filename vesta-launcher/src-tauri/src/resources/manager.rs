@@ -138,8 +138,8 @@ impl ResourceManager {
 
         // Serialize details publication with database deletion, so an older fetch
         // cannot restore a row after this invalidation.
-        let mut details_cache = self.version_details_cache.lock().await;
-        details_cache.clear();
+        let database = self.version_details_cache.lock().await.database.clone();
+        let database_guard = database.lock_owned().await;
 
         // 1. Clear in-memory caches
         self.project_cache.write().await.clear();
@@ -151,19 +151,21 @@ impl ResourceManager {
         self.image_cache.write().await.clear();
 
         // 2. Clear database tables
-        let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+        self.version_details_cache.lock().await.clear();
+        tokio::task::spawn_blocking(move || {
+            let _guard = database_guard;
+            let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+            diesel::delete(rmc_dsl::resource_metadata_cache)
+                .execute(&mut conn)
+                .map_err(|e| anyhow!("Failed to clear resource_metadata_cache: {}", e))?;
 
-        diesel::delete(rmc_dsl::resource_metadata_cache)
-            .execute(&mut conn)
-            .map_err(|e| anyhow!("Failed to clear resource_metadata_cache: {}", e))?;
+            diesel::delete(rp_dsl::resource_project)
+                .execute(&mut conn)
+                .map_err(|e| anyhow!("Failed to clear resource_project table: {}", e))?;
 
-        diesel::delete(rp_dsl::resource_project)
-            .execute(&mut conn)
-            .map_err(|e| anyhow!("Failed to clear resource_project table: {}", e))?;
-
-        crate::resources::update_cache::clear_all_instance_update_snapshots()?;
-
-        Ok(())
+            crate::resources::update_cache::clear_all_instance_update_snapshots()
+        })
+        .await?
     }
 
     fn platform_to_source_str(platform: SourcePlatform) -> &'static str {

@@ -41,6 +41,7 @@ impl Entry {
 
 #[derive(Default)]
 pub(super) struct VersionDetailsCache {
+    pub(super) database: Arc<Mutex<()>>,
     entries: HashMap<Key, (Entry, u64)>,
     flights: HashMap<(Key, bool), Flight>,
     clock: u64,
@@ -96,21 +97,32 @@ impl VersionDetailsCache {
         Fut: Future<Output = Result<ResourceVersionDetails>> + Send + 'static,
     {
         let flight_key = (key.clone(), ignore_cache);
-        let (flight, generation) = {
+        let (flight, generation, database) = {
             let mut state = state.lock().await;
             if !ignore_cache {
                 if let Some(details) = state.peek(&key) {
                     return Ok(details);
                 }
             }
+            let database = state.database.clone();
             let flight = state
                 .flights
                 .entry(flight_key.clone())
                 .or_insert_with(|| {
                     let key = key.clone();
+                    let database = database.clone();
                     async move {
                         if !ignore_cache {
-                            match read_from_db(&key) {
+                            let guard = database.lock_owned().await;
+                            let cache_key = key.clone();
+                            let cached = tokio::task::spawn_blocking(move || {
+                                let _guard = guard;
+                                read_from_db(&cache_key)
+                            })
+                            .await
+                            .map_err(anyhow::Error::from)
+                            .and_then(|result| result);
+                            match cached {
                                 Ok(Some(entry)) => return Ok(entry),
                                 Ok(None) => {}
                                 Err(error) => log::warn!(
@@ -128,28 +140,40 @@ impl VersionDetailsCache {
                     .shared()
                 })
                 .clone();
-            (flight, state.generation)
+            (flight, state.generation, database)
         };
         let result = flight.clone().await;
-        let mut state = state.lock().await;
+        let database_guard = if !ignore_cache && result.is_ok() {
+            Some(database.lock_owned().await)
+        } else {
+            None
+        };
+        let mut cache = state.lock().await;
         // A clear must not let older requests repopulate memory or SQLite. Only the
         // first waiter publishes; the others simply receive the shared result.
-        if state.generation == generation
-            && state
+        if cache.generation == generation
+            && cache
                 .flights
                 .get(&flight_key)
                 .is_some_and(|current| current.ptr_eq(&flight))
         {
-            state.flights.remove(&flight_key);
-            if !ignore_cache {
-                if let Ok(entry) = &result {
-                    if let Err(error) = write_to_db(&key, entry) {
-                        log::warn!(
-                            "[ResourceManager] Failed to persist version details cache: {}",
-                            error
-                        );
-                    }
-                    state.insert(key, entry.clone());
+            cache.flights.remove(&flight_key);
+            if let (Some(guard), Ok(entry)) = (database_guard, &result) {
+                cache.insert(key.clone(), entry.clone());
+                drop(cache);
+                let entry = entry.clone();
+                let write = tokio::task::spawn_blocking(move || {
+                    let _guard = guard;
+                    write_to_db(&key, &entry)
+                })
+                .await
+                .map_err(anyhow::Error::from)
+                .and_then(|result| result);
+                if let Err(error) = write {
+                    log::warn!(
+                        "[ResourceManager] Failed to persist version details cache: {}",
+                        error
+                    );
                 }
             }
         }
