@@ -615,12 +615,17 @@ mod tests {
     struct RecordingReporter {
         messages: StdMutex<Vec<String>>,
         steps: StdMutex<Vec<(u32, Option<u32>)>>,
+        overall: StdMutex<Vec<i32>>,
     }
 
     impl ProgressReporter for RecordingReporter {
         fn start_step(&self, _name: &str, _total_steps: Option<u32>) {}
         fn update_bytes(&self, _transferred: u64, _total: Option<u64>) {}
         fn set_percent(&self, _percent: i32) {}
+
+        fn set_overall_percent(&self, percent: i32) {
+            self.overall.lock().unwrap().push(percent);
+        }
 
         fn set_message(&self, message: &str) {
             self.messages.lock().unwrap().push(message.to_string());
@@ -645,6 +650,17 @@ mod tests {
 
     fn asset_object(hash: &str) -> serde_json::Value {
         serde_json::json!({ "hash": hash })
+    }
+
+    #[test]
+    fn library_progress_counts_completed_items_instead_of_individual_file_bytes() {
+        let reporter = Arc::new(RecordingReporter::default());
+        let libraries = progress::ProgressRange::stage_percent(reporter.clone(), 45, 85);
+        libraries.update_bytes(1024, Some(1024));
+        libraries.set_percent(25);
+        libraries.set_percent(20);
+        libraries.set_percent(100);
+        assert_eq!(reporter.overall.lock().unwrap().as_slice(), [45, 55, 85]);
     }
 
     #[test]
