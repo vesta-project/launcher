@@ -21,6 +21,7 @@ import { Card as Panel } from '../settings/parts';
 import { ServerErrorNote } from './parts';
 import { RemovedServersPanel } from './host-removed';
 import { StoragePanel } from './host-storage';
+import { hostHas } from '../../features/servers/host-removed';
 import { SettingsColumns } from './settings-parts';
 import '../library/instance/settings-tab.css';
 import './vesta-server.css';
@@ -226,6 +227,12 @@ function HostSettingsContent(props: { host: VestaHost }) {
           <Show when={owner()}>
             <RemovedServersPanel hostId={id()} onChanged={() => { setChanges((count) => count + 1); void refreshServers(); }} />
             <StoragePanel hostId={id()} refresh={changes()} />
+            {/* Older machines: say where these went instead of leaving them missing. */}
+            <Show when={info() && !hostHas(info(), 'storage') && !hostHas(info(), 'removed-servers')}>
+              <Panel title={t('vesta-server.storage.title')}>
+                <p data-vesta="server-muted" class="server-panel-note">{t('vesta-server.storage.older', { machine: props.host.name })}</p>
+              </Panel>
+            </Show>
           </Show>
         </SettingsColumns>
       </div>

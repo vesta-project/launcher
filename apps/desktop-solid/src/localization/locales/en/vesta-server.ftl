@@ -211,6 +211,7 @@ vesta-server-storage-part-other = Other
 vesta-server-storage-unavailable = This server doesn't report its storage.
 vesta-server-storage-on-volume = { $free } free on { $name }
 vesta-server-storage-largest = Biggest folders
+vesta-server-storage-older = Disk use and removed servers need a newer Vesta Server. Update it on { $machine } to see them here.
 vesta-server-storage-show = Show what's using it
 
 vesta-server-link-action = Link a device
