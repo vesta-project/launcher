@@ -30,11 +30,16 @@ export const MEMORY_STEP_MB = 512;
 export const DEFAULT_MIN_MEMORY_MB = 2048;
 export const MAX_GENERATED_MEMORY_MB = 16384;
 
+/**
+ * Heap by mod count, in line with common modpack guidance: vanilla and light packs run well in
+ * 4 GB, small to medium packs want about 6 GB, most modded setups 8 GB, and large packs (250+
+ * mods, ATM-sized) 10 to 12 GB. More than that rarely helps and lengthens GC pauses.
+ */
 export const MOD_COUNT_MEMORY_TIERS: MemoryRecommendationTier[] = [
 	{ minMods: 0, maxMods: 50, minMemoryMb: 4096, maxMemoryMb: 6144 },
 	{ minMods: 51, maxMods: 150, minMemoryMb: 6144, maxMemoryMb: 8192 },
-	{ minMods: 151, maxMods: 250, minMemoryMb: 8192, maxMemoryMb: 12288 },
-	{ minMods: 251, maxMods: null, minMemoryMb: 12288, maxMemoryMb: 16384 },
+	{ minMods: 151, maxMods: 250, minMemoryMb: 8192, maxMemoryMb: 10240 },
+	{ minMods: 251, maxMods: null, minMemoryMb: 10240, maxMemoryMb: 12288 },
 ];
 
 export function roundDownToMemoryStep(valueMb: number): number {
@@ -58,10 +63,16 @@ export function getDynamicPreferredMaxMemoryMb(systemRamMb: number): number {
 	return 10240;
 }
 
+/**
+ * Memory a suggestion leaves for everything else: the game's own native memory (graphics,
+ * threads) on top of the heap, the OS, and a browser or Discord. 8 GB is the game's minimum
+ * system memory and 16 GB its recommendation, so an 8 GB machine gets at most 5 GB of heap and
+ * a 16 GB machine 11 GB. Manual choices can still go higher.
+ */
 function reservedGeneratedMemoryMb(systemRamMb: number): number {
-	if (systemRamMb <= 8192) return 1024;
-	if (systemRamMb <= 16384) return 2048;
-	return 4096;
+	if (systemRamMb <= 8192) return 3072;
+	if (systemRamMb <= 16384) return 5120;
+	return 6144;
 }
 
 export function getGeneratedMemoryLimitMb(systemRamMb: number): number {

@@ -99,16 +99,9 @@ fn metadata_from_modrinth(index: ModrinthIndex) -> ModpackMetadata {
         modloader_version = Some(v.clone());
     }
 
-    let mods_count = index.files.len();
-    let recommended_ram = if mods_count > 200 {
-        Some(8192)
-    } else if mods_count > 100 {
-        Some(6144)
-    } else if mods_count > 20 {
-        Some(4096)
-    } else {
-        Some(2048)
-    };
+    // Modrinth packs don't declare memory; the launcher sizes it from the mod count instead,
+    // and only a pack's own number is ever shown as "the modpack's recommendation".
+    let recommended_ram = None;
 
     let mods = index
         .files
@@ -169,18 +162,8 @@ fn metadata_from_curseforge(manifest: CurseForgeManifest) -> ModpackMetadata {
         }
     }
 
-    let mods_count = manifest.files.len();
-    let recommended_ram = manifest.minecraft.recommended_ram.or({
-        if mods_count > 200 {
-            Some(8192)
-        } else if mods_count > 100 {
-            Some(6144)
-        } else if mods_count > 20 {
-            Some(4096)
-        } else {
-            Some(2048)
-        }
-    });
+    // Only what the pack author declared; the launcher sizes the rest from the mod count.
+    let recommended_ram = manifest.minecraft.recommended_ram;
 
     let mods = manifest
         .files
