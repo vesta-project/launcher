@@ -5,6 +5,7 @@ use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use tokio::task;
 
 const ZULU_API_BASE: &str = "https://api.azul.com/metadata/v1/zulu/packages";
@@ -110,49 +111,33 @@ async fn install_zulu_jre(
     };
 
     let arch_param = match arch {
-        Arch::X64 => "x86",
-        Arch::Arm64 => "arm",
-        Arch::Arm32 => "arm",
+        Arch::X64 => "x64",
+        Arch::Arm64 => "arm64",
+        Arch::Arm32 => "arm32",
     };
 
-    let hw_bitness = match arch {
-        Arch::X64 | Arch::Arm64 => "64",
-        Arch::Arm32 => "32",
-    };
-
-    let bundle_type = "jre"; // JRE only, not full JDK
-    let javafx = "false";
     let ext = match os {
         OsType::Windows | OsType::WindowsArm64 => "zip",
         _ => "tar.gz",
     };
 
-    let url = format!(
-        "{}/?os={}&arch={}&hw_bitness={}&bundle_type={}&javafx_bundled={}&java_version={}&ext={}&archive_type={}&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=1",
-        ZULU_API_BASE,
-        os_param,
-        arch_param,
-        hw_bitness,
-        bundle_type,
-        javafx,
-        required_version.major,
-        ext,
-        ext
-    );
-
-    log::debug!("Querying Zulu API: {}", url);
-
-    // Query API
-    let response = client.get(&url).send().await?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("Failed to query Zulu API: HTTP {}", response.status());
+    // Some supported platforms (for example Windows ARM64 with Java 17)
+    // publish only a JDK. Prefer the smaller runtime where Azul publishes it.
+    let mut package = None;
+    for java_package_type in ["jre", "jdk"] {
+        let url = format!(
+            "{ZULU_API_BASE}/?os={os_param}&arch={arch_param}&java_package_type={java_package_type}&javafx_bundled=false&crac_supported=false&java_version={}&archive_type={ext}&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=1",
+            required_version.major,
+        );
+        log::debug!("Querying Zulu API: {url}");
+        let response = client.get(&url).send().await?.error_for_status()?;
+        let packages: Vec<ZuluPackage> = response.json().await?;
+        package = packages.into_iter().next();
+        if package.is_some() {
+            break;
+        }
     }
-
-    let packages: Vec<ZuluPackage> = response.json().await?;
-    let package = packages
-        .first()
-        .context("No Zulu JRE package found for this platform")?;
+    let package = package.context("No Zulu runtime found for this platform")?;
 
     log::info!("Downloading Zulu JRE from: {}", package.download_url);
 
@@ -363,11 +348,16 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
         anyhow::bail!("Java path does not exist: {:?}", path);
     }
 
-    let output = std::process::Command::new(path)
+    let output = std::process::Command::new(dunce::simplified(path))
         .arg("-version")
         .suppress_console()
         .output()
         .context("Failed to run java -version")?;
+    anyhow::ensure!(
+        output.status.success(),
+        "java -version failed: {}",
+        output.status
+    );
 
     let version_str = String::from_utf8_lossy(&output.stderr);
     let major_version = parse_major_version(&version_str).context(format!(

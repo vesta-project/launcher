@@ -208,6 +208,11 @@ pub async fn launch_prepared_game(
         super::targets::prepare_quick_play_log(&spec)?;
     }
 
+    // HotSpot can fail to locate its module image when launched through a
+    // Windows verbatim path. Keep canonical paths for policy checks, and use
+    // the equivalent Win32 spelling for every JVM invocation in this command.
+    let java_path = dunce::simplified(&spec.java_path);
+
     // 2. Verify Java installation. Sandboxed launches have already validated
     // Java during host launch preparation; executing `java -version` here would
     // run the selected binary outside the prepared OS sandbox.
@@ -220,7 +225,7 @@ pub async fn launch_prepared_game(
             anyhow::bail!("Java executable not found: {:?}", spec.java_path);
         }
     } else {
-        verify_java(&spec.java_path).context("Java verification failed")?;
+        verify_java(java_path).context("Java verification failed")?;
     }
 
     if let Err(e) = crate::utils::stop_intent::clear_stop_requested(&spec.game_dir) {
@@ -310,7 +315,7 @@ pub async fn launch_prepared_game(
 
     // Build the "core" game command arguments (java path and all args)
     let mut game_base_command: Vec<String> = Vec::new();
-    game_base_command.push(spec.java_path.to_string_lossy().to_string());
+    game_base_command.push(java_path.to_string_lossy().into_owned());
     game_base_command.extend(jvm_args.clone());
     game_base_command.push(main_class.clone());
     game_base_command.extend(game_args.clone());
@@ -333,12 +338,12 @@ pub async fn launch_prepared_game(
         let parts = shlex::split(wrapper)
             .unwrap_or_else(|| wrapper.split_whitespace().map(|s| s.to_string()).collect());
         if parts.is_empty() {
-            (spec.java_path.to_string_lossy().to_string(), Vec::new())
+            (java_path.to_string_lossy().into_owned(), Vec::new())
         } else {
             (parts[0].clone(), parts[1..].to_vec())
         }
     } else {
-        (spec.java_path.to_string_lossy().to_string(), Vec::new())
+        (java_path.to_string_lossy().into_owned(), Vec::new())
     };
 
     let delegate_sandbox_to_exit_handler = spec.exit_handler_jar.is_some()
@@ -378,7 +383,7 @@ pub async fn launch_prepared_game(
         command.args(&initial_args);
 
         if has_user_wrapper {
-            command.arg(&spec.java_path);
+            command.arg(java_path);
         }
 
         command.arg("-jar");
@@ -415,7 +420,7 @@ pub async fn launch_prepared_game(
         command.args(&initial_args);
 
         if has_user_wrapper {
-            command.arg(&spec.java_path);
+            command.arg(java_path);
         }
 
         command.args(&jvm_args);
