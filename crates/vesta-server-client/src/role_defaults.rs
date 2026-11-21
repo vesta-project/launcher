@@ -187,8 +187,16 @@ mod tests {
 
     #[test]
     fn host_role_names_map_to_presets() {
-        assert_eq!(role_defaults(Some("primary_owner")), role_defaults(Some("owner")));
-        assert!(role_defaults(Some("primary_owner")).iter().any(|c| c == "status.view"));
-        assert_eq!(role_defaults(Some("player")), role_defaults(Some("pack-user")));
+        assert_eq!(
+            role_defaults(Some("primary_owner")),
+            role_defaults(Some("owner"))
+        );
+        assert!(role_defaults(Some("primary_owner"))
+            .iter()
+            .any(|c| c == "status.view"));
+        assert_eq!(
+            role_defaults(Some("player")),
+            role_defaults(Some("pack-user"))
+        );
     }
 }

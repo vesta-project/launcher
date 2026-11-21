@@ -925,7 +925,10 @@ mod sign_in_tests {
     }
 
     /// A host that answers the sign-in routes; returns its address, pin and route hit counts.
-    async fn host(behaviour: Behaviour, nonce: String) -> (String, String, Arc<StdMutex<Vec<String>>>) {
+    async fn host(
+        behaviour: Behaviour,
+        nonce: String,
+    ) -> (String, String, Arc<StdMutex<Vec<String>>>) {
         let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let pin = crate::trust::leaf_fingerprint(cert.cert.der());
         let tls = rustls::ServerConfig::builder_with_provider(Arc::new(
@@ -1004,7 +1007,9 @@ mod sign_in_tests {
         let (address, _, routes) = host(behaviour, nonce.clone()).await;
         let signer = crate::auth::Ed25519Signer::from_seed([7; 32]);
         let joins = Arc::new(AtomicUsize::new(0));
-        let mut sign_in = AccountSignIn::open(&address, None, Some("host")).await.unwrap();
+        let mut sign_in = AccountSignIn::open(&address, None, Some("host"))
+            .await
+            .unwrap();
         let fingerprint = sign_in.connection.fingerprint.clone();
         let counted = joins.clone();
         let key = signer.public_key();
@@ -1014,7 +1019,12 @@ mod sign_in_tests {
                     assert_eq!(
                         hash,
                         vesta_host_client::requests::account_server_hash(
-                            "host", &key, "signin", &fingerprint, ACCOUNT, &nonce
+                            "host",
+                            &key,
+                            "signin",
+                            &fingerprint,
+                            ACCOUNT,
+                            &nonce
                         )
                     );
                     counted.fetch_add(1, Ordering::SeqCst);
@@ -1069,13 +1079,15 @@ mod sign_in_tests {
 
     #[tokio::test]
     async fn another_machine_at_the_address_is_an_identity_change() {
-        let (address, _, _) = host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
+        let (address, _, _) =
+            host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
         let error = AccountSignIn::open(&address, None, Some("other"))
             .await
             .err()
             .unwrap();
         assert_eq!(error.reason.as_deref(), Some("host_identity_changed"));
-        let (address, _, _) = host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
+        let (address, _, _) =
+            host(Behaviour::Honest, uuid::Uuid::new_v4().simple().to_string()).await;
         let error = AccountSignIn::open(&address, Some("ab".repeat(32)), None)
             .await
             .err()
@@ -1086,7 +1098,8 @@ mod sign_in_tests {
     #[test]
     fn hash_check_needs_the_nonce_and_exact_values() {
         let nonce = uuid::Uuid::new_v4().simple().to_string();
-        let good = vesta_host_client::requests::account_server_hash("h", "k", "signin", "f", "a", &nonce);
+        let good =
+            vesta_host_client::requests::account_server_hash("h", "k", "signin", "f", "a", &nonce);
         let challenge = json!({"serverHash":good,"nonce":nonce});
         assert_eq!(
             checked_server_hash(&challenge, "h", "k", "signin", "f", "a").unwrap(),
@@ -1094,13 +1107,18 @@ mod sign_in_tests {
         );
         assert!(checked_server_hash(&challenge, "h", "k", "signin", "other", "a").is_err());
         assert!(checked_server_hash(&challenge, "h", "k2", "signin", "f", "a").is_err());
-        assert!(checked_server_hash(&json!({"serverHash":good}), "h", "k", "signin", "f", "a").is_err());
+        assert!(
+            checked_server_hash(&json!({"serverHash":good}), "h", "k", "signin", "f", "a").is_err()
+        );
     }
 
     #[test]
     fn device_names_follow_the_host_rules() {
         assert_eq!(device_name("  ATTIC-PC  ").as_deref(), Some("ATTIC-PC"));
-        assert_eq!(device_name("Rae's\u{202E}  \tlaptop\u{200B}\n").as_deref(), Some("Rae's laptop"));
+        assert_eq!(
+            device_name("Rae's\u{202E}  \tlaptop\u{200B}\n").as_deref(),
+            Some("Rae's laptop")
+        );
         assert_eq!(device_name(&"x".repeat(300)).unwrap().chars().count(), 64);
         assert_eq!(device_name("\u{200B}\u{0007} "), None);
     }

@@ -989,7 +989,11 @@ async fn host_backed_users_mark_machine_owners() {
     let a = Agent::start().await;
     let mut owner = user();
     owner["machine_owner"] = json!(true);
-    a.set("GET", "/api/v3/manage/users?offset=0&limit=100", json!({"users":[owner],"next_offset":null}));
+    a.set(
+        "GET",
+        "/api/v3/manage/users?offset=0&limit=100",
+        json!({"users":[owner],"next_offset":null}),
+    );
     let page = a.client.users(0).await.unwrap();
     assert_eq!(page.users[0].machine_owner, Some(true));
     assert_eq!(page.users[0].device_count, 2);

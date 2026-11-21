@@ -73,7 +73,10 @@ async fn session_signing_bytes_and_unpadded_base64url_are_exact() {
     use base64::Engine;
     let nonce = uuid::Uuid::new_v4().simple().to_string();
     let bytes = signing_bytes("server-1", &nonce);
-    assert_eq!(bytes, [b"vesta.management.session.v1\0server-1\0", nonce.as_bytes()].concat());
+    assert_eq!(
+        bytes,
+        [b"vesta.management.session.v1\0server-1\0", nonce.as_bytes()].concat()
+    );
     let signer = Ed25519Signer::from_seed([42; 32]);
     let signature = signer.sign(&bytes).await.unwrap();
     assert!(!signature.contains('='));

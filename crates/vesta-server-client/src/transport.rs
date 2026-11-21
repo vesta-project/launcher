@@ -173,24 +173,53 @@ impl Transport {
         Ok(())
     }
     pub fn for_host(endpoint: Endpoint, host: Arc<crate::host::HostSession>) -> Result<Arc<Self>> {
-        let mut transport=Self::new(endpoint,Some(host.host.fingerprint.clone()))?;
-        Arc::get_mut(&mut transport).expect("new transport").host=Some(host);Ok(transport)
+        let mut transport = Self::new(endpoint, Some(host.host.fingerprint.clone()))?;
+        Arc::get_mut(&mut transport).expect("new transport").host = Some(host);
+        Ok(transport)
     }
-    pub(crate) fn routes(&self,path:&str)->Result<Vec<url::Url>> {
-        if let Some(host)=&self.host {
-            host.endpoints().iter().map(|address| crate::endpoint::Endpoint::host(address)?.for_server(self.endpoint.server_id().ok_or_else(||Error::new(ErrorCode::Internal))?)?.route(path)).collect()
-        } else {Ok(vec![self.endpoint.route(path)?])}
+    pub(crate) fn routes(&self, path: &str) -> Result<Vec<url::Url>> {
+        if let Some(host) = &self.host {
+            host.endpoints()
+                .iter()
+                .map(|address| {
+                    crate::endpoint::Endpoint::host(address)?
+                        .for_server(
+                            self.endpoint
+                                .server_id()
+                                .ok_or_else(|| Error::new(ErrorCode::Internal))?,
+                        )?
+                        .route(path)
+                })
+                .collect()
+        } else {
+            Ok(vec![self.endpoint.route(path)?])
+        }
     }
-    pub(crate) async fn send_fallback(&self, request:reqwest::RequestBuilder,path:&str)->Result<reqwest::Response> {
-        let mut last=Error::new(ErrorCode::Unreachable);
+    pub(crate) async fn send_fallback(
+        &self,
+        request: reqwest::RequestBuilder,
+        path: &str,
+    ) -> Result<reqwest::Response> {
+        let mut last = Error::new(ErrorCode::Unreachable);
         for url in self.routes(path)? {
-            let mut candidate=request.try_clone().ok_or_else(||Error::new(ErrorCode::Internal))?.build().map_err(|e|self.network_error(e))?;
-            *candidate.url_mut()=url;
+            let mut candidate = request
+                .try_clone()
+                .ok_or_else(|| Error::new(ErrorCode::Internal))?
+                .build()
+                .map_err(|e| self.network_error(e))?;
+            *candidate.url_mut() = url;
             match self.http.execute(candidate).await {
-                Ok(response)=>return Ok(response),
-                Err(e)=>{let retry=e.is_connect();last=self.network_error(e);if !retry{return Err(last);}}
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    let retry = e.is_connect();
+                    last = self.network_error(e);
+                    if !retry {
+                        return Err(last);
+                    }
+                }
             }
-        }Err(last)
+        }
+        Err(last)
     }
     pub fn observed(&self) -> Option<String> {
         self.observed.lock().ok().and_then(|v| v.clone())
@@ -428,7 +457,7 @@ impl Transport {
         if let Some((tag, _)) = &validator {
             request = request.header("If-None-Match", tag);
         }
-        let mut response = self.send_fallback(request,path).await?;
+        let mut response = self.send_fallback(request, path).await?;
         self.check_access()?;
         let status = response.status();
         // A rejected revision means the cached observation used to construct the
@@ -585,12 +614,28 @@ impl Transport {
         self.check_access()?;
         Ok(data)
     }
-    pub async fn socket(&self,path:&str,token:&str)->Result<Socket>{
+    pub async fn socket(&self, path: &str, token: &str) -> Result<Socket> {
         self.check_access()?;
-        let mut last=Error::new(ErrorCode::Unreachable);
-        for url in self.routes(path)? {match self.socket_at(url,token).await{Ok(s)=>return Ok(s),Err(e)=>{if !matches!(e.code,ErrorCode::Unreachable|ErrorCode::TlsFailed|ErrorCode::FingerprintMismatch){return Err(e);}last=e;}}}Err(last)
+        let mut last = Error::new(ErrorCode::Unreachable);
+        for url in self.routes(path)? {
+            match self.socket_at(url, token).await {
+                Ok(s) => return Ok(s),
+                Err(e) => {
+                    if !matches!(
+                        e.code,
+                        ErrorCode::Unreachable
+                            | ErrorCode::TlsFailed
+                            | ErrorCode::FingerprintMismatch
+                    ) {
+                        return Err(e);
+                    }
+                    last = e;
+                }
+            }
+        }
+        Err(last)
     }
-    async fn socket_at(&self, mut url:url::Url, token: &str) -> Result<Socket> {
+    async fn socket_at(&self, mut url: url::Url, token: &str) -> Result<Socket> {
         if self.expected.is_none() {
             return Err(Error::new(ErrorCode::TlsFailed));
         }

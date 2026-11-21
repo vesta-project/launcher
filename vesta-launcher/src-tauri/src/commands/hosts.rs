@@ -209,13 +209,19 @@ fn purge_body(body: Option<&Value>) -> Result<Value> {
 /// Restoring: an optional new name and port; the machine picks free ones when they're absent.
 fn restore_body(body: Option<&Value>) -> Result<Value> {
     let mut out = json!({});
-    if let Some(name) = body.and_then(|body| body.get("name")).and_then(Value::as_str) {
+    if let Some(name) = body
+        .and_then(|body| body.get("name"))
+        .and_then(Value::as_str)
+    {
         if name.trim().is_empty() || name.len() > 256 {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
         out["name"] = json!(name);
     }
-    if let Some(port) = body.and_then(|body| body.get("gamePort")).and_then(Value::as_u64) {
+    if let Some(port) = body
+        .and_then(|body| body.get("gamePort"))
+        .and_then(Value::as_u64)
+    {
         if !(1..=65535).contains(&port) {
             return Err(Error::new(ErrorCode::InvalidInput));
         }
@@ -225,7 +231,10 @@ fn restore_body(body: Option<&Value>) -> Result<Value> {
 }
 /// A list cursor for a query string: the opaque token the machine handed out, nothing more.
 fn cursor_query(body: Option<&Value>) -> Result<String> {
-    match body.and_then(|body| body.get("cursor")).and_then(Value::as_str) {
+    match body
+        .and_then(|body| body.get("cursor"))
+        .and_then(Value::as_str)
+    {
         None => Ok(String::new()),
         Some(cursor)
             if !cursor.is_empty()
@@ -255,7 +264,10 @@ mod remove_tests {
             json!({ "confirmName": "Lobby", "idempotencyKey": "k-2", "permanently": true, "keepBackups": false })
         );
         assert_eq!(
-            purge_body(Some(&json!({ "confirmName": "Lobby", "keepBackups": true, "x": 1 }))).unwrap(),
+            purge_body(Some(
+                &json!({ "confirmName": "Lobby", "keepBackups": true, "x": 1 })
+            ))
+            .unwrap(),
             json!({ "confirmName": "Lobby", "keepBackups": true })
         );
         assert_eq!(
@@ -263,7 +275,10 @@ mod remove_tests {
             json!({ "gamePort": 25570 })
         );
         assert!(restore_body(Some(&json!({ "gamePort": 70000 }))).is_err());
-        assert_eq!(cursor_query(Some(&json!({ "cursor": "abc-1" }))).unwrap(), "?cursor=abc-1");
+        assert_eq!(
+            cursor_query(Some(&json!({ "cursor": "abc-1" }))).unwrap(),
+            "?cursor=abc-1"
+        );
         assert!(cursor_query(Some(&json!({ "cursor": "a&b=c" }))).is_err());
         assert!(remove_body(Some(&json!({ "confirmName": "" })), "k").is_err());
         assert!(remove_body(None, "k").is_err());
@@ -400,7 +415,10 @@ async fn dispatch(
         CreateResume => ("POST", format!("/creates/jobs/{}/resume", id()?)),
         CreateStart => ("POST", format!("/creates/jobs/{}/start", id()?)),
         ServerRemove => ("DELETE", format!("/servers/{}", id()?)),
-        ServersRemoved => ("GET", format!("/servers/removed{}", cursor_query(body.as_ref())?)),
+        ServersRemoved => (
+            "GET",
+            format!("/servers/removed{}", cursor_query(body.as_ref())?),
+        ),
         ServerRestore => ("POST", format!("/servers/removed/{}/restore", id()?)),
         ServerPurge => ("DELETE", format!("/servers/removed/{}", id()?)),
         Storage => ("GET", "/storage".into()),

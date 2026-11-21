@@ -974,27 +974,25 @@ async fn refresh_account_tokens_internal(
     log::info!("[auth] Attempting session refresh");
 
     // Attempt refresh
-    let token_response = match piston_lib::auth::refresh_access_token(
-        &client,
-        refresh_token_val.clone(),
-    )
-    .await
-    {
-        Ok(t) => t,
-        Err(e) => {
-            log::error!("[auth] Microsoft session refresh request failed");
-            let failure = AuthFailure::from(e);
+    let token_response =
+        match piston_lib::auth::refresh_access_token(&client, refresh_token_val.clone()).await {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("[auth] Microsoft session refresh request failed");
+                let failure = AuthFailure::from(e);
 
-            // If the session expired, mark it in the database
-            if failure.is_session_expired() {
-                log::warn!("[auth] Refresh token is revoked or expired. Marking account as expired.");
-                mark_account_expired(&app_handle, &target_uuid);
+                // If the session expired, mark it in the database
+                if failure.is_session_expired() {
+                    log::warn!(
+                        "[auth] Refresh token is revoked or expired. Marking account as expired."
+                    );
+                    mark_account_expired(&app_handle, &target_uuid);
+                }
+
+                publish_auth_service_unavailable(&app_handle, &failure);
+                return Err(failure);
             }
-
-            publish_auth_service_unavailable(&app_handle, &failure);
-            return Err(failure);
-        }
-    };
+        };
 
     // Exchange for Minecraft token
     let ms_access_token = token_response.access_token().secret().clone();

@@ -2130,7 +2130,10 @@ pub async fn read_specific_log_file(
                 crate::instance::console_tail::read_stream_tail(decoder, n)
                     .map_err(|e| format!("Failed to read compressed log tail: {e}"))
             } else {
-                Ok(BufReader::new(decoder).lines().map_while(Result::ok).collect())
+                Ok(BufReader::new(decoder)
+                    .lines()
+                    .map_while(Result::ok)
+                    .collect())
             }
         } else if let Some(n) = last_lines {
             crate::instance::console_tail::read_tail(file, n)

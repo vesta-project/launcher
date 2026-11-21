@@ -3,10 +3,7 @@ use vesta_host_client::rand_core::SeedableRng;
 use vesta_host_client::*;
 #[test]
 fn deterministic_client_vector_and_negative_confirmations() {
-    let f: serde_json::Value = serde_json::from_str(include_str!(
-        "fixtures/pake-v1.json"
-    ))
-    .unwrap();
+    let f: serde_json::Value = serde_json::from_str(include_str!("fixtures/pake-v1.json")).unwrap();
     let code = SetupCode::parse(f["code"].as_str().unwrap()).unwrap();
     for scenario in [
         "ok",
@@ -92,10 +89,7 @@ fn strict_password_and_wire_parsing() {
         assert!(SetupCode::parse(input).is_err());
     }
     assert!(decode::<32>("AA==").is_err());
-    let f: serde_json::Value = serde_json::from_str(include_str!(
-        "fixtures/pake-v1.json"
-    ))
-    .unwrap();
+    let f: serde_json::Value = serde_json::from_str(include_str!("fixtures/pake-v1.json")).unwrap();
     let mut bad = f["start"].clone();
     bad["unknown"] = true.into();
     assert!(serde_json::from_value::<Start>(bad).is_err());

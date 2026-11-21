@@ -72,10 +72,15 @@ impl Endpoint {
         Ok(Self { url, server: None })
     }
     pub fn host(input: &str) -> Result<Self> {
-        let raw = if input.contains("://") { input.to_owned() } else { format!("https://{input}") };
+        let raw = if input.contains("://") {
+            input.to_owned()
+        } else {
+            format!("https://{input}")
+        };
         let mut url = Url::parse(&raw).map_err(|_| Error::new(ErrorCode::InvalidAddress))?;
         if url.port().is_none() && !raw.trim_end_matches('/').ends_with(":443") {
-            url.set_port(Some(25500)).map_err(|_| Error::new(ErrorCode::InvalidAddress))?;
+            url.set_port(Some(25500))
+                .map_err(|_| Error::new(ErrorCode::InvalidAddress))?;
         }
         Self::parse(url.as_str())
     }
@@ -84,8 +89,12 @@ impl Endpoint {
         self.server = Some(id.to_owned());
         Ok(self)
     }
-    pub(crate) fn server_id(&self)->Option<&str>{self.server.as_deref()}
-    pub fn is_host_server(&self) -> bool { self.server.is_some() }
+    pub(crate) fn server_id(&self) -> Option<&str> {
+        self.server.as_deref()
+    }
+    pub fn is_host_server(&self) -> bool {
+        self.server.is_some()
+    }
     pub fn url(&self) -> &Url {
         &self.url
     }
@@ -116,11 +125,17 @@ impl Endpoint {
         }
         let mapped;
         let path = if let Some(id) = &self.server {
-            let suffix = path.strip_prefix("/api/v3/").ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
-            if suffix.starts_with("auth/") || suffix == "manage/pair" { return Err(Error::new(ErrorCode::Unsupported)); }
+            let suffix = path
+                .strip_prefix("/api/v3/")
+                .ok_or_else(|| Error::new(ErrorCode::InvalidInput))?;
+            if suffix.starts_with("auth/") || suffix == "manage/pair" {
+                return Err(Error::new(ErrorCode::Unsupported));
+            }
             mapped = format!("/v1/servers/{id}/{suffix}");
             &mapped
-        } else { path };
+        } else {
+            path
+        };
         self.url
             .join(path)
             .map_err(|_| Error::new(ErrorCode::InvalidInput))

@@ -112,7 +112,7 @@ impl Transport {
         if let Some(key) = &input.key {
             request = request.header("Idempotency-Key", key);
         }
-        let raw = self.send_fallback(request,&input.path).await?;
+        let raw = self.send_fallback(request, &input.path).await?;
         self.check_access()?;
         let status = raw.status();
         let retry = raw

@@ -233,7 +233,9 @@ mod tests {
         assert!(envelope
             .verify("server", &"b".repeat(64), &nonce, 2)
             .is_err());
-        assert!(envelope.verify("server", &fp, &format!("{nonce}-old"), 2).is_err());
+        assert!(envelope
+            .verify("server", &fp, &format!("{nonce}-old"), 2)
+            .is_err());
         assert!(envelope.verify("server", &fp, &nonce, 1).is_err());
         let mut payload = STANDARD.decode(&envelope.payload_base64).unwrap();
         payload.push(b' ');

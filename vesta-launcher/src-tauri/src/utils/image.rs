@@ -120,12 +120,19 @@ pub mod icon_cache {
 
     /// Keeps the newest `keep` icons by modification time.
     pub fn prune_in(dir: &Path, keep: usize) {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         let mut files: Vec<(std::time::SystemTime, PathBuf)> = entries
             .filter_map(|entry| entry.ok())
             .filter_map(|entry| {
                 let metadata = entry.metadata().ok()?;
-                metadata.is_file().then(|| (metadata.modified().unwrap_or(std::time::UNIX_EPOCH), entry.path()))
+                metadata.is_file().then(|| {
+                    (
+                        metadata.modified().unwrap_or(std::time::UNIX_EPOCH),
+                        entry.path(),
+                    )
+                })
             })
             .collect();
         if files.len() <= keep {
@@ -158,12 +165,21 @@ pub mod icon_cache {
             let dir = tempfile::tempdir().unwrap();
             write_in(dir.path(), "https://cdn.example/a.png", b"first").unwrap();
             write_in(dir.path(), "https://cdn.example/b.png", b"second").unwrap();
-            assert_eq!(read_in(dir.path(), "https://cdn.example/a.png").as_deref(), Some(&b"first"[..]));
-            assert_eq!(read_in(dir.path(), "https://cdn.example/b.png").as_deref(), Some(&b"second"[..]));
+            assert_eq!(
+                read_in(dir.path(), "https://cdn.example/a.png").as_deref(),
+                Some(&b"first"[..])
+            );
+            assert_eq!(
+                read_in(dir.path(), "https://cdn.example/b.png").as_deref(),
+                Some(&b"second"[..])
+            );
             assert_eq!(read_in(dir.path(), "https://cdn.example/missing.png"), None);
             // Rewriting replaces the icon in place.
             write_in(dir.path(), "https://cdn.example/a.png", b"third").unwrap();
-            assert_eq!(read_in(dir.path(), "https://cdn.example/a.png").as_deref(), Some(&b"third"[..]));
+            assert_eq!(
+                read_in(dir.path(), "https://cdn.example/a.png").as_deref(),
+                Some(&b"third"[..])
+            );
         }
 
         #[test]
@@ -181,14 +197,24 @@ pub mod icon_cache {
             let big = vec![0u8; (MAX_ICON_BYTES + 1) as usize];
             write_in(dir.path(), "https://cdn.example/big.png", &big).unwrap();
             assert_eq!(read_in(dir.path(), "https://cdn.example/big.png"), None);
-            assert_eq!(std::fs::read_dir(dir.path()).map(|entries| entries.count()).unwrap_or(0), 0);
+            assert_eq!(
+                std::fs::read_dir(dir.path())
+                    .map(|entries| entries.count())
+                    .unwrap_or(0),
+                0
+            );
         }
 
         #[test]
         fn pruning_keeps_the_newest_icons() {
             let dir = tempfile::tempdir().unwrap();
             for index in 0..5 {
-                write_in(dir.path(), &format!("https://cdn.example/{index}.png"), b"icon").unwrap();
+                write_in(
+                    dir.path(),
+                    &format!("https://cdn.example/{index}.png"),
+                    b"icon",
+                )
+                .unwrap();
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             prune_in(dir.path(), 2);

@@ -96,7 +96,12 @@ impl Drop for EnrollmentKey {
 /// A server on a machine as a normal saved connection. Like any other new server it starts
 /// unpinned: the sidebar only shows what the person pinned. It belongs to the account that
 /// listed it, like every other saved connection.
-fn host_server_record(host: &VestaHost, target: &ServerRef, server: &Value, account: Option<String>) -> Result<Record> {
+fn host_server_record(
+    host: &VestaHost,
+    target: &ServerRef,
+    server: &Value,
+    account: Option<String>,
+) -> Result<Record> {
     Ok(Record {
         snapshot: ServerSnapshot {
             connection: ServerConnection {
@@ -138,7 +143,11 @@ fn host_server_record(host: &VestaHost, target: &ServerRef, server: &Value, acco
 /// for it (its pin, its name), however often the machine is asked for its servers.
 fn keep_or_add(store: &mut Store, record: Record) {
     let id = &record.snapshot.connection.id;
-    if !store.connections.iter().any(|r| &r.snapshot.connection.id == id) {
+    if !store
+        .connections
+        .iter()
+        .any(|r| &r.snapshot.connection.id == id)
+    {
         store.connections.push(record);
     }
 }
@@ -311,7 +320,10 @@ impl ServerManager {
         }
         Ok(found)
     }
-    async fn host_minecraft_account(app: &AppHandle, account_uuid: &str) -> Result<MinecraftAccount> {
+    async fn host_minecraft_account(
+        app: &AppHandle,
+        account_uuid: &str,
+    ) -> Result<MinecraftAccount> {
         let signin = || reasoned(ErrorCode::CredentialsUnavailable, "account_signin_required");
         let account = crate::auth::ensure_account_tokens_valid(app.clone(), account_uuid.into())
             .await
@@ -666,8 +678,8 @@ impl ServerManager {
         if let Some(old) = previous.filter(|old| old.key_reference != h.key_reference) {
             self.host_retire_clients(&h.id);
             let credentials = self.credentials.clone();
-            let _ = tokio::task::spawn_blocking(move || credentials.delete(&old.key_reference))
-                .await;
+            let _ =
+                tokio::task::spawn_blocking(move || credentials.delete(&old.key_reference)).await;
         }
         Ok(h)
     }
@@ -724,7 +736,14 @@ impl ServerManager {
                 .await
             {
                 Ok(_) => return Ok(()),
-                Err(e) if matches!(e.code, ErrorCode::Unreachable | ErrorCode::Timeout | ErrorCode::TlsFailed) && e.reason.is_none() => last = e,
+                Err(e)
+                    if matches!(
+                        e.code,
+                        ErrorCode::Unreachable | ErrorCode::Timeout | ErrorCode::TlsFailed
+                    ) && e.reason.is_none() =>
+                {
+                    last = e
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -856,7 +875,10 @@ impl ServerManager {
     pub async fn host_info(&self, app: &AppHandle, id: &str) -> Result<Value> {
         let (info, session) = self
             .host_using(app, id, |session| async move {
-                Ok((session.call("GET", "/v1/host", None, None, None).await?, session))
+                Ok((
+                    session.call("GET", "/v1/host", None, None, None).await?,
+                    session,
+                ))
             })
             .await?;
         if info["hostId"] != id || info["fingerprint"] != session.host.fingerprint {
@@ -948,7 +970,10 @@ mod tests {
         keep_or_add(&mut store, record("srv-2"));
         assert_eq!(store.connections.len(), 2);
         assert!(store.connections[0].snapshot.connection.pinned);
-        assert_eq!(store.connections[0].snapshot.connection.name, "Renamed here");
+        assert_eq!(
+            store.connections[0].snapshot.connection.name,
+            "Renamed here"
+        );
         assert!(!store.connections[1].snapshot.connection.pinned);
     }
 }

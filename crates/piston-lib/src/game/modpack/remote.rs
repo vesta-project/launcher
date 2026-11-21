@@ -107,7 +107,10 @@ fn find_manifest(directory: &[u8]) -> Result<Option<(&'static str, Entry)>> {
         let name = directory
             .get(at + 46..at + 46 + name_len)
             .ok_or_else(|| anyhow!("zip_truncated"))?;
-        if let Some(manifest) = MANIFESTS.iter().find(|candidate| candidate.as_bytes() == name) {
+        if let Some(manifest) = MANIFESTS
+            .iter()
+            .find(|candidate| candidate.as_bytes() == name)
+        {
             // Zip64 extra field: the values that overflowed, in this order.
             let extra = directory
                 .get(at + 46 + name_len..at + 46 + name_len + extra_len)
@@ -179,11 +182,18 @@ async fn read_entry(url: &str, entry: &Entry) -> Result<Vec<u8>> {
     // The local header repeats the name and may carry its own extra field; ask for some slack
     // so one request usually covers header and data, and ask again when it didn't.
     let start = entry.local_header;
-    let (mut bytes, _) = fetch(url, format!("bytes={start}-{}", start + 30 + 1024 + entry.compressed - 1)).await?;
+    let (mut bytes, _) = fetch(
+        url,
+        format!("bytes={start}-{}", start + 30 + 1024 + entry.compressed - 1),
+    )
+    .await?;
     if bytes.len() >= 30 {
-        let needed = 30 + u16_at(&bytes, 26)? as u64 + u16_at(&bytes, 28)? as u64 + entry.compressed;
+        let needed =
+            30 + u16_at(&bytes, 26)? as u64 + u16_at(&bytes, 28)? as u64 + entry.compressed;
         if needed > bytes.len() as u64 {
-            bytes = fetch(url, format!("bytes={start}-{}", start + needed - 1)).await?.0;
+            bytes = fetch(url, format!("bytes={start}-{}", start + needed - 1))
+                .await?
+                .0;
         }
     }
     entry_data(&bytes, entry)
@@ -214,7 +224,9 @@ pub async fn metadata_from_url(url: &str) -> Result<ModpackMetadata> {
     let directory = if offset >= tail_start && offset + size <= total {
         tail[(offset - tail_start) as usize..(offset - tail_start + size) as usize].to_vec()
     } else {
-        fetch(url, format!("bytes={offset}-{}", offset + size - 1)).await?.0
+        fetch(url, format!("bytes={offset}-{}", offset + size - 1))
+            .await?
+            .0
     };
     let (name, entry) = find_manifest(&directory)?.ok_or_else(|| anyhow!("manifest_missing"))?;
     let bytes = read_entry(url, &entry).await?;
@@ -250,7 +262,8 @@ mod tests {
         ]);
         // A tail that starts partway through the file, as a suffix range would return.
         let tail_start = 10;
-        let (offset, size) = locate_central_directory(&bytes[tail_start..], tail_start as u64).unwrap();
+        let (offset, size) =
+            locate_central_directory(&bytes[tail_start..], tail_start as u64).unwrap();
         let directory = &bytes[offset as usize..(offset + size) as usize];
         let (name, entry) = find_manifest(directory).unwrap().unwrap();
         assert_eq!(name, "manifest.json");
@@ -267,7 +280,12 @@ mod tests {
     async fn reads_a_live_pack() {
         let url = std::env::var("VESTA_REMOTE_PACK_URL").expect("VESTA_REMOTE_PACK_URL");
         let metadata = metadata_from_url(&url).await.unwrap();
-        println!("{} {} {} mods", metadata.minecraft_version, metadata.modloader_type, metadata.mods.len());
+        println!(
+            "{} {} {} mods",
+            metadata.minecraft_version,
+            metadata.modloader_type,
+            metadata.mods.len()
+        );
         assert!(!metadata.mods.is_empty());
     }
 

@@ -1,7 +1,7 @@
 mod credentials;
-pub(crate) mod hosts;
 pub(crate) mod files;
 mod hosting;
+pub(crate) mod hosts;
 mod management;
 mod setup;
 pub use setup::SetupDiscovery;
@@ -179,7 +179,8 @@ impl ServerManager {
                     break;
                 };
                 manager.cleanup_deleted_credentials().await;
-                let _ = tokio::time::timeout(Duration::from_secs(10), manager.host_discover()).await;
+                let _ =
+                    tokio::time::timeout(Duration::from_secs(10), manager.host_discover()).await;
                 drop(manager);
                 tokio::time::sleep(Duration::from_secs(60)).await;
             }
@@ -400,7 +401,10 @@ impl ServerManager {
         if r.snapshot.connection.sign_in_method == "host" {
             let (host_id, _) = id.split_once(':').ok_or_else(internal)?;
             let session = self.host_session(host_id).await?;
-            let endpoint = self.host_endpoint(host_id).await?.for_server(&r.snapshot.connection.server_id)?;
+            let endpoint = self
+                .host_endpoint(host_id)
+                .await?
+                .for_server(&r.snapshot.connection.server_id)?;
             let transport = Transport::for_host(endpoint, session.clone())?;
             protect_transport(
                 &transport,
@@ -495,11 +499,17 @@ impl ServerManager {
         let status = match status {
             Ok(status) => status,
             Err(error) if error.code == ErrorCode::NotFound => {
-                transport.request(
-                    vesta_server_client::Method::GET,
-                    "/api/v3/setup", None, None, None, true,
-                ).await?
-            },
+                transport
+                    .request(
+                        vesta_server_client::Method::GET,
+                        "/api/v3/setup",
+                        None,
+                        None,
+                        None,
+                        true,
+                    )
+                    .await?
+            }
             Err(error) => return Err(error),
         };
         let server_id = status["server_id"]
@@ -679,7 +689,8 @@ impl ServerManager {
         {
             return Err(Error::new(ErrorCode::CredentialsRejected));
         }
-        let pending_setup = discovery.public_lifecycle.as_deref() == Some("awaiting_app_onboarding");
+        let pending_setup =
+            discovery.public_lifecycle.as_deref() == Some("awaiting_app_onboarding");
         let id = discovery
             .existing_connection_id
             .clone()
@@ -1127,7 +1138,9 @@ impl ServerManager {
         id: &str,
         fingerprint: &str,
     ) -> Result<ServerSnapshot> {
-        if self.record(id).await?.snapshot.connection.sign_in_method == "host" {return Err(Error::new(ErrorCode::Unsupported));}
+        if self.record(id).await?.snapshot.connection.sign_in_method == "host" {
+            return Err(Error::new(ErrorCode::Unsupported));
+        }
         self.client(id).await?;
         let slot = self.slot(id)?;
         let _refresh = slot.refresh.lock().await;
@@ -1174,10 +1187,19 @@ impl ServerManager {
     }
     pub async fn remove(&self, app: &AppHandle, id: &str) -> Result<()> {
         if self.record(id).await?.snapshot.connection.sign_in_method == "host" {
-            self.edit_store(|s| { s.connections.retain(|r|r.snapshot.connection.id!=id); Ok(()) }).await?;
-            let mut store=self.host_store.lock().await; let mut next=store.clone();
-            next.servers.retain(|r|r.connection_id()!=id);next.save(&self.root)?;*store=next;
-        } else { self.edit_store(|s| s.remove_connection(id)).await?; }
+            self.edit_store(|s| {
+                s.connections.retain(|r| r.snapshot.connection.id != id);
+                Ok(())
+            })
+            .await?;
+            let mut store = self.host_store.lock().await;
+            let mut next = store.clone();
+            next.servers.retain(|r| r.connection_id() != id);
+            next.save(&self.root)?;
+            *store = next;
+        } else {
+            self.edit_store(|s| s.remove_connection(id)).await?;
+        }
         self.subscriptions
             .lock()
             .map_err(|_| internal())?
